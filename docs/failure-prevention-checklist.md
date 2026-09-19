@@ -223,3 +223,37 @@ Policy:
 - unregister them on every success/failure/cancel path;
 - probe the actual selected input before formal encoding;
 - after a failed SAF probe, discard that SAF registration and recreate it rather than reusing potentially stale protocol state.
+
+
+### 23. Keep FFmpegKit session history bounded
+
+Historical FFmpegKit reports note that retained sessions can retain their completion callbacks and objects captured by those callbacks. Repeated encode/probe operations can therefore keep Activity/UI state alive longer than intended.
+
+Native policy:
+- keep the session history deliberately small;
+- clear startup/self-test sessions after their results are extracted;
+- the long-running encode service, not an Activity, owns formal-session callbacks;
+- do not capture Activity/WebView objects inside a formal encode callback.
+
+### 24. Do not treat asynchronous dispatch or progress=100% as durable completion
+
+\`executeAsync(...)\` intentionally returns when the job is scheduled, not when media processing is complete. Statistics reaching 100% are also not a file-integrity guarantee.
+
+Native completion means all of the following:
+1. the FFmpeg completion callback has fired;
+2. the return code is successful;
+3. the staging file exists and is non-zero;
+4. FFprobe/packet validation passes;
+5. the validated staging file has been copied and flushed to the user destination.
+
+Do not call \`cancel()\` as a generic cleanup step after a successful session; cancellation belongs only to an explicit cancel/timeout path.
+
+### 25. Formal native staging files must not live in Android cache storage
+
+Android may delete files under \`cacheDir\` when storage pressure is high. A multi-hour transcode must therefore stage its output under an app-private persistent job directory such as \`filesDir/jobs/<job-id>\`, then delete it explicitly after verified delivery or user-confirmed cleanup.
+
+Before starting an encode:
+- estimate conservative output + working-space headroom;
+- on API 26+, query \`StorageManager.getAllocatableBytes()\` for the volume hosting the staging directory;
+- fail before encoding if the requirement cannot be met;
+- never discover an out-of-space condition only after hours of encoding.
