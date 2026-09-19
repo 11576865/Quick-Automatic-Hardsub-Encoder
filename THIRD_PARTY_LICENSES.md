@@ -17,3 +17,12 @@ Upstream projects:
 
 The app uses `coi-serviceworker` 0.1.7 (MIT) on static hosts such as GitHub Pages to obtain cross-origin isolation required by `SharedArrayBuffer` / WebAssembly pthreads.
 Upstream: https://github.com/gzuidhof/coi-serviceworker
+
+
+## Noto Sans SC fallback font
+
+The web frontend bundles the unmodified Noto Sans SC Regular font as a libass/fontconfig fallback when an ASS-requested font is not supplied by the user.
+
+- Upstream: https://github.com/notofonts/noto-cjk
+- Font: Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+- License: SIL Open Font License 1.1
