@@ -1,6 +1,7 @@
 package io.github.quickhardsub
 
 import android.app.Activity
+import android.net.Uri
 import android.os.Build
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -16,6 +17,53 @@ class NativeBridge(
     private val activity: Activity,
     private val webView: WebView
 ) {
+    @Volatile
+    private var nextPickerRole: String? = null
+
+    private val pickedUris = mutableMapOf<String, List<Uri>>()
+    private val pickerLock = Any()
+
+    @JavascriptInterface
+    fun preparePickerRole(role: String) {
+        nextPickerRole = when (role) {
+            "video", "ass", "fonts" -> role
+            else -> null
+        }
+    }
+
+    fun consumePickerRole(): String? {
+        val role = nextPickerRole
+        nextPickerRole = null
+        return role
+    }
+
+    fun recordPickedUris(role: String?, uris: List<Uri>) {
+        if (role == null) return
+        synchronized(pickerLock) {
+            if (uris.isEmpty()) pickedUris.remove(role)
+            else pickedUris[role] = uris.toList()
+        }
+    }
+
+    fun getPickedUris(role: String): List<Uri> =
+        synchronized(pickerLock) { pickedUris[role]?.toList() ?: emptyList() }
+
+    @JavascriptInterface
+    fun getNativeSelectionState(): String {
+        val snapshot = synchronized(pickerLock) {
+            mapOf(
+                "video" to (pickedUris["video"]?.size ?: 0),
+                "ass" to (pickedUris["ass"]?.size ?: 0),
+                "fonts" to (pickedUris["fonts"]?.size ?: 0)
+            )
+        }
+
+        return JSONObject()
+            .put("video", snapshot["video"])
+            .put("ass", snapshot["ass"])
+            .put("fonts", snapshot["fonts"])
+            .toString()
+    }
     @JavascriptInterface
     fun getBackendInfo(): String {
         return JSONObject()
