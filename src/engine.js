@@ -248,10 +248,26 @@ export class EncoderEngine {
     let resolveDone;
     let completedSession = null;
     const done = new Promise(resolve => { resolveDone = resolve; });
-    const session = await FFmpegKit.executeAsync(cmd, completed => {
-      completedSession = completed;
-      resolveDone(completed);
-    });
+    const session = await FFmpegKit.executeAsync(
+      cmd,
+      completed => {
+        completedSession = completed;
+        resolveDone(completed);
+      },
+      undefined,
+      statistics => {
+        try {
+          options.onStatistics?.({
+            timeMs: Number(statistics?.getTime?.() || 0),
+            fps: Number(statistics?.getVideoFps?.() || 0),
+            bitrateKbps: Number(statistics?.getBitrate?.() || 0),
+            speed: Number(statistics?.getSpeed?.() || 0),
+            sizeBytes: Number(statistics?.getSize?.() || 0),
+            frame: Number(statistics?.getVideoFrameNumber?.() || 0)
+          });
+        } catch {}
+      }
+    );
     const chunks = [];
     let totalBytes = 0;
     let emptyAfterCompletion = 0;
