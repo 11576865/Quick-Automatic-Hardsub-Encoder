@@ -48,3 +48,45 @@ jobs:
           name: ffmpeg-kit-next-android-arm64-hardsub
           path: /tmp/ffmpeg-kit-next/prebuilt/bundle-android-aar-24-maven
           retention-days: 30
+
+      - name: Stage native Maven repository for app
+        run: |
+          rm -rf android-native/libs-maven
+          mkdir -p android-native/libs-maven
+          cp -a /tmp/ffmpeg-kit-next/prebuilt/bundle-android-aar-24-maven/. android-native/libs-maven/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build web UI for Android assets
+        run: |
+          npm install
+          npm run build
+          rm -rf android-native/app/src/main/assets/www
+          mkdir -p android-native/app/src/main/assets/www
+          cp -a dist/. android-native/app/src/main/assets/www/
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Build debug APK
+        run: gradle -p android-native :app:assembleDebug --stacktrace
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-automatic-hardsub-encoder-android-debug
+          path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
