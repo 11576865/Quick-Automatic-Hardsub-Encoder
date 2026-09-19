@@ -96,16 +96,24 @@ export class EncoderEngine {
     return true;
   }
 
-  async renderPreview(timeSeconds, index = 0) {
+  async setAssText(text) {
+    this.assertReady();
+    await this.api.writeFile(this.assPath, new TextEncoder().encode(text));
+  }
+
+  async renderPreview(timeSeconds, index = 0, previewAssText = null) {
     this.assertReady();
     const output = `/preview_${index}.png`;
-    const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
+    const previewAssPath = previewAssText == null ? this.assPath : `/preview_${index}.ass`;
+    if (previewAssText != null) {
+      await this.api.writeFile(previewAssPath, new TextEncoder().encode(previewAssText));
+    }
+
+    const filter = `setpts=PTS-STARTPTS,ass=${escapeFilter(previewAssPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const decoder = this.inputDecoderArgs();
-    // Keep the original media timestamp after fast input seeking.
-    // Without -copyts, the seeked frame can arrive at the ASS filter near PTS=0
-    // while the external ASS track still uses its original timeline, producing
-    // a perfectly valid preview image with no subtitle drawn.
-    const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} -copyts ${decoder}-i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
+    // Preview ASS timestamps are shifted in JS so the chosen subtitle is active
+    // around t=0. This avoids relying on seek/copyts timestamp behavior.
+    const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
     const logs = await this.execute(cmd, true, 60000);
     const bytes = await this.api.readFile(output);
     if (!bytes) throw new Error('预览帧没有生成');
