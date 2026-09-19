@@ -685,7 +685,7 @@ function profileFor(codec, goal) {
     speed: {
       h264: { crf: 21, preset: 'veryfast' },
       h265: { crf: 24, preset: 'faster' },
-      av1: { crf: 34, preset: '10' }
+      av1: { crf: 34, preset: '12' }
     },
     balanced: {
       h264: { crf: 19, preset: 'medium' },
@@ -772,14 +772,15 @@ async function runSelectedTest() {
     $('selectedTestResult').classList.remove('hidden');
     $('selectedTestResult').innerHTML = '<div class="note">正在生成所选方案测试片段…</div>';
     const fps = state.media?.fps || 30;
-    const duration = Math.min(3, Math.max(1.5, 90 / fps));
+    const targetFrames = state.selectedCodec === 'av1' ? 24 : 45;
+    const duration = Math.min(1.5, Math.max(0.6, targetFrames / fps));
     const total = state.media?.duration || 0;
     const candidates = state.assInfo?.previewTimes || [];
     const anchor = candidates.length
       ? [...candidates].sort((a,b) => Math.abs(a - total * 0.45) - Math.abs(b - total * 0.45))[0]
       : total * 0.45;
     const startAt = Math.max(0, Math.min(Math.max(0, total - duration), anchor - 0.45));
-    log('所选方案测试：' + state.selectedCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 · 含真实字幕');
+    log('所选方案测试：' + state.selectedCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 / 约 ' + Math.round(duration * fps) + ' 帧 · 含真实字幕');
     const originalAss = state.activeAssText || state.assText;
     const shiftedAss = shiftAssForPreview(originalAss, startAt);
     await state.engine.setAssText(shiftedAss);
@@ -788,8 +789,9 @@ async function runSelectedTest() {
       r = await state.engine.benchmarkCodec(state.selectedCodec, {
         start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
         targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
-      twoPass: false,
-        timeoutMs: state.selectedCodec === 'av1' ? 120000 : 90000
+        twoPass: false,
+        measureSsim: false,
+        timeoutMs: state.selectedCodec === 'av1' ? 60000 : 45000
       });
     } finally {
       await state.engine.setAssText(originalAss);
@@ -797,7 +799,7 @@ async function runSelectedTest() {
     if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
     state.selectedTest = r;
     const sampleBitrate = r.packetStats?.totalVideoBytes ? r.packetStats.totalVideoBytes * 8 / duration : 0;
-    $('selectedTestResult').innerHTML = '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' + r.encodeSpeed.toFixed(2) + '× realtime</span><span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span><span>SSIM：' + (r.ssim ? r.ssim.toFixed(5) : '未取得') + '</span><a class="button-link" href="' + r.sampleUrl + '" download="hardsub_test_' + state.selectedCodec + '.mkv">下载测试片段查看实际画质</a><small>这些数字只描述这段测试片段，不外推为整片体积或总耗时。</small></div>';
+    $('selectedTestResult').innerHTML = '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' + r.encodeSpeed.toFixed(2) + '× realtime</span><span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span><a class="button-link" href="' + r.sampleUrl + '" download="hardsub_test_' + state.selectedCodec + '.mkv">下载测试片段查看实际画质</a><small>所选方案测试只验证真实字幕、画质和设备速度，不再额外跑一次 SSIM；这些数字也不外推整片。</small></div>';
   } catch (e) {
     log('所选方案测试失败：' + e.message);
     $('selectedTestResult').innerHTML = '<div class="error-box">测试失败：' + escapeHtml(e.message) + '</div>';
