@@ -34,6 +34,7 @@ jobs:
         working-directory: /tmp/ffmpeg-kit-next
         run: |
           ./nix-web.sh -p web-wasm32-emscripten --static --enable-gpl \
+            --enable-lib-dav1d \
             --enable-lib-fontconfig \
             --enable-lib-freetype \
             --enable-lib-fribidi \
