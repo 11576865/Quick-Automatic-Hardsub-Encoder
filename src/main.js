@@ -93,7 +93,7 @@ app.innerHTML = `
 
   <section id="benchmarkCard" class="card hidden">
     <h2>5. 三编码器样本测试</h2>
-    <p class="note">程序使用约 36 帧的快速样本实测当前设备上的编码速度、样本大小与 SSIM；AV1 使用 SVT-AV1。这里是编码器比较，不是字幕预览。</p>
+    <p class="note">程序使用约 36 帧的快速样本实测编码速度与 SSIM；体积预测按视频 packet 拆分关键帧/增量帧后估算，避免把短样本首帧和容器开销直接放大到整片。AV1 使用 SVT-AV1。</p>
     <div class="button-row"><button id="benchmarkBtn" class="primary" disabled>测试 H.264 / H.265 / AV1</button></div>
     <div id="codecGrid" class="grid three" style="margin-top:14px"></div>
   </section>
@@ -585,9 +585,43 @@ async function runBenchmarks() {
 
 function estimateFullBytes(result, sampleDuration, media) {
   if (!media?.duration) return null;
-  const videoBytes = result.sampleBytes / sampleDuration * media.duration;
-  const audioBytes = media.audioBitRate ? media.audioBitRate / 8 * media.duration : 0;
-  return Math.round(videoBytes + audioBytes);
+
+  const fps = media.fps || 30;
+  const totalFrames = Math.max(1, Math.round(media.duration * fps));
+  const stats = result.packetStats;
+  let videoBytes;
+
+  if (stats?.interCount > 0) {
+    const avgInter = stats.interBytes / stats.interCount;
+    const avgKey = stats.keyCount > 0
+      ? stats.keyBytes / stats.keyCount
+      : avgInter * 4;
+    const gop = result.gop || Math.max(48, Math.min(300, Math.round(fps * 5)));
+    const estimatedKeys = Math.max(1, Math.ceil(totalFrames / gop));
+    const estimatedInter = Math.max(0, totalFrames - estimatedKeys);
+    videoBytes = avgInter * estimatedInter + avgKey * estimatedKeys;
+    result.sizeEstimateMethod = 'packet-model';
+  } else {
+    // Fallback only: whole short-file extrapolation is much less reliable,
+    // especially for AV1 where the first key frame dominates tiny samples.
+    videoBytes = result.sampleBytes / sampleDuration * media.duration;
+    result.sizeEstimateMethod = 'whole-sample-fallback';
+  }
+
+  const audioBytes = media.audioBitRate
+    ? media.audioBitRate / 8 * media.duration
+    : 0;
+  const containerReserve = Math.max(256 * 1024, (videoBytes + audioBytes) * 0.01);
+  const estimate = Math.round(videoBytes + audioBytes + containerReserve);
+
+  const uncertainty = result.sizeEstimateMethod === 'packet-model'
+    ? (result.codecKey === 'av1' ? 0.35 : 0.25)
+    : 0.55;
+  result.estimatedRange = {
+    low: Math.max(0, Math.round(estimate * (1 - uncertainty))),
+    high: Math.round(estimate * (1 + uncertainty))
+  };
+  return estimate;
 }
 
 function renderCodecCards() {
@@ -602,6 +636,7 @@ function renderCodecCards() {
       <h3>${labels[k]}</h3>
       <dl>
         <dt>预计体积</dt><dd>${r.estimatedBytes ? formatBytes(r.estimatedBytes) : '—'}</dd>
+        <dt>估算范围</dt><dd>${r.estimatedRange ? `${formatBytes(r.estimatedRange.low)}–${formatBytes(r.estimatedRange.high)}` : '—'}</dd>
         <dt>预计时间</dt><dd>${totalTime ? formatDuration(totalTime) : '—'}</dd>
         <dt>${speedLabel}</dt><dd>${r.encodeSpeed.toFixed(2)}× realtime</dd>
         <dt>SSIM</dt><dd>${r.ssim ? r.ssim.toFixed(5) : '未取得'}</dd>
