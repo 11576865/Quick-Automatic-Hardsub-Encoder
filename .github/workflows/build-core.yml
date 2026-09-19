@@ -2,10 +2,6 @@ name: Build Core and Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/build-core.yml'
 
 permissions:
   contents: read
@@ -27,8 +23,15 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Clone FFmpegKitNext
-        run: git clone --depth 1 https://github.com/arthenica/ffmpeg-kit-next.git /tmp/ffmpeg-kit-next
+      - name: Clone pinned FFmpegKitNext
+        env:
+          FFMPEG_KIT_NEXT_REV: 5e51b2da4c3593c0f2f9b49f53eeb497d93e39d3
+        run: |
+          git init /tmp/ffmpeg-kit-next
+          git -C /tmp/ffmpeg-kit-next remote add origin https://github.com/arthenica/ffmpeg-kit-next.git
+          git -C /tmp/ffmpeg-kit-next fetch --depth 1 origin "$FFMPEG_KIT_NEXT_REV"
+          git -C /tmp/ffmpeg-kit-next checkout --detach FETCH_HEAD
+          echo "Pinned FFmpegKitNext: $(git -C /tmp/ffmpeg-kit-next rev-parse HEAD)"
 
       - name: Build WebAssembly core
         working-directory: /tmp/ffmpeg-kit-next
