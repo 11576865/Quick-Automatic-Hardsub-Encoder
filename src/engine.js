@@ -104,24 +104,35 @@ export class EncoderEngine {
     await this.api.writeFile(this.assPath, new TextEncoder().encode(text));
   }
 
-  async renderPreview(timeSeconds, index = 0, previewAssText = null) {
+  async renderPreview(timeSeconds, index = 0) {
     this.assertReady();
+    const baseOutput = `/preview_base_${index}.png`;
     const output = `/preview_${index}.png`;
-    const previewAssPath = previewAssText == null ? this.assPath : `/preview_${index}.ass`;
-    if (previewAssText != null) {
-      await this.api.writeFile(previewAssPath, new TextEncoder().encode(previewAssText));
-    }
-
-    const filter = `setpts=PTS-STARTPTS,ass=${escapeFilter(previewAssPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const decoder = this.inputDecoderArgs();
-    // Preview ASS timestamps are shifted in JS so the chosen subtitle is active
-    // around t=0. This avoids relying on seek/copyts timestamp behavior.
-    const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
-    const logs = await this.execute(cmd, true, 60000);
-    const bytes = await this.api.readFile(output);
-    if (!bytes) throw new Error('预览帧没有生成');
+
+    // Step 1: seek only for frame extraction. Subtitle timing is deliberately
+    // not involved here, so seek-related PTS resets cannot hide the subtitle.
+    const extractCmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn -frames:v 1 ${q(baseOutput)}`;
+    await this.execute(extractCmd, false, 60000);
+
+    // Step 2: feed the extracted still frame back into FFmpeg and explicitly
+    // assign it the original media timestamp before libass. The original (or
+    // forced-font rewritten) ASS timeline can therefore be used unchanged.
+    const filter = `setpts=PTS+${Math.max(0, timeSeconds).toFixed(3)}/TB,ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
+    const renderCmd = `-y -i ${q(baseOutput)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
+    const logs = await this.execute(renderCmd, true, 60000);
+
+    const [baseBytes, bytes] = await Promise.all([
+      this.api.readFile(baseOutput),
+      this.api.readFile(output)
+    ]);
+    if (!baseBytes || !bytes) throw new Error('预览帧没有生成');
+
+    const visualChange = await detectImageDifference(baseBytes, bytes).catch(() => null);
     return {
       url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+      baseUrl: URL.createObjectURL(new Blob([baseBytes], { type: 'image/png' })),
+      visualChange,
       fontEvents: parseLibassFontEvents(logs)
     };
   }
@@ -418,6 +429,52 @@ function normalGop(fps) {
   const n = Math.round((Number(fps) || 30) * 5);
   return Math.max(48, Math.min(300, n));
 }
+async function detectImageDifference(aBytes, bBytes) {
+  if (typeof createImageBitmap !== 'function') return null;
+  const [a, b] = await Promise.all([
+    createImageBitmap(new Blob([aBytes], { type: 'image/png' })),
+    createImageBitmap(new Blob([bBytes], { type: 'image/png' }))
+  ]);
+  try {
+    if (a.width !== b.width || a.height !== b.height) return true;
+    const canvas = document.createElement('canvas');
+    canvas.width = a.width;
+    canvas.height = a.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return null;
+
+    ctx.drawImage(a, 0, 0);
+    const p1 = ctx.getImageData(0, 0, a.width, a.height).data;
+    ctx.clearRect(0, 0, a.width, a.height);
+    ctx.drawImage(b, 0, 0);
+    const p2 = ctx.getImageData(0, 0, b.width, b.height).data;
+
+    // Sample at most about 250k pixels. Any visible ASS glyph should alter many
+    // samples, while this avoids a full per-pixel scan on 4K frames.
+    const pixels = a.width * a.height;
+    const step = Math.max(1, Math.floor(pixels / 250000));
+    let changed = 0;
+    let checked = 0;
+    for (let px = 0; px < pixels; px += step) {
+      const i = px * 4;
+      checked++;
+      if (
+        Math.abs(p1[i] - p2[i]) > 2 ||
+        Math.abs(p1[i + 1] - p2[i + 1]) > 2 ||
+        Math.abs(p1[i + 2] - p2[i + 2]) > 2 ||
+        Math.abs(p1[i + 3] - p2[i + 3]) > 2
+      ) {
+        changed++;
+        if (changed >= 8) return true;
+      }
+    }
+    return checked > 0 ? false : null;
+  } finally {
+    a.close();
+    b.close();
+  }
+}
+
 function estimateSteadyStateSpeed(logs = '') {
   const points = [];
   for (const line of String(logs).split(/\r?\n/)) {
