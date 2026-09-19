@@ -143,6 +143,7 @@ export class EncoderEngine {
     const start = options.start ?? 0;
     const crf = options.crf ?? defaultCrf(codecKey);
     const preset = options.preset ?? defaultPreset(codecKey);
+    const targetVideoBitrate = Number(options.targetVideoBitrate || 0);
     const encoder = encoderName(codecKey);
     const out = `/sample_${codecKey}.mkv`;
     const filter = options.withSubtitles
@@ -152,7 +153,10 @@ export class EncoderEngine {
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
     const gop = normalGop(this.mediaInfo?.fps || 30);
-    const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -g ${gop} -crf ${crf}${extra} ${q(out)}`;
+    const rateControl = targetVideoBitrate > 0
+      ? `-b:v ${Math.round(targetVideoBitrate)}`
+      : `-crf ${crf}`;
+    const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} ${q(out)}`;
     const t0 = performance.now();
     const logs = await this.execute(cmd, true, options.timeoutMs ?? 120000);
     const elapsedSeconds = (performance.now() - t0) / 1000;
@@ -172,6 +176,8 @@ export class EncoderEngine {
       sampleBytes: bytes.byteLength,
       packetStats,
       gop,
+      targetVideoBitrate,
+      sampleUrl: URL.createObjectURL(new Blob([bytes], { type: 'video/x-matroska' })),
       ssim,
       averageSpeed,
       encodeSpeed: steadySpeed || averageSpeed,
