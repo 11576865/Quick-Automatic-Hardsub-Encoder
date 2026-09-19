@@ -65,26 +65,38 @@ app.innerHTML = `
     </details>
   </section>
 
+  <section id="preflightCard" class="card preflight-card hidden">
+    <details id="preflightDetails" class="preflight-details">
+      <summary>
+        <span class="preflight-heading">3. 媒体与字幕预检</span>
+        <span id="preflightStatus" class="preflight-status">等待分析</span>
+      </summary>
+      <div class="preflight-body">
+        <div id="subtitleSummary" class="status-list"></div>
+        <div id="fontWarnings"></div>
+      </div>
+    </details>
+  </section>
+
   <section id="subtitleCard" class="card hidden">
-    <h2>3. 字幕与字体预检</h2>
-    <div id="subtitleSummary" class="status-list"></div>
-    <div id="fontWarnings"></div>
+    <h2>4. 字幕预览</h2>
+    <p class="note">使用实际 FFmpeg + libass 渲染结果检查字体、位置、描边和回退；预览与上面的媒体信息分开。</p>
     <div class="button-row">
       <button id="previewBtn" disabled>生成真实字幕预览</button>
     </div>
-    <div id="preview" class="preview-wrap"><div class="preview-placeholder">分析后可用 FFmpeg + libass 生成真实预览帧。</div></div>
+    <div id="preview" class="preview-wrap"><div class="preview-placeholder">分析完成后可生成真实预览帧。</div></div>
     <div id="warningAccept" class="hidden" style="margin-top:12px"><label><input type="checkbox" id="acceptWarnings"> 已查看预览，接受当前字体回退/缺失警告并继续。</label></div>
   </section>
 
   <section id="benchmarkCard" class="card hidden">
-    <h2>4. 三编码器样本测试</h2>
+    <h2>5. 三编码器样本测试</h2>
     <p class="note">程序使用同一段短样本实测当前设备上的编码时间、样本大小与 SSIM；AV1 使用 SVT-AV1。字幕正确性已在上一阶段单独验证。</p>
     <div class="button-row"><button id="benchmarkBtn" class="primary" disabled>测试 H.264 / H.265 / AV1</button></div>
     <div id="codecGrid" class="grid three" style="margin-top:14px"></div>
   </section>
 
   <section id="encodeCard" class="card hidden">
-    <h2>5. 正式压制</h2>
+    <h2>6. 正式压制</h2>
     <div id="chosenSummary" class="note">尚未选择编码器。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
@@ -267,6 +279,13 @@ function refreshAnalyze() {
 async function analyzeAll() {
   try {
     $('analyze').disabled = true;
+    state.acceptedWarnings = false;
+    $('acceptWarnings').checked = false;
+    state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
+    state.previewUrls = [];
+    state.previewFontEvents = [];
+    state.previewTimes = [];
+    state.inputDecodeOk = false;
     log('开始分析 ASS 和字体…');
     const assText = await state.ass.text();
     state.assInfo = parseAss(assText);
@@ -313,6 +332,7 @@ async function analyzeAll() {
       log('输入视频解码测试通过。');
     }
     renderSubtitleSummary();
+    $('preflightCard').classList.remove('hidden');
     $('subtitleCard').classList.remove('hidden');
     $('benchmarkCard').classList.remove('hidden');
     $('encodeCard').classList.remove('hidden');
@@ -367,6 +387,27 @@ function renderSubtitleSummary() {
     state.acceptedWarnings = true;
   }
   $('fontWarnings').innerHTML = notices.join('');
+
+  const fontRisk = missing.length + probable.length;
+  const mediaRisk = state.media?.unsafeColorPipeline ? 1 : 0;
+  const decodeRisk = state.inputDecodeOk ? 0 : 1;
+  const riskCount = fontRisk + mediaRisk + decodeRisk;
+  const details = $('preflightDetails');
+  const status = $('preflightStatus');
+
+  if (riskCount > 0) {
+    details.open = true;
+    status.textContent = `${riskCount} 项需注意 · 已自动展开`;
+    status.className = 'preflight-status warn';
+  } else {
+    details.open = false;
+    const codec = state.media?.videoCodec?.toUpperCase?.() || '视频';
+    const resolution = state.media?.width && state.media?.height
+      ? `${state.media.width}×${state.media.height}`
+      : '';
+    status.textContent = `检查通过 · ${codec}${resolution ? ' · ' + resolution : ''}`;
+    status.className = 'preflight-status ok';
+  }
 }
 
 async function renderPreviews() {
