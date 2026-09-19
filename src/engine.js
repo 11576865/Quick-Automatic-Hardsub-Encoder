@@ -140,7 +140,8 @@ export class EncoderEngine {
     const vf = filter ? ` -vf ${q(filter)}` : '';
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
-    const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} ${q(out)}`;
+    const gop = normalGop(this.mediaInfo?.fps || 30);
+    const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -g ${gop} -crf ${crf}${extra} ${q(out)}`;
     const t0 = performance.now();
     const logs = await this.execute(cmd, true, options.timeoutMs ?? 120000);
     const elapsedSeconds = (performance.now() - t0) / 1000;
@@ -148,6 +149,7 @@ export class EncoderEngine {
     if (!bytes) throw new Error(`${codecKey} 样本没有生成`);
 
     const ssim = await this.measureSsim(out, start, duration).catch(() => null);
+    const packetStats = await this.getVideoPacketStats(out).catch(() => null);
     const averageSpeed = duration / elapsedSeconds;
     const steadySpeed = estimateSteadyStateSpeed(logs);
     return {
@@ -157,10 +159,39 @@ export class EncoderEngine {
       preset,
       elapsedSeconds,
       sampleBytes: bytes.byteLength,
+      packetStats,
+      gop,
       ssim,
       averageSpeed,
       encodeSpeed: steadySpeed || averageSpeed,
       speedEstimate: steadySpeed ? 'steady-state' : 'whole-sample'
+    };
+  }
+
+  async getVideoPacketStats(path) {
+    const { FFprobeKit, ReturnCode } = this.api;
+    const cmd = `-v error -select_streams v:0 -show_packets -show_entries packet=size,flags -of csv=p=0 ${q(path)}`;
+    const session = await FFprobeKit.execute(cmd);
+    const rc = session.getReturnCode?.();
+    const output = await session.getOutput?.() || '';
+    if (ReturnCode && !ReturnCode.isSuccess(rc)) throw new Error(output || 'FFprobe packet 统计失败');
+
+    const packets = String(output).split(/\r?\n/).map(line => {
+      const m = line.trim().match(/^(\d+),([^,]*)/);
+      if (!m) return null;
+      return { size: Number(m[1]), key: /K/.test(m[2]) };
+    }).filter(Boolean).filter(p => Number.isFinite(p.size) && p.size > 0);
+
+    if (!packets.length) return null;
+    const keyPackets = packets.filter(p => p.key);
+    const interPackets = packets.filter(p => !p.key);
+    return {
+      packetCount: packets.length,
+      keyCount: keyPackets.length,
+      keyBytes: keyPackets.reduce((n,p) => n + p.size, 0),
+      interCount: interPackets.length,
+      interBytes: interPackets.reduce((n,p) => n + p.size, 0),
+      totalVideoBytes: packets.reduce((n,p) => n + p.size, 0)
     };
   }
 
@@ -183,12 +214,13 @@ export class EncoderEngine {
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
+    const gop = normalGop(this.mediaInfo?.fps || 30);
     const targetVideoBitrate = Number(options.targetVideoBitrate || 0);
     const passlog = `/twopass_${codecKey}_${Date.now()}`;
 
     if (targetVideoBitrate > 0) {
       options.onPhase?.('pass1');
-      const firstPass = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
+      const firstPass = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
       this.onLog(`两遍目标体积编码：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
       await this.execute(firstPass);
     }
@@ -199,7 +231,7 @@ export class EncoderEngine {
     const rateControl = targetVideoBitrate > 0
       ? `-b:v ${Math.round(targetVideoBitrate)} -pass 2 -passlogfile ${q(passlog)}`
       : `-crf ${crf}`;
-    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
+    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
     this.onLog(`$ ffmpeg ${cmd}`);
 
     let resolveDone;
@@ -382,6 +414,10 @@ function encoderName(k) { return k === 'h264' ? 'libx264' : k === 'h265' ? 'libx
 function defaultCrf(k) { return k === 'h264' ? 18 : k === 'h265' ? 20 : 28; }
 function defaultPreset(k) { return k === 'av1' ? '8' : 'medium'; }
 function codecExtra(k) { return k === 'av1' ? ' -svtav1-params lp=4' : ''; }
+function normalGop(fps) {
+  const n = Math.round((Number(fps) || 30) * 5);
+  return Math.max(48, Math.min(300, n));
+}
 function estimateSteadyStateSpeed(logs = '') {
   const points = [];
   for (const line of String(logs).split(/\r?\n/)) {
