@@ -364,6 +364,97 @@ export class EncoderEngine {
     }
   }
 
+  async scanEncodedPackets(blob, expectedDuration = 0) {
+    this.assertReady();
+    const { mount, FFprobeKit, ReturnCode } = this.api;
+    if (!blob || !(blob.size > 0)) throw new Error('成品为空，无法执行 packet 扫描');
+
+    const stamp = Date.now();
+    const mountPoint = `/verify_${stamp}`;
+    const fileName = 'encoded_output.mkv';
+    const path = `${mountPoint}/${fileName}`;
+
+    // WORKERFS mounts the Blob read-only without copying the complete file into
+    // the wasm heap. ffprobe then demuxes packets only; it does not decode video.
+    await mount(mountPoint, {
+      blobs: [{ name: fileName, data: blob }]
+    });
+
+    const cmd = `-v error -select_streams v:0 -show_packets -show_entries packet=pts_time,dts_time,duration_time,size,flags -of compact=p=0:nk=0 ${q(path)}`;
+    const t0 = performance.now();
+    const session = await FFprobeKit.execute(cmd);
+    const rc = session.getReturnCode?.();
+    const output = await session.getOutput?.() || '';
+
+    if (ReturnCode && !ReturnCode.isSuccess(rc)) {
+      throw new Error(output || 'FFprobe packet 扫描失败');
+    }
+
+    let packetCount = 0;
+    let keyCount = 0;
+    let corruptCount = 0;
+    let totalVideoBytes = 0;
+    let firstTimestamp = Infinity;
+    let lastPacketStart = -Infinity;
+    let videoEnd = -Infinity;
+
+    for (const rawLine of String(output).split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      const fields = {};
+      for (const part of line.split('|')) {
+        const eq = part.indexOf('=');
+        if (eq <= 0) continue;
+        fields[part.slice(0, eq)] = part.slice(eq + 1);
+      }
+
+      const pts = Number(fields.pts_time);
+      const dts = Number(fields.dts_time);
+      const duration = Number(fields.duration_time);
+      const size = Number(fields.size);
+      const flags = fields.flags || '';
+      const timestamp = Number.isFinite(pts) ? pts : Number.isFinite(dts) ? dts : NaN;
+      if (!Number.isFinite(timestamp)) continue;
+
+      packetCount++;
+      if (/K/.test(flags)) keyCount++;
+      if (/C/.test(flags)) corruptCount++;
+      if (Number.isFinite(size) && size > 0) totalVideoBytes += size;
+
+      firstTimestamp = Math.min(firstTimestamp, timestamp);
+      lastPacketStart = Math.max(lastPacketStart, timestamp);
+      const packetEnd = timestamp + (Number.isFinite(duration) && duration > 0 ? duration : 0);
+      videoEnd = Math.max(videoEnd, packetEnd);
+    }
+
+    if (!packetCount || !Number.isFinite(videoEnd)) {
+      throw new Error('FFprobe 未扫描到有效视频 packet');
+    }
+
+    const expected = Number(expectedDuration || 0);
+    const durationDelta = expected > 0 ? videoEnd - expected : null;
+    const fps = Number(this.mediaInfo?.fps || 0);
+    const tolerance = Math.max(0.5, fps > 0 ? 2 / fps : 0);
+    const durationOk = durationDelta == null || Math.abs(durationDelta) <= tolerance;
+
+    return {
+      packetCount,
+      keyCount,
+      corruptCount,
+      totalVideoBytes,
+      firstTimestamp: Number.isFinite(firstTimestamp) ? firstTimestamp : null,
+      lastPacketStart,
+      videoEnd,
+      expectedDuration: expected > 0 ? expected : null,
+      durationDelta,
+      tolerance,
+      durationOk,
+      ok: packetCount > 0 && corruptCount === 0 && durationOk,
+      scanSeconds: (performance.now() - t0) / 1000
+    };
+  }
+
   async resetRuntime(reason = '释放工作内存') {
     if (!this.api) return;
     const video = this.sourceVideoFile;
