@@ -201,3 +201,25 @@ Release packaging must keep:
 - corresponding source/build instructions available alongside distributed APKs.
 
 Do not silently switch between LGPL and GPL native bundles under the same binary/release label.
+
+
+### 21. Android libass can fail silently when fontconfig is not initialized
+
+FFmpegKit's Android guidance documents a particularly dangerous subtitle failure mode: Android does not ship a normal desktop-style fontconfig configuration, and subtitle burning can complete without an FFmpeg error while producing no visible subtitles if no font directory/configuration has been registered.
+
+Native policy:
+- initialize FFmpegKit fontconfig before any libass preview or formal encode;
+- register \`/system/fonts\` plus the app-private persistent font pool;
+- keep at least one bundled open fallback font available;
+- do not treat a successful FFmpeg return code as proof that subtitles were rendered;
+- the native startup self-test must compare a no-subtitle frame with a libass-rendered frame and require a pixel difference.
+
+### 22. SAF operations need isolation and cleanup around FFprobe
+
+Historical FFmpegKit Android reports show SAF operations affecting later FFprobe behavior in the same process. Even when the current fork has fixes, native code should avoid treating SAF protocol state as globally harmless.
+
+Policy:
+- create reusable SAF URLs only for the lifetime of the owning job;
+- unregister them on every success/failure/cancel path;
+- probe the actual selected input before formal encoding;
+- after a failed SAF probe, discard that SAF registration and recreate it rather than reusing potentially stale protocol state.
