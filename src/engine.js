@@ -131,12 +131,14 @@ export class EncoderEngine {
     const decoder = this.inputDecoderArgs();
     const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} ${q(out)}`;
     const t0 = performance.now();
-    await this.execute(cmd, false, options.timeoutMs ?? 120000);
+    const logs = await this.execute(cmd, true, options.timeoutMs ?? 120000);
     const elapsedSeconds = (performance.now() - t0) / 1000;
     const bytes = await this.api.readFile(out);
     if (!bytes) throw new Error(`${codecKey} 样本没有生成`);
 
     const ssim = await this.measureSsim(out, start, duration).catch(() => null);
+    const averageSpeed = duration / elapsedSeconds;
+    const steadySpeed = estimateSteadyStateSpeed(logs);
     return {
       codecKey,
       encoder,
@@ -145,7 +147,9 @@ export class EncoderEngine {
       elapsedSeconds,
       sampleBytes: bytes.byteLength,
       ssim,
-      encodeSpeed: duration / elapsedSeconds
+      averageSpeed,
+      encodeSpeed: steadySpeed || averageSpeed,
+      speedEstimate: steadySpeed ? 'steady-state' : 'whole-sample'
     };
   }
 
@@ -363,6 +367,32 @@ function encoderName(k) { return k === 'h264' ? 'libx264' : k === 'h265' ? 'libx
 function defaultCrf(k) { return k === 'h264' ? 18 : k === 'h265' ? 20 : 28; }
 function defaultPreset(k) { return k === 'av1' ? '8' : 'medium'; }
 function codecExtra(k) { return k === 'av1' ? ' -svtav1-params lp=4' : ''; }
+function estimateSteadyStateSpeed(logs = '') {
+  const points = [];
+  for (const line of String(logs).split(/\r?\n/)) {
+    const tm = line.match(/time=(\d+):(\d+):([0-9.]+)/);
+    const em = line.match(/elapsed=(\d+):(\d+):([0-9.]+)/);
+    if (!tm || !em) continue;
+    const media = Number(tm[1]) * 3600 + Number(tm[2]) * 60 + Number(tm[3]);
+    const elapsed = Number(em[1]) * 3600 + Number(em[2]) * 60 + Number(em[3]);
+    if (Number.isFinite(media) && Number.isFinite(elapsed)) points.push({ media, elapsed });
+  }
+
+  if (points.length < 3) return null;
+
+  // Use the latter half of the progress samples so encoder/WASM startup cost does
+  // not get extrapolated across the entire movie.
+  const startIndex = Math.max(0, Math.floor(points.length / 2) - 1);
+  const a = points[startIndex];
+  const b = points[points.length - 1];
+  const mediaDelta = b.media - a.media;
+  const elapsedDelta = b.elapsed - a.elapsed;
+  if (mediaDelta <= 0.12 || elapsedDelta <= 0.15) return null;
+
+  const speed = mediaDelta / elapsedDelta;
+  return Number.isFinite(speed) && speed > 0 ? speed : null;
+}
+
 function parseLibassFontEvents(logs = '') {
   return String(logs)
     .split(/\r?\n/)
