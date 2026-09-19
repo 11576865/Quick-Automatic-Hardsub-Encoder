@@ -19,6 +19,7 @@ const state = {
   softwareDecoders: { av1Dav1d: null },
   inputDecodeOk: false,
   previewUrls: [],
+  previewFontEvents: [],
   previewTimes: [],
   benchmarks: {},
   selectedCodec: null,
@@ -235,18 +236,20 @@ function renderSubtitleSummary() {
     return `✗ ${escapeHtml(m.requested)} → 未在用户提供字体中找到`;
   }).join('<br>');
 
+  const notices = [];
   if (state.media?.unsafeColorPipeline) {
-    $('fontWarnings').innerHTML += `<div class="error-box" style="margin-top:12px">检测到 ${state.media.bitDepth}-bit / HDR 或高位深视频。当前版本尚未实现可靠的 10-bit/HDR 色彩保持，因此允许生成字幕预览，但会锁定编码测试与正式压制，避免静默转换成 8-bit/SDR。</div>`;
+    notices.push(`<div class="error-box" style="margin-top:12px">检测到 ${state.media.bitDepth}-bit / HDR 或高位深视频。当前版本尚未实现可靠的 10-bit/HDR 色彩保持，因此允许生成字幕预览，但会锁定编码测试与正式压制，避免静默转换成 8-bit/SDR。</div>`);
   }
 
   if (missing.length || probable.length) {
-    $('fontWarnings').innerHTML = `<div class="warning-box" style="margin-top:12px">${details || '检测到字体风险。'}<br><br>注意：这只是静态字体名分析；最终是否回退以真实 libass 预览和日志为准。</div>`;
+    notices.push(`<div class="warning-box" style="margin-top:12px">${details || '检测到字体风险。'}<br><br>注意：这只是静态字体名分析；最终是否回退以真实 libass 预览和日志为准。</div>`);
     $('warningAccept').classList.remove('hidden');
   } else {
-    $('fontWarnings').innerHTML = `<div class="note" style="margin-top:12px">${details || 'ASS 未声明特定字体。'}<br>仍建议生成真实预览，确认 libass 实际渲染结果。</div>`;
+    notices.push(`<div class="note" style="margin-top:12px">${details || 'ASS 未声明特定字体。'}<br>仍建议生成真实预览，确认 libass 实际渲染结果。</div>`);
     $('warningAccept').classList.add('hidden');
     state.acceptedWarnings = true;
   }
+  $('fontWarnings').innerHTML = notices.join('');
 }
 
 async function renderPreviews() {
@@ -255,6 +258,7 @@ async function renderPreviews() {
     state.previewTimes = state.assInfo.previewTimes.slice(0, 6);
     state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
     state.previewUrls = new Array(state.previewTimes.length).fill(null);
+    state.previewFontEvents = new Array(state.previewTimes.length).fill(null);
     await loadPreviewAt(0);
     refreshBenchmarkEnabled(true);
   } catch (e) {
@@ -274,10 +278,18 @@ async function loadPreviewAt(index) {
   if (!state.previewUrls[safeIndex]) {
     container.innerHTML = `<div class="preview-placeholder">正在生成第 ${safeIndex + 1}/${times.length} 张真实 libass 预览…<br><small>首张先生成，其余仅在翻页时按需生成。</small></div>`;
     log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
-    state.previewUrls[safeIndex] = await state.engine.renderPreview(times[safeIndex], safeIndex);
+    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex);
+    state.previewUrls[safeIndex] = previewResult.url;
+    state.previewFontEvents[safeIndex] = previewResult.fontEvents || [];
+    if (state.previewFontEvents[safeIndex].length) {
+      log(`libass 字体选择 @ ${times[safeIndex].toFixed(2)}s:\n${state.previewFontEvents[safeIndex].join('\n')}`);
+    }
   }
 
-  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP">上一张</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP">下一张</button></div><div class="note" style="text-align:center;padding:0 10px 10px">只生成你实际查看的预览帧，避免一次等待全部采样点。</div></div>`;
+  const fontInfo = state.previewFontEvents[safeIndex]?.length
+    ? `<details class="note" style="padding:0 12px 12px"><summary>查看 libass 实际字体选择</summary><pre class="log" style="max-height:140px">${escapeHtml(state.previewFontEvents[safeIndex].join('\n'))}</pre></details>`
+    : '<div class="note" style="text-align:center;padding:0 10px 10px">此帧未捕获到 fontselect 警告/记录。</div>';
+  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP">上一张</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP">下一张</button></div><div class="note" style="text-align:center;padding:0 10px 10px">只生成你实际查看的预览帧，避免一次等待全部采样点。</div>${fontInfo}</div>`;
   $('prevP').onclick = () => loadPreviewAt(safeIndex - 1);
   $('nextP').onclick = () => loadPreviewAt(safeIndex + 1);
 }
