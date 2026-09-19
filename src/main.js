@@ -435,10 +435,12 @@ function renderSubtitleSummary() {
         ${risky.map(({ m, index }) => {
           const current = state.fontBindings[m.requested] || '';
           const opts = state.fontFaces.map((face, faceIndex) => {
-            const target = face.family || face.fullName || face.postScriptName || '';
-            const label = [face.fileName, target].filter(Boolean).join(' → ');
+            const target = getFontTargetName(face);
+            const label = target
+              ? `${face.fileName} → 内部名：${target}`
+              : `${face.fileName} → 未解析到内部字体名`;
             const selected = current && current === target ? ' selected' : '';
-            return `<option value="${faceIndex}"${selected}>${escapeHtml(label)}</option>`;
+            return `<option value="${faceIndex}"${selected}${target ? '' : ' disabled'}>${escapeHtml(label)}</option>`;
           }).join('');
           return `<label class="font-binding-row">
             <span>${escapeHtml(m.requested)}</span>
@@ -482,6 +484,17 @@ function renderSubtitleSummary() {
   }
 }
 
+function getFontTargetName(face) {
+  if (!face) return '';
+  return String(
+    face.family ||
+    face.fullName ||
+    face.postScriptName ||
+    (face.aliases || []).find(Boolean) ||
+    ''
+  ).trim();
+}
+
 function bindFontOverrideControls() {
   document.querySelectorAll('.font-binding-select').forEach(select => {
     select.addEventListener('change', async () => {
@@ -493,16 +506,21 @@ function bindFontOverrideControls() {
         delete state.fontBindings[match.requested];
       } else {
         const face = state.fontFaces[Number(select.value)];
-        const target = face?.family || face?.fullName || face?.postScriptName || '';
-        if (target) state.fontBindings[match.requested] = target;
+        const target = getFontTargetName(face);
+        if (!target) {
+          log(`无法强制映射 ${match.requested}：所选字体没有解析到可用的内部 family/full name。`);
+          return;
+        }
+        state.fontBindings[match.requested] = target;
       }
 
       state.activeAssText = rewriteAssFonts(state.assText, state.fontBindings);
       try {
+        await state.engine.setFontMappings(state.fontBindings);
         await state.engine.setAssText(state.activeAssText);
-        log(`字体映射已更新：${match.requested} → ${state.fontBindings[match.requested] || '取消强制映射'}`);
+        log(`字体强制映射已生效：${match.requested} → ${state.fontBindings[match.requested] || '取消强制映射'}`);
       } catch (e) {
-        log(`应用字体映射失败：${e.message}`);
+        log(`应用字体强制映射失败：${e.message}`);
       }
 
       state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
@@ -549,7 +567,10 @@ async function loadPreviewAt(index) {
   if (!state.previewUrls[safeIndex]) {
     container.innerHTML = `<div class="preview-placeholder">正在生成第 ${safeIndex + 1}/${times.length} 张真实 libass 预览…<br><small>首张先生成，其余仅在翻页时按需生成。</small></div>`;
     log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
-    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex);
+    const previewCenter = 0.5;
+    const shiftBy = Math.max(0, times[safeIndex] - previewCenter);
+    const previewAss = shiftAssForPreview(state.activeAssText || state.assText, shiftBy);
+    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex, previewAss);
     state.previewUrls[safeIndex] = previewResult.url;
     state.previewBaseUrls[safeIndex] = previewResult.baseUrl || null;
     state.previewFontEvents[safeIndex] = previewResult.fontEvents || [];
@@ -614,10 +635,21 @@ function workflowReadiness() {
 
 function refreshBenchmarkEnabled() {
   const status = workflowReadiness();
-  $('benchmarkBtn').disabled = !status.ready;
-  $('testSelectedBtn').disabled = !status.ready || !state.selectedCodec;
+  const warningsAccepted = !status.warnings || state.acceptedWarnings;
+  const basicReady = !!(state.engine.ready && state.inputDecodeOk && !status.unsafeColor && warningsAccepted);
+
+  // Parameter selection and a short test clip are diagnostic tools, so they
+  // must remain available even when the PNG subtitle preview itself failed.
+  $('benchmarkBtn').disabled = !basicReady;
+  $('testSelectedBtn').disabled = !basicReady || !state.selectedCodec;
+
+  // Full-length encoding remains guarded until subtitle rendering is verified.
   const plan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
   $('encodeBtn').disabled = !status.ready || !state.selectedCodec || !plan;
+
+  if (state.selectedCodec && basicReady && !status.previewOk) {
+    $('liveEta').textContent = '参数已选择；字幕预览尚未验证。可以先生成所选方案测试片段，正式全片压制暂时锁定。';
+  }
 }
 
 function getSourceVideoBitrate() {
