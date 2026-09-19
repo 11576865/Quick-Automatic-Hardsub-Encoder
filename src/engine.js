@@ -179,7 +179,9 @@ export class EncoderEngine {
     const bytes = await this.api.readFile(out);
     if (!bytes) throw new Error(`${codecKey} 样本没有生成`);
 
-    const ssim = await this.measureSsim(out, start, duration).catch(() => null);
+    const ssim = options.measureSsim === false
+      ? null
+      : await this.measureSsim(out, start, duration).catch(() => null);
     const packetStats = await this.getVideoPacketStats(out).catch(() => null);
     const averageSpeed = duration / elapsedSeconds;
     const steadySpeed = estimateSteadyStateSpeed(logs);
