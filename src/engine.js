@@ -71,10 +71,21 @@ export class EncoderEngine {
 
   async detectSoftwareDecoders() {
     this.assertReady();
-    const output = await this.execute('-hide_banner -decoders', true);
-    return {
-      av1Dav1d: /\blibdav1d\b/.test(output)
-    };
+    let av1Dav1d = false;
+    try {
+      const output = await this.execute('-hide_banner -h decoder=libdav1d', true, 15000);
+      av1Dav1d = /libdav1d/i.test(output) && !/unknown decoder/i.test(output);
+    } catch {
+      av1Dav1d = false;
+    }
+    return { av1Dav1d };
+  }
+
+  async testDav1dInput(timeSeconds = 0) {
+    this.assertReady();
+    const cmd = `-v error -ss ${Math.max(0, timeSeconds).toFixed(3)} -c:v libdav1d -i ${q(this.inputPath)} -frames:v 1 -an -sn -f null -`;
+    await this.execute(cmd, false, 30000);
+    return true;
   }
 
   async testInputDecode(timeSeconds = 0) {
