@@ -485,6 +485,9 @@ async function runBenchmarks() {
         const timeoutMs = codec === 'av1' ? 90000 : codec === 'h265' ? 60000 : 45000;
         const r = await state.engine.benchmarkCodec(codec, { start, duration, withSubtitles: false, timeoutMs });
         r.estimatedBytes = estimateFullBytes(r, duration, state.media);
+        r.estimatedSeconds = state.media?.duration && r.encodeSpeed > 0
+          ? state.media.duration / r.encodeSpeed
+          : null;
         state.benchmarks[codec] = r;
       } catch (e) {
         state.benchmarks[codec] = { codecKey: codec, error: e.message };
@@ -521,13 +524,14 @@ function renderCodecCards() {
     const r = state.benchmarks[k];
     if (!r) return `<div class="codec-card"><h3>${labels[k]}</h3><div class="note">等待测试</div></div>`;
     if (r.error) return `<div class="codec-card"><h3>${labels[k]}</h3><div class="bad">当前核心不可用</div><div class="note">${escapeHtml(r.error.slice(0,180))}</div></div>`;
-    const totalTime = state.media?.duration && r.encodeSpeed > 0 ? state.media.duration / r.encodeSpeed : null;
+    const totalTime = r.estimatedSeconds || null;
+    const speedLabel = r.speedEstimate === 'steady-state' ? '稳态速度' : '样本平均';
     return `<div class="codec-card ${state.selectedCodec===k?'selected':''}" data-codec="${k}">
       <h3>${labels[k]}</h3>
       <dl>
         <dt>预计体积</dt><dd>${r.estimatedBytes ? formatBytes(r.estimatedBytes) : '—'}</dd>
         <dt>预计时间</dt><dd>${totalTime ? formatDuration(totalTime) : '—'}</dd>
-        <dt>样本速度</dt><dd>${r.encodeSpeed.toFixed(2)}× realtime</dd>
+        <dt>${speedLabel}</dt><dd>${r.encodeSpeed.toFixed(2)}× realtime</dd>
         <dt>SSIM</dt><dd>${r.ssim ? r.ssim.toFixed(5) : '未取得'}</dd>
         <dt>CRF</dt><dd>${r.crf}</dd>
       </dl>
@@ -550,7 +554,7 @@ function autoSelectCandidate() {
   // without a measurable SSIM advantage, then choose the smallest remaining candidate.
   const frontier = allowed.filter(a => !allowed.some(b => b !== a &&
     b.estimatedBytes <= a.estimatedBytes &&
-    b.elapsedSeconds <= a.elapsedSeconds &&
+    (b.estimatedSeconds ?? Infinity) <= (a.estimatedSeconds ?? Infinity) &&
     (b.ssim ?? 0) >= (a.ssim ?? 0) - 0.0002));
   const pick = [...frontier].sort((a,b) => a.estimatedBytes - b.estimatedBytes)[0] || allowed[0];
   selectCodec(pick.codecKey, true);
