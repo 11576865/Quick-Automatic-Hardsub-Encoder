@@ -16,6 +16,8 @@ const state = {
   engine: null,
   capabilities: null,
   softwareEncoders: { h264: null, h265: null, av1: null },
+  softwareDecoders: { av1Dav1d: null },
+  inputDecodeOk: false,
   previewUrls: [],
   previewTimes: [],
   benchmarks: {},
@@ -126,7 +128,9 @@ async function bootstrap() {
   if (engineStatus.ready) {
     try {
       state.softwareEncoders = await state.engine.detectSoftwareEncoders();
+      state.softwareDecoders = await state.engine.detectSoftwareDecoders();
       log(`WASM 软件编码器：x264=${state.softwareEncoders.h264} x265=${state.softwareEncoders.h265} SVT-AV1=${state.softwareEncoders.av1}`);
+      log(`WASM 软件解码器：dav1d=${state.softwareDecoders.av1Dav1d}`);
     } catch (e) {
       log(`软件编码器检测失败：${e.message}`);
     }
@@ -149,6 +153,7 @@ function renderCapabilities() {
     ['FFmpeg WASM · H.264 / x264', sw.h264, sw.h264 === null ? '检测中' : sw.h264 ? '可编码' : '未编入核心'],
     ['FFmpeg WASM · H.265 / x265', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可编码' : '未编入核心'],
     ['FFmpeg WASM · AV1 / SVT-AV1', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可编码' : '未编入核心'],
+    ['FFmpeg WASM · AV1 / dav1d', state.softwareDecoders.av1Dav1d, state.softwareDecoders.av1Dav1d === null ? '检测中' : state.softwareDecoders.av1Dav1d ? '可解码' : '未编入核心'],
     ['WebCodecs 硬件通道 · H.264', c.codecs.h264, c.codecs.h264 ? '浏览器已暴露' : '浏览器未暴露'],
     ['WebCodecs 硬件通道 · H.265', c.codecs.hevc, c.codecs.hevc ? '浏览器已暴露' : '浏览器未暴露'],
     ['WebCodecs 硬件通道 · AV1', c.codecs.av1, c.codecs.av1 ? '浏览器已暴露' : '浏览器未暴露']
@@ -177,7 +182,17 @@ async function analyzeAll() {
       log('挂载媒体文件到浏览器 WebAssembly 文件系统…');
       await state.engine.stageFiles(state.video, state.ass, state.fonts);
       state.media = await state.engine.probe();
-      log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps`);
+      if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
+      log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps · ${state.media.pixelFormat || '未知像素格式'} · ${state.media.bitDepth}-bit`);
+
+      if (state.media.videoCodec === 'av1' && state.softwareDecoders.av1Dav1d === false) {
+        throw new Error('这是 AV1 源视频，但当前 Web core 没有 dav1d 软件解码器。请等待/使用带 dav1d 的新核心。');
+      }
+
+      log('执行输入解码 smoke test（只解码 1 帧）…');
+      await state.engine.testInputDecode(Math.max(0, Math.min(state.media.duration * 0.1, 1)));
+      state.inputDecodeOk = true;
+      log('输入视频解码测试通过。');
     }
     renderSubtitleSummary();
     $('subtitleCard').classList.remove('hidden');
@@ -200,6 +215,10 @@ function renderSubtitleSummary() {
   const mediaRows = state.media ? [
     ['视频', `${state.media.videoCodec} · ${state.media.width}×${state.media.height} · ${state.media.fps.toFixed(2)} fps`],
     ['时长', formatDuration(state.media.duration)],
+    ['像素格式', `${state.media.pixelFormat || '未知'} · ${state.media.bitDepth}-bit`],
+    ['色彩', [state.media.colorPrimaries, state.media.colorTransfer, state.media.colorSpace].filter(Boolean).join(' / ') || '未标记'],
+    ['HDR/高位深', state.media.unsafeColorPipeline ? '检测到：当前版本禁止静默重编码' : '未检测到风险'],
+    ['输入解码', state.inputDecodeOk ? '已通过 1 帧实测' : '未验证'],
     ['音频', state.media.audioCodec || '未检测到']
   ] : [];
   $('subtitleSummary').innerHTML = [
@@ -215,6 +234,10 @@ function renderSubtitleSummary() {
     if (m.status === 'probable') return `△ ${escapeHtml(m.requested)} → 可能匹配 ${escapeHtml(m.face.fullName || m.face.family || m.face.fileName)}`;
     return `✗ ${escapeHtml(m.requested)} → 未在用户提供字体中找到`;
   }).join('<br>');
+
+  if (state.media?.unsafeColorPipeline) {
+    $('fontWarnings').innerHTML += `<div class="error-box" style="margin-top:12px">检测到 ${state.media.bitDepth}-bit / HDR 或高位深视频。当前版本尚未实现可靠的 10-bit/HDR 色彩保持，因此允许生成字幕预览，但会锁定编码测试与正式压制，避免静默转换成 8-bit/SDR。</div>`;
+  }
 
   if (missing.length || probable.length) {
     $('fontWarnings').innerHTML = `<div class="warning-box" style="margin-top:12px">${details || '检测到字体风险。'}<br><br>注意：这只是静态字体名分析；最终是否回退以真实 libass 预览和日志为准。</div>`;
@@ -261,7 +284,8 @@ async function loadPreviewAt(index) {
 
 function refreshBenchmarkEnabled(previewDone = state.previewUrls.length > 0) {
   const warnings = state.fontMatches.some(x => x.status !== 'matched');
-  $('benchmarkBtn').disabled = !state.engine.ready || !previewDone || (warnings && !state.acceptedWarnings);
+  const unsafeColor = !!state.media?.unsafeColorPipeline;
+  $('benchmarkBtn').disabled = !state.engine.ready || !state.inputDecodeOk || !previewDone || unsafeColor || (warnings && !state.acceptedWarnings);
 }
 
 async function runBenchmarks() {
@@ -294,6 +318,16 @@ async function runBenchmarks() {
       renderCodecCards();
     }
     autoSelectCandidate();
+
+    // Benchmark samples and SSIM intermediates live in the WASM runtime. Reboot once
+    // after collecting results so the final encode starts from a clean heap.
+    try {
+      log('样本测试完成，正在重启 WASM runtime 释放临时样本与工作内存…');
+      await state.engine.resetRuntime('样本测试完成后清理临时文件');
+      log('WASM runtime 已清理并重新挂载输入。');
+    } catch (e) {
+      log(`WASM runtime 清理失败：${e.message}`);
+    }
   } finally {
     $('benchmarkBtn').disabled = false;
   }
@@ -357,16 +391,37 @@ function selectCodec(codec, automatic = false) {
 
 async function runEncode() {
   if (!state.selectedCodec) return;
+  if (state.media?.unsafeColorPipeline) {
+    alert('检测到 HDR/高位深输入。当前版本不会冒险静默转换，正式压制已锁定。');
+    return;
+  }
+
   try {
     $('encodeBtn').disabled = true;
-    $('progressBar').style.width = '8%';
-    log(`正式压制：${state.selectedCodec.toUpperCase()}`);
-    const bytes = await state.engine.encodeFull(state.selectedCodec);
+    $('progressBar').style.width = '5%';
+    log(`正式压制：${state.selectedCodec.toUpperCase()} · 使用流式输出，避免完整成品先堆在 WASM 文件系统中`);
+
+    const policy = $('spacePolicy').value;
+    const maxBytes = policy === 'knee' ? null : Math.floor(state.video.size * Number(policy));
+    if (maxBytes) log(`硬上限：${formatBytes(maxBytes)}（源文件 × ${policy}）`);
+
+    const estimated = state.benchmarks[state.selectedCodec]?.estimatedBytes || null;
+    const result = await state.engine.encodeFullStream(state.selectedCodec, {
+      maxBytes,
+      onBytes: written => {
+        if (estimated) {
+          const p = Math.min(94, Math.max(5, written / estimated * 90));
+          $('progressBar').style.width = `${p.toFixed(1)}%`;
+        }
+      }
+    });
+
     $('progressBar').style.width = '100%';
     const base = state.video.name.replace(/\.[^.]+$/, '');
-    downloadBytes(bytes, `${base}_hardsub_${state.selectedCodec}.mkv`);
-    log(`完成：${formatBytes(bytes.byteLength)}`);
+    downloadBlob(result.blob, `${base}_hardsub_${state.selectedCodec}.mkv`);
+    log(`完成：${formatBytes(result.byteLength)}`);
   } catch (e) {
+    $('progressBar').style.width = '0%';
     log(`压制失败：${e.stack || e.message}`);
     alert(`压制失败：${e.message}`);
   } finally {
@@ -374,11 +429,11 @@ async function runEncode() {
   }
 }
 
-function downloadBytes(bytes, name) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'video/x-matroska' }));
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 function formatBytes(n) {
