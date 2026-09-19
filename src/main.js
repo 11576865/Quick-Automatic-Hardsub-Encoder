@@ -281,16 +281,31 @@ async function analyzeAll() {
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps · ${state.media.pixelFormat || '未知像素格式'} · ${state.media.bitDepth}-bit`);
 
-      if (state.media.videoCodec === 'av1' && state.softwareDecoders.av1Dav1d === false) {
-        const nativeAv1 = !!state.capabilities?.codecs?.decode?.av1;
-        const nativeHint = nativeAv1
-          ? '本浏览器的 WebCodecs AV1 解码可用，但当前正式压制流水线仍以 FFmpeg WASM 为主，尚未把 WebCodecs VideoDecoder 接入 FFmpeg/libass。'
-          : '本浏览器也没有通过 WebCodecs 暴露 AV1 解码能力。';
-        throw new Error(`这是 AV1 源视频，但当前 Web core 没有 dav1d 软件解码器。${nativeHint}`);
+      const smokeTime = Math.max(0, Math.min(state.media.duration * 0.1, 1));
+
+      if (state.media.videoCodec === 'av1') {
+        log('AV1 输入：直接执行 dav1d 真实 1 帧解码测试…');
+        try {
+          await state.engine.testDav1dInput(smokeTime);
+          state.softwareDecoders.av1Dav1d = true;
+          renderCapabilities();
+          updateEnvironmentSummary(true);
+          log('dav1d 实际解码通过。');
+        } catch (dav1dError) {
+          state.softwareDecoders.av1Dav1d = false;
+          renderCapabilities();
+          updateEnvironmentSummary(true);
+          const nativeAv1 = !!state.capabilities?.codecs?.decode?.av1;
+          const nativeHint = nativeAv1
+            ? '浏览器的 WebCodecs AV1 解码可用，但当前正式压制流水线尚未接入该通道。'
+            : '浏览器也没有通过 WebCodecs 暴露 AV1 解码能力。';
+          throw new Error(`dav1d 实际解码测试失败：${dav1dError.message}。${nativeHint}`);
+        }
+      } else {
+        log('执行输入解码 smoke test（只解码 1 帧）…');
+        await state.engine.testInputDecode(smokeTime);
       }
 
-      log('执行输入解码 smoke test（只解码 1 帧）…');
-      await state.engine.testInputDecode(Math.max(0, Math.min(state.media.duration * 0.1, 1)));
       state.inputDecodeOk = true;
       log('输入视频解码测试通过。');
     }
