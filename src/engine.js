@@ -191,9 +191,7 @@ export class EncoderEngine {
     const targetVideoBitrate = Number(options.targetVideoBitrate || 0);
     const encoder = encoderName(codecKey);
     const out = `/sample_${codecKey}.mkv`;
-    const filter = options.withSubtitles
-      ? `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`
-      : null;
+    const filter = this.buildEncodeFilter(!!options.withSubtitles);
     const vf = filter ? ` -vf ${q(filter)}` : '';
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
@@ -275,7 +273,7 @@ export class EncoderEngine {
     const crf = options.crf ?? defaultCrf(codecKey);
     const preset = options.preset ?? defaultPreset(codecKey);
     const encoder = encoderName(codecKey);
-    const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
+    const filter = this.buildEncodeFilter(true);
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
     const gop = normalGop(this.mediaInfo?.fps || 30);
@@ -479,6 +477,24 @@ export class EncoderEngine {
       if (activeAssText) await this.setAssText(activeAssText);
     }
     this.mediaInfo = mediaInfo;
+  }
+
+  buildEncodeFilter(withSubtitles = true) {
+    const filters = [];
+    if (withSubtitles) {
+      filters.push(`ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`);
+    }
+
+    // 4:2:0 encoders commonly reject odd frame dimensions. Preserve the
+    // original subtitle coordinate system, then add at most one pixel on the
+    // right/bottom after libass rendering.
+    const width = Number(this.mediaInfo?.width || 0);
+    const height = Number(this.mediaInfo?.height || 0);
+    if ((width > 0 && width % 2) || (height > 0 && height % 2)) {
+      filters.push('pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0');
+    }
+
+    return filters.length ? filters.join(',') : null;
   }
 
   inputDecoderArgs() {
