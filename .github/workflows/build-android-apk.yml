@@ -13,18 +13,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Locate latest successful native core build
+      - name: Locate latest native core artifact
         id: core
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          RUN_ID="$(gh api             -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/workflows/build-android-core.yml/runs?status=success&per_page=20"             --jq '.workflow_runs[0].id // empty')"
+          RUN_ID=""
+          while IFS= read -r candidate; do
+            [ -n "$candidate" ] || continue
+            COUNT="$(gh api -H "Accept: application/vnd.github+json"               "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate}/artifacts"               --jq '[.artifacts[] | select(.name == "ffmpeg-kit-next-android-arm64-hardsub" and .expired == false)] | length')"
+            if [ "$COUNT" -gt 0 ]; then
+              RUN_ID="$candidate"
+              break
+            fi
+          done < <(gh api -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/workflows/build-android-core.yml/runs?per_page=30"             --jq '.workflow_runs[].id')
+
           if [ -z "$RUN_ID" ]; then
-            echo "::error::No successful Build Android Native Core run is available."
+            echo "::error::No non-expired Android native-core artifact is available."
             exit 1
           fi
+
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
-          echo "Using native core run $RUN_ID"
+          echo "Using native core artifact from run $RUN_ID"
 
       - name: Download native Maven bundle
         env:
