@@ -136,7 +136,7 @@ async function bootstrap() {
       log(`软件编码器检测失败：${e.message}`);
     }
     renderCapabilities();
-    $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> 上面的 WebCodecs 项只是浏览器/硬件通道检测，不影响 FFmpeg WASM 软件编码。';
+    $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与 WebCodecs 是两套独立能力：dav1d/SVT-AV1 属于网页自带的软件解码/编码；WebCodecs 表示浏览器是否另外开放原生编解码通道。';
   } else {
     $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
   }
@@ -155,9 +155,12 @@ function renderCapabilities() {
     ['FFmpeg WASM · H.265 / x265', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可编码' : '未编入核心'],
     ['FFmpeg WASM · AV1 / SVT-AV1', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可编码' : '未编入核心'],
     ['FFmpeg WASM · AV1 / dav1d', state.softwareDecoders.av1Dav1d, state.softwareDecoders.av1Dav1d === null ? '检测中' : state.softwareDecoders.av1Dav1d ? '可解码' : '未编入核心'],
-    ['WebCodecs 硬件通道 · H.264', c.codecs.h264, c.codecs.h264 ? '浏览器已暴露' : '浏览器未暴露'],
-    ['WebCodecs 硬件通道 · H.265', c.codecs.hevc, c.codecs.hevc ? '浏览器已暴露' : '浏览器未暴露'],
-    ['WebCodecs 硬件通道 · AV1', c.codecs.av1, c.codecs.av1 ? '浏览器已暴露' : '浏览器未暴露']
+    ['WebCodecs 解码 · H.264', c.codecs.decode.h264, c.codecs.decode.h264 ? '可用' : '浏览器未暴露'],
+    ['WebCodecs 解码 · H.265', c.codecs.decode.hevc, c.codecs.decode.hevc ? '可用' : '浏览器未暴露'],
+    ['WebCodecs 解码 · AV1', c.codecs.decode.av1, c.codecs.decode.av1 ? '可用' : '浏览器未暴露'],
+    ['WebCodecs 编码 · H.264', c.codecs.encode.h264, c.codecs.encode.h264 ? '可用' : '浏览器未暴露'],
+    ['WebCodecs 编码 · H.265', c.codecs.encode.hevc, c.codecs.encode.hevc ? '可用' : '浏览器未暴露'],
+    ['WebCodecs 编码 · AV1', c.codecs.encode.av1, c.codecs.encode.av1 ? '可用' : '浏览器未暴露']
   ];
   $('capabilities').innerHTML = rows.map(([k,v,label]) => `<div class="status-item"><span>${k}</span><span class="${v ? 'ok' : 'warn'}">${label}</span></div>`).join('');
 }
@@ -187,7 +190,11 @@ async function analyzeAll() {
       log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps · ${state.media.pixelFormat || '未知像素格式'} · ${state.media.bitDepth}-bit`);
 
       if (state.media.videoCodec === 'av1' && state.softwareDecoders.av1Dav1d === false) {
-        throw new Error('这是 AV1 源视频，但当前 Web core 没有 dav1d 软件解码器。请等待/使用带 dav1d 的新核心。');
+        const nativeAv1 = !!state.capabilities?.codecs?.decode?.av1;
+        const nativeHint = nativeAv1
+          ? '本浏览器的 WebCodecs AV1 解码可用，但当前正式压制流水线仍以 FFmpeg WASM 为主，尚未把 WebCodecs VideoDecoder 接入 FFmpeg/libass。'
+          : '本浏览器也没有通过 WebCodecs 暴露 AV1 解码能力。';
+        throw new Error(`这是 AV1 源视频，但当前 Web core 没有 dav1d 软件解码器。${nativeHint}`);
       }
 
       log('执行输入解码 smoke test（只解码 1 帧）…');
