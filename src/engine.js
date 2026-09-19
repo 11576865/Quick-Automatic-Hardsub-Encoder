@@ -153,9 +153,23 @@ export class EncoderEngine {
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
+    const targetVideoBitrate = Number(options.targetVideoBitrate || 0);
+    const passlog = `/twopass_${codecKey}_${Date.now()}`;
+
+    if (targetVideoBitrate > 0) {
+      options.onPhase?.('pass1');
+      const firstPass = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
+      this.onLog(`两遍目标体积编码：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
+      await this.execute(firstPass);
+    }
+
+    options.onPhase?.(targetVideoBitrate > 0 ? 'pass2' : 'encode');
     const stream = await FFmpegKitStreamOutput.create('mkv', 8 * 1024 * 1024);
     const target = stream.getUrl();
-    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} -c:a copy -f matroska ${q(target)}`;
+    const rateControl = targetVideoBitrate > 0
+      ? `-b:v ${Math.round(targetVideoBitrate)} -pass 2 -passlogfile ${q(passlog)}`
+      : `-crf ${crf}`;
+    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
     this.onLog(`$ ffmpeg ${cmd}`);
 
     let resolveDone;
