@@ -166,3 +166,38 @@ For formal output, native verification should compare:
 - non-zero packet/file size.
 
 Only after validation should the app copy the temporary MKV to the user destination and report success.
+
+
+### 18. SAF input may be a stream, not a seekable local file
+
+Android explicitly allows a document provider opened in read-only mode to return a pipe/socket rather than a seekable disk-backed descriptor. Cloud and virtual document providers may therefore behave differently from Downloads/internal storage.
+
+Native input policy:
+
+1. Probe the selected URI through FFprobe/FFmpegKit before the formal job.
+2. If normal seek/read operations work, keep the zero-copy reusable SAF read URL.
+3. If the provider is non-seekable or FFmpeg reports seek/random-access failure, offer/perform a one-time copy into app-private temporary storage, subject to free-space checks.
+4. Do not assume every `content://` URI can support arbitrary FFmpeg seeking.
+
+### 19. Treat Android app-private output as a staging file, not merely cache
+
+A formal encode should not use an evictable browser/WASM buffer or rely on a direct SAF writer. Native output should be staged in a controlled app-private job directory long enough to survive Activity recreation and to permit post-encode validation.
+
+Before starting:
+- estimate a conservative temporary-space requirement;
+- query available filesystem space;
+- refuse early if the headroom is insufficient instead of failing after a long encode.
+
+After verification and destination copy, clean the staging file. Interrupted-job staging files should be recoverable/cleanable on next launch.
+
+### 20. GPL build configuration is part of the distributed Android artifact
+
+The current Android core enables GPL components (x264/x265) and therefore the FFmpegKit/FFmpeg native bundle is GPL-3.0 under the project's pinned build configuration.
+
+Release packaging must keep:
+- exact upstream revision;
+- exact build flags;
+- applicable license texts;
+- corresponding source/build instructions available alongside distributed APKs.
+
+Do not silently switch between LGPL and GPL native bundles under the same binary/release label.
