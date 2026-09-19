@@ -599,13 +599,166 @@ function stripAssTags(text = '') {
     .trim();
 }
 
-function refreshBenchmarkEnabled(previewDone = state.previewUrls.some(Boolean)) {
+function workflowReadiness() {
+  const previewDone = state.previewUrls.some(Boolean);
   const warnings = state.fontMatches.some(x => x.status !== 'matched');
   const unsafeColor = !!state.media?.unsafeColorPipeline;
   const rendered = state.previewVisualChange.some(v => v === true);
-  const unknownOnly = previewDone && state.previewVisualChange.filter(v => v !== null).length === 0;
-  const previewOk = rendered || unknownOnly;
-  $('benchmarkBtn').disabled = !state.engine.ready || !state.inputDecodeOk || !previewDone || !previewOk || unsafeColor || (warnings && !state.acceptedWarnings);
+  const knownChecks = state.previewVisualChange.filter(v => v !== null);
+  const previewOk = rendered || (previewDone && knownChecks.length === 0);
+  return {
+    previewDone, warnings, unsafeColor, previewOk,
+    ready: !!(state.engine.ready && state.inputDecodeOk && previewDone && previewOk && !unsafeColor && (!warnings || state.acceptedWarnings))
+  };
+}
+
+function refreshBenchmarkEnabled() {
+  const status = workflowReadiness();
+  $('benchmarkBtn').disabled = !status.ready;
+  $('testSelectedBtn').disabled = !status.ready || !state.selectedCodec;
+  const plan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
+  $('encodeBtn').disabled = !status.ready || !state.selectedCodec || !plan;
+}
+
+function getSourceVideoBitrate() {
+  const media = state.media;
+  if (!media?.duration || !state.video) return 0;
+  if (media.videoBitRate > 0) return media.videoBitRate;
+  const containerAverage = state.video.size * 8 / media.duration;
+  if (media.audioBitRate > 0 && containerAverage > media.audioBitRate) return containerAverage - media.audioBitRate;
+  if (media.bitRate > 0 && media.audioBitRate > 0 && media.bitRate > media.audioBitRate) return media.bitRate - media.audioBitRate;
+  return containerAverage;
+}
+
+function getSourceBppf() {
+  const m = state.media;
+  const bitrate = getSourceVideoBitrate();
+  if (!m?.width || !m?.height || !m?.fps || !bitrate) return 0;
+  return bitrate / (m.width * m.height * m.fps);
+}
+
+function normalizeCodec(codec = '') {
+  const c = String(codec).toLowerCase();
+  if (/hevc|h265|265/.test(c)) return 'h265';
+  if (/av1/.test(c)) return 'av1';
+  return 'h264';
+}
+
+function codecEfficiency(codec) {
+  return codec === 'av1' ? 1.50 : codec === 'h265' ? 1.30 : 1.00;
+}
+
+function profileFor(codec, goal) {
+  const profiles = {
+    speed: {
+      h264: { crf: 21, preset: 'veryfast' },
+      h265: { crf: 24, preset: 'faster' },
+      av1: { crf: 34, preset: '10' }
+    },
+    balanced: {
+      h264: { crf: 19, preset: 'medium' },
+      h265: { crf: 22, preset: 'medium' },
+      av1: { crf: 30, preset: '8' }
+    },
+    quality: {
+      h264: { crf: 17, preset: 'slow' },
+      h265: { crf: 20, preset: 'slow' },
+      av1: { crf: 26, preset: '7' }
+    }
+  };
+  return profiles[goal]?.[codec] || profiles.balanced[codec];
+}
+
+function codecDescription(codec) {
+  if (codec === 'h264') return '兼容性高 · 软件编码较快 · 同等质量通常需要更多码率';
+  if (codec === 'h265') return '兼容性与压缩效率较均衡 · 适合多数现代设备';
+  return '压缩效率高 · 当前浏览器 WASM 软件编码较慢；原生后端完成后更有价值';
+}
+
+function chooseDefaultCodec(goal) {
+  const available = ['h264','h265','av1'].filter(k => state.softwareEncoders[k] !== false);
+  if (!available.length) return null;
+  if (goal === 'speed' && available.includes('h264')) return 'h264';
+  const source = normalizeCodec(state.media?.videoCodec);
+  if (available.includes(source)) return source;
+  if (available.includes('h265')) return 'h265';
+  return available[0];
+}
+
+function renderPlanOptions() {
+  if (!state.media) return;
+  const goal = $('encodeGoal').value;
+  if (!state.selectedCodec || state.softwareEncoders[state.selectedCodec] === false) state.selectedCodec = chooseDefaultCodec(goal);
+  const sourceRate = getSourceVideoBitrate();
+  const bppf = getSourceBppf();
+  $('sourceAnchor').innerHTML = '<strong>源片锚点</strong><br>' + escapeHtml((state.media.videoCodec || 'unknown').toUpperCase()) + ' · ' + formatBitrate(sourceRate) + ' · ' + formatBppf(bppf) + '<br><span class="note">源码率只作为压缩状态参考，不当成质量分数。</span>';
+  const labels = { h264: 'H.264 / x264', h265: 'H.265 / x265', av1: 'AV1 / SVT-AV1' };
+  $('codecPlanGrid').innerHTML = ['h264','h265','av1'].map(codec => {
+    const available = state.softwareEncoders[codec] !== false;
+    const plan = available ? buildEncodePlan(codec) : null;
+    const selected = state.selectedCodec === codec;
+    let param = '不可用';
+    if (plan?.mode === 'crf') param = 'CRF ' + plan.crf + ' · preset ' + plan.preset;
+    else if (plan?.mode === 'target-size') param = '目标视频码率 ' + formatBitrate(plan.targetVideoBitrate) + ' · 两遍';
+    return '<div class="codec-card plan-codec ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '">' +
+      '<h3>' + labels[codec] + '</h3>' +
+      '<div class="note">' + codecDescription(codec) + '</div>' +
+      '<div class="plan-param">' + param + '</div>' +
+      '<button class="plan-choose" data-codec="' + codec + '" ' + (available ? '' : 'disabled') + '>' + (selected ? '已选择' : '选择') + '</button>' +
+      '</div>';
+  }).join('');
+  document.querySelectorAll('.plan-choose').forEach(btn => btn.onclick = () => selectCodec(btn.dataset.codec));
+  updateChosenSummary();
+  refreshBenchmarkEnabled();
+}
+
+function updateChosenSummary() {
+  if (!state.selectedCodec) { $('chosenSummary').textContent = '请选择一个编码器。'; return; }
+  const plan = buildEncodePlan(state.selectedCodec);
+  if (!plan) { $('chosenSummary').textContent = '当前方案无法生成安全参数。'; return; }
+  if (plan.mode === 'crf') {
+    $('chosenSummary').innerHTML = '<strong>' + state.selectedCodec.toUpperCase() + '</strong> · CRF ' + plan.crf + ' · preset ' + plan.preset + '。质量模式不提前给出伪精确的成品体积或总耗时；正式编码后根据实时 statistics 计算 ETA。';
+  } else {
+    $('chosenSummary').innerHTML = '<strong>' + state.selectedCodec.toUpperCase() + '</strong> · 两遍目标码率 ' + formatBitrate(plan.targetVideoBitrate) + '。按码率计算的计划体积约 ' + formatBytes(plan.plannedBytes) + '，硬上限 ' + formatBytes(plan.sizeCeiling) + '。目标码率同时受源码率锚点和体积天花板约束。';
+  }
+}
+
+function selectCodec(codec) {
+  state.selectedCodec = codec;
+  if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
+  state.selectedTest = null;
+  $('selectedTestResult').classList.add('hidden');
+  renderPlanOptions();
+}
+
+async function runSelectedTest() {
+  if (!state.selectedCodec) return;
+  const plan = buildEncodePlan(state.selectedCodec);
+  if (!plan) return;
+  try {
+    $('testSelectedBtn').disabled = true;
+    $('selectedTestResult').classList.remove('hidden');
+    $('selectedTestResult').innerHTML = '<div class="note">正在生成所选方案测试片段…</div>';
+    const fps = state.media?.fps || 30;
+    const duration = Math.min(3, Math.max(1.5, 90 / fps));
+    const total = state.media?.duration || 0;
+    const startAt = total > duration * 2 ? Math.max(0, total * 0.45) : 0;
+    log('所选方案测试：' + state.selectedCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 · 含真实字幕');
+    const r = await state.engine.benchmarkCodec(state.selectedCodec, {
+      start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
+      targetVideoBitrate: plan.mode === 'target-size' ? plan.targetVideoBitrate : 0,
+      timeoutMs: state.selectedCodec === 'av1' ? 120000 : 90000
+    });
+    if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
+    state.selectedTest = r;
+    const sampleBitrate = r.packetStats?.totalVideoBytes ? r.packetStats.totalVideoBytes * 8 / duration : 0;
+    $('selectedTestResult').innerHTML = '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' + r.encodeSpeed.toFixed(2) + '× realtime</span><span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span><span>SSIM：' + (r.ssim ? r.ssim.toFixed(5) : '未取得') + '</span><a class="button-link" href="' + r.sampleUrl + '" download="hardsub_test_' + state.selectedCodec + '.mkv">下载测试片段查看实际画质</a><small>这些数字只描述这段测试片段，不外推为整片体积或总耗时。</small></div>';
+  } catch (e) {
+    log('所选方案测试失败：' + e.message);
+    $('selectedTestResult').innerHTML = '<div class="error-box">测试失败：' + escapeHtml(e.message) + '</div>';
+  } finally {
+    refreshBenchmarkEnabled();
+  }
 }
 
 async function runBenchmarks() {
@@ -613,285 +766,146 @@ async function runBenchmarks() {
     $('benchmarkBtn').disabled = true;
     state.benchmarks = {};
     renderCodecCards();
-    // Mobile/WASM benchmark: target roughly 36 source frames rather than a fixed
-    // multi-second clip. This keeps the comparison useful without making users
-    // wait minutes before the real encode even starts.
     const fps = state.media?.fps || 30;
     const duration = Math.min(1.5, Math.max(0.6, 36 / fps));
-    const totalDuration = state.media?.duration || 0;
-    log(`快速样本长度：${duration.toFixed(2)} 秒（约 ${Math.round(duration * fps)} 帧 @ ${fps.toFixed(2)} fps）`);
-    const start = totalDuration > duration * 2 ? Math.max(0, totalDuration * 0.45) : 0;
-    const codecs = ['h264','h265','av1'];
-    for (const codec of codecs) {
+    const total = state.media?.duration || 0;
+    const startAt = total > duration * 2 ? Math.max(0, total * 0.45) : 0;
+    log('高级比较：每个编码器约 ' + duration.toFixed(2) + ' 秒样本；结果不外推整片。');
+    for (const codec of ['h264','h265','av1']) {
       if (state.softwareEncoders[codec] === false) {
-        state.benchmarks[codec] = { codecKey: codec, error: '当前 FFmpeg WASM 核心未编入该编码器，已跳过测试。' };
-        log(`${codec.toUpperCase()}：核心检测为不可用，跳过，不启动 FFmpeg。`);
+        state.benchmarks[codec] = { codecKey: codec, error: '当前核心未编入该编码器。' };
         renderCodecCards();
         continue;
       }
-
-      log(`开始 ${codec.toUpperCase()} 样本测试…`);
       try {
-        const timeoutMs = codec === 'av1' ? 90000 : codec === 'h265' ? 60000 : 45000;
-        const r = await state.engine.benchmarkCodec(codec, { start, duration, withSubtitles: false, timeoutMs });
-        r.estimatedBytes = estimateFullBytes(r, duration, state.media);
-        r.estimatedSeconds = state.media?.duration && r.encodeSpeed > 0
-          ? state.media.duration / r.encodeSpeed
-          : null;
-        state.benchmarks[codec] = r;
+        const p = profileFor(codec, 'balanced');
+        state.benchmarks[codec] = await state.engine.benchmarkCodec(codec, { start: startAt, duration, withSubtitles: false, crf: p.crf, preset: p.preset, timeoutMs: codec === 'av1' ? 90000 : codec === 'h265' ? 60000 : 45000 });
       } catch (e) {
         state.benchmarks[codec] = { codecKey: codec, error: e.message };
-        log(`${codec.toUpperCase()} 测试终止：${e.message}`);
       }
       renderCodecCards();
     }
-    autoSelectCandidate();
-
-    // Benchmark samples and SSIM intermediates live in the WASM runtime. Reboot once
-    // after collecting results so the final encode starts from a clean heap.
-    try {
-      log('样本测试完成，正在重启 WASM runtime 释放临时样本与工作内存…');
-      await state.engine.resetRuntime('样本测试完成后清理临时文件');
-      log('WASM runtime 已清理并重新挂载输入。');
-    } catch (e) {
-      log(`WASM runtime 清理失败：${e.message}`);
-    }
+    try { await state.engine.resetRuntime('高级样本测试完成后清理临时文件'); }
+    catch (e) { log('样本测试后的 runtime 清理失败：' + e.message); }
   } finally {
-    $('benchmarkBtn').disabled = false;
+    refreshBenchmarkEnabled();
   }
-}
-
-function estimateFullBytes(result, sampleDuration, media) {
-  if (!media?.duration) return null;
-
-  const fps = media.fps || 30;
-  const totalFrames = Math.max(1, Math.round(media.duration * fps));
-  const stats = result.packetStats;
-  let videoBytes;
-
-  if (stats?.interCount > 0) {
-    const avgInter = stats.interBytes / stats.interCount;
-    const avgKey = stats.keyCount > 0
-      ? stats.keyBytes / stats.keyCount
-      : avgInter * 4;
-    const gop = result.gop || Math.max(48, Math.min(300, Math.round(fps * 5)));
-    const estimatedKeys = Math.max(1, Math.ceil(totalFrames / gop));
-    const estimatedInter = Math.max(0, totalFrames - estimatedKeys);
-    videoBytes = avgInter * estimatedInter + avgKey * estimatedKeys;
-    result.sizeEstimateMethod = 'packet-model';
-  } else {
-    // Fallback only: whole short-file extrapolation is much less reliable,
-    // especially for AV1 where the first key frame dominates tiny samples.
-    videoBytes = result.sampleBytes / sampleDuration * media.duration;
-    result.sizeEstimateMethod = 'whole-sample-fallback';
-  }
-
-  const audioBytes = media.audioBitRate
-    ? media.audioBitRate / 8 * media.duration
-    : 0;
-  const containerReserve = Math.max(256 * 1024, (videoBytes + audioBytes) * 0.01);
-  const estimate = Math.round(videoBytes + audioBytes + containerReserve);
-
-  const uncertainty = result.sizeEstimateMethod === 'packet-model'
-    ? (result.codecKey === 'av1' ? 0.35 : 0.25)
-    : 0.55;
-  result.estimatedRange = {
-    low: Math.max(0, Math.round(estimate * (1 - uncertainty))),
-    high: Math.round(estimate * (1 + uncertainty))
-  };
-  return estimate;
 }
 
 function renderCodecCards() {
-  const labels = {h264:'H.264 / x264', h265:'H.265 / x265', av1:'AV1 / SVT-AV1'};
-  $('codecGrid').innerHTML = ['h264','h265','av1'].map(k => {
-    const r = state.benchmarks[k];
-    if (!r) return `<div class="codec-card"><h3>${labels[k]}</h3><div class="note">等待测试</div></div>`;
-    if (r.error) return `<div class="codec-card"><h3>${labels[k]}</h3><div class="bad">当前核心不可用</div><div class="note">${escapeHtml(r.error.slice(0,180))}</div></div>`;
-    const totalTime = r.estimatedSeconds || null;
-    const speedLabel = r.speedEstimate === 'steady-state' ? '稳态速度' : '样本平均';
-    return `<div class="codec-card ${state.selectedCodec===k?'selected':''}" data-codec="${k}">
-      <h3>${labels[k]}</h3>
-      <dl>
-        <dt>预计体积</dt><dd>${r.estimatedBytes ? formatBytes(r.estimatedBytes) : '—'}</dd>
-        <dt>估算范围</dt><dd>${r.estimatedRange ? `${formatBytes(r.estimatedRange.low)}–${formatBytes(r.estimatedRange.high)}` : '—'}</dd>
-        <dt>预计时间</dt><dd>${totalTime ? formatDuration(totalTime) : '—'}</dd>
-        <dt>${speedLabel}</dt><dd>${r.encodeSpeed.toFixed(2)}× realtime</dd>
-        <dt>SSIM</dt><dd>${r.ssim ? r.ssim.toFixed(5) : '未取得'}</dd>
-        <dt>CRF</dt><dd>${r.crf}</dd>
-      </dl>
-      <div class="button-row"><button class="choose" data-codec="${k}">选择</button></div>
-    </div>`;
+  const labels = { h264:'H.264 / x264', h265:'H.265 / x265', av1:'AV1 / SVT-AV1' };
+  $('codecGrid').innerHTML = ['h264','h265','av1'].map(codec => {
+    const r = state.benchmarks[codec];
+    if (!r) return '<div class="codec-card"><h3>' + labels[codec] + '</h3><div class="note">等待测试</div></div>';
+    if (r.error) return '<div class="codec-card"><h3>' + labels[codec] + '</h3><div class="bad">测试失败</div><div class="note">' + escapeHtml(r.error.slice(0,180)) + '</div></div>';
+    const sampleDuration = Math.max(0.001, r.packetStats?.packetCount / (state.media?.fps || 30));
+    const sampleBitrate = r.packetStats?.totalVideoBytes ? r.packetStats.totalVideoBytes * 8 / sampleDuration : 0;
+    return '<div class="codec-card"><h3>' + labels[codec] + '</h3><dl>' +
+      '<dt>样本速度</dt><dd>' + r.encodeSpeed.toFixed(2) + '× realtime</dd>' +
+      '<dt>样本视频码率</dt><dd>' + formatBitrate(sampleBitrate) + '</dd>' +
+      '<dt>SSIM</dt><dd>' + (r.ssim ? r.ssim.toFixed(5) : '未取得') + '</dd>' +
+      '<dt>参数</dt><dd>CRF ' + r.crf + ' · ' + r.preset + '</dd></dl>' +
+      '<div class="button-row"><button class="advanced-choose" data-codec="' + codec + '">采用此编码器</button></div></div>';
   }).join('');
-  document.querySelectorAll('.choose').forEach(btn => btn.onclick = () => selectCodec(btn.dataset.codec));
-}
-
-function autoSelectCandidate() {
-  const policy = $('spacePolicy').value;
-  const good = Object.values(state.benchmarks).filter(r => !r.error && r.estimatedBytes && r.ssim);
-  if (!good.length) return;
-  const sourceSize = state.video.size;
-  let allowed = good;
-  if (policy !== 'knee') allowed = good.filter(r => r.estimatedBytes <= sourceSize * Number(policy));
-  if (!allowed.length) allowed = good;
-
-  // Conservative Pareto-like default: remove candidates that are both larger and slower
-  // without a measurable SSIM advantage, then choose the smallest remaining candidate.
-  const frontier = allowed.filter(a => !allowed.some(b => b !== a &&
-    b.estimatedBytes <= a.estimatedBytes &&
-    (b.estimatedSeconds ?? Infinity) <= (a.estimatedSeconds ?? Infinity) &&
-    (b.ssim ?? 0) >= (a.ssim ?? 0) - 0.0002));
-  const pick = [...frontier].sort((a,b) => a.estimatedBytes - b.estimatedBytes)[0] || allowed[0];
-  selectCodec(pick.codecKey, true);
-}
-
-function selectCodec(codec, automatic = false) {
-  state.selectedCodec = codec;
-  renderCodecCards();
-  const r = state.benchmarks[codec];
-  const plan = buildEncodePlan(codec);
-  const planText = plan?.mode === 'target-size'
-    ? `预计接近/超过体积上限，将使用两遍目标体积编码；目标视频码率约 ${Math.round(plan.targetVideoBitrate / 1000)} kb/s。`
-    : plan?.mode === 'crf'
-      ? `预计有足够余量，保留 CRF 单遍编码，不会为了“用满上限”主动增大文件。`
-      : '';
-  $('chosenSummary').textContent = `${automatic ? '自动候选：' : '已选择：'} ${codec.toUpperCase()} · 样本估算 ${r?.estimatedBytes ? formatBytes(r.estimatedBytes) : '未知体积'}。 ${planText} 正式压制前仍由你确认。`;
-  $('encodeBtn').disabled = !r || !!r.error || !plan;
+  document.querySelectorAll('.advanced-choose').forEach(btn => btn.onclick = () => selectCodec(btn.dataset.codec));
 }
 
 async function runEncode() {
   if (!state.selectedCodec) return;
-  if (state.media?.unsafeColorPipeline) {
-    alert('检测到 HDR/高位深输入。当前版本不会冒险静默转换，正式压制已锁定。');
-    return;
-  }
-
+  if (state.media?.unsafeColorPipeline) { alert('检测到 HDR/高位深输入。当前版本不会静默转换，正式压制已锁定。'); return; }
   const plan = buildEncodePlan(state.selectedCodec);
-  if (!plan) {
-    alert('无法生成安全的压制方案；请重新分析文件。');
-    return;
-  }
-
+  if (!plan) { alert('无法生成安全的压制方案。'); return; }
   try {
     $('encodeBtn').disabled = true;
-    $('progressBar').style.width = '5%';
-    log(`正式压制：${state.selectedCodec.toUpperCase()} · 流式读取 FFmpeg 输出，减少 WASM 内部完整成品副本`);
-
-    if (plan.sizeCeiling) {
-      log(`硬上限：${formatBytes(plan.sizeCeiling)}（源文件 × ${plan.multiplier}）`);
-      if (plan.mode === 'target-size') {
-        log(`预测结果距离上限过近或已经超出；启用两遍目标体积编码，安全预算 ${formatBytes(plan.safeBudgetBytes)}，视频目标码率约 ${Math.round(plan.targetVideoBitrate / 1000)} kb/s。`);
-      } else {
-        log(`样本估算 ${formatBytes(plan.estimatedBytes)}，低于上限的 90%；保留 CRF 单遍，避免为了接近上限反而把文件压大。`);
-      }
-    } else {
-      log('效率曲线模式：使用 CRF 单遍，不设置固定体积上限。');
-    }
-
+    $('progressBar').style.width = '1%';
+    $('liveEta').textContent = '正在启动编码器；前几秒不计算 ETA。';
+    log('正式压制：' + state.selectedCodec.toUpperCase() + ' · ' + (plan.mode === 'target-size' ? '两遍目标体积' : 'CRF质量') + '模式');
+    if (plan.mode === 'target-size') log('硬上限 ' + formatBytes(plan.sizeCeiling) + '；源码率锚点 ' + formatBitrate(plan.sourceVideoBitrate) + '；目标视频码率 ' + formatBitrate(plan.targetVideoBitrate) + '。');
+    else log('CRF ' + plan.crf + ' · preset ' + plan.preset + '；不提前猜整片大小。');
+    const durationMs = state.media.duration * 1000;
+    let phaseName = '';
+    let samples = [];
+    let lastUi = 0;
     const result = await state.engine.encodeFullStream(state.selectedCodec, {
+      crf: plan.crf, preset: plan.preset,
       targetVideoBitrate: plan.mode === 'target-size' ? plan.targetVideoBitrate : 0,
-      onPhase: phase => {
-        if (phase === 'pass1') {
-          $('progressBar').style.width = '8%';
-          log('阶段 1/2：统计整片复杂度与码率分配。');
-        } else if (phase === 'pass2') {
-          $('progressBar').style.width = '50%';
-          log('阶段 2/2：按目标码率正式生成成品。');
+      onPhase: phase => { phaseName = phase; samples = []; $('liveEta').textContent = phase === 'pass1' ? '第一遍：正在稳定编码速度…' : phase === 'pass2' ? '第二遍：正在稳定编码速度…' : '正在稳定编码速度…'; },
+      onStatistics: stat => {
+        const currentPhase = stat.phase || phaseName || 'encode';
+        if (currentPhase !== phaseName) { phaseName = currentPhase; samples = []; }
+        const mediaSec = Math.max(0, (stat.timeMs || 0) / 1000);
+        const now = performance.now();
+        samples.push({ wall: now, media: mediaSec });
+        samples = samples.filter(x => now - x.wall <= 20000);
+        const phaseProgress = durationMs > 0 ? Math.min(1, (stat.timeMs || 0) / durationMs) : 0;
+        const twoPass = plan.mode === 'target-size';
+        const overall = twoPass ? (currentPhase === 'pass1' ? phaseProgress * 0.48 : 0.50 + phaseProgress * 0.48) : phaseProgress * 0.98;
+        $('progressBar').style.width = Math.max(1, Math.min(98, overall * 100)).toFixed(1) + '%';
+        if (now - lastUi < 500) return;
+        lastUi = now;
+        let rollingSpeed = 0;
+        if (samples.length >= 2) {
+          const a = samples[0], b = samples[samples.length - 1];
+          const wallSec = (b.wall - a.wall) / 1000;
+          if (wallSec >= 6 && b.media > a.media) rollingSpeed = (b.media - a.media) / wallSec;
         }
-      },
-      onBytes: written => {
-        const denominator = plan.mode === 'target-size'
-          ? (plan.safeBudgetBytes || plan.estimatedBytes)
-          : plan.estimatedBytes;
-        if (denominator) {
-          const base = plan.mode === 'target-size' ? 50 : 5;
-          const span = plan.mode === 'target-size' ? 44 : 89;
-          const p = Math.min(94, Math.max(base, base + written / denominator * span));
-          $('progressBar').style.width = `${p.toFixed(1)}%`;
+        const phaseLabel = currentPhase === 'pass1' ? '第一遍' : currentPhase === 'pass2' ? '第二遍' : '正式压制';
+        if (!(rollingSpeed > 0)) {
+          $('liveEta').textContent = phaseLabel + ' · 已处理 ' + (phaseProgress * 100).toFixed(1) + '% · 正在稳定编码速度…';
+          return;
         }
+        const remainMedia = Math.max(0, state.media.duration - mediaSec);
+        const eta = remainMedia / rollingSpeed;
+        const fps = rollingSpeed * (state.media.fps || 0);
+        $('liveEta').textContent = phaseLabel + ' · 已处理 ' + (phaseProgress * 100).toFixed(1) + '% · 最近20秒 ' + fps.toFixed(1) + ' fps / ' + rollingSpeed.toFixed(2) + '× realtime · 当前阶段预计剩余 ' + formatDuration(eta);
       }
     });
-
     $('progressBar').style.width = '100%';
+    $('liveEta').textContent = '压制完成 · ' + formatBytes(result.byteLength);
     const base = state.video.name.replace(/\.[^.]+$/, '');
-    downloadBlob(result.blob, `${base}_hardsub_${state.selectedCodec}.mkv`);
-
+    downloadBlob(result.blob, base + '_hardsub_' + state.selectedCodec + '.mkv');
     if (plan.sizeCeiling && result.byteLength > plan.sizeCeiling) {
       const over = (result.byteLength / plan.sizeCeiling - 1) * 100;
-      log(`警告：实际成品 ${formatBytes(result.byteLength)}，比设定上限高 ${over.toFixed(2)}%。成品仍已保留并下载，没有在末尾丢弃。`);
-      alert(`压制完成，但实际成品比设定上限高 ${over.toFixed(2)}%。成品不会被删除，已正常下载。后续可用更保守的安全余量重新压制。`);
-    } else {
-      log(`完成：${formatBytes(result.byteLength)}`);
+      log('成品 ' + formatBytes(result.byteLength) + '，比硬上限高 ' + over.toFixed(2) + '%；成品已保留并下载。');
+      alert('压制完成，但实际成品比硬上限高 ' + over.toFixed(2) + '%。成品已正常下载，没有丢弃。');
     }
-
-    try {
-      await state.engine.resetRuntime('正式压制完成后释放 WASM heap');
-      log('正式压制结束，WASM runtime 已重启并释放工作内存。');
-    } catch (e) {
-      log(`完成后的内存清理失败：${e.message}`);
-    }
+    try { await state.engine.resetRuntime('正式压制完成后释放 WASM heap'); }
+    catch (e) { log('完成后的内存清理失败：' + e.message); }
   } catch (e) {
     $('progressBar').style.width = '0%';
-    log(`压制失败：${e.stack || e.message}`);
-    alert(`压制失败：${e.message}`);
+    $('liveEta').textContent = '压制失败。';
+    log('压制失败：' + (e.stack || e.message));
+    alert('压制失败：' + e.message);
   } finally {
-    $('encodeBtn').disabled = false;
+    refreshBenchmarkEnabled();
   }
 }
 
 function buildEncodePlan(codec) {
-  const benchmark = state.benchmarks[codec];
   const media = state.media;
-  if (!benchmark || benchmark.error || !media?.duration) return null;
-
-  const policy = $('spacePolicy').value;
-  const estimatedBytes = benchmark.estimatedBytes || null;
-  if (policy === 'knee') {
-    return { mode: 'crf', estimatedBytes, sizeCeiling: null, multiplier: null };
+  if (!media?.duration || !state.video || state.softwareEncoders[codec] === false) return null;
+  const goal = $('encodeGoal')?.value || 'balanced';
+  if (goal === 'balanced' || goal === 'quality' || goal === 'speed') {
+    const p = profileFor(codec, goal);
+    return { mode: 'crf', goal, codec, crf: p.crf, preset: p.preset, sizeCeiling: null, sourceVideoBitrate: getSourceVideoBitrate() };
   }
-
-  const multiplier = Number(policy);
+  const multiplier = goal === 'size20' ? 2.0 : 1.6;
   const sizeCeiling = Math.floor(state.video.size * multiplier);
-
-  // The ceiling is a fence, not a target. If the CRF estimate is comfortably below it,
-  // keep CRF mode instead of deliberately inflating bitrate.
-  if (estimatedBytes && estimatedBytes <= sizeCeiling * 0.90) {
-    return { mode: 'crf', estimatedBytes, sizeCeiling, multiplier };
-  }
-
-  // Leave 4% headroom for bitrate-control error, container overhead and imperfect
-  // audio bitrate metadata. Audio is stream-copied, so its budget must be reserved.
   const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
   const containerReserveBytes = Math.max(256 * 1024, Math.floor(safeBudgetBytes * 0.01));
-  const totalBitRate = media.bitRate || 0;
-  const videoBitRate = media.videoBitRate || 0;
-
+  const totalAverage = state.video.size * 8 / media.duration;
+  const sourceVideoBitrate = getSourceVideoBitrate();
   let audioBitRate = media.audioBitRate || 0;
-  if (!audioBitRate && totalBitRate > videoBitRate && videoBitRate > 0) {
-    audioBitRate = totalBitRate - videoBitRate;
-  }
-  if (!audioBitRate && media.audioTracks > 0) {
-    // Conservative fallback for streams whose ffprobe metadata lacks bit_rate.
-    audioBitRate = 1_000_000 * media.audioTracks;
-  }
-
-  const bitsAvailableForVideo =
-    (safeBudgetBytes - containerReserveBytes) * 8 - audioBitRate * media.duration;
-  const targetVideoBitrate = Math.floor(bitsAvailableForVideo / media.duration);
-
-  if (!Number.isFinite(targetVideoBitrate) || targetVideoBitrate < 150_000) {
-    return null;
-  }
-
-  return {
-    mode: 'target-size',
-    estimatedBytes,
-    sizeCeiling,
-    multiplier,
-    safeBudgetBytes,
-    targetVideoBitrate,
-    audioBitRate
-  };
+  if (!audioBitRate && totalAverage > sourceVideoBitrate) audioBitRate = Math.max(0, totalAverage - sourceVideoBitrate);
+  if (!audioBitRate && media.audioTracks > 0) audioBitRate = 256000 * media.audioTracks;
+  const ceilingVideoBitrate = Math.floor(((safeBudgetBytes - containerReserveBytes) * 8 / media.duration) - audioBitRate);
+  if (!(ceilingVideoBitrate > 150000)) return null;
+  const sourceCodec = normalizeCodec(media.videoCodec);
+  const sourceEquivalent = sourceVideoBitrate > 0 ? sourceVideoBitrate * (codecEfficiency(sourceCodec) / codecEfficiency(codec)) * (multiplier === 2.0 ? 1.12 : 1.05) : ceilingVideoBitrate;
+  const targetVideoBitrate = Math.floor(Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent)));
+  const plannedBytes = Math.round(((targetVideoBitrate + audioBitRate) * media.duration / 8) + containerReserveBytes);
+  const p = profileFor(codec, 'balanced');
+  return { mode: 'target-size', goal, codec, crf: p.crf, preset: p.preset, multiplier, sizeCeiling, safeBudgetBytes, plannedBytes, targetVideoBitrate, ceilingVideoBitrate, sourceVideoBitrate, audioBitRate };
 }
 
 function downloadBlob(blob, name) {
