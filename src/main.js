@@ -402,12 +402,15 @@ async function runEncode() {
     log(`正式压制：${state.selectedCodec.toUpperCase()} · 使用流式输出，避免完整成品先堆在 WASM 文件系统中`);
 
     const policy = $('spacePolicy').value;
-    const maxBytes = policy === 'knee' ? null : Math.floor(state.video.size * Number(policy));
-    if (maxBytes) log(`硬上限：${formatBytes(maxBytes)}（源文件 × ${policy}）`);
+    const sizeCeiling = policy === 'knee' ? null : Math.floor(state.video.size * Number(policy));
+    if (sizeCeiling) log(`体积约束目标：≤ ${formatBytes(sizeCeiling)}（源文件 × ${policy}）。当前版本只会在开始前依据样本估算筛选，不会在编码末期粗暴取消。`);
 
     const estimated = state.benchmarks[state.selectedCodec]?.estimatedBytes || null;
+    if (sizeCeiling && estimated && estimated > sizeCeiling) {
+      throw new Error(`当前方案预计输出 ${formatBytes(estimated)}，超过所选上限 ${formatBytes(sizeCeiling)}。请重新测试或选择更高压缩效率的方案；程序不会先编码到末尾再强制取消。`);
+    }
+
     const result = await state.engine.encodeFullStream(state.selectedCodec, {
-      maxBytes,
       onBytes: written => {
         if (estimated) {
           const p = Math.min(94, Math.max(5, written / estimated * 90));
