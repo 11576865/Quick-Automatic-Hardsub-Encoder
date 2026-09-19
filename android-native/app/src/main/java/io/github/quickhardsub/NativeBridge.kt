@@ -29,22 +29,98 @@ class NativeBridge(
             .toString()
     }
 
+    private fun executeOk(args: Array<String>): Pair<Boolean, String> {
+        val session = FFmpegKit.executeWithArguments(args)
+        val ok = ReturnCode.isSuccess(session.getReturnCode())
+        return ok to session.getOutput()
+    }
+
+    private fun codecSmoke(
+        encoder: String,
+        presetArgs: Array<String>,
+        output: File
+    ): Pair<Boolean, String> {
+        output.delete()
+        val args = mutableListOf(
+            "-y",
+            "-f", "lavfi",
+            "-i", "testsrc2=size=160x96:rate=12:duration=0.5",
+            "-an",
+            "-frames:v", "6",
+            "-c:v", encoder
+        )
+        args.addAll(presetArgs)
+        args.addAll(listOf("-pix_fmt", "yuv420p", output.absolutePath))
+
+        val (encodeOk, logs) = executeOk(args.toTypedArray())
+        if (!encodeOk || output.length() <= 0) {
+            return false to logs
+        }
+
+        val probe = FFprobeKit.getMediaInformation(output.absolutePath)
+        return (probe.getMediaInformation() != null) to logs
+    }
+
+    private fun libassVisualSmoke(assFile: File): Pair<Boolean, String> {
+        val base = File(activity.cacheDir, "native_hardsub_selftest_base.raw")
+        val sub = File(activity.cacheDir, "native_hardsub_selftest_sub.raw")
+        base.delete()
+        sub.delete()
+
+        val common = arrayOf(
+            "-y",
+            "-f", "lavfi",
+            "-i", "color=c=black:s=320x180:r=1:d=1",
+            "-frames:v", "1",
+            "-pix_fmt", "rgb24"
+        )
+
+        val baseArgs = common + arrayOf("-f", "rawvideo", base.absolutePath)
+        val (baseOk, baseLogs) = executeOk(baseArgs)
+        if (!baseOk || base.length() <= 0) return false to baseLogs
+
+        val subArgs = arrayOf(
+            "-y",
+            "-f", "lavfi",
+            "-i", "color=c=black:s=320x180:r=1:d=1",
+            "-vf", "ass=${assFile.absolutePath}:fontsdir=/system/fonts",
+            "-frames:v", "1",
+            "-pix_fmt", "rgb24",
+            "-f", "rawvideo",
+            sub.absolutePath
+        )
+        val (subOk, subLogs) = executeOk(subArgs)
+        if (!subOk || sub.length() <= 0) return false to subLogs
+
+        val different = !base.readBytes().contentEquals(sub.readBytes())
+        base.delete()
+        sub.delete()
+        return different to subLogs
+    }
+
     @JavascriptInterface
     fun runSelfTest() {
         thread(name = "native-hardsub-selftest") {
             val result = JSONObject()
             result.put("available", true)
 
+            val tempFiles = mutableListOf<File>()
             try {
                 val encoders = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-encoders")).getOutput()
                 val decoders = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-decoders")).getOutput()
                 val filters = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-filters")).getOutput()
 
-                result.put("x264", Regex("""\\blibx264\\b""").containsMatchIn(encoders))
-                result.put("x265", Regex("""\\blibx265\\b""").containsMatchIn(encoders))
-                result.put("svtAv1", Regex("""\\blibsvtav1\\b""").containsMatchIn(encoders))
-                result.put("dav1d", Regex("""\\blibdav1d\\b""").containsMatchIn(decoders))
-                result.put("assFilter", Regex("""\\bass\\b""").containsMatchIn(filters))
+                val hasX264 = Regex("""\\blibx264\\b""").containsMatchIn(encoders)
+                val hasX265 = Regex("""\\blibx265\\b""").containsMatchIn(encoders)
+                val hasSvt = Regex("""\\blibsvtav1\\b""").containsMatchIn(encoders)
+                val hasDav1d = Regex("""\\blibdav1d\\b""").containsMatchIn(decoders)
+                val hasAss = Regex("""\\bass\\b""").containsMatchIn(filters)
+
+                result.put("x264", hasX264)
+                result.put("x265", hasX265)
+                result.put("svtAv1", hasSvt)
+                result.put("dav1d", hasDav1d)
+                result.put("assFilter", hasAss)
                 result.put("h264MediaCodec", encoders.contains("h264_mediacodec"))
                 result.put("hevcMediaCodec", encoders.contains("hevc_mediacodec"))
                 result.put("av1MediaCodec", encoders.contains("av1_mediacodec"))
@@ -56,8 +132,7 @@ class NativeBridge(
                 )
 
                 val assFile = File(activity.cacheDir, "native_hardsub_selftest.ass")
-                val outFile = File(activity.cacheDir, "native_hardsub_selftest.mkv")
-                outFile.delete()
+                tempFiles.add(assFile)
                 assFile.writeText(
                     """
                     [Script Info]
@@ -75,39 +150,57 @@ class NativeBridge(
                     """.trimIndent()
                 )
 
-                val command = arrayOf(
-                    "-y",
-                    "-f", "lavfi",
-                    "-i", "color=c=black:s=320x180:r=24:d=1",
-                    "-vf", "ass=${assFile.absolutePath}:fontsdir=/system/fonts",
-                    "-c:v", "libx264",
-                    "-preset", "ultrafast",
-                    "-crf", "28",
-                    "-pix_fmt", "yuv420p",
-                    "-an",
-                    outFile.absolutePath
-                )
-
-                val session = FFmpegKit.executeWithArguments(command)
-                val encodeOk = ReturnCode.isSuccess(session.getReturnCode()) && outFile.length() > 0
-                result.put("softwareEncodeSmoke", encodeOk)
-
-                if (encodeOk) {
-                    val probe = FFprobeKit.getMediaInformation(outFile.absolutePath)
-                    val info = probe.getMediaInformation()
-                    result.put("ffprobeSmoke", info != null)
-                    result.put("smokeBytes", outFile.length())
-                } else {
-                    result.put("ffprobeSmoke", false)
-                    result.put("error", session.getOutput().takeLast(1200))
+                val libassVisual = if (hasAss) libassVisualSmoke(assFile) else false to "ass filter missing"
+                result.put("libassVisualSmoke", libassVisual.first)
+                if (!libassVisual.first) {
+                    result.put("libassError", libassVisual.second.takeLast(1200))
                 }
 
-                assFile.delete()
-                outFile.delete()
+                val x264Out = File(activity.cacheDir, "native_hardsub_selftest_x264.mkv")
+                val x265Out = File(activity.cacheDir, "native_hardsub_selftest_x265.mkv")
+                val av1Out = File(activity.cacheDir, "native_hardsub_selftest_av1.mkv")
+                tempFiles.addAll(listOf(x264Out, x265Out, av1Out))
+
+                val x264Smoke = if (hasX264) {
+                    codecSmoke("libx264", arrayOf("-preset", "ultrafast", "-crf", "30"), x264Out)
+                } else false to "libx264 missing"
+
+                val x265Smoke = if (hasX265) {
+                    codecSmoke("libx265", arrayOf("-preset", "ultrafast", "-crf", "32"), x265Out)
+                } else false to "libx265 missing"
+
+                val av1Smoke = if (hasSvt) {
+                    codecSmoke(
+                        "libsvtav1",
+                        arrayOf("-preset", "12", "-crf", "40", "-svtav1-params", "lp=2"),
+                        av1Out
+                    )
+                } else false to "libsvtav1 missing"
+
+                result.put("x264EncodeSmoke", x264Smoke.first)
+                result.put("x265EncodeSmoke", x265Smoke.first)
+                result.put("svtAv1EncodeSmoke", av1Smoke.first)
+
+                if (!x264Smoke.first) result.put("x264Error", x264Smoke.second.takeLast(1200))
+                if (!x265Smoke.first) result.put("x265Error", x265Smoke.second.takeLast(1200))
+                if (!av1Smoke.first) result.put("svtAv1Error", av1Smoke.second.takeLast(1200))
+
+                val allSoftwareSmoke =
+                    libassVisual.first &&
+                    x264Smoke.first &&
+                    x265Smoke.first &&
+                    av1Smoke.first
+
+                result.put("softwareEncodeSmoke", allSoftwareSmoke)
+                result.put("ffprobeSmoke", x264Smoke.first && x265Smoke.first && av1Smoke.first)
             } catch (e: Throwable) {
                 result.put("softwareEncodeSmoke", false)
                 result.put("ffprobeSmoke", false)
                 result.put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                tempFiles.forEach { file ->
+                    try { file.delete() } catch (_: Throwable) {}
+                }
             }
 
             val quoted = JSONObject.quote(result.toString())
