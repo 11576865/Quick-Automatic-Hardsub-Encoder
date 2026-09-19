@@ -13,6 +13,7 @@ export class EncoderEngine {
     this.sourceAssFile = null;
     this.sourceFontFiles = [];
     this.activeAssText = null;
+    this.activeFontMappings = {};
   }
 
   async init() {
@@ -36,6 +37,7 @@ export class EncoderEngine {
     this.sourceAssFile = assFile;
     this.sourceFontFiles = [...fontFiles];
     this.activeAssText = null;
+    this.activeFontMappings = {};
     const { mount, writeFile, FFmpegKitConfig } = this.api;
 
     const stamp = Date.now();
@@ -47,7 +49,17 @@ export class EncoderEngine {
     await writeFile(this.assPath, new Uint8Array(await assFile.arrayBuffer()));
 
     if (fontFiles.length) await mount(this.fontDir, { files: fontFiles });
-    FFmpegKitConfig.setFontDirectoryList?.(fontFiles.length ? [this.fontDir] : []);
+    await FFmpegKitConfig.setFontDirectoryList?.(fontFiles.length ? [this.fontDir] : [], {});
+  }
+
+  async setFontMappings(mappings = {}) {
+    this.assertReady();
+    this.activeFontMappings = { ...mappings };
+    const { FFmpegKitConfig } = this.api;
+    await FFmpegKitConfig.setFontDirectoryList?.(
+      this.sourceFontFiles.length ? [this.fontDir] : [],
+      this.activeFontMappings
+    );
   }
 
   async probe() {
@@ -104,22 +116,26 @@ export class EncoderEngine {
     await this.api.writeFile(this.assPath, new TextEncoder().encode(text));
   }
 
-  async renderPreview(timeSeconds, index = 0) {
+  async renderPreview(timeSeconds, index = 0, previewAssText = null) {
     this.assertReady();
     const baseOutput = `/preview_base_${index}.png`;
     const output = `/preview_${index}.png`;
+    const previewAssPath = previewAssText == null ? this.assPath : `/preview_${index}.ass`;
     const decoder = this.inputDecoderArgs();
 
-    // Step 1: seek only for frame extraction. Subtitle timing is deliberately
-    // not involved here, so seek-related PTS resets cannot hide the subtitle.
+    if (previewAssText != null) {
+      await this.api.writeFile(previewAssPath, new TextEncoder().encode(previewAssText));
+    }
+
+    // 1) Extract the exact source frame without subtitles.
     const extractCmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn -frames:v 1 ${q(baseOutput)}`;
     await this.execute(extractCmd, false, 60000);
 
-    // Step 2: feed the extracted still frame back into FFmpeg and explicitly
-    // assign it the original media timestamp before libass. The original (or
-    // forced-font rewritten) ASS timeline can therefore be used unchanged.
-    const filter = `setpts=PTS+${Math.max(0, timeSeconds).toFixed(3)}/TB,ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
-    const renderCmd = `-y -i ${q(baseOutput)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
+    // 2) Loop that still image for one second. The preview ASS is shifted so
+    // the requested subtitle is active around t=0.5s. Rendering away from t=0
+    // avoids seek/PTS boundary behaviour that previously produced blank frames.
+    const filter = `ass=${escapeFilter(previewAssPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
+    const renderCmd = `-y -loop 1 -framerate 10 -i ${q(baseOutput)} -vf ${q(filter)} -ss 0.500 -frames:v 1 ${q(output)}`;
     const logs = await this.execute(renderCmd, true, 60000);
 
     const [baseBytes, bytes] = await Promise.all([
@@ -324,6 +340,7 @@ export class EncoderEngine {
     const fonts = [...this.sourceFontFiles];
     const mediaInfo = this.mediaInfo;
     const activeAssText = this.activeAssText;
+    const activeFontMappings = { ...this.activeFontMappings };
 
     this.onLog(`重启 FFmpeg WASM runtime：${reason}`);
     try { await this.api.FFmpegKit?.cancel(); } catch {}
@@ -334,6 +351,9 @@ export class EncoderEngine {
     if (!status.ready) throw new Error('FFmpeg WASM runtime 重启失败');
     if (video && ass) {
       await this.stageFiles(video, ass, fonts);
+      if (activeFontMappings && Object.keys(activeFontMappings).length) {
+        await this.setFontMappings(activeFontMappings);
+      }
       if (activeAssText) await this.setAssText(activeAssText);
     }
     this.mediaInfo = mediaInfo;
