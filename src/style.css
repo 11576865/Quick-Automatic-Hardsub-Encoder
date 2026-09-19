@@ -318,3 +318,54 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   background: #232a37;
 }
 #liveEta { margin-bottom: 8px; }
+
+
+/* Persistent local font library */
+.font-persist-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .92rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.font-persist-check input { width: auto; }
+.font-library-details {
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.font-library-details > summary {
+  cursor: pointer;
+  color: var(--muted);
+  user-select: none;
+}
+.font-library-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+.font-library-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 8px 10px;
+}
+.font-library-item > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.font-library-item strong {
+  overflow-wrap: anywhere;
+  font-size: .92rem;
+}
+.font-library-item small { color: var(--muted); }
+.font-library-item button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+}
