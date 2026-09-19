@@ -1,5 +1,5 @@
 import './style.css';
-import { parseAss, rewriteAssFonts } from './ass.js';
+import { parseAss, rewriteAssFonts, shiftAssForPreview } from './ass.js';
 import { inspectFontFile, matchRequestedFonts } from './fonts.js';
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
@@ -742,13 +742,25 @@ async function runSelectedTest() {
     const fps = state.media?.fps || 30;
     const duration = Math.min(3, Math.max(1.5, 90 / fps));
     const total = state.media?.duration || 0;
-    const startAt = total > duration * 2 ? Math.max(0, total * 0.45) : 0;
+    const candidates = state.assInfo?.previewTimes || [];
+    const anchor = candidates.length
+      ? [...candidates].sort((a,b) => Math.abs(a - total * 0.45) - Math.abs(b - total * 0.45))[0]
+      : total * 0.45;
+    const startAt = Math.max(0, Math.min(Math.max(0, total - duration), anchor - 0.45));
     log('所选方案测试：' + state.selectedCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 · 含真实字幕');
-    const r = await state.engine.benchmarkCodec(state.selectedCodec, {
-      start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
-      targetVideoBitrate: plan.mode === 'target-size' ? plan.targetVideoBitrate : 0,
-      timeoutMs: state.selectedCodec === 'av1' ? 120000 : 90000
-    });
+    const originalAss = state.activeAssText || state.assText;
+    const shiftedAss = shiftAssForPreview(originalAss, startAt);
+    await state.engine.setAssText(shiftedAss);
+    let r;
+    try {
+      r = await state.engine.benchmarkCodec(state.selectedCodec, {
+        start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
+        targetVideoBitrate: plan.mode === 'target-size' ? plan.targetVideoBitrate : 0,
+        timeoutMs: state.selectedCodec === 'av1' ? 120000 : 90000
+      });
+    } finally {
+      await state.engine.setAssText(originalAss);
+    }
     if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
     state.selectedTest = r;
     const sampleBitrate = r.packetStats?.totalVideoBytes ? r.packetStats.totalVideoBytes * 8 / duration : 0;
