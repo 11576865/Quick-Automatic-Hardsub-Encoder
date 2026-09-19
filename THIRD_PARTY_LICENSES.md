@@ -8,6 +8,7 @@ Upstream projects:
 - FFmpegKitNext: https://github.com/arthenica/ffmpeg-kit-next
 - FFmpeg: https://ffmpeg.org/
 - libass: https://github.com/libass/libass
+- dav1d (AV1 software decoder): https://code.videolan.org/videolan/dav1d
 - x264: https://www.videolan.org/developers/x264.html
 - x265: https://bitbucket.org/multicoreware/x265_git/
 - SVT-AV1: https://gitlab.com/AOMediaCodec/SVT-AV1
