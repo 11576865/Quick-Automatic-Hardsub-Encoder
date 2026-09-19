@@ -233,20 +233,23 @@ export class EncoderEngine {
     const decoder = this.inputDecoderArgs();
     const gop = normalGop(this.mediaInfo?.fps || 30);
     const targetVideoBitrate = Number(options.targetVideoBitrate || 0);
+    const twoPass = !!options.twoPass && targetVideoBitrate > 0;
     const passlog = `/twopass_${codecKey}_${Date.now()}`;
 
-    if (targetVideoBitrate > 0) {
+    if (twoPass) {
       options.onPhase?.('pass1');
       const firstPass = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
-      this.onLog(`两遍目标体积编码：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
+      this.onLog(`严格目标体积：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
       await this.executeWithStatistics(firstPass, options.onStatistics, 'pass1');
     }
 
-    options.onPhase?.(targetVideoBitrate > 0 ? 'pass2' : 'encode');
+    options.onPhase?.(twoPass ? 'pass2' : 'encode');
     const stream = await FFmpegKitStreamOutput.create('mkv', 8 * 1024 * 1024);
     const target = stream.getUrl();
     const rateControl = targetVideoBitrate > 0
-      ? `-b:v ${Math.round(targetVideoBitrate)} -pass 2 -passlogfile ${q(passlog)}`
+      ? twoPass
+        ? `-b:v ${Math.round(targetVideoBitrate)} -pass 2 -passlogfile ${q(passlog)}`
+        : `-b:v ${Math.round(targetVideoBitrate)}`
       : `-crf ${crf}`;
     const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
     this.onLog(`$ ffmpeg ${cmd}`);
@@ -270,7 +273,7 @@ export class EncoderEngine {
             speed: Number(statistics?.getSpeed?.() || 0),
             sizeBytes: Number(statistics?.getSize?.() || 0),
             frame: Number(statistics?.getVideoFrameNumber?.() || 0),
-            phase: targetVideoBitrate > 0 ? 'pass2' : 'encode'
+            phase: twoPass ? 'pass2' : 'encode'
           });
         } catch {}
       }
