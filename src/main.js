@@ -25,6 +25,7 @@ const state = {
   capabilities: null,
   nativeBackend: null,
   nativeSelfTest: null,
+  nativeInputProbe: null,
   softwareEncoders: { h264: null, h265: null, av1: null },
   softwareDecoders: { av1Dav1d: null },
   inputDecodeOk: false,
@@ -168,8 +169,19 @@ for (const [inputId, role] of [['video', 'video'], ['ass', 'ass'], ['fonts', 'fo
 
 $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
+  state.nativeInputProbe = null;
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
   $('videoMeta').className = state.video?.size > MAX_BYTES ? 'bad' : '';
+
+  if (state.video && globalThis.NativeHardsub?.probeSelectedVideo) {
+    try {
+      globalThis.NativeHardsub.probeSelectedVideo();
+      log('Android 原生后端：正在直接探测所选 content:// 视频和 SAF 可寻址性…');
+    } catch (error) {
+      log('Android 原生输入探测启动失败：' + error.message);
+    }
+  }
+
   refreshAnalyze();
 });
 $('ass').addEventListener('change', e => {
@@ -298,6 +310,28 @@ function detectNativeBackend() {
     renderBackendSummary();
     log(`检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}`);
 
+    globalThis.__onNativeInputProbe = payload => {
+      try {
+        state.nativeInputProbe = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        state.nativeInputProbe = { ok: false, error: '原生输入探测结果解析失败' };
+      }
+
+      const p = state.nativeInputProbe || {};
+      if (p.ok) {
+        log(
+          'Android SAF 输入探测：' +
+          (p.seekable ? '可 seek' : '不可 seek，将需要本地 staging') +
+          ' · ' + (p.videoCodec || 'unknown') +
+          ' ' + (p.width || 0) + 'x' + (p.height || 0) +
+          ' · ' + Number(p.duration || 0).toFixed(3) + ' s'
+        );
+      } else {
+        log('Android SAF 输入探测失败：' + (p.error || '未知错误'));
+      }
+      renderBackendSummary();
+    };
+
     globalThis.__onNativeSelfTest = payload => {
       try {
         state.nativeSelfTest = typeof payload === 'string' ? JSON.parse(payload) : payload;
@@ -366,9 +400,16 @@ function renderBackendSummary() {
     ? `<small class="native-font-dirs">字体目录：${escapeHtml(t.fontDirs)}</small>`
     : '';
 
+  const p = state.nativeInputProbe;
+  const inputProbe = p
+    ? p.ok
+      ? `<small class="native-input-probe">当前视频 SAF：${p.seekable ? '可 seek，可直接读取' : '不可 seek，正式 Native 压制将先复制到本地 staging'} · ${escapeHtml(p.videoCodec || 'unknown')} ${Number(p.width || 0)}×${Number(p.height || 0)} · ${Number(p.duration || 0).toFixed(3)} s</small>`
+      : `<small class="native-input-probe warn">当前视频 SAF 探测失败：${escapeHtml(p.error || '未知错误')}</small>`
+    : '';
+
   el.innerHTML =
     `${ok ? '<span class="ok">Android 原生核心实际自检通过。</span>' : '<span class="warn">Android 原生核心实际自检未完全通过。</span>'} ` +
-    `${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。${fontDirs}`;
+    `${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。${fontDirs}${inputProbe}`;
 }
 
 function renderCapabilities() {
