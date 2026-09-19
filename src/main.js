@@ -156,23 +156,67 @@ async function bootstrap() {
 function renderCapabilities() {
   const c = state.capabilities;
   const sw = state.softwareEncoders;
-  const rows = [
+  const dec = state.softwareDecoders;
+
+  const badge = (ok, text) =>
+    `<span class="env-badge ${ok ? 'ok' : 'warn'}">${text}</span>`;
+
+  const base = [
     ['WebAssembly', c.webAssembly, c.webAssembly ? '支持' : '不可用'],
     ['Web Worker', c.worker, c.worker ? '支持' : '不可用'],
     ['SharedArrayBuffer', c.sharedArrayBuffer, c.sharedArrayBuffer ? '支持' : '不可用'],
-    ['跨源隔离', c.crossOriginIsolated, c.crossOriginIsolated ? '支持' : '未启用'],
-    ['FFmpeg WASM · H.264 / x264', sw.h264, sw.h264 === null ? '检测中' : sw.h264 ? '可编码' : '未编入核心'],
-    ['FFmpeg WASM · H.265 / x265', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可编码' : '未编入核心'],
-    ['FFmpeg WASM · AV1 / SVT-AV1', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可编码' : '未编入核心'],
-    ['FFmpeg WASM · AV1 / dav1d', state.softwareDecoders.av1Dav1d, state.softwareDecoders.av1Dav1d === null ? '检测中' : state.softwareDecoders.av1Dav1d ? '可解码' : '未编入核心'],
-    ['WebCodecs 解码 · H.264', c.codecs.decode.h264, c.codecs.decode.h264 ? '可用' : '浏览器未暴露'],
-    ['WebCodecs 解码 · H.265', c.codecs.decode.hevc, c.codecs.decode.hevc ? '可用' : '浏览器未暴露'],
-    ['WebCodecs 解码 · AV1', c.codecs.decode.av1, c.codecs.decode.av1 ? '可用' : '浏览器未暴露'],
-    ['WebCodecs 编码 · H.264', c.codecs.encode.h264, c.codecs.encode.h264 ? '可用' : '浏览器未暴露'],
-    ['WebCodecs 编码 · H.265', c.codecs.encode.hevc, c.codecs.encode.hevc ? '可用' : '浏览器未暴露'],
-    ['WebCodecs 编码 · AV1', c.codecs.encode.av1, c.codecs.encode.av1 ? '可用' : '浏览器未暴露']
+    ['跨源隔离', c.crossOriginIsolated, c.crossOriginIsolated ? '支持' : '未启用']
   ];
-  $('capabilities').innerHTML = rows.map(([k,v,label]) => `<div class="status-item"><span>${k}</span><span class="${v ? 'ok' : 'warn'}">${label}</span></div>`).join('');
+
+  const wasm = [
+    ['H.264', 'x264 · 编码', sw.h264, sw.h264 === null ? '检测中' : sw.h264 ? '可用' : '未编入'],
+    ['H.265', 'x265 · 编码', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可用' : '未编入'],
+    ['AV1', 'SVT-AV1 · 编码', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可用' : '未编入'],
+    ['AV1', 'dav1d · 解码', dec.av1Dav1d, dec.av1Dav1d === null ? '检测中' : dec.av1Dav1d ? '可用' : '未编入']
+  ];
+
+  const webCodecs = [
+    ['H.264', c.codecs.decode.h264, c.codecs.encode.h264],
+    ['H.265', c.codecs.decode.hevc, c.codecs.encode.hevc],
+    ['AV1', c.codecs.decode.av1, c.codecs.encode.av1]
+  ];
+
+  $('capabilities').innerHTML = `
+    <div class="env-group">
+      <div class="env-group-title">基础环境</div>
+      <div class="env-chip-grid">
+        ${base.map(([name, ok, text]) => `
+          <div class="env-chip"><span>${name}</span>${badge(ok, text)}</div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="env-group">
+      <div class="env-group-title">FFmpeg WASM</div>
+      <div class="env-wasm-grid">
+        ${wasm.map(([codec, detail, ok, text]) => `
+          <div class="env-codec-card">
+            <div><strong>${codec}</strong><small>${detail}</small></div>
+            ${badge(ok, text)}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="env-group">
+      <div class="env-group-title">WebCodecs</div>
+      <div class="env-matrix">
+        <div class="env-matrix-head">格式</div>
+        <div class="env-matrix-head">解码</div>
+        <div class="env-matrix-head">编码</div>
+        ${webCodecs.map(([codec, decode, encode]) => `
+          <div class="env-matrix-codec">${codec}</div>
+          <div>${badge(decode, decode ? '可用' : '未暴露')}</div>
+          <div>${badge(encode, encode ? '可用' : '未暴露')}</div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function updateEnvironmentSummary(engineReady = state.engine?.ready) {
