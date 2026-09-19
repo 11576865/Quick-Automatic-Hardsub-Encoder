@@ -719,7 +719,7 @@ function updateChosenSummary() {
   if (plan.mode === 'crf') {
     $('chosenSummary').innerHTML = '<strong>' + state.selectedCodec.toUpperCase() + '</strong> · CRF ' + plan.crf + ' · preset ' + plan.preset + '。质量模式不提前给出伪精确的成品体积或总耗时；正式编码后根据实时 statistics 计算 ETA。';
   } else {
-    $('chosenSummary').innerHTML = '<strong>' + state.selectedCodec.toUpperCase() + '</strong> · 两遍目标码率 ' + formatBitrate(plan.targetVideoBitrate) + '。按码率计算的计划体积约 ' + formatBytes(plan.plannedBytes) + '，硬上限 ' + formatBytes(plan.sizeCeiling) + '。目标码率同时受源码率锚点和体积天花板约束。';
+    $('chosenSummary').innerHTML = '<strong>' + state.selectedCodec.toUpperCase() + '</strong> · 单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate) + '。规划体积约 ' + formatBytes(plan.plannedBytes) + '，预算边界 ' + formatBytes(plan.sizeCeiling) + '。这是参数规划值，不承诺最终字节数严格命中。';
   }
 }
 
