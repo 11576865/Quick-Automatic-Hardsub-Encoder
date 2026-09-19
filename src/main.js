@@ -1266,11 +1266,16 @@ async function runEncode() {
       const deltaText = packetScan.durationDelta == null
         ? ''
         : ' · 与源视频差 ' + (packetScan.durationDelta >= 0 ? '+' : '') + packetScan.durationDelta.toFixed(3) + ' s';
+      const audioEndText = packetScan.audioTrackCount
+        ? ' · 音频 ' + packetScan.audioTrackCount + ' 轨，末端 ' +
+          packetScan.audioEnds.map(v => v == null ? 'N/A' : v.toFixed(3) + ' s').join(' / ')
+        : ' · 无音频';
       log(
         '成品 packet 扫描：视频 ' +
         packetScan.packetCount + ' 个 packet · 末端 ' +
         packetScan.videoEnd.toFixed(3) + ' s' +
         deltaText +
+        audioEndText +
         ' · corrupt=' + packetScan.corruptCount +
         ' · 扫描耗时 ' + packetScan.scanSeconds.toFixed(2) + ' s。'
       );
@@ -1278,9 +1283,16 @@ async function runEncode() {
       if (!packetScan.ok) {
         log(
           '成品完整性警告：packet 扫描未通过。' +
+          (packetScan.videoStreamCount !== 1 ? ' 视频流数量=' + packetScan.videoStreamCount + '（预期 1）。' : '') +
           (packetScan.corruptCount ? ' 检测到损坏标记 packet=' + packetScan.corruptCount + '。' : '') +
           (!packetScan.durationOk && packetScan.durationDelta != null
             ? ' 视频末端与源时长偏差 ' + packetScan.durationDelta.toFixed(3) + ' s，容差 ±' + packetScan.tolerance.toFixed(3) + ' s。'
+            : '') +
+          (!packetScan.audioTrackCountOk
+            ? ' 音频轨数量=' + packetScan.audioTrackCount + '，源视频=' + packetScan.expectedAudioTracks + '。'
+            : '') +
+          (!packetScan.audioDurationsOk
+            ? ' 至少一条音频轨的 packet 末端与源时长偏差超过 ±' + packetScan.audioTolerance.toFixed(1) + ' s。'
             : '')
         );
       }
