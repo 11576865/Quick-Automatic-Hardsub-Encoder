@@ -90,7 +90,7 @@ app.innerHTML = `
 
   <section id="benchmarkCard" class="card hidden">
     <h2>5. 三编码器样本测试</h2>
-    <p class="note">程序使用同一段短样本实测当前设备上的编码时间、样本大小与 SSIM；AV1 使用 SVT-AV1。字幕正确性已在上一阶段单独验证。</p>
+    <p class="note">程序使用约 36 帧的快速样本实测当前设备上的编码速度、样本大小与 SSIM；AV1 使用 SVT-AV1。这里是编码器比较，不是字幕预览。</p>
     <div class="button-row"><button id="benchmarkBtn" class="primary" disabled>测试 H.264 / H.265 / AV1</button></div>
     <div id="codecGrid" class="grid three" style="margin-top:14px"></div>
   </section>
@@ -463,8 +463,13 @@ async function runBenchmarks() {
     $('benchmarkBtn').disabled = true;
     state.benchmarks = {};
     renderCodecCards();
-    const duration = Math.min(6, Math.max(3, (state.media?.duration || 12) / 10));
+    // Mobile/WASM benchmark: target roughly 36 source frames rather than a fixed
+    // multi-second clip. This keeps the comparison useful without making users
+    // wait minutes before the real encode even starts.
+    const fps = state.media?.fps || 30;
+    const duration = Math.min(1.5, Math.max(0.6, 36 / fps));
     const totalDuration = state.media?.duration || 0;
+    log(`快速样本长度：${duration.toFixed(2)} 秒（约 ${Math.round(duration * fps)} 帧 @ ${fps.toFixed(2)} fps）`);
     const start = totalDuration > duration * 2 ? Math.max(0, totalDuration * 0.45) : 0;
     const codecs = ['h264','h265','av1'];
     for (const codec of codecs) {
@@ -477,7 +482,7 @@ async function runBenchmarks() {
 
       log(`开始 ${codec.toUpperCase()} 样本测试…`);
       try {
-        const timeoutMs = codec === 'av1' ? 180000 : codec === 'h265' ? 120000 : 90000;
+        const timeoutMs = codec === 'av1' ? 90000 : codec === 'h265' ? 60000 : 45000;
         const r = await state.engine.benchmarkCodec(codec, { start, duration, withSubtitles: false, timeoutMs });
         r.estimatedBytes = estimateFullBytes(r, duration, state.media);
         state.benchmarks[codec] = r;
@@ -516,7 +521,7 @@ function renderCodecCards() {
     const r = state.benchmarks[k];
     if (!r) return `<div class="codec-card"><h3>${labels[k]}</h3><div class="note">等待测试</div></div>`;
     if (r.error) return `<div class="codec-card"><h3>${labels[k]}</h3><div class="bad">当前核心不可用</div><div class="note">${escapeHtml(r.error.slice(0,180))}</div></div>`;
-    const totalTime = state.media?.duration ? r.elapsedSeconds / (Math.min(6, Math.max(3, state.media.duration / 10))) * state.media.duration : null;
+    const totalTime = state.media?.duration && r.encodeSpeed > 0 ? state.media.duration / r.encodeSpeed : null;
     return `<div class="codec-card ${state.selectedCodec===k?'selected':''}" data-codec="${k}">
       <h3>${labels[k]}</h3>
       <dl>
