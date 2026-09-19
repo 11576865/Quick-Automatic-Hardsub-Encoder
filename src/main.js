@@ -13,6 +13,7 @@ const state = {
   savedFonts: [],
   effectiveFonts: [],
   assInfo: null,
+  assEncoding: 'unknown',
   assText: '',
   activeAssText: '',
   fontBindings: {},
@@ -471,6 +472,50 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
   $('envSummary').className = 'env-summary';
 }
 
+async function decodeAssFile(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let encoding = 'UTF-8';
+  let offset = 0;
+  let text = '';
+
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    encoding = 'UTF-8 BOM';
+    offset = 3;
+    text = new TextDecoder('utf-8').decode(bytes.subarray(offset));
+  } else if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    encoding = 'UTF-16 LE BOM';
+    offset = 2;
+    text = new TextDecoder('utf-16le').decode(bytes.subarray(offset));
+  } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    encoding = 'UTF-16 BE BOM';
+    offset = 2;
+    try {
+      text = new TextDecoder('utf-16be').decode(bytes.subarray(offset));
+    } catch {
+      const le = new Uint8Array(bytes.length - offset);
+      for (let i = offset, j = 0; i + 1 < bytes.length; i += 2, j += 2) {
+        le[j] = bytes[i + 1];
+        le[j + 1] = bytes[i];
+      }
+      text = new TextDecoder('utf-16le').decode(le);
+    }
+  } else {
+    text = new TextDecoder('utf-8').decode(bytes);
+  }
+
+  const nulMatches = text.match(/\u0000/g);
+  const removedNulls = nulMatches ? nulMatches.length : 0;
+  if (removedNulls) text = text.replaceAll('\u0000', '');
+
+  if (!/\[Events\]/i.test(text) || !/Dialogue\s*:/i.test(text)) {
+    throw new Error(
+      'ASS 文本解析前检查失败：按 ' + encoding + ' 解码后没有找到 [Events]/Dialogue。' +
+      '如果这是旧式 ANSI/GBK/Shift-JIS 字幕，需要先确认原始字符编码，不能静默猜测。'
+    );
+  }
+
+  return { text, encoding, removedNulls };
+}
 function fontFileKey(file) {
   return `${String(file?.name || '').toLowerCase()}::${Number(file?.size || 0)}`;
 }
@@ -552,7 +597,13 @@ async function analyzeAll() {
     state.previewTimes = [];
     state.inputDecodeOk = false;
     log('开始分析 ASS 和字体…');
-    const assText = await state.ass.text();
+    const decodedAss = await decodeAssFile(state.ass);
+    const assText = decodedAss.text;
+    state.assEncoding = decodedAss.encoding;
+    if (decodedAss.removedNulls > 0) {
+      log('ASS 文本中发现并移除了 ' + decodedAss.removedNulls + ' 个 NUL 字符；这类字符会让部分 libass/文本解析路径提前截断。');
+    }
+    log('ASS 文本编码：' + state.assEncoding + '；统一转换为 UTF-8 后交给预览与正式压制。');
     state.assText = assText;
     state.activeAssText = assText;
     state.fontBindings = {};
@@ -569,6 +620,9 @@ async function analyzeAll() {
     if (state.engine.ready) {
       log(`挂载媒体文件与 ${state.effectiveFonts.length} 个可用字体到浏览器 WebAssembly 文件系统…`);
       await state.engine.stageFiles(state.video, state.ass, state.effectiveFonts);
+      // Normalize every subtitle path to the exact UTF-8 text parsed by the UI.
+      // This avoids preview/formal-encode differences for UTF-16 BOM files.
+      await state.engine.setAssText(state.activeAssText);
       if (state.engine.hasBundledFallbackFont) {
         state.autoFontFallbacks = Object.fromEntries(
           state.fontMatches
