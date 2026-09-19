@@ -173,18 +173,28 @@ export class EncoderEngine {
     this.onLog(`$ ffmpeg ${cmd}`);
 
     let resolveDone;
+    let completedSession = null;
     const done = new Promise(resolve => { resolveDone = resolve; });
-    const session = await FFmpegKit.executeAsync(cmd, completed => resolveDone(completed));
+    const session = await FFmpegKit.executeAsync(cmd, completed => {
+      completedSession = completed;
+      resolveDone(completed);
+    });
     const chunks = [];
     let totalBytes = 0;
+    let emptyAfterCompletion = 0;
 
     try {
       while (true) {
         const chunk = await stream.read(4 * 1024 * 1024);
         if (chunk === null) {
+          if (completedSession) {
+            emptyAfterCompletion++;
+            if (emptyAfterCompletion >= 10) break;
+          }
           await sleep(20);
           continue;
         }
+        emptyAfterCompletion = 0;
         if (chunk.byteLength === 0) break;
 
         totalBytes += chunk.byteLength;
@@ -192,7 +202,7 @@ export class EncoderEngine {
         options.onBytes?.(totalBytes);
       }
 
-      const completed = await done;
+      const completed = completedSession || await done;
       const rc = completed?.getReturnCode?.();
       if (!ReturnCode.isSuccess(rc)) {
         const output = await completed?.getAllLogsAsString?.(1000) || await completed?.getOutput?.() || '';
