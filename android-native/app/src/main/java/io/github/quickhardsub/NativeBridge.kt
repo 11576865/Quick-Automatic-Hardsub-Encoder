@@ -3,6 +3,8 @@ package io.github.quickhardsub
 import android.app.Activity
 import android.net.Uri
 import android.os.Build
+import android.system.Os
+import android.system.OsConstants
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import com.arthenica.ffmpegkit.FFmpegKit
@@ -64,6 +66,81 @@ class NativeBridge(
             .put("fonts", snapshot["fonts"])
             .toString()
     }
+    @JavascriptInterface
+    fun probeSelectedVideo() {
+        thread(name = "native-input-probe") {
+            val result = JSONObject()
+            val uri = getPickedUris("video").firstOrNull()
+
+            if (uri == null) {
+                result.put("ok", false)
+                result.put("error", "没有可供原生后端访问的视频 URI")
+                postJsonCallback("__onNativeInputProbe", result)
+                return@thread
+            }
+
+            var safUrl: String? = null
+            try {
+                var statSize = -1L
+                var seekable = false
+                activity.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+                    statSize = pfd.statSize
+                    seekable = try {
+                        Os.lseek(pfd.fileDescriptor, 0L, OsConstants.SEEK_CUR)
+                        true
+                    } catch (_: Throwable) {
+                        false
+                    }
+                }
+
+                safUrl = FFmpegKitConfig.getSafParameterForRead(activity, uri, true)
+                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 FFmpegKit SAF 读取 URL")
+
+                val probe = FFprobeKit.getMediaInformation(safUrl)
+                val info = probe.getMediaInformation()
+                    ?: throw IllegalStateException(probe.getOutput().takeLast(1200).ifBlank { "FFprobe 无法读取该 URI" })
+
+                val streams = info.getStreams()
+                val video = streams.firstOrNull { it.getType() == "video" }
+                    ?: throw IllegalStateException("FFprobe 没有发现视频流")
+                val audioTracks = streams.count { it.getType() == "audio" }
+
+                result
+                    .put("ok", true)
+                    .put("seekable", seekable)
+                    .put("statSize", statSize)
+                    .put("needsInputStaging", !seekable)
+                    .put("format", info.getFormat() ?: "")
+                    .put("duration", info.getDuration()?.toDoubleOrNull() ?: 0.0)
+                    .put("videoCodec", video.getCodec() ?: "")
+                    .put("width", video.getWidth() ?: 0)
+                    .put("height", video.getHeight() ?: 0)
+                    .put("fps", video.getAverageFrameRate() ?: "")
+                    .put("audioTracks", audioTracks)
+            } catch (e: Throwable) {
+                result.put("ok", false)
+                result.put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                if (!safUrl.isNullOrBlank()) {
+                    try { FFmpegKitConfig.unregisterSafProtocolUrl(safUrl) } catch (_: Throwable) {}
+                }
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
+            }
+
+            postJsonCallback("__onNativeInputProbe", result)
+        }
+    }
+
+    private fun postJsonCallback(callbackName: String, result: JSONObject) {
+        val quoted = JSONObject.quote(result.toString())
+        activity.runOnUiThread {
+            webView.evaluateJavascript(
+                "window.$callbackName && window.$callbackName($quoted);",
+                null
+            )
+        }
+    }
+
     @JavascriptInterface
     fun getBackendInfo(): String {
         return JSONObject()
@@ -301,13 +378,7 @@ class NativeBridge(
                 try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
             }
 
-            val quoted = JSONObject.quote(result.toString())
-            activity.runOnUiThread {
-                webView.evaluateJavascript(
-                    "window.__onNativeSelfTest && window.__onNativeSelfTest($quoted);",
-                    null
-                )
-            }
+            postJsonCallback("__onNativeSelfTest", result)
         }
     }
 
