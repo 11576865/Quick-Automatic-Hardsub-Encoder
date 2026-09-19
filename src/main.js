@@ -1,5 +1,5 @@
 import './style.css';
-import { parseAss, rewriteAssFonts, shiftAssForPreview } from './ass.js';
+import { parseAss, rewriteAssFonts } from './ass.js';
 import { inspectFontFile, matchRequestedFonts } from './fonts.js';
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
@@ -22,7 +22,9 @@ const state = {
   softwareDecoders: { av1Dav1d: null },
   inputDecodeOk: false,
   previewUrls: [],
+  previewBaseUrls: [],
   previewFontEvents: [],
+  previewVisualChange: [],
   previewTimes: [],
   benchmarks: {},
   selectedCodec: null,
@@ -285,8 +287,11 @@ async function analyzeAll() {
     state.acceptedWarnings = false;
     $('acceptWarnings').checked = false;
     state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
+    state.previewBaseUrls.filter(Boolean).forEach(URL.revokeObjectURL);
     state.previewUrls = [];
+    state.previewBaseUrls = [];
     state.previewFontEvents = [];
+    state.previewVisualChange = [];
     state.previewTimes = [];
     state.inputDecodeOk = false;
     log('开始分析 ASS 和字体…');
@@ -469,8 +474,11 @@ function bindFontOverrideControls() {
       }
 
       state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
+      state.previewBaseUrls.filter(Boolean).forEach(URL.revokeObjectURL);
       state.previewUrls = [];
+      state.previewBaseUrls = [];
       state.previewFontEvents = [];
+      state.previewVisualChange = [];
       state.previewTimes = [];
       state.acceptedWarnings = false;
       $('acceptWarnings').checked = false;
@@ -487,7 +495,9 @@ async function renderPreviews() {
     state.previewTimes = state.assInfo.previewTimes.slice(0, 6);
     state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
     state.previewUrls = new Array(state.previewTimes.length).fill(null);
+    state.previewBaseUrls = new Array(state.previewTimes.length).fill(null);
     state.previewFontEvents = new Array(state.previewTimes.length).fill(null);
+    state.previewVisualChange = new Array(state.previewTimes.length).fill(null);
     await loadPreviewAt(0);
     refreshBenchmarkEnabled(true);
   } catch (e) {
@@ -507,10 +517,11 @@ async function loadPreviewAt(index) {
   if (!state.previewUrls[safeIndex]) {
     container.innerHTML = `<div class="preview-placeholder">正在生成第 ${safeIndex + 1}/${times.length} 张真实 libass 预览…<br><small>首张先生成，其余仅在翻页时按需生成。</small></div>`;
     log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
-    const previewAss = shiftAssForPreview(state.activeAssText || state.assText, times[safeIndex]);
-    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex, previewAss);
+    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex);
     state.previewUrls[safeIndex] = previewResult.url;
+    state.previewBaseUrls[safeIndex] = previewResult.baseUrl || null;
     state.previewFontEvents[safeIndex] = previewResult.fontEvents || [];
+    state.previewVisualChange[safeIndex] = previewResult.visualChange;
     if (state.previewFontEvents[safeIndex].length) {
       log(`libass 字体选择 @ ${times[safeIndex].toFixed(2)}s:\n${state.previewFontEvents[safeIndex].join('\n')}`);
     }
@@ -519,15 +530,50 @@ async function loadPreviewAt(index) {
   const fontInfo = state.previewFontEvents[safeIndex]?.length
     ? `<details class="note" style="padding:0 12px 12px"><summary>查看 libass 实际字体选择</summary><pre class="log" style="max-height:140px">${escapeHtml(state.previewFontEvents[safeIndex].join('\n'))}</pre></details>`
     : '<div class="note" style="text-align:center;padding:0 10px 10px">此帧未捕获到 fontselect 警告/记录。</div>';
-  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP">上一张</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP">下一张</button></div><div class="note" style="text-align:center;padding:0 10px 10px">只生成你实际查看的预览帧，避免一次等待全部采样点。</div>${fontInfo}</div>`;
+
+  const activeEvents = getActiveDialogue(times[safeIndex]);
+  const dialogueInfo = activeEvents.length
+    ? `<div class="note" style="padding:0 12px 10px">ASS 在此时刻有 ${activeEvents.length} 条活跃对白：${escapeHtml(activeEvents.slice(0,2).map(e => stripAssTags(e.text || '')).join(' / ').slice(0,180))}</div>`
+    : '<div class="error-box" style="margin:0 12px 10px">解析器判断这个时间点没有任何活跃 Dialogue；这个采样点本身有问题。</div>';
+
+  const changed = state.previewVisualChange[safeIndex];
+  const verifyInfo = changed === true
+    ? '<div class="ok-box" style="margin:0 12px 10px">已检测到字幕渲染前后存在像素变化。</div>'
+    : changed === false
+      ? `<div class="error-box" style="margin:0 12px 10px">没有检测到任何字幕叠加造成的像素变化。当前预览不能视为成功，下面可展开查看同一时刻的无字幕底图。</div>
+         <details class="note" style="padding:0 12px 10px"><summary>查看无字幕底图</summary><img src="${state.previewBaseUrls[safeIndex] || ''}" alt="无字幕底图" style="width:100%;margin-top:8px;border-radius:8px"></details>`
+      : '<div class="warning-box" style="margin:0 12px 10px">浏览器无法自动完成像素差校验，请人工确认预览中确实出现了字幕。</div>';
+
+  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP">上一张</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP">下一张</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">只生成你实际查看的预览帧，避免一次等待全部采样点。</div>${fontInfo}</div>`;
   $('prevP').onclick = () => loadPreviewAt(safeIndex - 1);
   $('nextP').onclick = () => loadPreviewAt(safeIndex + 1);
 }
 
-function refreshBenchmarkEnabled(previewDone = state.previewUrls.length > 0) {
+function getActiveDialogue(timeSeconds) {
+  return (state.assInfo?.events || []).filter(e =>
+    e.kind?.toLowerCase() === 'dialogue' &&
+    Number.isFinite(e.startSeconds) &&
+    Number.isFinite(e.endSeconds) &&
+    e.startSeconds <= timeSeconds &&
+    timeSeconds < e.endSeconds
+  );
+}
+
+function stripAssTags(text = '') {
+  return String(text)
+    .replace(/\{[^}]*\}/g, '')
+    .replace(/\\N|\\n/g, ' ')
+    .replace(/\\h/g, ' ')
+    .trim();
+}
+
+function refreshBenchmarkEnabled(previewDone = state.previewUrls.some(Boolean)) {
   const warnings = state.fontMatches.some(x => x.status !== 'matched');
   const unsafeColor = !!state.media?.unsafeColorPipeline;
-  $('benchmarkBtn').disabled = !state.engine.ready || !state.inputDecodeOk || !previewDone || unsafeColor || (warnings && !state.acceptedWarnings);
+  const rendered = state.previewVisualChange.some(v => v === true);
+  const unknownOnly = previewDone && state.previewVisualChange.filter(v => v !== null).length === 0;
+  const previewOk = rendered || unknownOnly;
+  $('benchmarkBtn').disabled = !state.engine.ready || !state.inputDecodeOk || !previewDone || !previewOk || unsafeColor || (warnings && !state.acceptedWarnings);
 }
 
 async function runBenchmarks() {
