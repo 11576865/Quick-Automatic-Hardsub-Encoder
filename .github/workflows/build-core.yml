@@ -1,0 +1,37 @@
+name: Build FFmpeg Web Core
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@main
+      - name: Clone FFmpegKitNext
+        run: git clone --depth 1 https://github.com/arthenica/ffmpeg-kit-next.git /tmp/ffmpeg-kit-next
+      - name: Build WebAssembly core
+        working-directory: /tmp/ffmpeg-kit-next
+        run: |
+          ./nix-web.sh -p web-wasm32-emscripten --static --enable-gpl \
+            --enable-lib-fontconfig \
+            --enable-lib-freetype \
+            --enable-lib-fribidi \
+            --enable-lib-harfbuzz \
+            --enable-lib-libass \
+            --enable-lib-x264 \
+            --enable-lib-x265 \
+            --enable-lib-libsvtav1
+      - name: Prepare artifact
+        run: |
+          mkdir -p core-artifact
+          cp -a /tmp/ffmpeg-kit-next/prebuilt/bundle-web-wasm32/ffmpeg-kit-next/. core-artifact/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-kit-next-web-hardsub-core
+          path: core-artifact
+          retention-days: 30
