@@ -1,7 +1,7 @@
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview } from './ass.js';
 import { inspectFontFile, matchRequestedFonts } from './fonts.js';
-import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts } from './font-store.js';
+import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
 
@@ -185,11 +185,24 @@ $('fonts').addEventListener('change', async e => {
 
     if (valid.length) {
       try {
+        const persistence = await requestPersistentFontStorage();
         await persistFonts(valid);
         state.savedFonts = await listSavedFonts();
         renderSavedFontLibrary();
         updateFontMeta();
-        log(`已将 ${valid.length} 个字体保存到本机常用字体库。`);
+
+        const estimate = await getFontStorageEstimate();
+        const persistenceText = persistence.persisted
+          ? '浏览器已将站点存储标记为持久化'
+          : persistence.supported
+            ? '浏览器未授予持久化存储，低存储空间时仍可能被清理'
+            : '当前浏览器不支持持久化存储请求';
+
+        const quotaText = estimate?.quota
+          ? ` · 站点存储约 ${formatBytes(estimate.usage)} / ${formatBytes(estimate.quota)}`
+          : '';
+
+        log(`已将 ${valid.length} 个字体保存到本机常用字体库；${persistenceText}${quotaText}。`);
       } catch (error) {
         log(`保存常用字体失败：${error.message}`);
       }
