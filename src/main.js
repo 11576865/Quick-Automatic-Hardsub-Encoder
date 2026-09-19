@@ -144,7 +144,7 @@ async function bootstrap() {
     }
     renderCapabilities();
     updateEnvironmentSummary(true);
-    $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与 WebCodecs 是两套独立能力：dav1d/SVT-AV1 属于网页自带的软件解码/编码；WebCodecs 表示浏览器是否另外开放原生编解码通道。';
+    $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与浏览器原生能力是两套独立路径：dav1d/SVT-AV1 属于网页自带的软件编解码；“播放”表示浏览器能否直接处理该格式，“解码API/编码API”则表示 WebCodecs 是否进一步向网页开放接口。';
   } else {
     $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
     $('envDetails').open = true;
@@ -175,10 +175,10 @@ function renderCapabilities() {
     ['AV1', 'dav1d · 解码', dec.av1Dav1d, dec.av1Dav1d === null ? '检测中' : dec.av1Dav1d ? '可用' : '未编入']
   ];
 
-  const webCodecs = [
-    ['H.264', c.codecs.decode.h264, c.codecs.encode.h264],
-    ['H.265', c.codecs.decode.hevc, c.codecs.encode.hevc],
-    ['AV1', c.codecs.decode.av1, c.codecs.encode.av1]
+  const browserMatrix = [
+    ['H.264', c.nativePlayback.h264, c.codecs.decode.h264, c.codecs.encode.h264],
+    ['H.265', c.nativePlayback.hevc, c.codecs.decode.hevc, c.codecs.encode.hevc],
+    ['AV1', c.nativePlayback.av1, c.codecs.decode.av1, c.codecs.encode.av1]
   ];
 
   $('capabilities').innerHTML = `
@@ -204,17 +204,20 @@ function renderCapabilities() {
     </div>
 
     <div class="env-group">
-      <div class="env-group-title">WebCodecs</div>
-      <div class="env-matrix">
+      <div class="env-group-title">浏览器原生能力</div>
+      <div class="env-matrix env-matrix-four">
         <div class="env-matrix-head">格式</div>
-        <div class="env-matrix-head">解码</div>
-        <div class="env-matrix-head">编码</div>
-        ${webCodecs.map(([codec, decode, encode]) => `
+        <div class="env-matrix-head">播放</div>
+        <div class="env-matrix-head">解码API</div>
+        <div class="env-matrix-head">编码API</div>
+        ${browserMatrix.map(([codec, playback, decode, encode]) => `
           <div class="env-matrix-codec">${codec}</div>
+          <div>${badge(playback, playback ? '可播放' : '未报告')}</div>
           <div>${badge(decode, decode ? '可用' : '未暴露')}</div>
           <div>${badge(encode, encode ? '可用' : '未暴露')}</div>
         `).join('')}
       </div>
+      <div class="note env-explain">“未暴露”只表示 WebCodecs API 没开放给网页，不等于设备硬件不支持该格式。</div>
     </div>
   `;
 }
