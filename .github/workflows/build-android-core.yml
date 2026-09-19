@@ -59,6 +59,12 @@ jobs:
         with:
           node-version: 22
 
+      - name: Add bundled fallback font
+        run: |
+          mkdir -p public/vendor/fallback-fonts
+          curl -L --fail --retry 3             -o public/vendor/fallback-fonts/NotoSansSC-Regular.otf             https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+          test -s public/vendor/fallback-fonts/NotoSansSC-Regular.otf
+
       - name: Build web UI for Android assets
         run: |
           npm install
