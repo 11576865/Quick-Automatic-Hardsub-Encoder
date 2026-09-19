@@ -1,5 +1,5 @@
 import './style.css';
-import { parseAss } from './ass.js';
+import { parseAss, rewriteAssFonts, shiftAssForPreview } from './ass.js';
 import { inspectFontFile, matchRequestedFonts } from './fonts.js';
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
@@ -10,6 +10,9 @@ const state = {
   ass: null,
   fonts: [],
   assInfo: null,
+  assText: '',
+  activeAssText: '',
+  fontBindings: {},
   fontFaces: [],
   fontMatches: [],
   media: null,
@@ -288,6 +291,9 @@ async function analyzeAll() {
     state.inputDecodeOk = false;
     log('开始分析 ASS 和字体…');
     const assText = await state.ass.text();
+    state.assText = assText;
+    state.activeAssText = assText;
+    state.fontBindings = {};
     state.assInfo = parseAss(assText);
     state.fontFaces = [];
     for (const file of state.fonts) {
@@ -368,6 +374,8 @@ function renderSubtitleSummary() {
   ].map(([k,v]) => `<div class="status-item"><span>${k}</span><span>${v}</span></div>`).join('');
 
   const details = state.fontMatches.map(m => {
+    const forced = state.fontBindings[m.requested];
+    if (forced) return `↪ ${escapeHtml(m.requested)} → 强制映射为 ${escapeHtml(forced)}`;
     if (m.status === 'matched') return `✓ ${escapeHtml(m.requested)} → ${escapeHtml(m.face.fullName || m.face.family || m.face.fileName)}`;
     if (m.status === 'probable') return `△ ${escapeHtml(m.requested)} → 可能匹配 ${escapeHtml(m.face.fullName || m.face.family || m.face.fileName)}`;
     return `✗ ${escapeHtml(m.requested)} → 未在用户提供字体中找到`;
@@ -379,7 +387,33 @@ function renderSubtitleSummary() {
   }
 
   if (missing.length || probable.length) {
-    notices.push(`<div class="warning-box" style="margin-top:12px">${details || '检测到字体风险。'}<br><br>注意：这只是静态字体名分析；最终是否回退以真实 libass 预览和日志为准。</div>`);
+    let bindingUi = '';
+    if (state.fontFaces.length) {
+      const risky = state.fontMatches
+        .map((m, index) => ({ m, index }))
+        .filter(({ m }) => m.status !== 'matched');
+      bindingUi = `<div class="font-binding-box">
+        <div class="font-binding-title">强制字体映射（可选）</div>
+        <div class="note">如果你确认放入的字体就是 ASS 想要的字体，可以把 ASS 中的字体名临时改写成该字体真实的内部 Family Name。原始 ASS 文件不会修改。</div>
+        ${risky.map(({ m, index }) => {
+          const current = state.fontBindings[m.requested] || '';
+          const opts = state.fontFaces.map((face, faceIndex) => {
+            const target = face.family || face.fullName || face.postScriptName || '';
+            const label = [face.fileName, target].filter(Boolean).join(' → ');
+            const selected = current && current === target ? ' selected' : '';
+            return `<option value="${faceIndex}"${selected}>${escapeHtml(label)}</option>`;
+          }).join('');
+          return `<label class="font-binding-row">
+            <span>${escapeHtml(m.requested)}</span>
+            <select class="font-binding-select" data-match-index="${index}">
+              <option value="">不强制</option>
+              ${opts}
+            </select>
+          </label>`;
+        }).join('')}
+      </div>`;
+    }
+    notices.push(`<div class="warning-box" style="margin-top:12px">${details || '检测到字体风险。'}<br><br>注意：这只是静态字体名分析；最终是否回退以真实 libass 预览和日志为准。${bindingUi}</div>`);
     $('warningAccept').classList.remove('hidden');
   } else {
     notices.push(`<div class="note" style="margin-top:12px">${details || 'ASS 未声明特定字体。'}<br>仍建议生成真实预览，确认 libass 实际渲染结果。</div>`);
@@ -387,6 +421,7 @@ function renderSubtitleSummary() {
     state.acceptedWarnings = true;
   }
   $('fontWarnings').innerHTML = notices.join('');
+  bindFontOverrideControls();
 
   const fontRisk = missing.length + probable.length;
   const mediaRisk = state.media?.unsafeColorPipeline ? 1 : 0;
@@ -408,6 +443,42 @@ function renderSubtitleSummary() {
     status.textContent = `检查通过 · ${codec}${resolution ? ' · ' + resolution : ''}`;
     status.className = 'preflight-status ok';
   }
+}
+
+function bindFontOverrideControls() {
+  document.querySelectorAll('.font-binding-select').forEach(select => {
+    select.addEventListener('change', async () => {
+      const matchIndex = Number(select.dataset.matchIndex);
+      const match = state.fontMatches[matchIndex];
+      if (!match) return;
+
+      if (select.value === '') {
+        delete state.fontBindings[match.requested];
+      } else {
+        const face = state.fontFaces[Number(select.value)];
+        const target = face?.family || face?.fullName || face?.postScriptName || '';
+        if (target) state.fontBindings[match.requested] = target;
+      }
+
+      state.activeAssText = rewriteAssFonts(state.assText, state.fontBindings);
+      try {
+        await state.engine.setAssText(state.activeAssText);
+        log(`字体映射已更新：${match.requested} → ${state.fontBindings[match.requested] || '取消强制映射'}`);
+      } catch (e) {
+        log(`应用字体映射失败：${e.message}`);
+      }
+
+      state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
+      state.previewUrls = [];
+      state.previewFontEvents = [];
+      state.previewTimes = [];
+      state.acceptedWarnings = false;
+      $('acceptWarnings').checked = false;
+      $('preview').innerHTML = '<div class="preview-placeholder">字体映射已变化，请重新生成真实字幕预览。</div>';
+      renderSubtitleSummary();
+      refreshBenchmarkEnabled(false);
+    });
+  });
 }
 
 async function renderPreviews() {
@@ -436,7 +507,8 @@ async function loadPreviewAt(index) {
   if (!state.previewUrls[safeIndex]) {
     container.innerHTML = `<div class="preview-placeholder">正在生成第 ${safeIndex + 1}/${times.length} 张真实 libass 预览…<br><small>首张先生成，其余仅在翻页时按需生成。</small></div>`;
     log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
-    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex);
+    const previewAss = shiftAssForPreview(state.activeAssText || state.assText, times[safeIndex]);
+    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex, previewAss);
     state.previewUrls[safeIndex] = previewResult.url;
     state.previewFontEvents[safeIndex] = previewResult.fontEvents || [];
     if (state.previewFontEvents[safeIndex].length) {
