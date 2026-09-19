@@ -274,14 +274,22 @@ async function runBenchmarks() {
     const start = totalDuration > duration * 2 ? Math.max(0, totalDuration * 0.45) : 0;
     const codecs = ['h264','h265','av1'];
     for (const codec of codecs) {
+      if (state.softwareEncoders[codec] === false) {
+        state.benchmarks[codec] = { codecKey: codec, error: '当前 FFmpeg WASM 核心未编入该编码器，已跳过测试。' };
+        log(`${codec.toUpperCase()}：核心检测为不可用，跳过，不启动 FFmpeg。`);
+        renderCodecCards();
+        continue;
+      }
+
       log(`开始 ${codec.toUpperCase()} 样本测试…`);
       try {
-        const r = await state.engine.benchmarkCodec(codec, { start, duration, withSubtitles: false });
+        const timeoutMs = codec === 'av1' ? 180000 : codec === 'h265' ? 120000 : 90000;
+        const r = await state.engine.benchmarkCodec(codec, { start, duration, withSubtitles: false, timeoutMs });
         r.estimatedBytes = estimateFullBytes(r, duration, state.media);
         state.benchmarks[codec] = r;
       } catch (e) {
         state.benchmarks[codec] = { codecKey: codec, error: e.message };
-        log(`${codec.toUpperCase()} 不可用：${e.message}`);
+        log(`${codec.toUpperCase()} 测试终止：${e.message}`);
       }
       renderCodecCards();
     }
