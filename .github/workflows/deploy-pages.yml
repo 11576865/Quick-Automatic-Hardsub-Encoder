@@ -1,15 +1,26 @@
-name: Deploy Frontend Preview
+name: Deploy Frontend
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - 'package.json'
+      - 'vite.config.js'
+      - 'scripts/**'
+      - 'public/**'
+      - '.github/workflows/deploy-pages.yml'
 
 permissions:
   contents: read
+  actions: read
   pages: write
   id-token: write
 
 concurrency:
-  group: pages-preview
+  group: pages-frontend
   cancel-in-progress: true
 
 jobs:
@@ -17,11 +28,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Reuse latest successful FFmpeg Web core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID="$(gh run list --workflow build-core.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "No successful Build Core and Deploy run found."
+            exit 1
+          fi
+          rm -rf public/vendor/ffmpeg-kit-next-web
+          mkdir -p public/vendor/ffmpeg-kit-next-web
+          gh run download "$RUN_ID" -n ffmpeg-kit-next-web-hardsub-core -D public/vendor/ffmpeg-kit-next-web
+          test -f public/vendor/ffmpeg-kit-next-web/dist/index.js
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+
       - run: npm install
       - run: npm run build
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
