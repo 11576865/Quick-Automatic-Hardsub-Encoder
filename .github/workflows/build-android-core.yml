@@ -1,0 +1,50 @@
+name: Build Android Native Core
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-android-core.yml'
+      - 'android-native/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-native-core
+  cancel-in-progress: true
+
+jobs:
+  build-android-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Clone pinned FFmpegKitNext
+        env:
+          FFMPEG_KIT_NEXT_REV: 5e51b2da4c3593c0f2f9b49f53eeb497d93e39d3
+        run: |
+          git init /tmp/ffmpeg-kit-next
+          git -C /tmp/ffmpeg-kit-next remote add origin https://github.com/arthenica/ffmpeg-kit-next.git
+          git -C /tmp/ffmpeg-kit-next fetch --depth 1 origin "$FFMPEG_KIT_NEXT_REV"
+          git -C /tmp/ffmpeg-kit-next checkout --detach FETCH_HEAD
+          echo "Pinned FFmpegKitNext: $(git -C /tmp/ffmpeg-kit-next rev-parse HEAD)"
+
+      - name: Build ARM64 Android FFmpegKitNext
+        working-directory: /tmp/ffmpeg-kit-next
+        run: |
+          ./nix-android.sh -p android-r27d             --arch=arm64-v8a             --enable-gpl             --enable-lib-android-media-codec             --enable-lib-dav1d             --enable-lib-fontconfig             --enable-lib-freetype             --enable-lib-fribidi             --enable-lib-harfbuzz             --enable-lib-libass             --enable-lib-x264             --enable-lib-x265             --enable-lib-libsvtav1
+
+      - name: Show Android bundle
+        run: |
+          find /tmp/ffmpeg-kit-next/prebuilt -maxdepth 5 -type f \( -name '*.aar' -o -name '*.pom' \) -print
+
+      - name: Upload native Android Maven bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ffmpeg-kit-next-android-arm64-hardsub
+          path: /tmp/ffmpeg-kit-next/prebuilt/bundle-android-aar-24-maven
+          retention-days: 30
