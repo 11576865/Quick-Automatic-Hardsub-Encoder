@@ -113,3 +113,30 @@ export async function clearSavedFonts() {
     db.close();
   }
 }
+
+
+export async function requestPersistentFontStorage() {
+  if (!navigator.storage?.persist) {
+    return { supported: false, persisted: false };
+  }
+  try {
+    const already = navigator.storage.persisted
+      ? await navigator.storage.persisted()
+      : false;
+    if (already) return { supported: true, persisted: true };
+    const persisted = await navigator.storage.persist();
+    return { supported: true, persisted: !!persisted };
+  } catch {
+    return { supported: true, persisted: false };
+  }
+}
+
+export async function getFontStorageEstimate() {
+  if (!navigator.storage?.estimate) return null;
+  try {
+    const { usage = 0, quota = 0 } = await navigator.storage.estimate();
+    return { usage, quota };
+  } catch {
+    return null;
+  }
+}
