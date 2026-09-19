@@ -29,6 +29,46 @@ class NativeBridge(
             .toString()
     }
 
+    private fun prepareNativeFonts(): Pair<List<String>, Boolean> {
+        val fontDirs = mutableListOf<String>()
+
+        listOf(
+            "/system/fonts",
+            "/product/fonts",
+            "/system_ext/fonts"
+        ).forEach { path ->
+            if (File(path).isDirectory) fontDirs.add(path)
+        }
+
+        var bundledFallbackReady = false
+        try {
+            val appFontDir = File(activity.filesDir, "fonts")
+            if (!appFontDir.exists()) appFontDir.mkdirs()
+
+            val fallback = File(appFontDir, "NotoSansSC-Regular.otf")
+            if (!fallback.exists() || fallback.length() == 0L) {
+                activity.assets.open("www/vendor/fallback-fonts/NotoSansSC-Regular.otf").use { input ->
+                    fallback.outputStream().use { output -> input.copyTo(output) }
+                }
+            }
+
+            if (fallback.isFile && fallback.length() > 0L) {
+                bundledFallbackReady = true
+                fontDirs.add(appFontDir.absolutePath)
+            }
+        } catch (_: Throwable) {
+            bundledFallbackReady = false
+        }
+
+        FFmpegKitConfig.setFontDirectoryList(
+            activity,
+            fontDirs.distinct(),
+            emptyMap<String?, String?>()
+        )
+
+        return fontDirs.distinct() to bundledFallbackReady
+    }
+
     private fun executeOk(args: Array<String>): Pair<Boolean, String> {
         val session = FFmpegKit.executeWithArguments(args)
         val ok = ReturnCode.isSuccess(session.getReturnCode())
@@ -61,7 +101,7 @@ class NativeBridge(
         return (probe.getMediaInformation() != null) to logs
     }
 
-    private fun libassVisualSmoke(assFile: File): Pair<Boolean, String> {
+    private fun libassVisualSmoke(assFile: File, fallbackFontDir: String): Pair<Boolean, String> {
         val base = File(activity.cacheDir, "native_hardsub_selftest_base.raw")
         val sub = File(activity.cacheDir, "native_hardsub_selftest_sub.raw")
         base.delete()
@@ -83,7 +123,7 @@ class NativeBridge(
             "-y",
             "-f", "lavfi",
             "-i", "color=c=black:s=320x180:r=1:d=1",
-            "-vf", "ass=${assFile.absolutePath}:fontsdir=/system/fonts",
+            "-vf", "ass=${assFile.absolutePath}:fontsdir=${fallbackFontDir}",
             "-frames:v", "1",
             "-pix_fmt", "rgb24",
             "-f", "rawvideo",
@@ -106,6 +146,10 @@ class NativeBridge(
 
             val tempFiles = mutableListOf<File>()
             try {
+                // Keep only a small bounded history. FFmpegKit sessions retain logs and
+                // callbacks, so an unbounded history is undesirable for a long-running app.
+                FFmpegKitConfig.setSessionHistorySize(12)
+
                 val encoders = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-encoders")).getOutput()
                 val decoders = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-decoders")).getOutput()
                 val filters = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-filters")).getOutput()
@@ -125,11 +169,9 @@ class NativeBridge(
                 result.put("hevcMediaCodec", encoders.contains("hevc_mediacodec"))
                 result.put("av1MediaCodec", encoders.contains("av1_mediacodec"))
 
-                FFmpegKitConfig.setFontDirectoryList(
-                    activity,
-                    listOf("/system/fonts"),
-                    emptyMap<String?, String?>()
-                )
+                val (nativeFontDirs, bundledFallbackReady) = prepareNativeFonts()
+                result.put("fontDirs", nativeFontDirs.joinToString(" | "))
+                result.put("bundledFallbackReady", bundledFallbackReady)
 
                 val assFile = File(activity.cacheDir, "native_hardsub_selftest.ass")
                 tempFiles.add(assFile)
@@ -142,7 +184,7 @@ class NativeBridge(
 
                     [V4+ Styles]
                     Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-                    Style: Default,sans-serif,28,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,18,1
+                    Style: Default,Noto Sans SC,28,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,18,1
 
                     [Events]
                     Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -150,7 +192,14 @@ class NativeBridge(
                     """.trimIndent()
                 )
 
-                val libassVisual = if (hasAss) libassVisualSmoke(assFile) else false to "ass filter missing"
+                val fallbackFontDir = nativeFontDirs.lastOrNull { it.startsWith(activity.filesDir.absolutePath) }
+                    ?: nativeFontDirs.firstOrNull()
+                    ?: "/system/fonts"
+                val libassVisual = if (hasAss && bundledFallbackReady) {
+                    libassVisualSmoke(assFile, fallbackFontDir)
+                } else {
+                    false to if (!hasAss) "ass filter missing" else "bundled fallback font unavailable"
+                }
                 result.put("libassVisualSmoke", libassVisual.first)
                 if (!libassVisual.first) {
                     result.put("libassError", libassVisual.second.takeLast(1200))
@@ -201,6 +250,7 @@ class NativeBridge(
                 tempFiles.forEach { file ->
                     try { file.delete() } catch (_: Throwable) {}
                 }
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
             }
 
             val quoted = JSONObject.quote(result.toString())
