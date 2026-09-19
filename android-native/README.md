@@ -42,3 +42,19 @@ The app will reuse the existing interaction model:
 - save with Android's document/download picker
 
 The WebAssembly backend remains available as an installation-free fallback.
+
+
+## MediaCodec policy
+
+MediaCodec support is compiled into the native core for capability probing and future acceleration, but hardware encoding is **not enabled by default**.
+
+Reason: FFmpegKitNext and upstream FFmpeg have documented device/vendor-specific MediaCodec encoder failures, including streams that FFmpeg can read but common players render as black video or otherwise fail. The default native path will therefore start with the ARM64 software encoders (x264, x265, SVT-AV1) and use MediaCodec only after codec-specific validation on the actual device.
+
+Native rollout order:
+
+1. ARM64 software FFmpeg + libass smoke tests
+2. SAF read/write tests
+3. subtitle/font regression test against the known sample
+4. H.264 / H.265 / AV1 software encode tests
+5. MediaCodec decode tests
+6. MediaCodec encode as an explicit experimental option only after output compatibility checks
