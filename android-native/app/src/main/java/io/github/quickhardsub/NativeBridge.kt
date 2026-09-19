@@ -154,11 +154,11 @@ class NativeBridge(
                 val decoders = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-decoders")).getOutput()
                 val filters = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-filters")).getOutput()
 
-                val hasX264 = Regex("""\\blibx264\\b""").containsMatchIn(encoders)
-                val hasX265 = Regex("""\\blibx265\\b""").containsMatchIn(encoders)
-                val hasSvt = Regex("""\\blibsvtav1\\b""").containsMatchIn(encoders)
-                val hasDav1d = Regex("""\\blibdav1d\\b""").containsMatchIn(decoders)
-                val hasAss = Regex("""\\bass\\b""").containsMatchIn(filters)
+                val hasX264 = Regex("""\blibx264\b""").containsMatchIn(encoders)
+                val hasX265 = Regex("""\blibx265\b""").containsMatchIn(encoders)
+                val hasSvt = Regex("""\blibsvtav1\b""").containsMatchIn(encoders)
+                val hasDav1d = Regex("""\blibdav1d\b""").containsMatchIn(decoders)
+                val hasAss = Regex("""\bass\b""").containsMatchIn(filters)
 
                 result.put("x264", hasX264)
                 result.put("x265", hasX265)
