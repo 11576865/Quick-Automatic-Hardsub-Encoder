@@ -121,3 +121,48 @@ IndexedDB data can be evicted under storage pressure. After the user explicitly 
 ### 13. Formal browser output is still memory-sensitive
 
 WASM/browser encoding remains a fallback. Large output should eventually move from accumulated JS Blob chunks to OPFS/File System streaming where supported.
+
+
+### 14. Do not expose a raw FFmpeg command executor to JavaScript
+
+The native bridge must accept a structured encode request, not an arbitrary shell/FFmpeg command string.
+
+Native code should build an argument array with `FFmpegKit.executeWithArgumentsAsync(...)` so:
+- filenames do not need shell quoting;
+- ASS/font paths containing spaces or punctuation cannot break parsing;
+- JavaScript cannot ask the native layer to read arbitrary app-accessible paths;
+- only supported codecs, presets, rate controls and filters can be selected.
+
+### 15. A native encode is a single owned job
+
+Only one formal encode may own the native FFmpeg session at a time.
+
+The service must reject or queue a second request and must clean up all of these on every terminal path:
+- FFmpeg session;
+- reusable SAF registrations;
+- temporary ASS/font files;
+- temporary output;
+- wake lock;
+- notification state.
+
+On next app launch, stale temporary files from interrupted jobs should be detected and offered for cleanup/recovery.
+
+### 16. Do not confuse WebView-selected File objects with a native persistent font pool
+
+When an APK file picker returns font URIs, the Android shell should immediately classify them as font inputs and copy the small font files into app-private storage (or persist the URI grants if copying is not possible). This gives native libass a stable path and avoids depending on WebView IndexedDB.
+
+The web IndexedDB library and native font pool can share UI semantics, but they are separate storage implementations.
+
+### 17. Validate output before copying it to Downloads
+
+A successful FFmpeg return code is necessary but not sufficient.
+
+For formal output, native verification should compare:
+- expected codec;
+- width/height;
+- duration tolerance;
+- at least one video stream;
+- copied audio stream count when audio exists;
+- non-zero packet/file size.
+
+Only after validation should the app copy the temporary MKV to the user destination and report success.
