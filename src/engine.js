@@ -52,6 +52,16 @@ export class EncoderEngine {
     return normalizeMediaInfo(info);
   }
 
+  async detectSoftwareEncoders() {
+    this.assertReady();
+    const output = await this.execute('-hide_banner -encoders', true);
+    return {
+      h264: /\blibx264\b/.test(output),
+      h265: /\blibx265\b/.test(output),
+      av1: /\blibsvtav1\b/.test(output)
+    };
+  }
+
   async renderPreview(timeSeconds, index = 0) {
     this.assertReady();
     const output = `/preview_${index}.png`;
