@@ -160,6 +160,12 @@ const $ = id => document.getElementById(id);
 const log = msg => { $('log').textContent += `${msg}\n`; $('log').scrollTop = $('log').scrollHeight; };
 state.engine = new EncoderEngine(log);
 
+for (const [inputId, role] of [['video', 'video'], ['ass', 'ass'], ['fonts', 'fonts']]) {
+  $(inputId).addEventListener('click', () => {
+    try { globalThis.NativeHardsub?.preparePickerRole?.(role); } catch {}
+  });
+}
+
 $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
