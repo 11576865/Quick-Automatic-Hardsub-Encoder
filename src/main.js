@@ -13,6 +13,7 @@ const state = {
   assText: '',
   activeAssText: '',
   fontBindings: {},
+  autoFontFallbacks: {},
   fontFaces: [],
   fontMatches: [],
   media: null,
@@ -328,6 +329,7 @@ async function analyzeAll() {
     state.assText = assText;
     state.activeAssText = assText;
     state.fontBindings = {};
+    state.autoFontFallbacks = {};
     state.assInfo = parseAss(assText);
     state.fontFaces = [];
     for (const file of state.fonts) {
@@ -339,6 +341,14 @@ async function analyzeAll() {
     if (state.engine.ready) {
       log('挂载媒体文件到浏览器 WebAssembly 文件系统…');
       await state.engine.stageFiles(state.video, state.ass, state.fonts);
+      if (state.engine.hasBundledFallbackFont) {
+        state.autoFontFallbacks = Object.fromEntries(
+          state.fontMatches
+            .filter(m => m.status === 'missing')
+            .map(m => [m.requested, state.engine.fallbackFontFamily])
+        );
+        await state.engine.setFontMappings({ ...state.autoFontFallbacks, ...state.fontBindings });
+      }
       state.media = await state.engine.probe();
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps · ${state.media.pixelFormat || '未知像素格式'} · ${state.media.bitDepth}-bit`);
@@ -412,10 +422,12 @@ function renderSubtitleSummary() {
 
   const details = state.fontMatches.map(m => {
     const forced = state.fontBindings[m.requested];
+    const fallback = state.autoFontFallbacks[m.requested];
     if (forced) return `↪ ${escapeHtml(m.requested)} → 强制映射为 ${escapeHtml(forced)}`;
     if (m.status === 'matched') return `✓ ${escapeHtml(m.requested)} → ${escapeHtml(m.face.fullName || m.face.family || m.face.fileName)}`;
     if (m.status === 'probable') return `△ ${escapeHtml(m.requested)} → 可能匹配 ${escapeHtml(m.face.fullName || m.face.family || m.face.fileName)}`;
-    return `✗ ${escapeHtml(m.requested)} → 未在用户提供字体中找到`;
+    if (fallback) return `↪ ${escapeHtml(m.requested)} → 未提供原字体，将回退到内置 ${escapeHtml(fallback)}`;
+    return `✗ ${escapeHtml(m.requested)} → 未在用户提供字体中找到，且当前没有可用内置回退字体`;
   }).join('<br>');
 
   const notices = [];
@@ -431,7 +443,7 @@ function renderSubtitleSummary() {
         .filter(({ m }) => m.status !== 'matched');
       bindingUi = `<div class="font-binding-box">
         <div class="font-binding-title">强制字体映射（可选）</div>
-        <div class="note">如果你确认放入的字体就是 ASS 想要的字体，可以把 ASS 中的字体名临时改写成该字体真实的内部 Family Name。原始 ASS 文件不会修改。</div>
+        <div class="note">未上传原字体时，libass 会使用内置 Noto Sans SC 回退；如果你确认上传的字体就是 ASS 想要的字体，可以在这里覆盖回退并强制映射到该字体真实的内部 Family Name。原始 ASS 文件不会修改。</div>
         ${risky.map(({ m, index }) => {
           const current = state.fontBindings[m.requested] || '';
           const opts = state.fontFaces.map((face, faceIndex) => {
@@ -516,7 +528,7 @@ function bindFontOverrideControls() {
 
       state.activeAssText = rewriteAssFonts(state.assText, state.fontBindings);
       try {
-        await state.engine.setFontMappings(state.fontBindings);
+        await state.engine.setFontMappings({ ...state.autoFontFallbacks, ...state.fontBindings });
         await state.engine.setAssText(state.activeAssText);
         log(`字体强制映射已生效：${match.requested} → ${state.fontBindings[match.requested] || '取消强制映射'}`);
       } catch (e) {
