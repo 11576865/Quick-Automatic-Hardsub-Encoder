@@ -36,9 +36,9 @@ class NativeBridge(
             result.put("available", true)
 
             try {
-                val encoders = FFmpegKit.execute("-hide_banner -encoders").output
-                val decoders = FFmpegKit.execute("-hide_banner -decoders").output
-                val filters = FFmpegKit.execute("-hide_banner -filters").output
+                val encoders = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-encoders")).getOutput()
+                val decoders = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-decoders")).getOutput()
+                val filters = FFmpegKit.executeWithArguments(arrayOf("-hide_banner", "-filters")).getOutput()
 
                 result.put("x264", Regex("""\\blibx264\\b""").containsMatchIn(encoders))
                 result.put("x265", Regex("""\\blibx265\\b""").containsMatchIn(encoders))
@@ -75,23 +75,31 @@ class NativeBridge(
                     """.trimIndent()
                 )
 
-                val command =
-                    "-y -f lavfi -i color=c=black:s=320x180:r=24:d=1 " +
-                    "-vf \"ass='\${assFile.absolutePath}':fontsdir='/system/fonts'\" " +
-                    "-c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p -an '\${outFile.absolutePath}'"
+                val command = arrayOf(
+                    "-y",
+                    "-f", "lavfi",
+                    "-i", "color=c=black:s=320x180:r=24:d=1",
+                    "-vf", "ass=${assFile.absolutePath}:fontsdir=/system/fonts",
+                    "-c:v", "libx264",
+                    "-preset", "ultrafast",
+                    "-crf", "28",
+                    "-pix_fmt", "yuv420p",
+                    "-an",
+                    outFile.absolutePath
+                )
 
-                val session = FFmpegKit.execute(command)
-                val encodeOk = ReturnCode.isSuccess(session.returnCode) && outFile.length() > 0
+                val session = FFmpegKit.executeWithArguments(command)
+                val encodeOk = ReturnCode.isSuccess(session.getReturnCode()) && outFile.length() > 0
                 result.put("softwareEncodeSmoke", encodeOk)
 
                 if (encodeOk) {
                     val probe = FFprobeKit.getMediaInformation(outFile.absolutePath)
-                    val info = probe.mediaInformation
+                    val info = probe.getMediaInformation()
                     result.put("ffprobeSmoke", info != null)
                     result.put("smokeBytes", outFile.length())
                 } else {
                     result.put("ffprobeSmoke", false)
-                    result.put("error", session.output.takeLast(1200))
+                    result.put("error", session.getOutput().takeLast(1200))
                 }
 
                 assFile.delete()
