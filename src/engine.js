@@ -159,7 +159,6 @@ export class EncoderEngine {
     const session = await FFmpegKit.executeAsync(cmd, completed => resolveDone(completed));
     const chunks = [];
     let totalBytes = 0;
-    let hitLimit = false;
 
     try {
       while (true) {
@@ -171,21 +170,8 @@ export class EncoderEngine {
         if (chunk.byteLength === 0) break;
 
         totalBytes += chunk.byteLength;
-        if (options.maxBytes && totalBytes > options.maxBytes) {
-          hitLimit = true;
-          this.onLog(`输出达到硬上限：${totalBytes} > ${options.maxBytes}，正在取消编码…`);
-          try { await session.cancel(); } catch {}
-          break;
-        }
-
         chunks.push(chunk.slice());
         options.onBytes?.(totalBytes);
-      }
-
-      if (hitLimit) {
-        await Promise.race([done, sleep(3000)]).catch(() => {});
-        await this.resetRuntime('输出超过硬上限');
-        throw new Error('输出已超过所选硬上限，任务已停止；程序没有继续生成异常膨胀的成品。');
       }
 
       const completed = await done;
