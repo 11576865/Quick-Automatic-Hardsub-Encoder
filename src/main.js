@@ -100,10 +100,10 @@ app.innerHTML = `
           <option value="balanced">均衡：CRF 质量模式</option>
           <option value="quality">质量优先：CRF 质量模式</option>
           <option value="speed">速度优先：CRF 质量模式</option>
-          <option value="size16">体积约束：硬上限 1.6×（完整两遍）</option>
-          <option value="size20">体积约束：硬上限 2.0×（完整两遍）</option>
+          <option value="size16">体积预算：1.6×（用于自动选参数）</option>
+          <option value="size20">体积预算：2.0×（用于自动选参数）</option>
         </select>
-        <small>CRF 模式只完整编码一遍。体积约束模式为了控制平均码率会完整跑两遍，耗时通常接近单遍的两倍；第一遍只分析，不生成最终视频。</small>
+        <small>1.6× / 2.0× 只参与参数规划：结合源码率、音频、时长和目标编码器计算单遍目标平均码率。它不是严格成品大小保证，也不会改变成两遍流程。</small>
       </div>
       <div id="sourceAnchor" class="plan-anchor note">分析完成后显示源码率与压缩密度。</div>
     </div>
@@ -699,7 +699,7 @@ function renderPlanOptions() {
     const selected = state.selectedCodec === codec;
     let param = '不可用';
     if (plan?.mode === 'crf') param = 'CRF ' + plan.crf + ' · preset ' + plan.preset;
-    else if (plan?.mode === 'target-size') param = '目标视频码率 ' + formatBitrate(plan.targetVideoBitrate) + ' · 两遍';
+    else if (plan?.mode === 'budget-rate') param = '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
     return '<div class="codec-card plan-codec ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '">' +
       '<h3>' + labels[codec] + '</h3>' +
       '<div class="note">' + codecDescription(codec) + '</div>' +
@@ -755,7 +755,8 @@ async function runSelectedTest() {
     try {
       r = await state.engine.benchmarkCodec(state.selectedCodec, {
         start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
-        targetVideoBitrate: plan.mode === 'target-size' ? plan.targetVideoBitrate : 0,
+        targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+      twoPass: false,
         timeoutMs: state.selectedCodec === 'av1' ? 120000 : 90000
       });
     } finally {
@@ -831,8 +832,8 @@ async function runEncode() {
     $('encodeBtn').disabled = true;
     $('progressBar').style.width = '1%';
     $('liveEta').textContent = '正在启动编码器；前几秒不计算 ETA。';
-    log('正式压制：' + state.selectedCodec.toUpperCase() + ' · ' + (plan.mode === 'target-size' ? '两遍目标体积' : 'CRF质量') + '模式');
-    if (plan.mode === 'target-size') log('硬上限 ' + formatBytes(plan.sizeCeiling) + '；源码率锚点 ' + formatBitrate(plan.sourceVideoBitrate) + '；目标视频码率 ' + formatBitrate(plan.targetVideoBitrate) + '。');
+    log('正式压制：' + state.selectedCodec.toUpperCase() + ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF质量') + '模式');
+    if (plan.mode === 'budget-rate') log('体积预算边界 ' + formatBytes(plan.sizeCeiling) + '；源码率锚点 ' + formatBitrate(plan.sourceVideoBitrate) + '；单遍目标视频码率 ' + formatBitrate(plan.targetVideoBitrate) + '。');
     else log('CRF ' + plan.crf + ' · preset ' + plan.preset + '；不提前猜整片大小。');
     const durationMs = state.media.duration * 1000;
     let phaseName = '';
@@ -840,7 +841,7 @@ async function runEncode() {
     let lastUi = 0;
     const result = await state.engine.encodeFullStream(state.selectedCodec, {
       crf: plan.crf, preset: plan.preset,
-      targetVideoBitrate: plan.mode === 'target-size' ? plan.targetVideoBitrate : 0,
+      targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
       onPhase: phase => { phaseName = phase; samples = []; $('liveEta').textContent = phase === 'pass1' ? '第一遍：正在稳定编码速度…' : phase === 'pass2' ? '第二遍：正在稳定编码速度…' : '正在稳定编码速度…'; },
       onStatistics: stat => {
         const currentPhase = stat.phase || phaseName || 'encode';
@@ -850,8 +851,7 @@ async function runEncode() {
         samples.push({ wall: now, media: mediaSec });
         samples = samples.filter(x => now - x.wall <= 20000);
         const phaseProgress = durationMs > 0 ? Math.min(1, (stat.timeMs || 0) / durationMs) : 0;
-        const twoPass = plan.mode === 'target-size';
-        const overall = twoPass ? (currentPhase === 'pass1' ? phaseProgress * 0.48 : 0.50 + phaseProgress * 0.48) : phaseProgress * 0.98;
+        const overall = phaseProgress * 0.98;
         $('progressBar').style.width = Math.max(1, Math.min(98, overall * 100)).toFixed(1) + '%';
         if (now - lastUi < 500) return;
         lastUi = now;
@@ -861,7 +861,7 @@ async function runEncode() {
           const wallSec = (b.wall - a.wall) / 1000;
           if (wallSec >= 6 && b.media > a.media) rollingSpeed = (b.media - a.media) / wallSec;
         }
-        const phaseLabel = currentPhase === 'pass1' ? '第一遍' : currentPhase === 'pass2' ? '第二遍' : '正式压制';
+        const phaseLabel = '正式压制';
         if (!(rollingSpeed > 0)) {
           $('liveEta').textContent = phaseLabel + ' · 已处理 ' + (phaseProgress * 100).toFixed(1) + '% · 正在稳定编码速度…';
           return;
@@ -878,8 +878,8 @@ async function runEncode() {
     downloadBlob(result.blob, base + '_hardsub_' + state.selectedCodec + '.mkv');
     if (plan.sizeCeiling && result.byteLength > plan.sizeCeiling) {
       const over = (result.byteLength / plan.sizeCeiling - 1) * 100;
-      log('成品 ' + formatBytes(result.byteLength) + '，比硬上限高 ' + over.toFixed(2) + '%；成品已保留并下载。');
-      alert('压制完成，但实际成品比硬上限高 ' + over.toFixed(2) + '%。成品已正常下载，没有丢弃。');
+      log('成品 ' + formatBytes(result.byteLength) + '，比规划预算边界高 ' + over.toFixed(2) + '%；这是单遍码率控制的正常可能误差，成品已保留并下载。');
+      alert('压制完成。实际成品比规划预算边界高 ' + over.toFixed(2) + '%；预算用于自动选参数，并不是严格字节上限。成品已正常下载。');
     }
     try { await state.engine.resetRuntime('正式压制完成后释放 WASM heap'); }
     catch (e) { log('完成后的内存清理失败：' + e.message); }
@@ -917,7 +917,7 @@ function buildEncodePlan(codec) {
   const targetVideoBitrate = Math.floor(Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent)));
   const plannedBytes = Math.round(((targetVideoBitrate + audioBitRate) * media.duration / 8) + containerReserveBytes);
   const p = profileFor(codec, 'balanced');
-  return { mode: 'target-size', goal, codec, crf: p.crf, preset: p.preset, multiplier, sizeCeiling, safeBudgetBytes, plannedBytes, targetVideoBitrate, ceilingVideoBitrate, sourceVideoBitrate, audioBitRate };
+  return { mode: 'budget-rate', goal, codec, crf: p.crf, preset: p.preset, multiplier, sizeCeiling, safeBudgetBytes, plannedBytes, targetVideoBitrate, ceilingVideoBitrate, sourceVideoBitrate, audioBitRate };
 }
 
 function downloadBlob(blob, name) {
