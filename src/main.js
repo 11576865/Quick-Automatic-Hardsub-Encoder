@@ -738,6 +738,9 @@ function renderSubtitleSummary() {
     ['像素格式', `${state.media.pixelFormat || '未知'} · ${state.media.bitDepth}-bit`],
     ['色彩', [state.media.colorPrimaries, state.media.colorTransfer, state.media.colorSpace].filter(Boolean).join(' / ') || '未标记'],
     ['HDR/高位深', state.media.unsafeColorPipeline ? '检测到：当前版本禁止静默重编码' : '未检测到风险'],
+    ['尺寸兼容', (state.media.width % 2 || state.media.height % 2)
+      ? `检测到奇数尺寸；编码时将在字幕渲染后补齐到 ${state.media.width + (state.media.width % 2)}×${state.media.height + (state.media.height % 2)}`
+      : '宽高均为偶数'],
     ['输入解码', state.inputDecodeOk ? '已通过 1 帧实测' : '未验证'],
     ['音频', state.media.audioCodec || '未检测到']
   ] : [];
@@ -763,6 +766,12 @@ function renderSubtitleSummary() {
   const notices = [];
   if (state.media?.unsafeColorPipeline) {
     notices.push(`<div class="error-box" style="margin-top:12px">检测到 ${state.media.bitDepth}-bit / HDR 或高位深视频。当前版本尚未实现可靠的 10-bit/HDR 色彩保持，因此允许生成字幕预览，但会锁定编码测试与正式压制，避免静默转换成 8-bit/SDR。</div>`);
+  }
+
+  if (state.media && (state.media.width % 2 || state.media.height % 2)) {
+    const outW = state.media.width + (state.media.width % 2);
+    const outH = state.media.height + (state.media.height % 2);
+    notices.push(`<div class="note" style="margin-top:12px">检测到奇数宽/高。x264 等 4:2:0 编码路径常会直接报 “width/height not divisible by 2”。正式压制会先按原始尺寸完成 libass 字幕渲染，再只在右侧/底部补最多 1 px，使输出成为 ${outW}×${outH}；不会缩放原画面或改变 ASS 坐标。</div>`);
   }
 
   if (missing.length || probable.length) {
