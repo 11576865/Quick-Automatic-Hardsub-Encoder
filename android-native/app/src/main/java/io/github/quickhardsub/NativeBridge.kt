@@ -3,6 +3,8 @@ package io.github.quickhardsub
 import android.app.Activity
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
+import android.os.storage.StorageManager
 import android.system.Os
 import android.system.OsConstants
 import android.webkit.JavascriptInterface
@@ -141,8 +143,32 @@ class NativeBridge(
         }
     }
 
+    private fun getStagingAllocatableBytes(): Long {
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val storage = activity.getSystemService(StorageManager::class.java)
+                val uuid = storage.getUuidForPath(activity.filesDir)
+                storage.getAllocatableBytes(uuid)
+            } else {
+                activity.filesDir.usableSpace
+            }
+        } catch (_: Throwable) {
+            activity.filesDir.usableSpace
+        }
+    }
+
+    private fun getThermalStatus(): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return try {
+            activity.getSystemService(PowerManager::class.java).currentThermalStatus
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     @JavascriptInterface
     fun getBackendInfo(): String {
+        val power = activity.getSystemService(PowerManager::class.java)
         return JSONObject()
             .put("available", true)
             .put("backend", "android-native")
@@ -151,6 +177,10 @@ class NativeBridge(
             .put("ffmpegKitVersion", FFmpegKitConfig.getVersion())
             .put("mediaCodecBuiltIn", true)
             .put("mediaCodecEncodingDefault", false)
+            .put("stagingAllocatableBytes", getStagingAllocatableBytes())
+            .put("thermalStatus", getThermalStatus())
+            .put("powerSaveMode", power.isPowerSaveMode)
+            .put("sustainedPerformanceSupported", power.isSustainedPerformanceModeSupported)
             .toString()
     }
 
