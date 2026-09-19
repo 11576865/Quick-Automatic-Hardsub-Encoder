@@ -1,4 +1,6 @@
 const VENDOR_ENTRY = './vendor/ffmpeg-kit-next-web/dist/index.js';
+const FALLBACK_FONT_URL = './vendor/fallback-fonts/NotoSansSC-Regular.otf';
+const FALLBACK_FONT_FAMILY = 'Noto Sans SC';
 
 export class EncoderEngine {
   constructor(onLog = () => {}) {
@@ -14,6 +16,9 @@ export class EncoderEngine {
     this.sourceFontFiles = [];
     this.activeAssText = null;
     this.activeFontMappings = {};
+    this.bundledFallbackFont = null;
+    this.hasBundledFallbackFont = false;
+    this.fallbackFontFamily = FALLBACK_FONT_FAMILY;
   }
 
   async init() {
@@ -48,8 +53,32 @@ export class EncoderEngine {
     this.inputPath = `${inputMount}/${videoFile.name}`;
     await writeFile(this.assPath, new Uint8Array(await assFile.arrayBuffer()));
 
-    if (fontFiles.length) await mount(this.fontDir, { files: fontFiles });
-    await FFmpegKitConfig.setFontDirectoryList?.(fontFiles.length ? [this.fontDir] : [], {});
+    const fallback = await this.getBundledFallbackFont();
+    const mountedFonts = fallback ? [...fontFiles, fallback] : [...fontFiles];
+    this.hasBundledFallbackFont = !!fallback;
+
+    if (mountedFonts.length) await mount(this.fontDir, { files: mountedFonts });
+    await FFmpegKitConfig.setFontDirectoryList?.(mountedFonts.length ? [this.fontDir] : [], {});
+  }
+
+  async getBundledFallbackFont() {
+    if (this.bundledFallbackFont) return this.bundledFallbackFont;
+    try {
+      const url = new URL(FALLBACK_FONT_URL, document.baseURI).href;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      this.bundledFallbackFont = new File(
+        [blob],
+        'NotoSansSC-Regular.otf',
+        { type: 'font/otf' }
+      );
+      this.onLog(`已加载内置回退字体：${FALLBACK_FONT_FAMILY}`);
+      return this.bundledFallbackFont;
+    } catch (error) {
+      this.onLog(`内置回退字体加载失败：${error.message}`);
+      return null;
+    }
   }
 
   async setFontMappings(mappings = {}) {
