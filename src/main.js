@@ -308,7 +308,12 @@ function detectNativeBackend() {
   try {
     state.nativeBackend = JSON.parse(bridge.getBackendInfo());
     renderBackendSummary();
-    log(`检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}`);
+    log(
+      `检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}` +
+      ` · Native staging 可分配 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))}` +
+      ` · 热状态 ${formatThermalStatus(state.nativeBackend.thermalStatus)}` +
+      (state.nativeBackend.powerSaveMode ? ' · 省电模式已开启' : '')
+    );
 
     globalThis.__onNativeInputProbe = payload => {
       try {
@@ -372,7 +377,11 @@ function renderBackendSummary() {
 
   const t = state.nativeSelfTest;
   if (!t) {
-    el.innerHTML = `Android 原生壳已检测到：${escapeHtml(state.nativeBackend.abi || 'unknown')} · FFmpegKitNext ${escapeHtml(state.nativeBackend.ffmpegKitVersion || 'unknown')}。正在执行原生编解码/字幕自检；当前正式压制仍先保持 WASM，直到原生任务桥接完成。`;
+    el.innerHTML =
+      `Android 原生壳已检测到：${escapeHtml(state.nativeBackend.abi || 'unknown')} · FFmpegKitNext ${escapeHtml(state.nativeBackend.ffmpegKitVersion || 'unknown')}。` +
+      `Native staging 可分配约 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))} · ` +
+      `热状态 ${escapeHtml(formatThermalStatus(state.nativeBackend.thermalStatus))}${state.nativeBackend.powerSaveMode ? ' · 省电模式开启' : ''}。` +
+      '正在执行原生编解码/字幕自检；当前正式压制仍先保持 WASM，直到原生任务桥接完成。';
     return;
   }
 
@@ -407,9 +416,13 @@ function renderBackendSummary() {
       : `<small class="native-input-probe warn">当前视频 SAF 探测失败：${escapeHtml(p.error || '未知错误')}</small>`
     : '';
 
+  const runtime =
+    `<small class="native-runtime">Native staging 可分配约 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))} · ` +
+    `热状态 ${escapeHtml(formatThermalStatus(state.nativeBackend.thermalStatus))}${state.nativeBackend.powerSaveMode ? ' · 省电模式开启' : ''}</small>`;
+
   el.innerHTML =
     `${ok ? '<span class="ok">Android 原生核心实际自检通过。</span>' : '<span class="warn">Android 原生核心实际自检未完全通过。</span>'} ` +
-    `${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。${fontDirs}${inputProbe}`;
+    `${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。${fontDirs}${inputProbe}${runtime}`;
 }
 
 function renderCapabilities() {
@@ -1368,6 +1381,20 @@ function downloadBlob(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+function formatThermalStatus(status) {
+  if (status === null || status === undefined || status === '') return 'API 不可用';
+  const n = Number(status);
+  if (!Number.isFinite(n)) return '未知';
+  return ({
+    0: '无节流',
+    1: '轻微',
+    2: '中等',
+    3: '严重',
+    4: '临界',
+    5: '紧急',
+    6: '关机阈值'
+  })[n] || ('未知(' + n + ')');
+}
 function formatBytes(n) {
   if (!Number.isFinite(n)) return '—';
   const units = ['B','KB','MB','GB']; let i = 0; let v = n;
