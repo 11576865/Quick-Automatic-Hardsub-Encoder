@@ -9,6 +9,9 @@ export class EncoderEngine {
     this.inputPath = '/input/source.bin';
     this.assPath = '/subtitle.ass';
     this.fontDir = '/fonts';
+    this.sourceVideoFile = null;
+    this.sourceAssFile = null;
+    this.sourceFontFiles = [];
   }
 
   async init() {
@@ -28,6 +31,9 @@ export class EncoderEngine {
 
   async stageFiles(videoFile, assFile, fontFiles = []) {
     this.assertReady();
+    this.sourceVideoFile = videoFile;
+    this.sourceAssFile = assFile;
+    this.sourceFontFiles = [...fontFiles];
     const { mount, writeFile, FFmpegKitConfig } = this.api;
 
     const stamp = Date.now();
@@ -60,6 +66,22 @@ export class EncoderEngine {
       h265: /\blibx265\b/.test(output),
       av1: /\blibsvtav1\b/.test(output)
     };
+  }
+
+  async detectSoftwareDecoders() {
+    this.assertReady();
+    const output = await this.execute('-hide_banner -decoders', true);
+    return {
+      av1Dav1d: /\blibdav1d\b/.test(output)
+    };
+  }
+
+  async testInputDecode(timeSeconds = 0) {
+    this.assertReady();
+    const decoder = this.inputDecoderArgs();
+    const cmd = `-v error -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -frames:v 1 -an -sn -f null -`;
+    await this.execute(cmd, false, 30000);
+    return true;
   }
 
   async renderPreview(timeSeconds, index = 0) {
@@ -116,20 +138,88 @@ export class EncoderEngine {
     return m ? Number(m[1]) : null;
   }
 
-  async encodeFull(codecKey, options = {}) {
+  async encodeFullStream(codecKey, options = {}) {
     this.assertReady();
+    const { FFmpegKit, ReturnCode, FFmpegKitStreamOutput } = this.api;
+    if (!FFmpegKitStreamOutput) throw new Error('当前 Web core 不支持流式输出');
+
     const crf = options.crf ?? defaultCrf(codecKey);
     const preset = options.preset ?? defaultPreset(codecKey);
     const encoder = encoderName(codecKey);
-    const output = `/output_${codecKey}.mkv`;
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
-    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} -c:a copy ${q(output)}`;
-    await this.execute(cmd);
-    const bytes = await this.api.readFile(output);
-    if (!bytes) throw new Error('成品文件没有生成');
-    return bytes;
+    const stream = await FFmpegKitStreamOutput.create('mkv', 8 * 1024 * 1024);
+    const target = stream.getUrl();
+    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} -c:a copy -f matroska ${q(target)}`;
+    this.onLog(`$ ffmpeg ${cmd}`);
+
+    let resolveDone;
+    const done = new Promise(resolve => { resolveDone = resolve; });
+    const session = await FFmpegKit.executeAsync(cmd, completed => resolveDone(completed));
+    const chunks = [];
+    let totalBytes = 0;
+    let hitLimit = false;
+
+    try {
+      while (true) {
+        const chunk = await stream.read(4 * 1024 * 1024);
+        if (chunk === null) {
+          await sleep(20);
+          continue;
+        }
+        if (chunk.byteLength === 0) break;
+
+        totalBytes += chunk.byteLength;
+        if (options.maxBytes && totalBytes > options.maxBytes) {
+          hitLimit = true;
+          this.onLog(`输出达到硬上限：${totalBytes} > ${options.maxBytes}，正在取消编码…`);
+          try { await session.cancel(); } catch {}
+          break;
+        }
+
+        chunks.push(chunk.slice());
+        options.onBytes?.(totalBytes);
+      }
+
+      if (hitLimit) {
+        await Promise.race([done, sleep(3000)]).catch(() => {});
+        await this.resetRuntime('输出超过硬上限');
+        throw new Error('输出已超过所选硬上限，任务已停止；程序没有继续生成异常膨胀的成品。');
+      }
+
+      const completed = await done;
+      const rc = completed?.getReturnCode?.();
+      if (!ReturnCode.isSuccess(rc)) {
+        const output = await completed?.getAllLogsAsString?.(1000) || await completed?.getOutput?.() || '';
+        throw new Error(output || `FFmpeg 流式编码失败：${rc}`);
+      }
+
+      return {
+        blob: new Blob(chunks, { type: 'video/x-matroska' }),
+        byteLength: totalBytes
+      };
+    } finally {
+      try { await stream.close(); } catch {}
+    }
+  }
+
+  async resetRuntime(reason = '释放工作内存') {
+    if (!this.api) return;
+    const video = this.sourceVideoFile;
+    const ass = this.sourceAssFile;
+    const fonts = [...this.sourceFontFiles];
+    const mediaInfo = this.mediaInfo;
+
+    this.onLog(`重启 FFmpeg WASM runtime：${reason}`);
+    try { await this.api.FFmpegKit?.cancel(); } catch {}
+    try { await this.api.FFmpegKitConfig?.uninit(); } catch {}
+    this.ready = false;
+
+    const status = await this.init();
+    if (!status.ready) throw new Error('FFmpeg WASM runtime 重启失败');
+    if (video && ass) await this.stageFiles(video, ass, fonts);
+    this.mediaInfo = mediaInfo;
   }
 
   inputDecoderArgs() {
@@ -158,6 +248,12 @@ export class EncoderEngine {
     let session;
     try {
       session = timeoutPromise ? await Promise.race([runPromise, timeoutPromise]) : await runPromise;
+    } catch (error) {
+      if (timedOut) {
+        try { await this.resetRuntime('超时后清理损坏/残留会话'); }
+        catch (recoveryError) { this.onLog(`runtime 恢复失败：${recoveryError.message}`); }
+      }
+      throw error;
     } finally {
       if (timer) clearTimeout(timer);
     }
@@ -176,11 +272,25 @@ export class EncoderEngine {
 }
 
 function normalizeMediaInfo(info) {
-  const raw = typeof info.toJSON === 'function' ? info.toJSON() : info;
-  const streams = raw.streams || raw.getStreams?.() || [];
-  const format = raw.format || raw;
+  const raw = typeof info.toJSON === 'function'
+    ? info.toJSON()
+    : typeof info.getAllProperties === 'function'
+      ? info.getAllProperties()
+      : info;
+  const rawStreams = raw.streams || info.getStreams?.() || [];
+  const streams = rawStreams.map?.(s => typeof s.getAllProperties === 'function' ? s.getAllProperties() : s) || [];
+  const format = raw.format || raw.format_properties || raw;
   const video = streams.find?.(s => (s.codec_type || s.type) === 'video') || {};
   const audio = streams.find?.(s => (s.codec_type || s.type) === 'audio') || {};
+  const pixelFormat = video.pix_fmt || video.pixel_format || '';
+  const bitDepth = inferBitDepth(video, pixelFormat);
+  const colorTransfer = video.color_transfer || '';
+  const colorPrimaries = video.color_primaries || '';
+  const colorSpace = video.color_space || '';
+  const hdr = /smpte2084|arib-std-b67/i.test(colorTransfer)
+    || (/bt2020/i.test(colorPrimaries) && bitDepth > 8);
+  const highBitDepth = bitDepth > 8;
+
   return {
     duration: Number(format.duration || raw.duration || 0),
     size: Number(format.size || raw.size || 0),
@@ -189,10 +299,24 @@ function normalizeMediaInfo(info) {
     width: Number(video.width || 0),
     height: Number(video.height || 0),
     fps: parseFps(video.avg_frame_rate || video.r_frame_rate),
-    pixelFormat: video.pix_fmt || '',
+    pixelFormat,
+    bitDepth,
+    colorTransfer,
+    colorPrimaries,
+    colorSpace,
+    hdr,
+    highBitDepth,
+    unsafeColorPipeline: hdr || highBitDepth,
     audioCodec: audio.codec_name || audio.codec || '',
     audioBitRate: Number(audio.bit_rate || 0)
   };
+}
+
+function inferBitDepth(video, pixelFormat = '') {
+  const explicit = Number(video.bits_per_raw_sample || video.bits_per_component || 0);
+  if (explicit) return explicit;
+  const m = String(pixelFormat).match(/(?:p|yuv\d*p?)(10|12|14|16)(?:le|be)?/i) || String(pixelFormat).match(/(10|12|14|16)(?:le|be)/i);
+  return m ? Number(m[1]) : 8;
 }
 
 function parseFps(value) {
@@ -207,3 +331,4 @@ function encoderName(k) { return k === 'h264' ? 'libx264' : k === 'h265' ? 'libx
 function defaultCrf(k) { return k === 'h264' ? 18 : k === 'h265' ? 20 : 28; }
 function defaultPreset(k) { return k === 'av1' ? '8' : 'medium'; }
 function codecExtra(k) { return k === 'av1' ? ' -svtav1-params lp=4' : ''; }
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
