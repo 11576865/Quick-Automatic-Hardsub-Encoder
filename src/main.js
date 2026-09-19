@@ -1,6 +1,7 @@
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview } from './ass.js';
 import { inspectFontFile, matchRequestedFonts } from './fonts.js';
+import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts } from './font-store.js';
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
 
@@ -9,6 +10,8 @@ const state = {
   video: null,
   ass: null,
   fonts: [],
+  savedFonts: [],
+  effectiveFonts: [],
   assInfo: null,
   assText: '',
   activeAssText: '',
@@ -46,7 +49,17 @@ app.innerHTML = `
     <div class="grid two">
       <div class="file-row"><label>视频（≤ 1 GB）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
-      <div class="file-row"><label>字体（可选，可多选）</label><input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc"><small id="fontMeta">未选择；程序会先分析 ASS 使用的字体。</small></div>
+      <div class="file-row">
+        <label>字体（可选，可多选）</label>
+        <input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc">
+        <label class="font-persist-check"><input id="rememberFonts" type="checkbox" checked> 记住本次选择，加入本机常用字体库</label>
+        <small id="fontMeta">未选择；常用字体库会自动参与 ASS 字体匹配。</small>
+        <details class="font-library-details">
+          <summary id="savedFontsSummary">常用字体库：加载中…</summary>
+          <div id="savedFontsList" class="font-library-list"></div>
+          <div class="button-row"><button id="clearSavedFontsBtn" type="button">清空常用字体库</button></div>
+        </details>
+      </div>
       <div class="file-row"><label>处理后端</label>
         <div class="note">当前网页使用 FFmpeg WASM；Android ARM64 原生后端正在构建。原生版完成后优先调用本机 FFmpeg / MediaCodec，WASM 保留为免安装后备。</div>
       </div>
@@ -155,9 +168,33 @@ $('ass').addEventListener('change', e => {
   $('assMeta').textContent = state.ass ? state.ass.name : '未选择';
   refreshAnalyze();
 });
-$('fonts').addEventListener('change', e => {
+$('fonts').addEventListener('change', async e => {
   state.fonts = [...(e.target.files || [])];
-  $('fontMeta').textContent = state.fonts.length ? `已选择 ${state.fonts.length} 个字体文件` : '未选择；程序会先分析 ASS 使用的字体。';
+  updateFontMeta();
+
+  if ($('rememberFonts').checked && state.fonts.length) {
+    const valid = [];
+    for (const file of state.fonts) {
+      try {
+        await inspectFontFile(file);
+        valid.push(file);
+      } catch (error) {
+        log(`未保存到常用字体库：${file.name} · ${error.message}`);
+      }
+    }
+
+    if (valid.length) {
+      try {
+        await persistFonts(valid);
+        state.savedFonts = await listSavedFonts();
+        renderSavedFontLibrary();
+        updateFontMeta();
+        log(`已将 ${valid.length} 个字体保存到本机常用字体库。`);
+      } catch (error) {
+        log(`保存常用字体失败：${error.message}`);
+      }
+    }
+  }
 });
 $('acceptWarnings').addEventListener('change', e => {
   state.acceptedWarnings = e.target.checked;
@@ -173,10 +210,33 @@ $('encodeGoal').addEventListener('change', () => {
 $('benchmarkBtn').addEventListener('click', runBenchmarks);
 $('testSelectedBtn').addEventListener('click', runSelectedTest);
 $('encodeBtn').addEventListener('click', runEncode);
+$('clearSavedFontsBtn').addEventListener('click', async () => {
+  if (!state.savedFonts.length) return;
+  if (!confirm('清空本机常用字体库？这不会删除设备上的原字体文件。')) return;
+  try {
+    await clearSavedFonts();
+    state.savedFonts = [];
+    renderSavedFontLibrary();
+    updateFontMeta();
+    log('本机常用字体库已清空。');
+  } catch (error) {
+    log(`清空常用字体库失败：${error.message}`);
+  }
+});
 
 bootstrap();
 
 async function bootstrap() {
+  try {
+    state.savedFonts = await listSavedFonts();
+    renderSavedFontLibrary();
+    updateFontMeta();
+    if (state.savedFonts.length) log(`已加载本机常用字体库：${state.savedFonts.length} 个文件。`);
+  } catch (error) {
+    log(`读取常用字体库失败：${error.message}`);
+    renderSavedFontLibrary();
+  }
+
   state.capabilities = await detectCapabilities();
   renderCapabilities();
   const engineStatus = await state.engine.init();
@@ -307,6 +367,69 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
   $('envSummary').className = 'env-summary';
 }
 
+function fontFileKey(file) {
+  return `${String(file?.name || '').toLowerCase()}::${Number(file?.size || 0)}`;
+}
+
+function getEffectiveFontFiles() {
+  const out = [];
+  const seen = new Set();
+  for (const file of [...state.fonts, ...state.savedFonts]) {
+    const key = fontFileKey(file);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(file);
+  }
+  return out;
+}
+
+function updateFontMeta() {
+  const selected = state.fonts.length;
+  const saved = state.savedFonts.length;
+  if (selected || saved) {
+    $('fontMeta').textContent = `本次选择 ${selected} 个 · 常用字体库 ${saved} 个；分析时自动合并去重。`;
+  } else {
+    $('fontMeta').textContent = '未选择；常用字体库为空，缺失字体将使用内置 Noto Sans SC 回退。';
+  }
+}
+
+function renderSavedFontLibrary() {
+  const summary = $('savedFontsSummary');
+  const list = $('savedFontsList');
+  if (!summary || !list) return;
+
+  summary.textContent = `常用字体库：${state.savedFonts.length} 个文件`;
+  if (!state.savedFonts.length) {
+    list.innerHTML = '<div class="note">还没有保存字体。第一次选择字体时保持“记住本次选择”勾选即可。</div>';
+    $('clearSavedFontsBtn').disabled = true;
+    return;
+  }
+
+  $('clearSavedFontsBtn').disabled = false;
+  list.innerHTML = state.savedFonts.map((file, index) =>
+    `<div class="font-library-item">
+      <div><strong>${escapeHtml(file.name)}</strong><small>${formatBytes(file.size)}</small></div>
+      <button type="button" class="remove-saved-font" data-index="${index}">删除</button>
+    </div>`
+  ).join('');
+
+  document.querySelectorAll('.remove-saved-font').forEach(button => {
+    button.addEventListener('click', async () => {
+      const file = state.savedFonts[Number(button.dataset.index)];
+      if (!file) return;
+      try {
+        await deleteSavedFont(file);
+        state.savedFonts = await listSavedFonts();
+        renderSavedFontLibrary();
+        updateFontMeta();
+        log(`已从常用字体库删除：${file.name}`);
+      } catch (error) {
+        log(`删除常用字体失败：${error.message}`);
+      }
+    });
+  });
+}
+
 function refreshAnalyze() {
   $('analyze').disabled = !(state.video && state.ass && state.video.size <= MAX_BYTES);
 }
@@ -331,16 +454,17 @@ async function analyzeAll() {
     state.fontBindings = {};
     state.autoFontFallbacks = {};
     state.assInfo = parseAss(assText);
+    state.effectiveFonts = getEffectiveFontFiles();
     state.fontFaces = [];
-    for (const file of state.fonts) {
+    for (const file of state.effectiveFonts) {
       try { state.fontFaces.push(...await inspectFontFile(file)); }
       catch (e) { log(`字体 ${file.name} 解析失败：${e.message}`); }
     }
     state.fontMatches = matchRequestedFonts(state.assInfo.requestedFonts, state.fontFaces);
 
     if (state.engine.ready) {
-      log('挂载媒体文件到浏览器 WebAssembly 文件系统…');
-      await state.engine.stageFiles(state.video, state.ass, state.fonts);
+      log(`挂载媒体文件与 ${state.effectiveFonts.length} 个可用字体到浏览器 WebAssembly 文件系统…`);
+      await state.engine.stageFiles(state.video, state.ass, state.effectiveFonts);
       if (state.engine.hasBundledFallbackFont) {
         state.autoFontFallbacks = Object.fromEntries(
           state.fontMatches
@@ -415,7 +539,8 @@ function renderSubtitleSummary() {
   $('subtitleSummary').innerHTML = [
     ['ASS 对话', `${a.dialogueCount} 条`],
     ['ASS 请求字体', `${a.requestedFonts.length} 个`],
-    ['已提供字体 face', `${state.fontFaces.length} 个`],
+    ['可用字体 face', `${state.fontFaces.length} 个`],
+    ['常用字体库', `${state.savedFonts.length} 个文件`],
     ['预览采样点', `${a.previewTimes.length} 个`],
     ...mediaRows
   ].map(([k,v]) => `<div class="status-item"><span>${k}</span><span>${v}</span></div>`).join('');
