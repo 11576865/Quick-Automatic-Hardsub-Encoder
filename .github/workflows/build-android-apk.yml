@@ -1,0 +1,114 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate latest successful native core build
+        id: core
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID="$(gh api             -H "Accept: application/vnd.github+json"             "/repos/${GITHUB_REPOSITORY}/actions/workflows/build-android-core.yml/runs?status=success&per_page=20"             --jq '.workflow_runs[0].id // empty')"
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::No successful Build Android Native Core run is available."
+            exit 1
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "Using native core run $RUN_ID"
+
+      - name: Download native Maven bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.core.outputs.run_id }}
+        run: |
+          rm -rf android-native/libs-maven
+          mkdir -p android-native/libs-maven
+          gh run download "$RUN_ID"             --repo "$GITHUB_REPOSITORY"             --name ffmpeg-kit-next-android-arm64-hardsub             --dir android-native/libs-maven
+          test -d android-native/libs-maven/com
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Add bundled fallback font
+        run: |
+          mkdir -p public/vendor/fallback-fonts
+          curl -L --fail --retry 3             -o public/vendor/fallback-fonts/NotoSansSC-Regular.otf             https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+          test -s public/vendor/fallback-fonts/NotoSansSC-Regular.otf
+
+      - name: Build web UI for Android assets
+        run: |
+          npm install
+          npm run build
+          rm -rf android-native/app/src/main/assets/www
+          mkdir -p android-native/app/src/main/assets/www
+          cp -a dist/. android-native/app/src/main/assets/www/
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android platform
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Restore stable debug signing key
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: quick-hardsub-debug-keystore-v1
+
+      - name: Build debug APK
+        run: gradle -p android-native :app:assembleDebug --stacktrace
+
+      - name: Verify APK signature and 16 KiB zip alignment
+        run: |
+          APK="android-native/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK"
+
+      - name: Verify native ELF segment alignment
+        run: |
+          APK="android-native/app/build/outputs/apk/debug/app-debug.apk"
+          rm -rf /tmp/apk-libs
+          mkdir -p /tmp/apk-libs
+          unzip -q "$APK" 'lib/arm64-v8a/*.so' -d /tmp/apk-libs
+          failed=0
+          while IFS= read -r so; do
+            echo "Checking $so"
+            if readelf -lW "$so" | awk '/ LOAD / { if ($NF+0 < 0x4000) bad=1 } END { exit bad ? 1 : 0 }'; then
+              :
+            else
+              echo "::error file=$so::ELF LOAD segment alignment is below 16 KiB"
+              failed=1
+            fi
+          done < <(find /tmp/apk-libs -name '*.so' -type f)
+          exit "$failed"
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: quick-automatic-hardsub-encoder-android-debug
+          path: android-native/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
