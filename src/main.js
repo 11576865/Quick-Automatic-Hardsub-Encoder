@@ -100,10 +100,10 @@ app.innerHTML = `
           <option value="balanced">均衡：CRF 质量模式</option>
           <option value="quality">质量优先：CRF 质量模式</option>
           <option value="speed">速度优先：CRF 质量模式</option>
-          <option value="size16">体积约束：硬上限 1.6×</option>
-          <option value="size20">体积约束：硬上限 2.0×</option>
+          <option value="size16">体积约束：硬上限 1.6×（完整两遍）</option>
+          <option value="size20">体积约束：硬上限 2.0×（完整两遍）</option>
         </select>
-        <small>CRF 模式不再假装精确预测成品大小；体积约束模式用两遍平均码率控制。</small>
+        <small>CRF 模式只完整编码一遍。体积约束模式为了控制平均码率会完整跑两遍，耗时通常接近单遍的两倍；第一遍只分析，不生成最终视频。</small>
       </div>
       <div id="sourceAnchor" class="plan-anchor note">分析完成后显示源码率与压缩密度。</div>
     </div>
