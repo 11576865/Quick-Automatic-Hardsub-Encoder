@@ -52,10 +52,17 @@ app.innerHTML = `
     <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
   </section>
 
-  <section class="card">
-    <h2>2. 运行环境</h2>
-    <div id="capabilities" class="status-list"><div class="status-item"><span>状态</span><span>检测中…</span></div></div>
-    <p id="engineHint" class="note"></p>
+  <section class="card env-card">
+    <details id="envDetails" class="env-details">
+      <summary>
+        <span class="env-heading">2. 运行环境</span>
+        <span id="envSummary" class="env-summary">检测中…</span>
+      </summary>
+      <div class="env-body">
+        <div id="capabilities" class="status-list"><div class="status-item"><span>状态</span><span>检测中…</span></div></div>
+        <p id="engineHint" class="note"></p>
+      </div>
+    </details>
   </section>
 
   <section id="subtitleCard" class="card hidden">
@@ -136,10 +143,13 @@ async function bootstrap() {
       log(`软件编码器检测失败：${e.message}`);
     }
     renderCapabilities();
+    updateEnvironmentSummary(true);
     $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与 WebCodecs 是两套独立能力：dav1d/SVT-AV1 属于网页自带的软件解码/编码；WebCodecs 表示浏览器是否另外开放原生编解码通道。';
   } else {
     $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
+    $('envDetails').open = true;
   }
+  updateEnvironmentSummary(engineStatus.ready);
   refreshAnalyze();
 }
 
@@ -163,6 +173,44 @@ function renderCapabilities() {
     ['WebCodecs 编码 · AV1', c.codecs.encode.av1, c.codecs.encode.av1 ? '可用' : '浏览器未暴露']
   ];
   $('capabilities').innerHTML = rows.map(([k,v,label]) => `<div class="status-item"><span>${k}</span><span class="${v ? 'ok' : 'warn'}">${label}</span></div>`).join('');
+}
+
+function updateEnvironmentSummary(engineReady = state.engine?.ready) {
+  const c = state.capabilities;
+  if (!c) {
+    $('envSummary').textContent = '检测中…';
+    return;
+  }
+
+  const baseOk = c.webAssembly && c.worker && c.sharedArrayBuffer && c.crossOriginIsolated;
+  if (!baseOk) {
+    $('envSummary').textContent = '基础环境存在问题 · 点此查看';
+    $('envSummary').className = 'env-summary warn';
+    $('envDetails').open = true;
+    return;
+  }
+
+  if (!engineReady) {
+    $('envSummary').textContent = '基础环境正常 · 编码核心未加载';
+    $('envSummary').className = 'env-summary warn';
+    return;
+  }
+
+  const enc = state.softwareEncoders;
+  const available = [
+    enc.h264 ? 'H.264' : null,
+    enc.h265 ? 'H.265' : null,
+    enc.av1 ? 'AV1' : null
+  ].filter(Boolean).join(' / ');
+
+  const dav1d = state.softwareDecoders.av1Dav1d === true
+    ? ' · AV1输入✓'
+    : state.softwareDecoders.av1Dav1d === false
+      ? ' · AV1输入待dav1d'
+      : '';
+
+  $('envSummary').textContent = `核心已加载 · ${available || '编码器检测中'}${dav1d}`;
+  $('envSummary').className = 'env-summary';
 }
 
 function refreshAnalyze() {
