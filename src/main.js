@@ -299,7 +299,15 @@ function detectNativeBackend() {
       }
       renderBackendSummary();
       const t = state.nativeSelfTest || {};
-      log(`Android 原生自检：x264=${!!t.x264} x265=${!!t.x265} SVT-AV1=${!!t.svtAv1} dav1d=${!!t.dav1d} libass=${!!t.assFilter} smoke=${!!t.softwareEncodeSmoke}`);
+      log(
+        `Android 原生自检：` +
+        `x264=${!!t.x264EncodeSmoke} ` +
+        `x265=${!!t.x265EncodeSmoke} ` +
+        `SVT-AV1=${!!t.svtAv1EncodeSmoke} ` +
+        `dav1d=${!!t.dav1d} ` +
+        `libass视觉=${!!t.libassVisualSmoke} ` +
+        `内置回退字体=${!!t.bundledFallbackReady}`
+      );
     };
 
     if (bridge.runSelfTest) {
@@ -327,19 +335,33 @@ function renderBackendSummary() {
     return;
   }
 
-  const required = [t.x264, t.x265, t.svtAv1, t.dav1d, t.assFilter, t.softwareEncodeSmoke, t.ffprobeSmoke];
+  const required = [
+    t.x264EncodeSmoke,
+    t.x265EncodeSmoke,
+    t.svtAv1EncodeSmoke,
+    t.dav1d,
+    t.libassVisualSmoke,
+    t.bundledFallbackReady,
+    t.ffprobeSmoke
+  ];
   const ok = required.every(Boolean);
   const details = [
-    `x264 ${t.x264 ? '✓' : '✗'}`,
-    `x265 ${t.x265 ? '✓' : '✗'}`,
-    `SVT-AV1 ${t.svtAv1 ? '✓' : '✗'}`,
+    `x264实际编码 ${t.x264EncodeSmoke ? '✓' : '✗'}`,
+    `x265实际编码 ${t.x265EncodeSmoke ? '✓' : '✗'}`,
+    `SVT-AV1实际编码 ${t.svtAv1EncodeSmoke ? '✓' : '✗'}`,
     `dav1d ${t.dav1d ? '✓' : '✗'}`,
-    `libass ${t.assFilter ? '✓' : '✗'}`,
-    `编码 smoke ${t.softwareEncodeSmoke ? '✓' : '✗'}`,
+    `libass像素验证 ${t.libassVisualSmoke ? '✓' : '✗'}`,
+    `Noto回退 ${t.bundledFallbackReady ? '✓' : '✗'}`,
     `FFprobe ${t.ffprobeSmoke ? '✓' : '✗'}`
   ].join(' · ');
 
-  el.innerHTML = `${ok ? '<span class="ok">Android 原生核心自检通过。</span>' : '<span class="warn">Android 原生核心自检未完全通过。</span>'} ${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。`;
+  const fontDirs = t.fontDirs
+    ? `<small class="native-font-dirs">字体目录：${escapeHtml(t.fontDirs)}</small>`
+    : '';
+
+  el.innerHTML =
+    `${ok ? '<span class="ok">Android 原生核心实际自检通过。</span>' : '<span class="warn">Android 原生核心实际自检未完全通过。</span>'} ` +
+    `${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。${fontDirs}`;
 }
 
 function renderCapabilities() {
