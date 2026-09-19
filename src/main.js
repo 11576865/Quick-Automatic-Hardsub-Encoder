@@ -732,7 +732,7 @@ function renderSubtitleSummary() {
   const probable = state.fontMatches.filter(x => x.status === 'probable');
   const mediaRows = state.media ? [
     ['视频', `${state.media.videoCodec} · ${state.media.width}×${state.media.height} · ${state.media.fps.toFixed(2)} fps`],
-    ['时长', formatDuration(state.media.duration)],
+    ['时长', formatDuration(state.media.duration) + (state.media.durationSource === 'packet-scan' ? ' · packet 扫描恢复' : '')],
     ['源视频码率', formatBitrate(getSourceVideoBitrate())],
     ['压缩密度', formatBppf(getSourceBppf())],
     ['像素格式', `${state.media.pixelFormat || '未知'} · ${state.media.bitDepth}-bit`],
