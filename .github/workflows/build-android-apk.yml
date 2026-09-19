@@ -121,11 +121,21 @@ jobs:
           failed=0
           while IFS= read -r so; do
             echo "Checking $so"
-            if readelf -lW "$so" | awk '/ LOAD / { if ($NF+0 < 0x4000) bad=1 } END { exit bad ? 1 : 0 }'; then
-              :
-            else
+            bad=0
+            while IFS= read -r align; do
+              # readelf prints p_align as hexadecimal (for example 0x4000).
+              # Bash arithmetic understands the 0x prefix; awk's numeric coercion
+              # does not reliably do so and previously produced false failures.
+              if (( align < 0x4000 )); then
+                echo "  LOAD alignment $align < 0x4000"
+                bad=1
+              fi
+            done < <(readelf -lW "$so" | awk '/ LOAD / { print $NF }')
+            if (( bad )); then
               echo "::error file=$so::ELF LOAD segment alignment is below 16 KiB"
               failed=1
+            else
+              echo "  OK: all LOAD segments are >= 0x4000"
             fi
           done < <(find /tmp/apk-libs -name '*.so' -type f)
           exit "$failed"
