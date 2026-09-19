@@ -46,13 +46,8 @@ app.innerHTML = `
       <div class="file-row"><label>视频（≤ 1 GB）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
       <div class="file-row"><label>字体（可选，可多选）</label><input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc"><small id="fontMeta">未选择；程序会先分析 ASS 使用的字体。</small></div>
-      <div class="file-row"><label>空间策略</label>
-        <select id="spacePolicy">
-          <option value="1.6">均衡：硬上限 1.6×</option>
-          <option value="2.0">质量优先：硬上限 2.0×</option>
-          <option value="knee">效率曲线：寻找边际收益拐点</option>
-        </select>
-        <small>硬上限是围栏，不是目标大小；只有预测接近/超过上限时才启用两遍目标体积编码。</small>
+      <div class="file-row"><label>处理后端</label>
+        <div class="note">当前网页使用 FFmpeg WASM；Android ARM64 原生后端正在构建。原生版完成后优先调用本机 FFmpeg / MediaCodec，WASM 保留为免安装后备。</div>
       </div>
     </div>
     <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
@@ -399,6 +394,8 @@ function renderSubtitleSummary() {
   const mediaRows = state.media ? [
     ['视频', `${state.media.videoCodec} · ${state.media.width}×${state.media.height} · ${state.media.fps.toFixed(2)} fps`],
     ['时长', formatDuration(state.media.duration)],
+    ['源视频码率', formatBitrate(getSourceVideoBitrate())],
+    ['压缩密度', formatBppf(getSourceBppf())],
     ['像素格式', `${state.media.pixelFormat || '未知'} · ${state.media.bitDepth}-bit`],
     ['色彩', [state.media.colorPrimaries, state.media.colorTransfer, state.media.colorSpace].filter(Boolean).join(' / ') || '未标记'],
     ['HDR/高位深', state.media.unsafeColorPipeline ? '检测到：当前版本禁止静默重编码' : '未检测到风险'],
