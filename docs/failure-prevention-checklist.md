@@ -257,3 +257,60 @@ Before starting an encode:
 - on API 26+, query \`StorageManager.getAllocatableBytes()\` for the volume hosting the staging directory;
 - fail before encoding if the requirement cannot be met;
 - never discover an out-of-space condition only after hours of encoding.
+
+
+### 26. Use ACTION_CREATE_DOCUMENT for final delivery, and do not assume "w" truncates
+
+Android's document picker deliberately does not overwrite an existing file when using \`ACTION_CREATE_DOCUMENT\`; a provider normally creates a new name such as \`file(1).mkv\`. This is useful protection for final delivery.
+
+If an existing content URI ever has to be replaced, do not assume \`ContentResolver.openFileDescriptor(uri, "w")\` truncates it. Android explicitly documents that provider implementations differ and "w" may or may not truncate. Use a truncate mode such as \`"rwt"\`/\`"wt"\` only when the provider supports it.
+
+For this project, prefer:
+- user chooses a fresh destination through ACTION_CREATE_DOCUMENT;
+- validated staging file is streamed once into that destination;
+- partial delivery is reported explicitly if the copy fails.
+
+### 27. Odd dimensions can fail 4:2:0 software encoders
+
+A common x264 failure is \`width not divisible by 2\` when a 4:2:0 path receives odd dimensions.
+
+Policy:
+- detect odd width/height during preflight;
+- render ASS at the original source geometry first;
+- then pad only the right/bottom edge by at most one pixel to the next even dimension;
+- never silently scale the picture just to satisfy the encoder.
+
+The web backend now uses this order for benchmark and formal encoding.
+
+### 28. Treat thermal throttling as normal mobile behavior, not an encoder bug
+
+Android documents that long CPU-heavy workloads can change performance dramatically as the SoC reaches thermal limits. The Thermal API can report overall throttling state on API 29+.
+
+Native policy:
+- keep ETA based on rolling observed throughput;
+- surface thermal status when available;
+- do not promise the initial FPS will be sustained;
+- do not automatically increase codec parallelism just because many logical CPU cores are visible.
+
+For x265 specifically, upstream documentation warns that over-allocating frame threads increases memory use and can reduce performance. Mobile defaults should therefore be bounded and measured rather than "use every core".
+
+### 29. mediaProcessing foreground service has a finite background budget on Android 15+
+
+For apps targeting Android 15+, \`mediaProcessing\` foreground services have a shared six-hour background allowance per 24 hours. When exhausted, Android calls \`Service.onTimeout(int,int)\`; failing to stop promptly can crash the app.
+
+Policy:
+- start formal encoding only from explicit foreground user action;
+- stop the service on success/failure/cancel;
+- implement \`onTimeout()\`;
+- warn before starting a job whose estimated background runtime could approach the six-hour limit;
+- persist staging/job state so a timeout or process death leaves a recoverable/cleanable artifact rather than a mysterious partial success.
+
+### 30. FFmpegKit log redirection can retain logs for the entire active session
+
+With Android redirection enabled, FFmpegKit adds redirected log entries to the active session before deciding whether to print them. Long noisy sessions can therefore retain more log data than expected.
+
+Formal native encode policy:
+- keep redirection enabled because statistics callbacks are required for progress;
+- lower FFmpeg's active log level for the long-running encode to warnings/errors while retaining statistics;
+- keep full verbose logs for short self-tests and explicit diagnostics only;
+- clear completed sessions after the needed failure summary has been extracted.
