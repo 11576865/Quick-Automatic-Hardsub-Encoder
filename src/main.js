@@ -46,7 +46,7 @@ app.innerHTML = `
           <option value="2.0">质量优先：硬上限 2.0×</option>
           <option value="knee">效率曲线：寻找边际收益拐点</option>
         </select>
-        <small>硬上限是围栏，不是目标大小。</small>
+        <small>硬上限是围栏，不是目标大小；只有预测接近/超过上限时才启用两遍目标体积编码。</small>
       </div>
     </div>
     <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
@@ -397,8 +397,14 @@ function selectCodec(codec, automatic = false) {
   state.selectedCodec = codec;
   renderCodecCards();
   const r = state.benchmarks[codec];
-  $('chosenSummary').textContent = `${automatic ? '自动候选：' : '已选择：'} ${codec.toUpperCase()} · 预计 ${r?.estimatedBytes ? formatBytes(r.estimatedBytes) : '未知体积'}。正式压制前仍由你确认。`;
-  $('encodeBtn').disabled = !r || !!r.error;
+  const plan = buildEncodePlan(codec);
+  const planText = plan?.mode === 'target-size'
+    ? `预计接近/超过体积上限，将使用两遍目标体积编码；目标视频码率约 ${Math.round(plan.targetVideoBitrate / 1000)} kb/s。`
+    : plan?.mode === 'crf'
+      ? `预计有足够余量，保留 CRF 单遍编码，不会为了“用满上限”主动增大文件。`
+      : '';
+  $('chosenSummary').textContent = `${automatic ? '自动候选：' : '已选择：'} ${codec.toUpperCase()} · 样本估算 ${r?.estimatedBytes ? formatBytes(r.estimatedBytes) : '未知体积'}。 ${planText} 正式压制前仍由你确认。`;
+  $('encodeBtn').disabled = !r || !!r.error || !plan;
 }
 
 async function runEncode() {
@@ -408,24 +414,47 @@ async function runEncode() {
     return;
   }
 
+  const plan = buildEncodePlan(state.selectedCodec);
+  if (!plan) {
+    alert('无法生成安全的压制方案；请重新分析文件。');
+    return;
+  }
+
   try {
     $('encodeBtn').disabled = true;
     $('progressBar').style.width = '5%';
-    log(`正式压制：${state.selectedCodec.toUpperCase()} · 使用流式输出，避免完整成品先堆在 WASM 文件系统中`);
+    log(`正式压制：${state.selectedCodec.toUpperCase()} · 流式读取 FFmpeg 输出，减少 WASM 内部完整成品副本`);
 
-    const policy = $('spacePolicy').value;
-    const sizeCeiling = policy === 'knee' ? null : Math.floor(state.video.size * Number(policy));
-    if (sizeCeiling) log(`体积约束目标：≤ ${formatBytes(sizeCeiling)}（源文件 × ${policy}）。当前版本只会在开始前依据样本估算筛选，不会在编码末期粗暴取消。`);
-
-    const estimated = state.benchmarks[state.selectedCodec]?.estimatedBytes || null;
-    if (sizeCeiling && estimated && estimated > sizeCeiling) {
-      throw new Error(`当前方案预计输出 ${formatBytes(estimated)}，超过所选上限 ${formatBytes(sizeCeiling)}。请重新测试或选择更高压缩效率的方案；程序不会先编码到末尾再强制取消。`);
+    if (plan.sizeCeiling) {
+      log(`硬上限：${formatBytes(plan.sizeCeiling)}（源文件 × ${plan.multiplier}）`);
+      if (plan.mode === 'target-size') {
+        log(`预测结果距离上限过近或已经超出；启用两遍目标体积编码，安全预算 ${formatBytes(plan.safeBudgetBytes)}，视频目标码率约 ${Math.round(plan.targetVideoBitrate / 1000)} kb/s。`);
+      } else {
+        log(`样本估算 ${formatBytes(plan.estimatedBytes)}，低于上限的 90%；保留 CRF 单遍，避免为了接近上限反而把文件压大。`);
+      }
+    } else {
+      log('效率曲线模式：使用 CRF 单遍，不设置固定体积上限。');
     }
 
     const result = await state.engine.encodeFullStream(state.selectedCodec, {
+      targetVideoBitrate: plan.mode === 'target-size' ? plan.targetVideoBitrate : 0,
+      onPhase: phase => {
+        if (phase === 'pass1') {
+          $('progressBar').style.width = '8%';
+          log('阶段 1/2：统计整片复杂度与码率分配。');
+        } else if (phase === 'pass2') {
+          $('progressBar').style.width = '50%';
+          log('阶段 2/2：按目标码率正式生成成品。');
+        }
+      },
       onBytes: written => {
-        if (estimated) {
-          const p = Math.min(94, Math.max(5, written / estimated * 90));
+        const denominator = plan.mode === 'target-size'
+          ? (plan.safeBudgetBytes || plan.estimatedBytes)
+          : plan.estimatedBytes;
+        if (denominator) {
+          const base = plan.mode === 'target-size' ? 50 : 5;
+          const span = plan.mode === 'target-size' ? 44 : 89;
+          const p = Math.min(94, Math.max(base, base + written / denominator * span));
           $('progressBar').style.width = `${p.toFixed(1)}%`;
         }
       }
@@ -434,7 +463,21 @@ async function runEncode() {
     $('progressBar').style.width = '100%';
     const base = state.video.name.replace(/\.[^.]+$/, '');
     downloadBlob(result.blob, `${base}_hardsub_${state.selectedCodec}.mkv`);
-    log(`完成：${formatBytes(result.byteLength)}`);
+
+    if (plan.sizeCeiling && result.byteLength > plan.sizeCeiling) {
+      const over = (result.byteLength / plan.sizeCeiling - 1) * 100;
+      log(`警告：实际成品 ${formatBytes(result.byteLength)}，比设定上限高 ${over.toFixed(2)}%。成品仍已保留并下载，没有在末尾丢弃。`);
+      alert(`压制完成，但实际成品比设定上限高 ${over.toFixed(2)}%。成品不会被删除，已正常下载。后续可用更保守的安全余量重新压制。`);
+    } else {
+      log(`完成：${formatBytes(result.byteLength)}`);
+    }
+
+    try {
+      await state.engine.resetRuntime('正式压制完成后释放 WASM heap');
+      log('正式压制结束，WASM runtime 已重启并释放工作内存。');
+    } catch (e) {
+      log(`完成后的内存清理失败：${e.message}`);
+    }
   } catch (e) {
     $('progressBar').style.width = '0%';
     log(`压制失败：${e.stack || e.message}`);
@@ -442,6 +485,61 @@ async function runEncode() {
   } finally {
     $('encodeBtn').disabled = false;
   }
+}
+
+function buildEncodePlan(codec) {
+  const benchmark = state.benchmarks[codec];
+  const media = state.media;
+  if (!benchmark || benchmark.error || !media?.duration) return null;
+
+  const policy = $('spacePolicy').value;
+  const estimatedBytes = benchmark.estimatedBytes || null;
+  if (policy === 'knee') {
+    return { mode: 'crf', estimatedBytes, sizeCeiling: null, multiplier: null };
+  }
+
+  const multiplier = Number(policy);
+  const sizeCeiling = Math.floor(state.video.size * multiplier);
+
+  // The ceiling is a fence, not a target. If the CRF estimate is comfortably below it,
+  // keep CRF mode instead of deliberately inflating bitrate.
+  if (estimatedBytes && estimatedBytes <= sizeCeiling * 0.90) {
+    return { mode: 'crf', estimatedBytes, sizeCeiling, multiplier };
+  }
+
+  // Leave 4% headroom for bitrate-control error, container overhead and imperfect
+  // audio bitrate metadata. Audio is stream-copied, so its budget must be reserved.
+  const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
+  const containerReserveBytes = Math.max(256 * 1024, Math.floor(safeBudgetBytes * 0.01));
+  const totalBitRate = media.bitRate || 0;
+  const videoBitRate = media.videoBitRate || 0;
+
+  let audioBitRate = media.audioBitRate || 0;
+  if (!audioBitRate && totalBitRate > videoBitRate && videoBitRate > 0) {
+    audioBitRate = totalBitRate - videoBitRate;
+  }
+  if (!audioBitRate && media.audioTracks > 0) {
+    // Conservative fallback for streams whose ffprobe metadata lacks bit_rate.
+    audioBitRate = 1_000_000 * media.audioTracks;
+  }
+
+  const bitsAvailableForVideo =
+    (safeBudgetBytes - containerReserveBytes) * 8 - audioBitRate * media.duration;
+  const targetVideoBitrate = Math.floor(bitsAvailableForVideo / media.duration);
+
+  if (!Number.isFinite(targetVideoBitrate) || targetVideoBitrate < 150_000) {
+    return null;
+  }
+
+  return {
+    mode: 'target-size',
+    estimatedBytes,
+    sizeCeiling,
+    multiplier,
+    safeBudgetBytes,
+    targetVideoBitrate,
+    audioBitRate
+  };
 }
 
 function downloadBlob(blob, name) {
