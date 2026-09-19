@@ -1125,8 +1125,52 @@ async function runEncode() {
         $('liveEta').textContent = phaseLabel + ' · 已处理 ' + (phaseProgress * 100).toFixed(1) + '% · 最近20秒 ' + fps.toFixed(1) + ' fps / ' + rollingSpeed.toFixed(2) + '× realtime · 当前阶段预计剩余 ' + formatDuration(eta);
       }
     });
+    $('progressBar').style.width = '99%';
+    $('liveEta').textContent = '编码完成；正在快速扫描成品 packet 完整性…';
+
+    let packetScan = null;
+    try {
+      packetScan = await state.engine.scanEncodedPackets(result.blob, state.media.duration);
+      const deltaText = packetScan.durationDelta == null
+        ? ''
+        : ' · 与源视频差 ' + (packetScan.durationDelta >= 0 ? '+' : '') + packetScan.durationDelta.toFixed(3) + ' s';
+      log(
+        '成品 packet 扫描：视频 ' +
+        packetScan.packetCount + ' 个 packet · 末端 ' +
+        packetScan.videoEnd.toFixed(3) + ' s' +
+        deltaText +
+        ' · corrupt=' + packetScan.corruptCount +
+        ' · 扫描耗时 ' + packetScan.scanSeconds.toFixed(2) + ' s。'
+      );
+
+      if (!packetScan.ok) {
+        log(
+          '成品完整性警告：packet 扫描未通过。' +
+          (packetScan.corruptCount ? ' 检测到损坏标记 packet=' + packetScan.corruptCount + '。' : '') +
+          (!packetScan.durationOk && packetScan.durationDelta != null
+            ? ' 视频末端与源时长偏差 ' + packetScan.durationDelta.toFixed(3) + ' s，容差 ±' + packetScan.tolerance.toFixed(3) + ' s。'
+            : '')
+        );
+      }
+    } catch (scanError) {
+      log('成品 packet 扫描失败，但不会丢弃已经完成的文件：' + scanError.message);
+    }
+
     $('progressBar').style.width = '100%';
-    $('liveEta').textContent = '压制完成 · ' + formatBytes(result.byteLength);
+    if (packetScan?.ok) {
+      $('liveEta').textContent =
+        '压制完成 · ' + formatBytes(result.byteLength) +
+        ' · packet 扫描通过 · 视频末端 ' + formatDurationPrecise(packetScan.videoEnd);
+    } else if (packetScan) {
+      $('liveEta').textContent =
+        '压制完成 · ' + formatBytes(result.byteLength) +
+        ' · packet 扫描有警告，请查看技术日志';
+    } else {
+      $('liveEta').textContent =
+        '压制完成 · ' + formatBytes(result.byteLength) +
+        ' · packet 扫描未完成，请查看技术日志';
+    }
+
     const base = state.video.name.replace(/\.[^.]+$/, '');
     downloadBlob(result.blob, base + '_hardsub_' + state.selectedCodec + '.mkv');
     if (plan.sizeCeiling && result.byteLength > plan.sizeCeiling) {
@@ -1199,5 +1243,15 @@ function formatDuration(sec) {
   if (!Number.isFinite(sec)) return '—';
   const s = Math.round(sec); const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const r = s%60;
   return h ? `${h}时${m}分${r}秒` : m ? `${m}分${r}秒` : `${r}秒`;
+}
+
+function formatDurationPrecise(sec) {
+  if (!Number.isFinite(sec)) return '—';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  return h
+    ? `${h}:${String(m).padStart(2,'0')}:${s.toFixed(3).padStart(6,'0')}`
+    : `${m}:${s.toFixed(3).padStart(6,'0')}`;
 }
 function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
