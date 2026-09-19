@@ -67,7 +67,7 @@ export class EncoderEngine {
     const output = `/preview_${index}.png`;
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} -i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
-    await this.execute(cmd);
+    await this.execute(cmd, false, 60000);
     const bytes = await this.api.readFile(output);
     if (!bytes) throw new Error('预览帧没有生成');
     return URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
@@ -88,7 +88,7 @@ export class EncoderEngine {
     const extra = codecExtra(codecKey);
     const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} -i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} ${q(out)}`;
     const t0 = performance.now();
-    await this.execute(cmd);
+    await this.execute(cmd, false, options.timeoutMs ?? 120000);
     const elapsedSeconds = (performance.now() - t0) / 1000;
     const bytes = await this.api.readFile(out);
     if (!bytes) throw new Error(`${codecKey} 样本没有生成`);
@@ -128,10 +128,34 @@ export class EncoderEngine {
     return bytes;
   }
 
-  async execute(command, returnOutput = false) {
+  async execute(command, returnOutput = false, timeoutMs = 0) {
     const { FFmpegKit, ReturnCode } = this.api;
     this.onLog(`$ ffmpeg ${command}`);
-    const session = await FFmpegKit.execute(command);
+
+    let timer = null;
+    let timedOut = false;
+
+    const runPromise = FFmpegKit.execute(command);
+    const timeoutPromise = timeoutMs > 0
+      ? new Promise((_, reject) => {
+          timer = setTimeout(async () => {
+            timedOut = true;
+            this.onLog(`FFmpeg 超时（${Math.round(timeoutMs / 1000)} 秒），正在取消当前会话…`);
+            try { await FFmpegKit.cancel(); } catch {}
+            reject(new Error(`FFmpeg 超时：超过 ${Math.round(timeoutMs / 1000)} 秒，已取消当前任务`));
+          }, timeoutMs);
+        })
+      : null;
+
+    let session;
+    try {
+      session = timeoutPromise ? await Promise.race([runPromise, timeoutPromise]) : await runPromise;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+
+    if (timedOut) throw new Error('FFmpeg 会话已因超时取消');
+
     const rc = session.getReturnCode?.();
     const output = await session.getAllLogsAsString?.(1000) || await session.getOutput?.() || '';
     if (!ReturnCode.isSuccess(rc)) throw new Error(output || `FFmpeg 执行失败：${rc}`);
