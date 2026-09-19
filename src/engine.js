@@ -54,8 +54,9 @@ export class EncoderEngine {
     const session = await FFprobeKit.getMediaInformation(this.inputPath);
     const info = session.getMediaInformation?.();
     if (!info) throw new Error((await session.getOutput?.()) || 'FFprobe 无法读取视频信息');
-    this.mediaInfo = info;
-    return normalizeMediaInfo(info);
+    const normalized = normalizeMediaInfo(info);
+    this.mediaInfo = normalized;
+    return normalized;
   }
 
   async detectSoftwareEncoders() {
@@ -90,10 +91,13 @@ export class EncoderEngine {
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const decoder = this.inputDecoderArgs();
     const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
-    await this.execute(cmd, false, 60000);
+    const logs = await this.execute(cmd, true, 60000);
     const bytes = await this.api.readFile(output);
     if (!bytes) throw new Error('预览帧没有生成');
-    return URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+    return {
+      url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+      fontEvents: parseLibassFontEvents(logs)
+    };
   }
 
   async benchmarkCodec(codecKey, options = {}) {
@@ -267,7 +271,8 @@ function normalizeMediaInfo(info) {
   const streams = rawStreams.map?.(s => typeof s.getAllProperties === 'function' ? s.getAllProperties() : s) || [];
   const format = raw.format || raw.format_properties || raw;
   const video = streams.find?.(s => (s.codec_type || s.type) === 'video') || {};
-  const audio = streams.find?.(s => (s.codec_type || s.type) === 'audio') || {};
+  const audioStreams = streams.filter?.(s => (s.codec_type || s.type) === 'audio') || [];
+  const audio = audioStreams[0] || {};
   const pixelFormat = video.pix_fmt || video.pixel_format || '';
   const bitDepth = inferBitDepth(video, pixelFormat);
   const colorTransfer = video.color_transfer || '';
@@ -282,6 +287,7 @@ function normalizeMediaInfo(info) {
     size: Number(format.size || raw.size || 0),
     bitRate: Number(format.bit_rate || raw.bitrate || 0),
     videoCodec: video.codec_name || video.codec || 'unknown',
+    videoBitRate: Number(video.bit_rate || video.bitrate || 0),
     width: Number(video.width || 0),
     height: Number(video.height || 0),
     fps: parseFps(video.avg_frame_rate || video.r_frame_rate),
@@ -294,7 +300,8 @@ function normalizeMediaInfo(info) {
     highBitDepth,
     unsafeColorPipeline: hdr || highBitDepth,
     audioCodec: audio.codec_name || audio.codec || '',
-    audioBitRate: Number(audio.bit_rate || 0)
+    audioTracks: audioStreams.length,
+    audioBitRate: audioStreams.reduce((sum, s) => sum + Number(s.bit_rate || s.bitrate || 0), 0)
   };
 }
 
@@ -317,4 +324,12 @@ function encoderName(k) { return k === 'h264' ? 'libx264' : k === 'h265' ? 'libx
 function defaultCrf(k) { return k === 'h264' ? 18 : k === 'h265' ? 20 : 28; }
 function defaultPreset(k) { return k === 'av1' ? '8' : 'medium'; }
 function codecExtra(k) { return k === 'av1' ? ' -svtav1-params lp=4' : ''; }
+function parseLibassFontEvents(logs = '') {
+  return String(logs)
+    .split(/\r?\n/)
+    .filter(line => /fontselect:|Glyph .* not found|failed to find.*fallback|font provider/i.test(line))
+    .map(line => line.replace(/^.*?(?=(?:fontselect:|Glyph |failed to find|font provider))/i, '').trim())
+    .filter(Boolean);
+}
+
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
