@@ -239,7 +239,7 @@ export class EncoderEngine {
       options.onPhase?.('pass1');
       const firstPass = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
       this.onLog(`两遍目标体积编码：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
-      await this.execute(firstPass);
+      await this.executeWithStatistics(firstPass, options.onStatistics, 'pass1');
     }
 
     options.onPhase?.(targetVideoBitrate > 0 ? 'pass2' : 'encode');
@@ -269,7 +269,8 @@ export class EncoderEngine {
             bitrateKbps: Number(statistics?.getBitrate?.() || 0),
             speed: Number(statistics?.getSpeed?.() || 0),
             sizeBytes: Number(statistics?.getSize?.() || 0),
-            frame: Number(statistics?.getVideoFrameNumber?.() || 0)
+            frame: Number(statistics?.getVideoFrameNumber?.() || 0),
+            phase: targetVideoBitrate > 0 ? 'pass2' : 'encode'
           });
         } catch {}
       }
@@ -337,6 +338,37 @@ export class EncoderEngine {
 
   inputDecoderArgs() {
     return this.mediaInfo?.videoCodec === 'av1' ? '-c:v libdav1d ' : '';
+  }
+
+  async executeWithStatistics(command, onStatistics, phase = 'encode') {
+    const { FFmpegKit, ReturnCode } = this.api;
+    this.onLog(`$ ffmpeg ${command}`);
+
+    let resolveDone;
+    const done = new Promise(resolve => { resolveDone = resolve; });
+    await FFmpegKit.executeAsync(
+      command,
+      completed => resolveDone(completed),
+      undefined,
+      statistics => {
+        try {
+          onStatistics?.({
+            timeMs: Number(statistics?.getTime?.() || 0),
+            fps: Number(statistics?.getVideoFps?.() || 0),
+            bitrateKbps: Number(statistics?.getBitrate?.() || 0),
+            speed: Number(statistics?.getSpeed?.() || 0),
+            sizeBytes: Number(statistics?.getSize?.() || 0),
+            frame: Number(statistics?.getVideoFrameNumber?.() || 0),
+            phase
+          });
+        } catch {}
+      }
+    );
+    const completed = await done;
+    const rc = completed?.getReturnCode?.();
+    const output = await completed?.getAllLogsAsString?.(1000) || await completed?.getOutput?.() || '';
+    if (!ReturnCode.isSuccess(rc)) throw new Error(output || `FFmpeg 执行失败：${rc}`);
+    return completed;
   }
 
   async execute(command, returnOutput = false, timeoutMs = 0) {
