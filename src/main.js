@@ -28,6 +28,7 @@ const state = {
   previewTimes: [],
   benchmarks: {},
   selectedCodec: null,
+  selectedTest: null,
   acceptedWarnings: false
 };
 
@@ -93,16 +94,44 @@ app.innerHTML = `
     <div id="warningAccept" class="hidden" style="margin-top:12px"><label><input type="checkbox" id="acceptWarnings"> 已查看预览，接受当前字体回退/缺失警告并继续。</label></div>
   </section>
 
-  <section id="benchmarkCard" class="card hidden">
-    <h2>5. 三编码器样本测试</h2>
-    <p class="note">程序使用约 36 帧的快速样本实测编码速度与 SSIM；体积预测按视频 packet 拆分关键帧/增量帧后估算，避免把短样本首帧和容器开销直接放大到整片。AV1 使用 SVT-AV1。</p>
-    <div class="button-row"><button id="benchmarkBtn" class="primary" disabled>测试 H.264 / H.265 / AV1</button></div>
-    <div id="codecGrid" class="grid three" style="margin-top:14px"></div>
+  <section id="planCard" class="card hidden">
+    <h2>5. 选择压制方案</h2>
+    <p class="note">主流程不再先压三种短样本再猜整片。体积约束模式按目标码率控制；质量模式使用 CRF/CQ。测试片段只用于看画质、字幕和当前设备速度。</p>
+
+    <div class="grid two plan-controls">
+      <div class="file-row">
+        <label>压制目标</label>
+        <select id="encodeGoal">
+          <option value="balanced">均衡：CRF 质量模式</option>
+          <option value="quality">质量优先：CRF 质量模式</option>
+          <option value="speed">速度优先：CRF 质量模式</option>
+          <option value="size16">体积约束：硬上限 1.6×</option>
+          <option value="size20">体积约束：硬上限 2.0×</option>
+        </select>
+        <small>CRF 模式不再假装精确预测成品大小；体积约束模式用两遍平均码率控制。</small>
+      </div>
+      <div id="sourceAnchor" class="plan-anchor note">分析完成后显示源码率与压缩密度。</div>
+    </div>
+
+    <div id="codecPlanGrid" class="grid three codec-plan-grid" style="margin-top:14px"></div>
+    <div id="chosenSummary" class="note plan-summary">请选择一个编码器。</div>
+
+    <div class="button-row">
+      <button id="testSelectedBtn" disabled>生成所选方案测试片段</button>
+    </div>
+    <div id="selectedTestResult" class="hidden"></div>
+
+    <details class="advanced-box">
+      <summary>高级：三编码器比较实验</summary>
+      <p class="note">仅用于研究，不参与主流程自动决策。短样本的速度、SSIM 和码率不能当成整片的精确预测。</p>
+      <div class="button-row"><button id="benchmarkBtn" disabled>比较 H.264 / H.265 / AV1</button></div>
+      <div id="codecGrid" class="grid three" style="margin-top:14px"></div>
+    </details>
   </section>
 
   <section id="encodeCard" class="card hidden">
     <h2>6. 正式压制</h2>
-    <div id="chosenSummary" class="note">尚未选择编码器。</div>
+    <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
     </div>
@@ -141,7 +170,12 @@ $('acceptWarnings').addEventListener('change', e => {
 
 $('analyze').addEventListener('click', analyzeAll);
 $('previewBtn').addEventListener('click', renderPreviews);
+$('encodeGoal').addEventListener('change', () => {
+  renderPlanOptions();
+  refreshBenchmarkEnabled();
+});
 $('benchmarkBtn').addEventListener('click', runBenchmarks);
+$('testSelectedBtn').addEventListener('click', runSelectedTest);
 $('encodeBtn').addEventListener('click', runEncode);
 
 bootstrap();
@@ -345,8 +379,9 @@ async function analyzeAll() {
     renderSubtitleSummary();
     $('preflightCard').classList.remove('hidden');
     $('subtitleCard').classList.remove('hidden');
-    $('benchmarkCard').classList.remove('hidden');
+    $('planCard').classList.remove('hidden');
     $('encodeCard').classList.remove('hidden');
+    renderPlanOptions();
     $('previewBtn').disabled = !state.engine.ready || !state.assInfo.previewTimes.length;
     refreshBenchmarkEnabled();
   } catch (e) {
