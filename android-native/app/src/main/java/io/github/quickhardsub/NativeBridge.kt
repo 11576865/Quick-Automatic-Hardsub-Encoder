@@ -49,7 +49,7 @@ class NativeBridge(
             "-frames:v", "6",
             "-c:v", encoder
         )
-        args.addAll(presetArgs)
+        args.addAll(presetArgs.asList())
         args.addAll(listOf("-pix_fmt", "yuv420p", output.absolutePath))
 
         val (encodeOk, logs) = executeOk(args.toTypedArray())
