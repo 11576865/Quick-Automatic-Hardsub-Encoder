@@ -422,88 +422,43 @@ export class EncoderEngine {
 
   async scanEncodedPackets(blob, expectedDuration = 0) {
     this.assertReady();
-    const { mount, FFprobeKit, ReturnCode } = this.api;
-    if (!blob || !(blob.size > 0)) throw new Error('成品为空，无法执行 packet 扫描');
+    const { mount, FFprobeKit, FFmpegKit, ReturnCode } = this.api;
+    if (!blob || !(blob.size > 0)) throw new Error('成品为空，无法执行完整性扫描');
 
     const stamp = Date.now();
     const mountPoint = `/verify_${stamp}`;
     const fileName = 'encoded_output.mkv';
     const path = `${mountPoint}/${fileName}`;
 
-    // WORKERFS mounts the Blob read-only without copying the complete file into
-    // the wasm heap. ffprobe demuxes packets only; it does not decode video.
+    // Mount the final Blob read-only through WORKERFS. Do not print every
+    // packet with ffprobe: on long 60 fps videos that textual output itself can
+    // become very large and duplicate memory after an already memory-heavy
+    // browser encode.
     await mount(mountPoint, {
       blobs: [{ name: fileName, data: blob }]
     });
 
-    const cmd = `-v error -show_streams -show_packets -show_entries stream=index,codec_type:packet=stream_index,pts_time,dts_time,duration_time,size,flags -of compact=p=0:nk=0 ${q(path)}`;
-    const t0 = performance.now();
-    const session = await FFprobeKit.execute(cmd);
-    const rc = session.getReturnCode?.();
-    const output = await session.getOutput?.() || '';
-
-    if (ReturnCode && !ReturnCode.isSuccess(rc)) {
-      throw new Error(output || 'FFprobe packet 扫描失败');
+    const layoutSession = await FFprobeKit.execute(
+      `-v error -show_streams -show_entries stream=index,codec_type -of compact=p=0:nk=0 ${q(path)}`
+    );
+    const layoutRc = layoutSession.getReturnCode?.();
+    const layoutOutput = await layoutSession.getOutput?.() || '';
+    if (ReturnCode && !ReturnCode.isSuccess(layoutRc)) {
+      throw new Error(layoutOutput || 'FFprobe 无法读取成品流布局');
     }
 
     const streamTypes = new Map();
-    const perStream = new Map();
-    let corruptCount = 0;
-
-    const ensureStream = index => {
-      if (!perStream.has(index)) {
-        perStream.set(index, {
-          packetCount: 0,
-          keyCount: 0,
-          bytes: 0,
-          firstTimestamp: Infinity,
-          lastPacketStart: -Infinity,
-          end: -Infinity
-        });
-      }
-      return perStream.get(index);
-    };
-
-    for (const rawLine of String(output).split(/\r?\n/)) {
-      const line = rawLine.trim();
-      if (!line) continue;
-
+    for (const rawLine of String(layoutOutput).split(/\r?\n/)) {
       const fields = {};
-      for (const part of line.split('|')) {
+      for (const part of rawLine.trim().split('|')) {
         const eq = part.indexOf('=');
         if (eq <= 0) continue;
         fields[part.slice(0, eq)] = part.slice(eq + 1);
       }
-
-      if (fields.codec_type != null && fields.index != null) {
-        const index = Number(fields.index);
-        if (Number.isInteger(index)) streamTypes.set(index, fields.codec_type);
-        continue;
+      const index = Number(fields.index);
+      if (Number.isInteger(index) && fields.codec_type) {
+        streamTypes.set(index, fields.codec_type);
       }
-
-      const index = Number(fields.stream_index);
-      if (!Number.isInteger(index)) continue;
-
-      const pts = Number(fields.pts_time);
-      const dts = Number(fields.dts_time);
-      const duration = Number(fields.duration_time);
-      const size = Number(fields.size);
-      const flags = fields.flags || '';
-      const timestamp = Number.isFinite(pts) ? pts : Number.isFinite(dts) ? dts : NaN;
-      if (!Number.isFinite(timestamp)) continue;
-
-      const stat = ensureStream(index);
-      stat.packetCount++;
-      if (/K/.test(flags)) stat.keyCount++;
-      if (/C/.test(flags)) corruptCount++;
-      if (Number.isFinite(size) && size > 0) stat.bytes += size;
-
-      stat.firstTimestamp = Math.min(stat.firstTimestamp, timestamp);
-      stat.lastPacketStart = Math.max(stat.lastPacketStart, timestamp);
-      stat.end = Math.max(
-        stat.end,
-        timestamp + (Number.isFinite(duration) && duration > 0 ? duration : 0)
-      );
     }
 
     const videoIndexes = [...streamTypes.entries()]
@@ -513,26 +468,59 @@ export class EncoderEngine {
       .filter(([, type]) => type === 'audio')
       .map(([index]) => index);
 
-    const videoIndex = videoIndexes[0];
-    const video = videoIndex == null ? null : perStream.get(videoIndex);
-    if (!video?.packetCount || !Number.isFinite(video.end)) {
-      throw new Error('FFprobe 未扫描到有效视频 packet');
+    if (videoIndexes.length !== 1) {
+      throw new Error(`成品视频流数量异常：${videoIndexes.length}（预期 1）`);
     }
 
-    const audioStats = audioIndexes.map(index => ({
-      index,
-      ...(perStream.get(index) || {
-        packetCount: 0,
-        keyCount: 0,
-        bytes: 0,
-        firstTimestamp: Infinity,
-        lastPacketStart: -Infinity,
-        end: -Infinity
-      })
-    }));
+    const scanMapToNull = async mapSpec => {
+      let lastTimeMs = 0;
+      let maxFrame = 0;
+      let maxSize = 0;
+      const command =
+        `-hide_banner -v error -stats -i ${q(path)} -map ${mapSpec} -c copy -f null -`;
+
+      let resolveDone;
+      const done = new Promise(resolve => { resolveDone = resolve; });
+      await FFmpegKit.executeAsync(
+        command,
+        completed => resolveDone(completed),
+        undefined,
+        statistics => {
+          try {
+            lastTimeMs = Math.max(lastTimeMs, Number(statistics?.getTime?.() || 0));
+            maxFrame = Math.max(maxFrame, Number(statistics?.getVideoFrameNumber?.() || 0));
+            maxSize = Math.max(maxSize, Number(statistics?.getSize?.() || 0));
+          } catch {}
+        }
+      );
+
+      const completed = await done;
+      const rc = completed?.getReturnCode?.();
+      if (!ReturnCode.isSuccess(rc)) {
+        const logs = await completed?.getAllLogsAsString?.(1000) ||
+          await completed?.getOutput?.() || '';
+        throw new Error(logs || `成品 ${mapSpec} 全量解复用扫描失败`);
+      }
+
+      return {
+        end: lastTimeMs / 1000,
+        frameCount: maxFrame,
+        processedBytes: maxSize
+      };
+    };
+
+    const t0 = performance.now();
+    const videoScan = await scanMapToNull('0:v:0');
+    const audioScan = audioIndexes.length
+      ? await scanMapToNull('0:a')
+      : null;
+
+    if (!(videoScan.end > 0)) {
+      throw new Error('全量视频 packet 扫描没有取得有效末端时间');
+    }
 
     const expected = Number(expectedDuration || 0);
-    const durationDelta = expected > 0 ? video.end - expected : null;
+    const durationDelta = expected > 0 ? videoScan.end - expected : null;
     const fps = Number(this.mediaInfo?.fps || 0);
     const tolerance = Math.max(0.5, fps > 0 ? 2 / fps : 0);
     const durationOk = durationDelta == null || Math.abs(durationDelta) <= tolerance;
@@ -540,21 +528,28 @@ export class EncoderEngine {
     const expectedAudioTracks = Number(this.mediaInfo?.audioTracks || 0);
     const audioTrackCountOk = audioIndexes.length === expectedAudioTracks;
     const audioTolerance = 1.0;
-    const audioDurationsOk = expected <= 0 || audioStats.every(stat =>
-      stat.packetCount > 0 &&
-      Number.isFinite(stat.end) &&
-      Math.abs(stat.end - expected) <= audioTolerance
-    );
+    const audioEnd = audioScan?.end ?? null;
+    const audioDurationsOk =
+      expectedAudioTracks === 0 ||
+      (
+        audioIndexes.length > 0 &&
+        audioEnd != null &&
+        audioEnd > 0 &&
+        (expected <= 0 || Math.abs(audioEnd - expected) <= audioTolerance)
+      );
     const audioOk = audioTrackCountOk && audioDurationsOk;
 
     return {
-      packetCount: video.packetCount,
-      keyCount: video.keyCount,
-      corruptCount,
-      totalVideoBytes: video.bytes,
-      firstTimestamp: Number.isFinite(video.firstTimestamp) ? video.firstTimestamp : null,
-      lastPacketStart: video.lastPacketStart,
-      videoEnd: video.end,
+      // Kept for UI/backward compatibility. The full scan now intentionally
+      // avoids ffprobe -show_packets to prevent huge textual packet dumps.
+      packetCount: null,
+      keyCount: null,
+      corruptCount: null,
+      totalVideoBytes: null,
+      firstTimestamp: null,
+      lastPacketStart: null,
+      videoEnd: videoScan.end,
+      videoFrameCount: videoScan.frameCount,
       expectedDuration: expected > 0 ? expected : null,
       durationDelta,
       tolerance,
@@ -563,15 +558,14 @@ export class EncoderEngine {
       audioTrackCount: audioIndexes.length,
       expectedAudioTracks,
       audioTrackCountOk,
-      audioEnds: audioStats.map(stat => Number.isFinite(stat.end) ? stat.end : null),
-      audioPacketCounts: audioStats.map(stat => stat.packetCount),
+      audioEnds: audioEnd == null ? [] : [audioEnd],
       audioTolerance,
       audioDurationsOk,
       audioOk,
+      scanMode: 'memory-bounded-demux',
       ok:
         videoIndexes.length === 1 &&
-        video.packetCount > 0 &&
-        corruptCount === 0 &&
+        videoScan.end > 0 &&
         durationOk &&
         audioOk,
       scanSeconds: (performance.now() - t0) / 1000
