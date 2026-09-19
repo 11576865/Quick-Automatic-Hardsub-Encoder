@@ -1,9 +1,22 @@
 export async function inspectFontFile(file) {
   const buffer = await file.arrayBuffer();
+  if (buffer.byteLength < 12) throw new Error('文件过小，不是有效字体');
   const view = new DataView(buffer);
   const tag = readTag(view, 0);
 
   if (tag === 'ttcf') return inspectCollection(file, view);
+
+  const signature = view.getUint32(0, false);
+  const validSfnt =
+    signature === 0x00010000 ||
+    tag === 'OTTO' ||
+    tag === 'true' ||
+    tag === 'typ1';
+
+  if (!validSfnt) {
+    throw new Error('文件头不是 TTF/OTF/TTC/OTC 字体；可能误选了 ASS 或其他文件');
+  }
+
   return [inspectSfntFace(file, view, 0, 0)];
 }
 
