@@ -1280,24 +1280,22 @@ async function runEncode() {
         ? ''
         : ' · 与源视频差 ' + (packetScan.durationDelta >= 0 ? '+' : '') + packetScan.durationDelta.toFixed(3) + ' s';
       const audioEndText = packetScan.audioTrackCount
-        ? ' · 音频 ' + packetScan.audioTrackCount + ' 轨，末端 ' +
+        ? ' · 音频 ' + packetScan.audioTrackCount + ' 轨，总体末端 ' +
           packetScan.audioEnds.map(v => v == null ? 'N/A' : v.toFixed(3) + ' s').join(' / ')
         : ' · 无音频';
       log(
-        '成品 packet 扫描：视频 ' +
-        packetScan.packetCount + ' 个 packet · 末端 ' +
+        '成品全量解复用扫描：视频末端 ' +
         packetScan.videoEnd.toFixed(3) + ' s' +
+        (packetScan.videoFrameCount > 0 ? ' · 视频帧/包进度 ' + packetScan.videoFrameCount : '') +
         deltaText +
         audioEndText +
-        ' · corrupt=' + packetScan.corruptCount +
         ' · 扫描耗时 ' + packetScan.scanSeconds.toFixed(2) + ' s。'
       );
 
       if (!packetScan.ok) {
         log(
-          '成品完整性警告：packet 扫描未通过。' +
+          '成品完整性警告：全量解复用扫描未通过。' +
           (packetScan.videoStreamCount !== 1 ? ' 视频流数量=' + packetScan.videoStreamCount + '（预期 1）。' : '') +
-          (packetScan.corruptCount ? ' 检测到损坏标记 packet=' + packetScan.corruptCount + '。' : '') +
           (!packetScan.durationOk && packetScan.durationDelta != null
             ? ' 视频末端与源时长偏差 ' + packetScan.durationDelta.toFixed(3) + ' s，容差 ±' + packetScan.tolerance.toFixed(3) + ' s。'
             : '') +
@@ -1305,7 +1303,7 @@ async function runEncode() {
             ? ' 音频轨数量=' + packetScan.audioTrackCount + '，源视频=' + packetScan.expectedAudioTracks + '。'
             : '') +
           (!packetScan.audioDurationsOk
-            ? ' 至少一条音频轨的 packet 末端与源时长偏差超过 ±' + packetScan.audioTolerance.toFixed(1) + ' s。'
+            ? ' 音频总体末端与源时长偏差超过 ±' + packetScan.audioTolerance.toFixed(1) + ' s。'
             : '')
         );
       }
@@ -1317,15 +1315,15 @@ async function runEncode() {
     if (packetScan?.ok) {
       $('liveEta').textContent =
         '压制完成 · ' + formatBytes(result.byteLength) +
-        ' · packet 扫描通过 · 视频末端 ' + formatDurationPrecise(packetScan.videoEnd);
+        ' · 完整性扫描通过 · 视频末端 ' + formatDurationPrecise(packetScan.videoEnd);
     } else if (packetScan) {
       $('liveEta').textContent =
         '压制完成 · ' + formatBytes(result.byteLength) +
-        ' · packet 扫描有警告，请查看技术日志';
+        ' · 完整性扫描有警告，请查看技术日志';
     } else {
       $('liveEta').textContent =
         '压制完成 · ' + formatBytes(result.byteLength) +
-        ' · packet 扫描未完成，请查看技术日志';
+        ' · 完整性扫描未完成，请查看技术日志';
     }
 
     const base = state.video.name.replace(/\.[^.]+$/, '');
