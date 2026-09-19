@@ -40,7 +40,7 @@ export function parseAss(text) {
   for (const style of styles.values()) {
     if (style.fontname?.trim()) requestedFonts.add(style.fontname.trim());
   }
-  const fnRegex = /\\fn([^\\}\r\n]+)/g;
+  const fnRegex = /\\fn([^\\}\r\n]+?)(?=\\|}|$)/g;
   for (const ev of events) {
     let m;
     while ((m = fnRegex.exec(ev.text || ''))) {
@@ -111,4 +111,121 @@ function midpoint(e) {
   const s = Number.isFinite(e.startSeconds) ? e.startSeconds : 0;
   const en = Number.isFinite(e.endSeconds) ? e.endSeconds : s + 1;
   return s + Math.max(0.08, Math.min((en - s) / 2, 1));
+}
+
+
+export function rewriteAssFonts(text, bindings = {}) {
+  const lookup = new Map(
+    Object.entries(bindings)
+      .filter(([, target]) => target)
+      .map(([source, target]) => [normalizeAssFontName(source), target])
+  );
+  if (!lookup.size) return text;
+
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  let section = '';
+  let styleFormat = [];
+  let eventFormat = [];
+
+  return lines.map(raw => {
+    const sec = raw.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (sec) {
+      section = sec[1].toLowerCase();
+      return raw;
+    }
+
+    if (section === 'v4+ styles' || section === 'v4 styles') {
+      if (/^\s*Format\s*:/i.test(raw)) {
+        styleFormat = raw.replace(/^\s*Format\s*:/i, '').split(',').map(x => x.trim().toLowerCase());
+        return raw;
+      }
+      if (/^\s*Style\s*:/i.test(raw) && styleFormat.length) {
+        const prefix = raw.slice(0, raw.indexOf(':') + 1);
+        const values = splitCsvLimited(raw.slice(raw.indexOf(':') + 1), styleFormat.length);
+        const fontIndex = styleFormat.indexOf('fontname');
+        if (fontIndex >= 0) {
+          const target = lookup.get(normalizeAssFontName(values[fontIndex] || ''));
+          if (target) values[fontIndex] = target;
+        }
+        return `${prefix} ${values.join(',')}`;
+      }
+    }
+
+    if (section === 'events') {
+      if (/^\s*Format\s*:/i.test(raw)) {
+        eventFormat = raw.replace(/^\s*Format\s*:/i, '').split(',').map(x => x.trim().toLowerCase());
+        return raw;
+      }
+      if (/^\s*(Dialogue|Comment)\s*:/i.test(raw) && eventFormat.length) {
+        const prefix = raw.slice(0, raw.indexOf(':') + 1);
+        const values = splitCsvLimited(raw.slice(raw.indexOf(':') + 1), eventFormat.length);
+        const textIndex = eventFormat.indexOf('text');
+        if (textIndex >= 0) {
+          values[textIndex] = replaceInlineFonts(values[textIndex] || '', lookup);
+        }
+        return `${prefix} ${values.join(',')}`;
+      }
+    }
+
+    return raw;
+  }).join('\n');
+}
+
+export function shiftAssForPreview(text, offsetSeconds) {
+  if (!Number.isFinite(offsetSeconds) || offsetSeconds <= 0) return text;
+
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  let section = '';
+  let eventFormat = [];
+
+  return lines.map(raw => {
+    const sec = raw.match(/^\s*\[([^\]]+)\]\s*$/);
+    if (sec) {
+      section = sec[1].toLowerCase();
+      return raw;
+    }
+
+    if (section !== 'events') return raw;
+
+    if (/^\s*Format\s*:/i.test(raw)) {
+      eventFormat = raw.replace(/^\s*Format\s*:/i, '').split(',').map(x => x.trim().toLowerCase());
+      return raw;
+    }
+
+    if (!/^\s*(Dialogue|Comment)\s*:/i.test(raw) || !eventFormat.length) return raw;
+
+    const prefix = raw.slice(0, raw.indexOf(':') + 1);
+    const values = splitCsvLimited(raw.slice(raw.indexOf(':') + 1), eventFormat.length);
+    const startIndex = eventFormat.indexOf('start');
+    const endIndex = eventFormat.indexOf('end');
+    if (startIndex < 0 || endIndex < 0) return raw;
+
+    const start = assTimeToSeconds(values[startIndex]);
+    const end = assTimeToSeconds(values[endIndex]);
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return raw;
+
+    values[startIndex] = secondsToAssTime(Math.max(0, start - offsetSeconds));
+    values[endIndex] = secondsToAssTime(Math.max(0, end - offsetSeconds));
+    return `${prefix} ${values.join(',')}`;
+  }).join('\n');
+}
+
+function replaceInlineFonts(text, lookup) {
+  return text.replace(/\\fn([^\\}\r\n]+?)(?=\\|}|$)/g, (full, name) => {
+    const target = lookup.get(normalizeAssFontName(name));
+    return target ? `\\fn${target}` : full;
+  });
+}
+
+function normalizeAssFontName(value = '') {
+  return String(value).normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function secondsToAssTime(seconds) {
+  const cs = Math.max(0, Math.round(seconds * 100));
+  const h = Math.floor(cs / 360000);
+  const m = Math.floor((cs % 360000) / 6000);
+  const s = Math.floor((cs % 6000) / 100);
+  const frac = cs % 100;
+  return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(frac).padStart(2, '0')}`;
 }
