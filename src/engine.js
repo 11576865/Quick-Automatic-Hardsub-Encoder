@@ -101,7 +101,11 @@ export class EncoderEngine {
     const output = `/preview_${index}.png`;
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const decoder = this.inputDecoderArgs();
-    const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
+    // Keep the original media timestamp after fast input seeking.
+    // Without -copyts, the seeked frame can arrive at the ASS filter near PTS=0
+    // while the external ASS track still uses its original timeline, producing
+    // a perfectly valid preview image with no subtitle drawn.
+    const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} -copyts ${decoder}-i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
     const logs = await this.execute(cmd, true, 60000);
     const bytes = await this.api.readFile(output);
     if (!bytes) throw new Error('预览帧没有生成');
