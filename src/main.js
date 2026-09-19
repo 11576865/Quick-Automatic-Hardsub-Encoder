@@ -392,15 +392,15 @@ function renderSubtitleSummary() {
   const mediaRisk = state.media?.unsafeColorPipeline ? 1 : 0;
   const decodeRisk = state.inputDecodeOk ? 0 : 1;
   const riskCount = fontRisk + mediaRisk + decodeRisk;
-  const details = $('preflightDetails');
+  const preflightDetailsEl = $('preflightDetails');
   const status = $('preflightStatus');
 
   if (riskCount > 0) {
-    details.open = true;
+    preflightDetailsEl.open = true;
     status.textContent = `${riskCount} 项需注意 · 已自动展开`;
     status.className = 'preflight-status warn';
   } else {
-    details.open = false;
+    preflightDetailsEl.open = false;
     const codec = state.media?.videoCodec?.toUpperCase?.() || '视频';
     const resolution = state.media?.width && state.media?.height
       ? `${state.media.width}×${state.media.height}`
