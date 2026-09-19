@@ -22,6 +22,8 @@ const state = {
   media: null,
   engine: null,
   capabilities: null,
+  nativeBackend: null,
+  nativeSelfTest: null,
   softwareEncoders: { h264: null, h265: null, av1: null },
   softwareDecoders: { av1Dav1d: null },
   inputDecodeOk: false,
@@ -61,7 +63,7 @@ app.innerHTML = `
         </details>
       </div>
       <div class="file-row"><label>处理后端</label>
-        <div class="note">当前网页使用 FFmpeg WASM；Android ARM64 原生后端正在构建。原生版完成后优先调用本机 FFmpeg / MediaCodec，WASM 保留为免安装后备。</div>
+        <div id="backendSummary" class="note">正在检测网页 / Android 原生后端…</div>
       </div>
     </div>
     <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
@@ -240,6 +242,8 @@ $('clearSavedFontsBtn').addEventListener('click', async () => {
 bootstrap();
 
 async function bootstrap() {
+  detectNativeBackend();
+
   try {
     state.savedFonts = await listSavedFonts();
     renderSavedFontLibrary();
@@ -271,6 +275,71 @@ async function bootstrap() {
   }
   updateEnvironmentSummary(engineStatus.ready);
   refreshAnalyze();
+}
+
+function detectNativeBackend() {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.getBackendInfo) {
+    state.nativeBackend = null;
+    state.nativeSelfTest = null;
+    renderBackendSummary();
+    return;
+  }
+
+  try {
+    state.nativeBackend = JSON.parse(bridge.getBackendInfo());
+    renderBackendSummary();
+    log(`检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}`);
+
+    globalThis.__onNativeSelfTest = payload => {
+      try {
+        state.nativeSelfTest = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        state.nativeSelfTest = { error: '原生自检结果解析失败' };
+      }
+      renderBackendSummary();
+      const t = state.nativeSelfTest || {};
+      log(`Android 原生自检：x264=${!!t.x264} x265=${!!t.x265} SVT-AV1=${!!t.svtAv1} dav1d=${!!t.dav1d} libass=${!!t.assFilter} smoke=${!!t.softwareEncodeSmoke}`);
+    };
+
+    if (bridge.runSelfTest) {
+      bridge.runSelfTest();
+    }
+  } catch (error) {
+    state.nativeBackend = { available: false, error: error.message };
+    renderBackendSummary();
+    log(`Android 原生后端检测失败：${error.message}`);
+  }
+}
+
+function renderBackendSummary() {
+  const el = $('backendSummary');
+  if (!el) return;
+
+  if (!state.nativeBackend?.available) {
+    el.innerHTML = '浏览器模式：正式处理仍使用 FFmpeg WASM。Android APK 可提供 ARM64 原生后端；网页保留为免安装后备。';
+    return;
+  }
+
+  const t = state.nativeSelfTest;
+  if (!t) {
+    el.innerHTML = `Android 原生壳已检测到：${escapeHtml(state.nativeBackend.abi || 'unknown')} · FFmpegKitNext ${escapeHtml(state.nativeBackend.ffmpegKitVersion || 'unknown')}。正在执行原生编解码/字幕自检；当前正式压制仍先保持 WASM，直到原生任务桥接完成。`;
+    return;
+  }
+
+  const required = [t.x264, t.x265, t.svtAv1, t.dav1d, t.assFilter, t.softwareEncodeSmoke, t.ffprobeSmoke];
+  const ok = required.every(Boolean);
+  const details = [
+    `x264 ${t.x264 ? '✓' : '✗'}`,
+    `x265 ${t.x265 ? '✓' : '✗'}`,
+    `SVT-AV1 ${t.svtAv1 ? '✓' : '✗'}`,
+    `dav1d ${t.dav1d ? '✓' : '✗'}`,
+    `libass ${t.assFilter ? '✓' : '✗'}`,
+    `编码 smoke ${t.softwareEncodeSmoke ? '✓' : '✗'}`,
+    `FFprobe ${t.ffprobeSmoke ? '✓' : '✗'}`
+  ].join(' · ');
+
+  el.innerHTML = `${ok ? '<span class="ok">Android 原生核心自检通过。</span>' : '<span class="warn">Android 原生核心自检未完全通过。</span>'} ${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。`;
 }
 
 function renderCapabilities() {
