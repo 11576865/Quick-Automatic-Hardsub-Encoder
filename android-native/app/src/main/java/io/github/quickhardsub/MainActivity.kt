@@ -17,7 +17,9 @@ import androidx.webkit.WebViewAssetLoader
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
+    private lateinit var nativeBridge: NativeBridge
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingPickerRole: String? = null
     private val filePickerRequest = 1401
 
     private val assetLoader by lazy {
@@ -66,6 +68,7 @@ class MainActivity : ComponentActivity() {
             ): Boolean {
                 fileCallback?.onReceiveValue(null)
                 fileCallback = callback
+                pendingPickerRole = nativeBridge.consumePickerRole()
 
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
@@ -79,7 +82,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        webView.addJavascriptInterface(NativeBridge(this, webView), "NativeHardsub")
+        nativeBridge = NativeBridge(this, webView)
+        webView.addJavascriptInterface(nativeBridge, "NativeHardsub")
         webView.loadUrl("https://appassets.androidplatform.net/assets/www/index.html")
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -107,15 +111,28 @@ class MainActivity : ComponentActivity() {
         if (requestCode == filePickerRequest) {
             val result = if (resultCode == RESULT_OK) {
                 val flags = data?.flags ?: 0
-                data?.data?.let { persistUriPermission(it, flags) }
+                val uris = mutableListOf<Uri>()
+
+                data?.data?.let { uri ->
+                    persistUriPermission(uri, flags)
+                    uris.add(uri)
+                }
                 data?.clipData?.let { clip ->
                     for (i in 0 until clip.itemCount) {
-                        persistUriPermission(clip.getItemAt(i).uri, flags)
+                        val uri = clip.getItemAt(i).uri
+                        persistUriPermission(uri, flags)
+                        uris.add(uri)
                     }
                 }
-                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-            } else null
 
+                nativeBridge.recordPickedUris(pendingPickerRole, uris.distinct())
+                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+            } else {
+                nativeBridge.recordPickedUris(pendingPickerRole, emptyList())
+                null
+            }
+
+            pendingPickerRole = null
             fileCallback?.onReceiveValue(result)
             fileCallback = null
             return
