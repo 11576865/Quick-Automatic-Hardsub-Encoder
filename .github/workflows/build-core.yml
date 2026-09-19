@@ -1,19 +1,35 @@
-name: Build FFmpeg Web Core
+name: Build Core and Deploy
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-core.yml'
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-core
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: DeterminateSystems/nix-installer-action@main
+
       - name: Clone FFmpegKitNext
         run: git clone --depth 1 https://github.com/arthenica/ffmpeg-kit-next.git /tmp/ffmpeg-kit-next
+
       - name: Build WebAssembly core
         working-directory: /tmp/ffmpeg-kit-next
         run: |
@@ -26,12 +42,34 @@ jobs:
             --enable-lib-x264 \
             --enable-lib-x265 \
             --enable-lib-libsvtav1
-      - name: Prepare artifact
+
+      - name: Install Web core into app
         run: |
-          mkdir -p core-artifact
-          cp -a /tmp/ffmpeg-kit-next/prebuilt/bundle-web-wasm32/ffmpeg-kit-next/. core-artifact/
-      - uses: actions/upload-artifact@v4
+          rm -rf public/vendor/ffmpeg-kit-next-web
+          mkdir -p public/vendor/ffmpeg-kit-next-web
+          cp -a /tmp/ffmpeg-kit-next/prebuilt/bundle-web-wasm32/ffmpeg-kit-next/. public/vendor/ffmpeg-kit-next-web/
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build app
+        run: |
+          npm install
+          npm run build
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Upload reusable core artifact
+        uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-kit-next-web-hardsub-core
-          path: core-artifact
+          path: public/vendor/ffmpeg-kit-next-web
           retention-days: 30
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
