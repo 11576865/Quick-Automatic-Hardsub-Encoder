@@ -12,6 +12,7 @@ export class EncoderEngine {
     this.sourceVideoFile = null;
     this.sourceAssFile = null;
     this.sourceFontFiles = [];
+    this.activeAssText = null;
   }
 
   async init() {
@@ -34,6 +35,7 @@ export class EncoderEngine {
     this.sourceVideoFile = videoFile;
     this.sourceAssFile = assFile;
     this.sourceFontFiles = [...fontFiles];
+    this.activeAssText = null;
     const { mount, writeFile, FFmpegKitConfig } = this.api;
 
     const stamp = Date.now();
@@ -98,6 +100,7 @@ export class EncoderEngine {
 
   async setAssText(text) {
     this.assertReady();
+    this.activeAssText = text;
     await this.api.writeFile(this.assPath, new TextEncoder().encode(text));
   }
 
@@ -251,6 +254,7 @@ export class EncoderEngine {
     const ass = this.sourceAssFile;
     const fonts = [...this.sourceFontFiles];
     const mediaInfo = this.mediaInfo;
+    const activeAssText = this.activeAssText;
 
     this.onLog(`重启 FFmpeg WASM runtime：${reason}`);
     try { await this.api.FFmpegKit?.cancel(); } catch {}
@@ -259,7 +263,10 @@ export class EncoderEngine {
 
     const status = await this.init();
     if (!status.ready) throw new Error('FFmpeg WASM runtime 重启失败');
-    if (video && ass) await this.stageFiles(video, ass, fonts);
+    if (video && ass) {
+      await this.stageFiles(video, ass, fonts);
+      if (activeAssText) await this.setAssText(activeAssText);
+    }
     this.mediaInfo = mediaInfo;
   }
 
