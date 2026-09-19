@@ -15,7 +15,9 @@ const state = {
   media: null,
   engine: null,
   capabilities: null,
+  softwareEncoders: { h264: null, h265: null, av1: null },
   previewUrls: [],
+  previewTimes: [],
   benchmarks: {},
   selectedCodec: null,
   acceptedWarnings: false
@@ -122,7 +124,14 @@ async function bootstrap() {
   renderCapabilities();
   const engineStatus = await state.engine.init();
   if (engineStatus.ready) {
-    $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> 可使用 FFprobe、libass 与软件编码器。';
+    try {
+      state.softwareEncoders = await state.engine.detectSoftwareEncoders();
+      log(`WASM 软件编码器：x264=${state.softwareEncoders.h264} x265=${state.softwareEncoders.h265} SVT-AV1=${state.softwareEncoders.av1}`);
+    } catch (e) {
+      log(`软件编码器检测失败：${e.message}`);
+    }
+    renderCapabilities();
+    $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> 上面的 WebCodecs 项只是浏览器/硬件通道检测，不影响 FFmpeg WASM 软件编码。';
   } else {
     $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
   }
@@ -131,16 +140,20 @@ async function bootstrap() {
 
 function renderCapabilities() {
   const c = state.capabilities;
+  const sw = state.softwareEncoders;
   const rows = [
-    ['WebAssembly', c.webAssembly],
-    ['Web Worker', c.worker],
-    ['SharedArrayBuffer', c.sharedArrayBuffer],
-    ['跨源隔离', c.crossOriginIsolated],
-    ['WebCodecs H.264', c.codecs.h264],
-    ['WebCodecs H.265', c.codecs.hevc],
-    ['WebCodecs AV1', c.codecs.av1]
+    ['WebAssembly', c.webAssembly, c.webAssembly ? '支持' : '不可用'],
+    ['Web Worker', c.worker, c.worker ? '支持' : '不可用'],
+    ['SharedArrayBuffer', c.sharedArrayBuffer, c.sharedArrayBuffer ? '支持' : '不可用'],
+    ['跨源隔离', c.crossOriginIsolated, c.crossOriginIsolated ? '支持' : '未启用'],
+    ['FFmpeg WASM · H.264 / x264', sw.h264, sw.h264 === null ? '检测中' : sw.h264 ? '可编码' : '未编入核心'],
+    ['FFmpeg WASM · H.265 / x265', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可编码' : '未编入核心'],
+    ['FFmpeg WASM · AV1 / SVT-AV1', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可编码' : '未编入核心'],
+    ['WebCodecs 硬件通道 · H.264', c.codecs.h264, c.codecs.h264 ? '浏览器已暴露' : '浏览器未暴露'],
+    ['WebCodecs 硬件通道 · H.265', c.codecs.hevc, c.codecs.hevc ? '浏览器已暴露' : '浏览器未暴露'],
+    ['WebCodecs 硬件通道 · AV1', c.codecs.av1, c.codecs.av1 ? '浏览器已暴露' : '浏览器未暴露']
   ];
-  $('capabilities').innerHTML = rows.map(([k,v]) => `<div class="status-item"><span>${k}</span><span class="${v?'ok':'warn'}">${v?'支持':'不可用/未暴露'}</span></div>`).join('');
+  $('capabilities').innerHTML = rows.map(([k,v,label]) => `<div class="status-item"><span>${k}</span><span class="${v ? 'ok' : 'warn'}">${label}</span></div>`).join('');
 }
 
 function refreshAnalyze() {
@@ -216,22 +229,10 @@ function renderSubtitleSummary() {
 async function renderPreviews() {
   try {
     $('previewBtn').disabled = true;
-    const times = state.assInfo.previewTimes.slice(0, 6);
-    state.previewUrls.forEach(URL.revokeObjectURL);
-    state.previewUrls = [];
-    const container = $('preview');
-    container.innerHTML = '<div class="preview-placeholder">正在生成真实 libass 预览…</div>';
-    for (let i = 0; i < times.length; i++) {
-      log(`生成预览 ${i + 1}/${times.length} @ ${times[i].toFixed(2)}s`);
-      state.previewUrls.push(await state.engine.renderPreview(times[i], i));
-    }
-    let idx = 0;
-    const show = () => {
-      container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[idx]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP">上一张</button><span class="note" style="padding:10px">${idx+1}/${state.previewUrls.length} · ${times[idx].toFixed(2)}s</span><button id="nextP">下一张</button></div></div>`;
-      $('prevP').onclick = () => { idx = (idx - 1 + state.previewUrls.length) % state.previewUrls.length; show(); };
-      $('nextP').onclick = () => { idx = (idx + 1) % state.previewUrls.length; show(); };
-    };
-    show();
+    state.previewTimes = state.assInfo.previewTimes.slice(0, 6);
+    state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
+    state.previewUrls = new Array(state.previewTimes.length).fill(null);
+    await loadPreviewAt(0);
     refreshBenchmarkEnabled(true);
   } catch (e) {
     log(`预览失败：${e.message}`);
@@ -239,6 +240,23 @@ async function renderPreviews() {
   } finally {
     $('previewBtn').disabled = !state.engine.ready;
   }
+}
+
+async function loadPreviewAt(index) {
+  const times = state.previewTimes;
+  if (!times.length) return;
+  const safeIndex = (index + times.length) % times.length;
+  const container = $('preview');
+
+  if (!state.previewUrls[safeIndex]) {
+    container.innerHTML = `<div class="preview-placeholder">正在生成第 ${safeIndex + 1}/${times.length} 张真实 libass 预览…<br><small>首张先生成，其余仅在翻页时按需生成。</small></div>`;
+    log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
+    state.previewUrls[safeIndex] = await state.engine.renderPreview(times[safeIndex], safeIndex);
+  }
+
+  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP">上一张</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP">下一张</button></div><div class="note" style="text-align:center;padding:0 10px 10px">只生成你实际查看的预览帧，避免一次等待全部采样点。</div></div>`;
+  $('prevP').onclick = () => loadPreviewAt(safeIndex - 1);
+  $('nextP').onclick = () => loadPreviewAt(safeIndex + 1);
 }
 
 function refreshBenchmarkEnabled(previewDone = state.previewUrls.length > 0) {
