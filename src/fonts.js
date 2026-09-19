@@ -30,25 +30,32 @@ function inspectSfntFace(file, view, baseOffset, faceIndex) {
     if (p + 16 > view.byteLength) break;
     const tableTag = readTag(view, p);
     if (tableTag === 'name') {
-      nameOffset = baseOffset + view.getUint32(p + 8, false);
+      nameOffset = view.getUint32(p + 8, false);
       nameLength = view.getUint32(p + 12, false);
       break;
     }
   }
 
   const names = nameOffset != null ? parseNameTable(view, nameOffset, nameLength) : {};
+  const family = pickName(names, 16, 1);
+  const subfamily = pickName(names, 17, 2);
+  const fullName = pickName(names, 4);
+  const postScriptName = pickName(names, 6);
+  const aliases = unique([
+    family,
+    fullName,
+    postScriptName,
+    ...collectNames(names, [1, 4, 6, 16])
+  ].filter(Boolean));
+
   return {
     fileName: file.name,
     faceIndex,
-    family: pickName(names, 16, 1),
-    subfamily: pickName(names, 17, 2),
-    fullName: pickName(names, 4),
-    postScriptName: pickName(names, 6),
-    aliases: unique([
-      pickName(names, 16, 1),
-      pickName(names, 4),
-      pickName(names, 6)
-    ].filter(Boolean))
+    family,
+    subfamily,
+    fullName,
+    postScriptName,
+    aliases
   };
 }
 
@@ -99,6 +106,16 @@ function decodeName(view, start, length, platformID) {
   }
   try { return new TextDecoder('latin1').decode(bytes); }
   catch { return [...bytes].map(b => String.fromCharCode(b)).join(''); }
+}
+
+function collectNames(records, ids) {
+  const out = [];
+  for (const id of ids) {
+    for (const item of records[id] || []) {
+      if (item?.text) out.push(item.text);
+    }
+  }
+  return unique(out);
 }
 
 function readTag(view, offset) {
