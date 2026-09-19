@@ -921,6 +921,15 @@ function formatBytes(n) {
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v.toFixed(i ? 1 : 0)} ${units[i]}`;
 }
+function formatBitrate(bitsPerSecond) {
+  if (!(bitsPerSecond > 0)) return '未知';
+  if (bitsPerSecond >= 1_000_000) return `${(bitsPerSecond / 1_000_000).toFixed(2)} Mbps`;
+  return `${Math.round(bitsPerSecond / 1000)} kbps`;
+}
+function formatBppf(v) {
+  if (!(v > 0)) return '未知 bppf';
+  return `${v.toFixed(4)} bppf`;
+}
 function formatDuration(sec) {
   if (!Number.isFinite(sec)) return '—';
   const s = Math.round(sec); const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const r = s%60;
