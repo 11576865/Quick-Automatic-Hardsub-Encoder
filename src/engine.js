@@ -66,7 +66,8 @@ export class EncoderEngine {
     this.assertReady();
     const output = `/preview_${index}.png`;
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
-    const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} -i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
+    const decoder = this.inputDecoderArgs();
+    const cmd = `-y -ss ${Math.max(0, timeSeconds).toFixed(3)} ${decoder}-i ${q(this.inputPath)} -vf ${q(filter)} -frames:v 1 ${q(output)}`;
     await this.execute(cmd, false, 60000);
     const bytes = await this.api.readFile(output);
     if (!bytes) throw new Error('预览帧没有生成');
@@ -86,7 +87,8 @@ export class EncoderEngine {
       : null;
     const vf = filter ? ` -vf ${q(filter)}` : '';
     const extra = codecExtra(codecKey);
-    const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} -i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} ${q(out)}`;
+    const decoder = this.inputDecoderArgs();
+    const cmd = `-y -ss ${start.toFixed(3)} -t ${duration.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -an -sn${vf} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} ${q(out)}`;
     const t0 = performance.now();
     await this.execute(cmd, false, options.timeoutMs ?? 120000);
     const elapsedSeconds = (performance.now() - t0) / 1000;
@@ -107,7 +109,8 @@ export class EncoderEngine {
   }
 
   async measureSsim(encodedPath, sourceStart, duration) {
-    const cmd = `-ss ${sourceStart.toFixed(3)} -t ${duration.toFixed(3)} -i ${q(this.inputPath)} -i ${q(encodedPath)} -filter_complex ${q('[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[test];[ref][test]ssim')} -f null -`;
+    const decoder = this.inputDecoderArgs();
+    const cmd = `-ss ${sourceStart.toFixed(3)} -t ${duration.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -i ${q(encodedPath)} -filter_complex ${q('[0:v]setpts=PTS-STARTPTS[ref];[1:v]setpts=PTS-STARTPTS[test];[ref][test]ssim')} -f null -`;
     const output = await this.execute(cmd, true);
     const m = output.match(/All:([0-9.]+)/g)?.at(-1)?.match(/All:([0-9.]+)/);
     return m ? Number(m[1]) : null;
@@ -121,11 +124,16 @@ export class EncoderEngine {
     const output = `/output_${codecKey}.mkv`;
     const filter = `ass=${escapeFilter(this.assPath)}:fontsdir=${escapeFilter(this.fontDir)}`;
     const extra = codecExtra(codecKey);
-    const cmd = `-y -i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} -c:a copy ${q(output)}`;
+    const decoder = this.inputDecoderArgs();
+    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -crf ${crf}${extra} -c:a copy ${q(output)}`;
     await this.execute(cmd);
     const bytes = await this.api.readFile(output);
     if (!bytes) throw new Error('成品文件没有生成');
     return bytes;
+  }
+
+  inputDecoderArgs() {
+    return this.mediaInfo?.videoCodec === 'av1' ? '-c:v libdav1d ' : '';
   }
 
   async execute(command, returnOutput = false, timeoutMs = 0) {
