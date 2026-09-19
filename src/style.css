@@ -60,6 +60,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .preview-placeholder { color: var(--muted); padding: 32px; text-align: center; }
 
 .warning-box { border: 1px solid #785e2d; background: #2b2417; border-radius: 11px; padding: 12px; color: #f1d79c; }
+.ok-box { border: 1px solid #365f40; background: #17251b; border-radius: 11px; padding: 12px; color: #a9ddb4; }
 .error-box { border: 1px solid #6d3333; background: #281818; border-radius: 11px; padding: 12px; color: #ffb1b1; }
 .log { white-space: pre-wrap; background: #090b10; border: 1px solid var(--border); padding: 12px; border-radius: 10px; max-height: 240px; overflow: auto; color: #c9d2df; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .hidden { display: none !important; }
