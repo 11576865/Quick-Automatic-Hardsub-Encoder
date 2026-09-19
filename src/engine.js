@@ -98,8 +98,66 @@ export class EncoderEngine {
     const info = session.getMediaInformation?.();
     if (!info) throw new Error((await session.getOutput?.()) || 'FFprobe 无法读取视频信息');
     const normalized = normalizeMediaInfo(info);
+
+    // Non-seekable Matroska writers cannot seek back to fill Segment Duration.
+    // If that metadata is absent, derive the real video end from packets instead
+    // of making the entire planner unusable.
+    if (!(normalized.duration > 0)) {
+      this.onLog('容器没有可用 duration；正在扫描视频 packet 计算实际末端…');
+      const scanned = await this.scanInputPacketDuration().catch(error => {
+        this.onLog(`输入 packet 时长扫描失败：${error.message}`);
+        return null;
+      });
+      if (scanned?.videoEnd > 0) {
+        normalized.duration = scanned.videoEnd;
+        normalized.durationSource = 'packet-scan';
+        this.onLog(`输入实际视频末端：${scanned.videoEnd.toFixed(3)} s（${scanned.packetCount} 个 packet）`);
+      }
+    }
+
     this.mediaInfo = normalized;
     return normalized;
+  }
+
+  async scanInputPacketDuration() {
+    const { FFprobeKit, ReturnCode } = this.api;
+    const cmd = `-v error -select_streams v:0 -show_packets -show_entries packet=pts_time,dts_time,duration_time -of compact=p=0:nk=0 ${q(this.inputPath)}`;
+    const session = await FFprobeKit.execute(cmd);
+    const rc = session.getReturnCode?.();
+    const output = await session.getOutput?.() || '';
+    if (ReturnCode && !ReturnCode.isSuccess(rc)) {
+      throw new Error(output || 'FFprobe 输入 packet 扫描失败');
+    }
+
+    let packetCount = 0;
+    let videoEnd = -Infinity;
+    for (const rawLine of String(output).split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const fields = {};
+      for (const part of line.split('|')) {
+        const eq = part.indexOf('=');
+        if (eq <= 0) continue;
+        fields[part.slice(0, eq)] = part.slice(eq + 1);
+      }
+
+      const pts = Number(fields.pts_time);
+      const dts = Number(fields.dts_time);
+      const duration = Number(fields.duration_time);
+      const timestamp = Number.isFinite(pts) ? pts : Number.isFinite(dts) ? dts : NaN;
+      if (!Number.isFinite(timestamp)) continue;
+
+      packetCount++;
+      videoEnd = Math.max(
+        videoEnd,
+        timestamp + (Number.isFinite(duration) && duration > 0 ? duration : 0)
+      );
+    }
+
+    if (!packetCount || !Number.isFinite(videoEnd)) {
+      throw new Error('没有扫描到有效视频 packet');
+    }
+    return { packetCount, videoEnd };
   }
 
   async detectSoftwareEncoders() {
@@ -600,6 +658,7 @@ function normalizeMediaInfo(info) {
 
   return {
     duration: Number(format.duration || raw.duration || 0),
+    durationSource: Number(format.duration || raw.duration || 0) > 0 ? 'container' : 'unknown',
     size: Number(format.size || raw.size || 0),
     bitRate: Number(format.bit_rate || raw.bitrate || 0),
     videoCodec: video.codec_name || video.codec || 'unknown',
