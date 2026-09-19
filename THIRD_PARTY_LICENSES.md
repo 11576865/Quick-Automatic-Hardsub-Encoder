@@ -26,3 +26,17 @@ The web frontend bundles the unmodified Noto Sans SC Regular font as a libass/fo
 - Upstream: https://github.com/notofonts/noto-cjk
 - Font: Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
 - License: SIL Open Font License 1.1
+
+
+## Android GPL build
+
+The Android native core is built with `--enable-gpl` and includes x264 and x265. FFmpegKit/FFmpeg documentation states that bundles built this way are subject to GPL-3.0 rather than the default LGPL-3.0.
+
+Consequences for distributed APK artifacts:
+
+- the repository's MIT license still applies to the project's original source files;
+- the combined Android binary must also comply with the GPL-3.0 obligations of the bundled FFmpegKit/FFmpeg components;
+- the exact source revision and build configuration are pinned in the repository so recipients can reproduce the native core;
+- release packaging must include the applicable third-party license texts and source/build information.
+
+This note is about the project's current build configuration and is not legal advice.
