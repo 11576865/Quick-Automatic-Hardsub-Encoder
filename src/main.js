@@ -34,7 +34,7 @@ app.innerHTML = `
   <section class="card">
     <h2>1. 选择文件</h2>
     <div class="grid two">
-      <div class="file-row"><label>视频（≤ 1 GB）</label><input id="video" type="file" accept="video/*,.mkv,.mp4,.webm,.mov,.m4v"><small id="videoMeta">未选择</small></div>
+      <div class="file-row"><label>视频（≤ 1 GB）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
       <div class="file-row"><label>字体（可选，可多选）</label><input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc"><small id="fontMeta">未选择；程序会先分析 ASS 使用的字体。</small></div>
       <div class="file-row"><label>空间策略</label>
