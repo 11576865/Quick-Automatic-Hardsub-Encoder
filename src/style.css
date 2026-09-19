@@ -192,3 +192,21 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .env-matrix { grid-template-columns: 64px 1fr 1fr; }
   .env-matrix > div { padding: 7px 8px; }
 }
+
+
+.env-matrix-four {
+  grid-template-columns: minmax(56px, .7fr) repeat(3, minmax(72px, 1fr));
+}
+.env-explain {
+  margin: 7px 2px 0 !important;
+  font-size: 12px !important;
+}
+@media (max-width: 560px) {
+  .env-matrix-four {
+    grid-template-columns: 54px repeat(3, minmax(64px, 1fr));
+    font-size: 12px;
+  }
+  .env-matrix-four > div {
+    padding: 7px 6px;
+  }
+}
