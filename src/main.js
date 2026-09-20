@@ -2367,10 +2367,42 @@ function buildEncodePlan(codec) {
   const media = state.media;
   if (!media?.duration || !state.video || state.softwareEncoders[codec] === false) return null;
   const goal = $('encodeGoal')?.value || 'balanced';
+
   if (goal === 'balanced' || goal === 'quality' || goal === 'speed') {
     const p = profileFor(codec, goal);
-    return { mode: 'crf', goal, codec, crf: p.crf, preset: p.preset, sizeCeiling: null, sourceVideoBitrate: getSourceVideoBitrate() };
+    return {
+      mode: 'crf',
+      goal,
+      codec,
+      crf: p.crf,
+      preset: p.preset,
+      sizeCeiling: null,
+      sourceVideoBitrate: getSourceVideoBitrate()
+    };
   }
+
+  if (goal === 'targetQuality' || goal === 'efficiency') {
+    const target = Number($('qualityTarget')?.value || 0.985);
+    const calibration = state.qualityCalibration[codec];
+    if (
+      !calibration ||
+      state.qualityCalibrationTarget !== target ||
+      !calibration.meetsTarget
+    ) {
+      return null;
+    }
+    return {
+      mode: 'crf',
+      goal,
+      codec,
+      crf: calibration.crf,
+      preset: calibration.preset,
+      sizeCeiling: null,
+      sourceVideoBitrate: getSourceVideoBitrate(),
+      calibration
+    };
+  }
+
   const multiplier = goal === 'size20' ? 2.0 : 1.6;
   const sizeCeiling = Math.floor(state.video.size * multiplier);
   const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
