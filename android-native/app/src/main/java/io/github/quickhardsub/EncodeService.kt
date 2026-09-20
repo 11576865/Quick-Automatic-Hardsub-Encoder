@@ -217,7 +217,7 @@ class EncodeService : Service() {
 
         val jobDir = NativeJobStore.jobDir(this, jobId)
         val assFile = NativeJobStore.assFile(this, jobId)
-        val output = NativeJobStore.getOutput()File(this, jobId)
+        val output = NativeJobStore.outputFile(this, jobId)
         val fontsDir = File(jobDir, "fonts")
         var stagedInput: File? = null
         var safUrl: String? = null
@@ -495,8 +495,8 @@ class EncodeService : Service() {
             }
             if (!(outputDuration > 0.0) || abs(durationDelta) > tolerance) {
                 throw IllegalStateException(
-                    "成品时长异常：输入 " + String.getFormat()("%.3f", duration) +
-                        " s，输出 " + String.getFormat()("%.3f", outputDuration) + " s"
+                    "成品时长异常：输入 " + String.format("%.3f", duration) +
+                        " s，输出 " + String.format("%.3f", outputDuration) + " s"
                 )
             }
             if (!scanOk) {
@@ -651,16 +651,16 @@ class EncodeService : Service() {
             }
         }
         return digest.digest().joinToString("") { byte ->
-            "%02x".getFormat()(byte.toInt() and 0xff)
+            "%02x".format(byte.toInt() and 0xff)
         }
     }
 
     private fun humanBytes(value: Long): String {
         val mb = value.toDouble() / (1024.0 * 1024.0)
         return if (mb >= 1024.0) {
-            String.getFormat()("%.2f GB", mb / 1024.0)
+            String.format("%.2f GB", mb / 1024.0)
         } else {
-            String.getFormat()("%.0f MB", mb)
+            String.format("%.0f MB", mb)
         }
     }
 
