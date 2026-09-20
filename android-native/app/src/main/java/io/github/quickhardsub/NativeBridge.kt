@@ -298,6 +298,23 @@ class NativeBridge(
     }
 
     @JavascriptInterface
+    fun getLocalBenchmarkHistory(): String =
+        NativeBenchmarkStore.snapshot(activity).toString()
+
+    @JavascriptInterface
+    fun clearLocalBenchmarkHistory(): String {
+        return try {
+            NativeBenchmarkStore.clear(activity)
+            JSONObject().put("ok", true).toString()
+        } catch (e: Throwable) {
+            JSONObject()
+                .put("ok", false)
+                .put("error", e.message ?: e.javaClass.simpleName)
+                .toString()
+        }
+    }
+
+    @JavascriptInterface
     fun checkForUpdate() {
         thread(name = "native-update-check") {
             val result = JSONObject()
@@ -877,6 +894,13 @@ class NativeBridge(
             val expectedDuration = incoming.optDouble("expectedDuration", 0.0)
             val expectedAudioTracks = incoming.optInt("expectedAudioTracks", -1)
             val estimatedOutputBytes = incoming.optLong("estimatedOutputBytes", -1L)
+            val goal = incoming.optString("goal", "").take(32)
+            val subtitleEventCount = incoming.optInt("subtitleEventCount", 0).coerceIn(0, 2_000_000)
+            val selectedFontCount = incoming.optInt("selectedFontCount", 0).coerceIn(0, 512)
+            val sampleEncodeSpeed = incoming.optDouble("sampleEncodeSpeed", 0.0)
+                .takeIf { it.isFinite() && it >= 0.0 && it <= 1000.0 } ?: 0.0
+            val calibrationSampleBitrate = incoming.optLong("calibrationSampleBitrate", 0L)
+                .coerceIn(0L, 2_000_000_000L)
             if (estimatedOutputBytes <= 0L || estimatedOutputBytes > 1_000_000_000_000L) {
                 throw IllegalStateException("缺少合理的成品空间预算")
             }
@@ -940,6 +964,11 @@ class NativeBridge(
                 .put("expectedDuration", expectedDuration)
                 .put("expectedAudioTracks", expectedAudioTracks)
                 .put("estimatedOutputBytes", estimatedOutputBytes)
+                .put("goal", goal)
+                .put("subtitleEventCount", subtitleEventCount)
+                .put("selectedFontCount", selectedFontCount)
+                .put("sampleEncodeSpeed", sampleEncodeSpeed)
+                .put("calibrationSampleBitrate", calibrationSampleBitrate)
                 .put("suggestedName", suggestedName)
 
             NativeJobStore.writeJsonAtomic(

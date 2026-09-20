@@ -34,6 +34,7 @@ const state = {
   nativeSampleWaiters: new Map(),
   nativeJobId: null,
   nativeCompletedJob: null,
+  localBenchmarkHistory: [],
   appRelease: null,
   appUpdateCheck: null,
   softwareEncoders: { h264: null, h265: null, av1: null },
@@ -433,6 +434,7 @@ function detectNativeBackend() {
 
   try {
     state.nativeBackend = JSON.parse(bridge.getBackendInfo());
+    loadLocalBenchmarkHistory();
     applyPlatformPresentation();
     renderBackendSummary();
     renderAppReleaseCard();
@@ -578,6 +580,75 @@ function detectNativeBackend() {
     renderBackendSummary();
     log(`Android 原生后端检测失败：${error.message}`);
   }
+}
+
+function loadLocalBenchmarkHistory() {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.getLocalBenchmarkHistory) {
+    state.localBenchmarkHistory = [];
+    return [];
+  }
+  try {
+    const snapshot = JSON.parse(bridge.getLocalBenchmarkHistory());
+    state.localBenchmarkHistory = Array.isArray(snapshot?.records)
+      ? snapshot.records.filter(Boolean)
+      : [];
+    if (state.localBenchmarkHistory.length) {
+      log('已加载本机成功压制历史：' + state.localBenchmarkHistory.length + ' 条。');
+    }
+  } catch (error) {
+    state.localBenchmarkHistory = [];
+    log('读取本机压制历史失败：' + error.message);
+  }
+  return state.localBenchmarkHistory;
+}
+
+function medianNumber(values) {
+  const sorted = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return 0;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2
+    ? sorted[mid]
+    : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function predictLocalEncode(codec, preset) {
+  const m = state.media;
+  if (!m || !codec || !preset) return null;
+
+  const width = Number(m.width || 0);
+  const height = Number(m.height || 0);
+  const fps = Number(m.fps || 0);
+
+  const candidates = state.localBenchmarkHistory.filter(record => {
+    if (record?.codec !== codec || String(record?.preset) !== String(preset)) return false;
+    if (!(Number(record?.averageSpeed) > 0)) return false;
+    if (Number(record?.width || 0) !== width || Number(record?.height || 0) !== height) return false;
+    const rfps = Number(record?.fps || 0);
+    return fps > 0 && rfps > 0 && Math.abs(rfps - fps) <= Math.max(0.5, fps * 0.02);
+  });
+
+  if (!candidates.length) return null;
+
+  // Keep recent behavior dominant: thermal state, app/core revisions and battery
+  // conditions can shift sustained mobile encoding performance over time.
+  const recent = candidates.slice(-12);
+  const speed = medianNumber(recent.map(x => Number(x.averageSpeed)));
+  if (!(speed > 0)) return null;
+
+  const duration = Number(m.duration || 0);
+  return {
+    samples: recent.length,
+    speed,
+    etaSeconds: duration > 0 ? duration / speed : 0,
+    minSpeed: Math.min(...recent.map(x => Number(x.averageSpeed))),
+    maxSpeed: Math.max(...recent.map(x => Number(x.averageSpeed)))
+  };
+}
+
+function localPredictionForPlan(plan) {
+  if (!plan?.codec || !plan?.preset) return null;
+  return predictLocalEncode(plan.codec, plan.preset);
 }
 
 function safeHttpsUrl(value, fallback = '') {
@@ -1776,6 +1847,13 @@ function updateChosenSummary() {
     return;
   }
 
+  const history = localPredictionForPlan(plan);
+  const historyHtml = history
+    ? ' <span class="note">本机历史 ' + history.samples + ' 次 · 中位速度 ' +
+      history.speed.toFixed(2) + '× realtime · 预计编码阶段约 ' +
+      formatDuration(history.etaSeconds) + '。</span>'
+    : '';
+
   if (plan.mode === 'crf') {
     if (plan.calibration) {
       $('chosenSummary').innerHTML =
@@ -1784,12 +1862,12 @@ function updateChosenSummary() {
         ' · 校准 SSIM ' + Number(plan.calibration.ssim).toFixed(5) +
         ' · 样本平均视频码率 ' + formatBitrate(plan.calibration.sampleBitrate) +
         ' · 样本速度 ' + Number(plan.calibration.encodeSpeed).toFixed(2) + '× realtime。' +
-        '正式整片仍会因场景变化而偏离短样本结果。';
+        '正式整片仍会因场景变化而偏离短样本结果。' + historyHtml;
     } else {
       $('chosenSummary').innerHTML =
         '<strong>' + state.selectedCodec.toUpperCase() + '</strong>' +
         ' · CRF ' + plan.crf + ' · preset ' + plan.preset +
-        '。质量模式不提前给出伪精确的成品体积或总耗时；正式编码后根据实时 statistics 计算 ETA。';
+        '。质量模式不提前给出伪精确的成品体积；正式编码开始后会用实时速度修正 ETA。' + historyHtml;
     }
   } else {
     $('chosenSummary').innerHTML =
@@ -1797,7 +1875,7 @@ function updateChosenSummary() {
       ' · 单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate) +
       '。规划体积约 ' + formatBytes(plan.plannedBytes) +
       '，预算边界 ' + formatBytes(plan.sizeCeiling) +
-      '。这是参数规划值，不承诺最终字节数严格命中。';
+      '。这是参数规划值，不承诺最终字节数严格命中。' + historyHtml;
   }
 }
 
@@ -2523,6 +2601,15 @@ async function runNativeEncode() {
     expectedDuration: Number(state.media.duration || 0),
     expectedAudioTracks: Number(state.media.audioTracks || 0),
     estimatedOutputBytes,
+    goal: plan.goal || '',
+    subtitleEventCount: Number(state.assInfo?.events?.filter?.(x => x.kind?.toLowerCase() === 'dialogue')?.length || 0),
+    selectedFontCount: Number(state.fonts?.length || 0),
+    sampleEncodeSpeed: Number(
+      plan.calibration?.encodeSpeed ||
+      (state.selectedTest?.codec === state.selectedCodec ? state.selectedTest?.encodeSpeed : 0) ||
+      0
+    ),
+    calibrationSampleBitrate: Number(plan.calibration?.sampleBitrate || 0),
     suggestedName
   };
 
@@ -2548,7 +2635,12 @@ async function runNativeEncode() {
   $('cancelEncodeBtn').classList.remove('hidden');
   $('cancelEncodeBtn').disabled = false;
   $('progressBar').style.width = '1%';
-  $('liveEta').textContent = 'Android Native 任务已创建，正在准备输入与字体…';
+  const localPrediction = localPredictionForPlan(plan);
+  $('liveEta').textContent = localPrediction
+    ? 'Android Native 任务已创建 · 本机历史预计编码约 ' +
+      formatDuration(localPrediction.etaSeconds) +
+      '（' + localPrediction.samples + ' 次记录），开始后会用实时速度修正。'
+    : 'Android Native 任务已创建，正在准备输入与字体…';
   log(
     'Android Native 正式压制：' + state.selectedCodec.toUpperCase() +
     ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
@@ -2578,14 +2670,24 @@ async function monitorNativeJob(jobId) {
     $('progressBar').style.width = Math.max(1, progress * 100).toFixed(1) + '%';
 
     if (status.state === 'encoding') {
-      const speed = Number(status.speed || 0);
+      const liveSpeed = Number(status.speed || 0);
       const timeSec = Number(status.timeMs || 0) / 1000;
-      const remain = speed > 0
-        ? Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec) / speed
+      const currentPlan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
+      const history = localPredictionForPlan(currentPlan);
+      const historySpeed = Number(history?.speed || 0);
+      const liveWeight = Math.max(0, Math.min(1, timeSec / 30));
+      const predictionSpeed = liveSpeed > 0 && historySpeed > 0
+        ? historySpeed * (1 - liveWeight) + liveSpeed * liveWeight
+        : liveSpeed > 0
+          ? liveSpeed
+          : historySpeed;
+      const remain = predictionSpeed > 0
+        ? Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec) / predictionSpeed
         : null;
       $('liveEta').textContent =
         'Android Native · ' + (progress * 100).toFixed(1) + '%' +
-        (speed > 0 ? ' · ' + speed.toFixed(2) + '× realtime' : '') +
+        (liveSpeed > 0 ? ' · 当前 ' + liveSpeed.toFixed(2) + '× realtime' : '') +
+        (historySpeed > 0 && liveWeight < 1 ? ' · 本机历史参与预测' : '') +
         (remain != null ? ' · 预计剩余 ' + formatDuration(remain) : '');
     } else if (status.state === 'staging') {
       $('liveEta').textContent = status.message || '正在准备 Native staging…';
@@ -2606,6 +2708,7 @@ async function monitorNativeJob(jobId) {
         ' · packet 扫描 + 完整解码验证通过 · 点击“保存成品”选择保存位置';
       $('encodeBtn').disabled = false;
       $('encodeBtn').textContent = '保存成品';
+      loadLocalBenchmarkHistory();
       log(
         'Android Native 成品验证通过：输出时长 ' +
         Number(status.outputDuration || 0).toFixed(3) +

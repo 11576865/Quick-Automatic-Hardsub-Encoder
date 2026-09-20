@@ -366,6 +366,10 @@ class EncodeService : Service() {
             val preset = request.getString("preset")
             val crf = request.optInt("crf", 0)
             val bitrate = request.optLong("targetVideoBitrate", 0L)
+            val powerManager = getSystemService(PowerManager::class.java)
+            val thermalStart = currentThermalStatus(powerManager)
+            val powerSaveStart = powerManager.isPowerSaveMode
+            val sourceVideoBitrate = video.getBitrate()?.toLongOrNull() ?: 0L
 
             validateEncodeSettings(codec, mode, preset, crf, bitrate)
 
@@ -435,6 +439,7 @@ class EncodeService : Service() {
             var lastStatusWrite = 0L
             var lastNotification = 0L
 
+            val encodeStartedNs = System.nanoTime()
             val session = FFmpegKit.executeWithArgumentsAsync(
                 args.toTypedArray(),
                 { completed ->
@@ -486,6 +491,10 @@ class EncodeService : Service() {
                 }
             }
             activeSessionId = null
+            val encodeElapsedSeconds =
+                (System.nanoTime() - encodeStartedNs) / 1_000_000_000.0
+            val averageEncodeSpeed =
+                if (encodeElapsedSeconds > 0.0) duration / encodeElapsedSeconds else 0.0
 
             if (cancelRequested || ReturnCode.isCancel(returnCode)) {
                 output.delete()
@@ -517,8 +526,11 @@ class EncodeService : Service() {
                     outputProbe.getOutput().takeLast(1200).ifBlank { "FFprobe 无法读取成品" }
                 )
             val outputStreams = outputInfo.getStreams()
-            val outputVideoCount = outputStreams.count { it.getType() == "video" }
+            val outputVideoStreams = outputStreams.filter { it.getType() == "video" }
+            val outputVideoCount = outputVideoStreams.size
             val outputAudioCount = outputStreams.count { it.getType() == "audio" }
+            val outputVideoBitrate =
+                outputVideoStreams.firstOrNull()?.getBitrate()?.toLongOrNull() ?: 0L
             val outputDuration = outputInfo.getDuration()?.toDoubleOrNull() ?: 0.0
             val durationDelta = outputDuration - duration
             val tolerance = max(0.75, if (fps > 0.0) 2.0 / fps else 0.0)
@@ -606,6 +618,50 @@ class EncodeService : Service() {
             updateNotification("正在计算成品校验值…", 99)
             val sha256 = sha256(output)
             val suggestedName = request.optString("suggestedName", "hardsub_" + codec + ".mkv")
+
+            val thermalEnd = currentThermalStatus(powerManager)
+            val powerSaveEnd = powerManager.isPowerSaveMode
+            try {
+                NativeBenchmarkStore.appendSuccess(
+                    this,
+                    JSONObject()
+                        .put("appVersionName", BuildConfig.VERSION_NAME)
+                        .put("appVersionCode", BuildConfig.VERSION_CODE)
+                        .put("ffmpegKitVersion", FFmpegKitConfig.getVersion())
+                        .put("manufacturer", Build.MANUFACTURER)
+                        .put("deviceModel", Build.MODEL)
+                        .put("apiLevel", Build.VERSION.SDK_INT)
+                        .put("codec", codec)
+                        .put("mode", mode)
+                        .put("goal", request.optString("goal", ""))
+                        .put("preset", preset)
+                        .put("crf", if (mode == "crf") crf else JSONObject.NULL)
+                        .put("targetVideoBitrate", if (mode == "budget-rate") bitrate else JSONObject.NULL)
+                        .put("sourceCodec", video.getCodec().orEmpty())
+                        .put("sourcePixelFormat", pixelFormat)
+                        .put("sourceVideoBitrate", sourceVideoBitrate)
+                        .put("width", width)
+                        .put("height", height)
+                        .put("fps", fps)
+                        .put("duration", duration)
+                        .put("audioTracks", audioTracks)
+                        .put("subtitleEventCount", request.optInt("subtitleEventCount", 0))
+                        .put("selectedFontCount", request.optInt("selectedFontCount", 0))
+                        .put("sampleEncodeSpeed", request.optDouble("sampleEncodeSpeed", 0.0))
+                        .put("calibrationSampleBitrate", request.optLong("calibrationSampleBitrate", 0L))
+                        .put("encodeSeconds", encodeElapsedSeconds)
+                        .put("averageSpeed", averageEncodeSpeed)
+                        .put("outputBytes", output.length())
+                        .put("outputVideoBitrate", outputVideoBitrate)
+                        .put("thermalStart", thermalStart)
+                        .put("thermalEnd", thermalEnd)
+                        .put("powerSaveStart", powerSaveStart)
+                        .put("powerSaveEnd", powerSaveEnd)
+                        .put("validation", "packet-scan")
+                )
+            } catch (_: Throwable) {
+                // Benchmark persistence must never turn an otherwise valid encode into a failure.
+            }
 
             NativeJobStore.writeStatus(
                 this,
@@ -876,6 +932,14 @@ class EncodeService : Service() {
 
     private fun checkCancelled() {
         if (cancelRequested) throw InterruptedException("cancelled")
+    }
+
+    private fun currentThermalStatus(power: PowerManager): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try { power.currentThermalStatus } catch (_: Throwable) { -1 }
+        } else {
+            -1
+        }
     }
 
     private fun inferBitDepth(explicit: String, pixelFormat: String): Int {
