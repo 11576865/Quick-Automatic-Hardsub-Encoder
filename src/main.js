@@ -6,6 +6,10 @@ import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
 
 const MAX_BYTES = 1024 ** 3;
+const APP_UPDATE_URL = './app-update.json';
+const APP_PACKAGE = 'io.github.quickhardsub';
+const APP_DOWNLOAD_FALLBACK = 'https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/quick-automatic-hardsub-encoder-debug.apk';
+
 const state = {
   video: null,
   ass: null,
@@ -26,6 +30,8 @@ const state = {
   nativeBackend: null,
   nativeSelfTest: null,
   nativeInputProbe: null,
+  appRelease: null,
+  appUpdateCheck: null,
   softwareEncoders: { h264: null, h265: null, av1: null },
   softwareDecoders: { av1Dav1d: null },
   inputDecodeOk: false,
@@ -47,6 +53,22 @@ app.innerHTML = `
     <h1>快捷自动硬字幕压制器</h1>
     <p>一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。</p>
   </header>
+
+  <section id="androidAppCard" class="card app-card">
+    <div class="app-card-head">
+      <div>
+        <h2>Android 应用</h2>
+        <p id="appReleaseSummary" class="note">正在读取最新版信息…</p>
+      </div>
+      <span id="appModeBadge" class="app-mode-badge">网页</span>
+    </div>
+    <div class="button-row">
+      <button id="openAndroidAppBtn" class="primary" type="button">打开 Android App</button>
+      <a id="downloadAndroidAppBtn" class="button-link" href="${APP_DOWNLOAD_FALLBACK}">下载最新版 APK</a>
+      <button id="checkAppUpdateBtn" class="hidden" type="button">检查更新</button>
+    </div>
+    <div id="appUpdateNotice" class="note app-update-notice">Android 浏览器可直接拉起已安装的 App；未安装时会回退到 APK 下载。</div>
+  </section>
 
   <section class="card">
     <h2>1. 选择文件</h2>
@@ -244,6 +266,31 @@ $('encodeGoal').addEventListener('change', () => {
 $('benchmarkBtn').addEventListener('click', runBenchmarks);
 $('testSelectedBtn').addEventListener('click', runSelectedTest);
 $('encodeBtn').addEventListener('click', runEncode);
+$('openAndroidAppBtn').addEventListener('click', () => {
+  const fallback = state.appRelease?.apkUrl || APP_DOWNLOAD_FALLBACK;
+  const intentUrl =
+    'intent://open#Intent;scheme=quickhardsub;package=' + APP_PACKAGE +
+    ';S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+  window.location.href = intentUrl;
+});
+
+$('downloadAndroidAppBtn').addEventListener('click', event => {
+  const bridge = globalThis.NativeHardsub;
+  const url = state.appUpdateCheck?.apkUrl || state.appRelease?.apkUrl || APP_DOWNLOAD_FALLBACK;
+  if (bridge?.openExternalUrl) {
+    event.preventDefault();
+    bridge.openExternalUrl(url);
+  }
+});
+
+$('checkAppUpdateBtn').addEventListener('click', () => {
+  const bridge = globalThis.NativeHardsub;
+  if (bridge?.checkForUpdate) {
+    $('appUpdateNotice').textContent = '正在检查更新…';
+    bridge.checkForUpdate();
+  }
+});
+
 $('clearSavedFontsBtn').addEventListener('click', async () => {
   if (!state.savedFonts.length) return;
   if (!confirm('清空本机常用字体库？这不会删除设备上的原字体文件。')) return;
@@ -262,6 +309,7 @@ bootstrap();
 
 async function bootstrap() {
   detectNativeBackend();
+  await loadAppReleaseInfo();
 
   try {
     state.savedFonts = await listSavedFonts();
@@ -308,6 +356,7 @@ function detectNativeBackend() {
   try {
     state.nativeBackend = JSON.parse(bridge.getBackendInfo());
     renderBackendSummary();
+    renderAppReleaseCard();
     log(
       `检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}` +
       ` · Native staging 可分配 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))}` +
@@ -356,6 +405,19 @@ function detectNativeBackend() {
       );
     };
 
+    globalThis.__onNativeUpdateCheck = payload => {
+      try {
+        state.appUpdateCheck = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        state.appUpdateCheck = { ok: false, error: '更新检查结果解析失败' };
+      }
+      renderAppReleaseCard();
+    };
+
+    if (bridge.checkForUpdate) {
+      bridge.checkForUpdate();
+    }
+
     if (bridge.runSelfTest) {
       bridge.runSelfTest();
     }
@@ -363,6 +425,89 @@ function detectNativeBackend() {
     state.nativeBackend = { available: false, error: error.message };
     renderBackendSummary();
     log(`Android 原生后端检测失败：${error.message}`);
+  }
+}
+
+async function loadAppReleaseInfo() {
+  try {
+    const response = await fetch(APP_UPDATE_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    state.appRelease = await response.json();
+  } catch (error) {
+    state.appRelease = null;
+    log('Android 版本信息读取失败：' + error.message);
+  }
+  renderAppReleaseCard();
+}
+
+function renderAppReleaseCard() {
+  const summary = $('appReleaseSummary');
+  const notice = $('appUpdateNotice');
+  const badge = $('appModeBadge');
+  const openBtn = $('openAndroidAppBtn');
+  const downloadBtn = $('downloadAndroidAppBtn');
+  const checkBtn = $('checkAppUpdateBtn');
+  if (!summary || !notice || !badge || !openBtn || !downloadBtn || !checkBtn) return;
+
+  const release = state.appRelease;
+  const remoteUrl = state.appUpdateCheck?.apkUrl || release?.apkUrl || APP_DOWNLOAD_FALLBACK;
+  downloadBtn.href = remoteUrl;
+
+  const inApp = !!state.nativeBackend?.available;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+
+  if (inApp) {
+    badge.textContent = 'Android App';
+    badge.className = 'app-mode-badge ok';
+    openBtn.classList.add('hidden');
+    checkBtn.classList.remove('hidden');
+
+    const currentName = state.nativeBackend?.appVersionName || state.appUpdateCheck?.installedVersionName || '未知';
+    const currentCode = state.nativeBackend?.appVersionCode ?? state.appUpdateCheck?.installedVersionCode;
+    summary.textContent = '当前版本 ' + currentName + (currentCode != null ? ' · versionCode ' + currentCode : '');
+
+    const update = state.appUpdateCheck;
+    if (!update) {
+      notice.textContent = '启动后会自动检查更新，也可以手动检查。';
+      return;
+    }
+    if (!update.ok) {
+      notice.textContent = '更新检查失败：' + (update.error || '未知错误');
+      return;
+    }
+    if (update.updateAvailable) {
+      const latest = update.latestVersionName || ('versionCode ' + update.latestVersionCode);
+      notice.innerHTML =
+        '<span class="warn">发现新版本 ' + escapeHtml(latest) + '。</span> ' +
+        '点击“下载最新版 APK”后由 Android 系统安装器确认覆盖更新。';
+      return;
+    }
+    notice.innerHTML = '<span class="ok">当前已是最新版。</span>';
+    return;
+  }
+
+  badge.textContent = '网页';
+  badge.className = 'app-mode-badge';
+  checkBtn.classList.add('hidden');
+  openBtn.classList.remove('hidden');
+
+  if (release?.versionName) {
+    summary.textContent =
+      '最新版 ' + release.versionName +
+      (release.publishedAt ? ' · ' + release.publishedAt.slice(0, 10) : '');
+    if (release.sha256) downloadBtn.title = 'SHA-256: ' + release.sha256;
+  } else {
+    summary.textContent = '最新版信息暂时不可用；仍可尝试下载当前发布 APK。';
+  }
+
+  if (isAndroid) {
+    openBtn.disabled = false;
+    openBtn.textContent = '打开 Android App';
+    notice.textContent = '已安装时直接拉起 App；未安装时回退到最新版 APK 下载。';
+  } else {
+    openBtn.disabled = true;
+    openBtn.textContent = '请在 Android 设备打开';
+    notice.textContent = 'APK 仍可下载；“打开 App”按钮仅在 Android 浏览器中启用。';
   }
 }
 

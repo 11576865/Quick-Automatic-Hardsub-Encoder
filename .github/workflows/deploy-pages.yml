@@ -56,6 +56,89 @@ jobs:
       - run: npm install
       - run: npm run build
 
+      - name: Wait for matching Android APK and publish it with Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RUN_ID=""
+          for attempt in $(seq 1 90); do
+            RUN_JSON="$(gh run list \
+              --workflow build-android-apk.yml \
+              --commit "$GITHUB_SHA" \
+              --limit 5 \
+              --json databaseId,status,conclusion)"
+
+            RUN_ID="$(printf '%s' "$RUN_JSON" | jq -r '[.[] | select(.status == "completed" and .conclusion == "success")][0].databaseId // empty')"
+            if [ -n "$RUN_ID" ]; then
+              break
+            fi
+
+            FAILED="$(printf '%s' "$RUN_JSON" | jq -r '[.[] | select(.status == "completed" and .conclusion != "success")] | length')"
+            if [ "$FAILED" -gt 0 ]; then
+              echo "::error::Matching Android APK workflow completed without success."
+              exit 1
+            fi
+
+            echo "Waiting for Android APK from commit $GITHUB_SHA (attempt $attempt/90)…"
+            sleep 10
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::Timed out waiting for matching Android APK artifact."
+            exit 1
+          fi
+
+          rm -rf /tmp/quick-hardsub-apk
+          mkdir -p /tmp/quick-hardsub-apk dist/downloads
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name quick-automatic-hardsub-encoder-android-debug \
+            --dir /tmp/quick-hardsub-apk
+
+          APK_SRC="/tmp/quick-hardsub-apk/app-debug.apk"
+          APK_DST="dist/downloads/quick-automatic-hardsub-encoder-debug.apk"
+          test -s "$APK_SRC"
+          cp "$APK_SRC" "$APK_DST"
+
+          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' android-native/app/build.gradle.kts | head -n1)"
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' android-native/app/build.gradle.kts | head -n1)"
+          SHA256="$(sha256sum "$APK_DST" | awk '{print $1}')"
+          SIZE_BYTES="$(stat -c '%s' "$APK_DST")"
+          PUBLISHED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          APK_URL="https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/quick-automatic-hardsub-encoder-debug.apk"
+
+          test -n "$VERSION_CODE"
+          test -n "$VERSION_NAME"
+
+          jq -n \
+            --argjson versionCode "$VERSION_CODE" \
+            --arg versionName "$VERSION_NAME" \
+            --arg packageName "io.github.quickhardsub" \
+            --arg channel "debug" \
+            --arg apkUrl "$APK_URL" \
+            --arg sha256 "$SHA256" \
+            --arg publishedAt "$PUBLISHED_AT" \
+            --arg commitSha "$GITHUB_SHA" \
+            --argjson sizeBytes "$SIZE_BYTES" \
+            '{
+              versionCode: $versionCode,
+              versionName: $versionName,
+              packageName: $packageName,
+              channel: $channel,
+              apkUrl: $apkUrl,
+              sha256: $sha256,
+              sizeBytes: $sizeBytes,
+              publishedAt: $publishedAt,
+              commitSha: $commitSha,
+              notes: [
+                "增加主网页直接拉起 Android App 的入口",
+                "增加 App 启动时与手动检查更新",
+                "GitHub Pages 固定地址提供与当前版本匹配的 APK"
+              ]
+            }' > dist/app-update.json
+
+          echo "Published Android $VERSION_NAME (versionCode $VERSION_CODE), SHA-256 $SHA256"
+
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

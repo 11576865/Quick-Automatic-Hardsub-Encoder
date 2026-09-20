@@ -369,3 +369,30 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   flex: 0 0 auto;
   padding: 7px 10px;
 }
+
+
+/* Android app handoff and update surface */
+.app-card { position: relative; }
+.app-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.app-card-head h2 { margin-bottom: 6px; }
+.app-card-head p { margin: 0; }
+.app-mode-badge {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--muted);
+  background: var(--panel-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+.app-update-notice { margin: 11px 0 0; }
+@media (max-width: 560px) {
+  .app-card-head { align-items: center; }
+  .app-card .button-row > * { flex: 1 1 160px; text-align: center; }
+}

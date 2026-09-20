@@ -1,6 +1,7 @@
 package io.github.quickhardsub
 
 import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -15,12 +16,18 @@ import com.arthenica.ffmpegkit.FFprobeKit
 import com.arthenica.ffmpegkit.ReturnCode
 import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.concurrent.thread
 
 class NativeBridge(
     private val activity: Activity,
     private val webView: WebView
 ) {
+    companion object {
+        private const val UPDATE_MANIFEST_URL =
+            "https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/app-update.json"
+    }
     @Volatile
     private var nextPickerRole: String? = null
 
@@ -174,6 +181,8 @@ class NativeBridge(
             .put("backend", "android-native")
             .put("abi", Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown")
             .put("apiLevel", Build.VERSION.SDK_INT)
+            .put("appVersionCode", BuildConfig.VERSION_CODE)
+            .put("appVersionName", BuildConfig.VERSION_NAME)
             .put("ffmpegKitVersion", FFmpegKitConfig.getVersion())
             .put("mediaCodecBuiltIn", true)
             .put("mediaCodecEncodingDefault", false)
@@ -182,6 +191,73 @@ class NativeBridge(
             .put("powerSaveMode", power.isPowerSaveMode)
             .put("sustainedPerformanceSupported", power.isSustainedPerformanceModeSupported)
             .toString()
+    }
+
+    @JavascriptInterface
+    fun checkForUpdate() {
+        thread(name = "native-update-check") {
+            val result = JSONObject()
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL(UPDATE_MANIFEST_URL).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 8000
+                    readTimeout = 8000
+                    useCaches = false
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("Cache-Control", "no-cache")
+                    setRequestProperty("User-Agent", "QuickHardsub/${BuildConfig.VERSION_NAME} Android")
+                }
+
+                val status = connection.responseCode
+                if (status !in 200..299) {
+                    throw IllegalStateException("更新清单 HTTP $status")
+                }
+
+                val manifest = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val latest = JSONObject(manifest)
+                val latestCode = latest.optLong("versionCode", -1L)
+
+                if (latestCode < 0) throw IllegalStateException("更新清单缺少 versionCode")
+
+                result
+                    .put("ok", true)
+                    .put("manifestUrl", UPDATE_MANIFEST_URL)
+                    .put("installedVersionCode", BuildConfig.VERSION_CODE)
+                    .put("installedVersionName", BuildConfig.VERSION_NAME)
+                    .put("latestVersionCode", latestCode)
+                    .put("latestVersionName", latest.optString("versionName", ""))
+                    .put("updateAvailable", latestCode > BuildConfig.VERSION_CODE)
+                    .put("apkUrl", latest.optString("apkUrl", ""))
+                    .put("sha256", latest.optString("sha256", ""))
+                    .put("publishedAt", latest.optString("publishedAt", ""))
+                    .put("notes", latest.optJSONArray("notes"))
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("installedVersionCode", BuildConfig.VERSION_CODE)
+                    .put("installedVersionName", BuildConfig.VERSION_NAME)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                try { connection?.disconnect() } catch (_: Throwable) {}
+            }
+
+            postJsonCallback("__onNativeUpdateCheck", result)
+        }
+    }
+
+    @JavascriptInterface
+    fun openExternalUrl(url: String) {
+        val uri = try { Uri.parse(url) } catch (_: Throwable) { return }
+        if (!uri.scheme.equals("https", ignoreCase = true)) return
+
+        activity.runOnUiThread {
+            try {
+                activity.startActivity(Intent(Intent.ACTION_VIEW, uri))
+            } catch (_: Throwable) {
+                // Leave the current app running if no external handler exists.
+            }
+        }
     }
 
     private fun prepareNativeFonts(): Pair<List<String>, Boolean> {
