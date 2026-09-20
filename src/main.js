@@ -178,7 +178,7 @@ app.innerHTML = `
 
     <details class="advanced-box">
       <summary>高级：三编码器比较实验</summary>
-      <p class="note">仅用于研究，不参与主流程自动决策。短样本的速度、SSIM 和码率不能当成整片的精确预测。</p>
+      <p class="note">固定一组参考 CRF/preset，快速观察这台设备上的编码速度、SSIM 与样本码率；三者不是等质量条件，不能据此直接判定谁的压缩效率更高。要做等质量比较，请使用上方“目标质量 / 效率优先”实测校准。</p>
       <div class="button-row"><button id="benchmarkBtn" disabled>比较 H.264 / H.265 / AV1</button></div>
       <div id="codecGrid" class="grid three" style="margin-top:14px"></div>
     </details>
