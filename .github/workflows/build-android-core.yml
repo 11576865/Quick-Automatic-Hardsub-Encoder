@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
 
       - name: Clone pinned FFmpegKitNext
         env:
@@ -42,7 +42,7 @@ jobs:
         with:
           name: ffmpeg-kit-next-android-arm64-hardsub
           path: /tmp/ffmpeg-kit-next/prebuilt/bundle-android-aar-24-maven
-          retention-days: 30
+          retention-days: 90
 
       - name: Stage native Maven repository for app
         run: |
@@ -86,12 +86,5 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Build debug APK
+      - name: Smoke-build debug APK against the fresh native core
         run: gradle -p android-native :app:assembleDebug --stacktrace
-
-      - name: Upload Android debug APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: quick-automatic-hardsub-encoder-android-debug
-          path: android-native/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 30
