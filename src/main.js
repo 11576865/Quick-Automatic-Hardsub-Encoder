@@ -1684,6 +1684,19 @@ function updateQualityCalibrationControls() {
     nativeOnly || inputNotReady || state.qualityCalibrationBusy || !!state.nativeJobId;
   $('qualityTarget').disabled = state.qualityCalibrationBusy;
   $('encodeGoal').disabled = state.qualityCalibrationBusy;
+
+  if (!state.qualityCalibrationBusy) {
+    if (goal === 'efficiency') {
+      $('calibrateQualityBtn').textContent = '比较三编码器等质量效率';
+    } else {
+      const codec = state.selectedCodec || chooseDefaultCodec(goal);
+      const label = codec === 'h264' ? 'H.264' : codec === 'h265' ? 'H.265' : codec === 'av1' ? 'AV1' : '所选编码器';
+      $('calibrateQualityBtn').textContent = '校准 ' + label + ' 目标质量';
+    }
+  } else {
+    $('calibrateQualityBtn').textContent = '正在实测校准…';
+  }
+
   if (nativeOnly) {
     $('qualityCalibrationResult').textContent =
       '当前版本的目标质量校准先在 Android Native 开启；网页模式仍使用固定 CRF / 体积预算方案。';
@@ -1812,12 +1825,20 @@ function qualitySampleStarts(duration) {
     return Math.max(0, Math.min(total - duration, anchor - duration * 0.35));
   });
 
-  return [...new Set(starts.map(v => v.toFixed(3)))].map(Number);
+  let distinct = [...new Set(starts.map(v => v.toFixed(3)))].map(Number);
+  if (distinct.length < 2 && total >= duration * 3) {
+    const fallback = Math.max(0, Math.min(total - duration, total * 0.70 - duration * 0.35));
+    if (!distinct.some(v => Math.abs(v - fallback) < duration * 0.5)) {
+      distinct.push(Number(fallback.toFixed(3)));
+    }
+  }
+  return distinct.slice(0, 2);
 }
 
 async function evaluateQualityCandidate(codec, crf, preset) {
-  const fps = Number(state.media?.fps || 30);
-  const duration = Math.min(1.0, Math.max(0.7, 30 / Math.max(1, fps)));
+  // Two seconds reduces keyframe/GOP overhead bias compared with the tiny
+  // diagnostic benchmark while keeping repeated AV1 calibration tolerable.
+  const duration = Math.min(2.0, Math.max(1.2, Number(state.media?.duration || 2.0) / 20));
   const starts = qualitySampleStarts(duration);
   const originalAss = state.activeAssText || state.assText;
   const results = [];
@@ -1956,12 +1977,31 @@ async function runQualityCalibration() {
 
   const target = Number($('qualityTarget')?.value || 0.985);
   const goal = $('encodeGoal')?.value || 'targetQuality';
-  const codecs = ['h264', 'h265', 'av1'].filter(
+  const available = ['h264', 'h265', 'av1'].filter(
     codec => state.softwareEncoders[codec] !== false
   );
 
+  if (!available.length) {
+    alert('没有可用于目标质量校准的 Native 编码器。');
+    return;
+  }
+
+  if (!state.selectedCodec || !available.includes(state.selectedCodec)) {
+    state.selectedCodec = chooseDefaultCodec(goal) || available[0];
+  }
+
+  // “目标质量”只校准当前选择，避免用户只想用 H.265 时还被迫等待 AV1。
+  // “效率优先”才需要把三个编码器拉到同一质量线后比较。
+  const codecs = goal === 'efficiency'
+    ? available
+    : [state.selectedCodec];
+
   state.qualityCalibrationBusy = true;
-  state.qualityCalibration = {};
+  if (goal === 'efficiency') {
+    state.qualityCalibration = {};
+  } else {
+    delete state.qualityCalibration[state.selectedCodec];
+  }
   state.qualityCalibrationTarget = target;
   updateQualityCalibrationControls();
   refreshBenchmarkEnabled();
@@ -1983,34 +2023,44 @@ async function runQualityCalibration() {
     }
 
     const values = codecs.map(codec => state.qualityCalibration[codec]);
-    const efficient = chooseEfficiencyCalibration(values);
+    const efficient = goal === 'efficiency'
+      ? chooseEfficiencyCalibration(values)
+      : null;
 
-    if (goal === 'efficiency' && efficient) {
+    if (efficient) {
       state.selectedCodec = efficient.codec;
     }
 
     const labels = { h264: 'H.264', h265: 'H.265', av1: 'AV1' };
+    const resultRows = codecs.map(codec => {
+      const r = state.qualityCalibration[codec];
+      if (!r || r.error) {
+        return '<div><strong>' + labels[codec] + '</strong>：<span class="bad">' +
+          escapeHtml(r?.error || '校准失败') + '</span></div>';
+      }
+      return '<div><strong>' + labels[codec] + '</strong>：CRF ' + r.crf +
+        ' · SSIM ' + r.ssim.toFixed(5) +
+        ' · ' + formatBitrate(r.sampleBitrate) +
+        ' · ' + r.encodeSpeed.toFixed(2) + '×' +
+        (r.meetsTarget ? '' : ' · <span class="warn">未达到目标</span>') +
+        '</div>';
+    }).join('');
+
+    const conclusion = goal === 'efficiency'
+      ? (
+          efficient
+            ? '<div class="quality-efficiency-pick"><strong>等质量压缩效率选择：</strong>' +
+              labels[efficient.codec] +
+              '（样本码率最低；差异在 5% 内时优先更快者）</div>'
+            : '<div class="warn">没有编码器在当前 CRF 搜索范围内达到目标 SSIM。</div>'
+        )
+      : '';
+
     $('qualityCalibrationResult').innerHTML =
       '<div class="quality-calibration-results">' +
-      codecs.map(codec => {
-        const r = state.qualityCalibration[codec];
-        if (!r || r.error) {
-          return '<div><strong>' + labels[codec] + '</strong>：<span class="bad">' +
-            escapeHtml(r?.error || '校准失败') + '</span></div>';
-        }
-        return '<div><strong>' + labels[codec] + '</strong>：CRF ' + r.crf +
-          ' · SSIM ' + r.ssim.toFixed(5) +
-          ' · ' + formatBitrate(r.sampleBitrate) +
-          ' · ' + r.encodeSpeed.toFixed(2) + '×' +
-          (r.meetsTarget ? '' : ' · <span class="warn">未达到目标</span>') +
-          '</div>';
-      }).join('') +
-      (efficient
-        ? '<div class="quality-efficiency-pick"><strong>等质量压缩效率：</strong>' +
-          labels[efficient.codec] +
-          '（样本码率最低；5% 以内优先更快者）</div>'
-        : '<div class="warn">没有编码器在当前 CRF 搜索范围内达到目标 SSIM。</div>') +
-      '<small>SSIM 以相同字幕渲染后的源画面为参考；取两个代表性短片段中的较低分数作为校准值。它仍不是整片质量保证。</small>' +
+      resultRows +
+      conclusion +
+      '<small>SSIM 以相同字幕渲染后的源画面为参考；最多取两个约 2 秒代表性片段中的较低分数作为校准值。它仍不是整片质量保证。</small>' +
       '</div>';
 
     renderPlanOptions();
@@ -2438,16 +2488,26 @@ async function runNativeEncode() {
 
   const base = (state.video?.name || 'video').replace(/\.[^.]+$/, '');
   const suggestedName = base + '_hardsub_' + state.selectedCodec + '.mkv';
+  const duration = Number(state.media?.duration || 0);
+  const audioBitrate = Number(state.media?.audioBitRate || 0) ||
+    Math.max(1, Number(state.media?.audioTracks || 0)) * 192000;
+  const calibratedVideoBitrate = Number(plan.calibration?.sampleBitrate || 0);
+
   const estimatedOutputBytes = plan.mode === 'budget-rate'
     ? Math.max(
         Number(plan.sizeCeiling || 0),
         Number(plan.plannedBytes || 0),
         64 * 1024 * 1024
       )
-    : Math.max(
-        Math.ceil(Number(state.video?.size || 0) * 1.5),
-        256 * 1024 * 1024
-      );
+    : calibratedVideoBitrate > 0 && duration > 0
+      ? Math.max(
+          Math.ceil(((calibratedVideoBitrate * 1.45 + audioBitrate) * duration) / 8),
+          128 * 1024 * 1024
+        )
+      : Math.max(
+          Math.ceil(Number(state.video?.size || 0) * 1.75),
+          256 * 1024 * 1024
+        );
 
   const request = {
     codec: state.selectedCodec,
