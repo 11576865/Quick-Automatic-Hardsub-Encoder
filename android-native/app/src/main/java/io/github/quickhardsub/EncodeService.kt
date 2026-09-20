@@ -291,7 +291,15 @@ class EncodeService : Service() {
             val sourceStreams = sourceInfo.getStreams()
             val video = sourceStreams.firstOrNull { it.getType() == "video" }
                 ?: throw IllegalStateException("输入没有可识别的视频流")
-            val audioTracks = sourceStreams.count { it.getType() == "audio" }
+            val audioStreams = sourceStreams.filter { it.getType() == "audio" }
+            val audioTracks = audioStreams.size
+            val requestedAudioTracks = request.optInt("expectedAudioTracks", -1)
+            if (requestedAudioTracks >= 0 && requestedAudioTracks != audioTracks) {
+                throw IllegalStateException(
+                    "输入音频轨数量与预检结果不一致：" + audioTracks +
+                        "，预检为 " + requestedAudioTracks
+                )
+            }
             val props = video.getAllProperties()
             val pixelFormat = video.getFormat().orEmpty()
             val bitDepth = inferBitDepth(props?.optString("bits_per_raw_sample", "").orEmpty(), pixelFormat)
@@ -311,6 +319,20 @@ class EncodeService : Service() {
             if (!(duration > 0.0)) {
                 throw IllegalStateException("无法取得有效视频时长")
             }
+
+            val expectedVideoDuration =
+                props?.optString("duration", "")?.toDoubleOrNull()
+                    ?.takeIf { it > 0.0 }
+                    ?: duration
+            val expectedAudioDuration = audioStreams
+                .mapNotNull { stream ->
+                    stream.getAllProperties()
+                        ?.optString("duration", "")
+                        ?.toDoubleOrNull()
+                        ?.takeIf { it > 0.0 }
+                }
+                .maxOrNull()
+                ?: duration
 
             val codec = request.getString("codec")
             val mode = request.getString("mode")
@@ -490,25 +512,37 @@ class EncodeService : Service() {
             }
             val videoEnd = videoScan.first
             val audioEnd = audioScan?.first
-            val videoDelta = videoEnd - duration
+            val videoDelta = videoEnd - expectedVideoDuration
+            val audioDelta = audioEnd?.minus(expectedAudioDuration)
             val audioTolerance = 1.0
 
             if (!(outputDuration > 0.0) || abs(durationDelta) > max(2.0, tolerance * 2.0)) {
                 throw IllegalStateException(
-                    "成品容器时长异常：输入 " + String.format("%.3f", duration) +
+                    "成品容器时长异常：输入容器 " + String.format("%.3f", duration) +
                         " s，输出 " + String.format("%.3f", outputDuration) + " s"
                 )
             }
             if (!(videoEnd > 0.0) || abs(videoDelta) > tolerance) {
                 throw IllegalStateException(
-                    "成品视频 packet 末端异常：输入 " + String.format("%.3f", duration) +
+                    "成品视频 packet 末端异常：输入视频约 " +
+                        String.format("%.3f", expectedVideoDuration) +
                         " s，扫描末端 " + String.format("%.3f", videoEnd) + " s"
                 )
             }
-            if (audioTracks > 0 && (audioEnd == null || !(audioEnd > 0.0) || abs(audioEnd - duration) > audioTolerance)) {
+            if (
+                audioTracks > 0 &&
+                (
+                    audioEnd == null ||
+                    !(audioEnd > 0.0) ||
+                    audioDelta == null ||
+                    abs(audioDelta) > audioTolerance
+                )
+            ) {
                 throw IllegalStateException(
-                    "成品音频 packet 末端异常：输入 " + String.format("%.3f", duration) +
-                        " s，扫描末端 " + (audioEnd?.let { String.format("%.3f", it) } ?: "N/A") + " s"
+                    "成品音频 packet 末端异常：输入音频约 " +
+                        String.format("%.3f", expectedAudioDuration) +
+                        " s，扫描末端 " +
+                        (audioEnd?.let { String.format("%.3f", it) } ?: "N/A") + " s"
                 )
             }
 
@@ -525,9 +559,12 @@ class EncodeService : Service() {
                     .put("duration", duration)
                     .put("outputDuration", outputDuration)
                     .put("durationDelta", durationDelta)
+                    .put("expectedVideoDuration", expectedVideoDuration)
                     .put("videoEnd", videoEnd)
                     .put("videoEndDelta", videoDelta)
+                    .put("expectedAudioDuration", if (audioTracks > 0) expectedAudioDuration else JSONObject.NULL)
                     .put("audioEnd", audioEnd)
+                    .put("audioEndDelta", audioDelta)
                     .put("tolerance", tolerance)
                     .put("audioTolerance", audioTolerance)
                     .put("audioTracks", outputAudioCount)
