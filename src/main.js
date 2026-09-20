@@ -55,13 +55,13 @@ app.innerHTML = `
 <div class="app-shell">
   <header class="hero">
     <h1>快捷自动硬字幕压制器</h1>
-    <p>一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。</p>
+    <p id="heroSubtitle">一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。</p>
   </header>
 
   <section id="androidAppCard" class="card app-card">
     <div class="app-card-head">
       <div>
-        <h2>Android 应用</h2>
+        <h2 id="appCardTitle">Android 应用</h2>
         <p id="appReleaseSummary" class="note">正在读取最新版信息…</p>
       </div>
       <span id="appModeBadge" class="app-mode-badge">网页</span>
@@ -77,20 +77,20 @@ app.innerHTML = `
   <section class="card">
     <h2>1. 选择文件</h2>
     <div class="grid two">
-      <div class="file-row"><label>视频（网页≤ 1 GB；Android Native 可直接读取更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
+      <div class="file-row"><label id="videoLabel">视频（网页≤ 1 GB；Android Native 可直接读取更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
       <div class="file-row">
-        <label>字体（可选，可多选）</label>
+        <label id="fontLabel">字体（可选，可多选）</label>
         <input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc">
-        <label class="font-persist-check"><input id="rememberFonts" type="checkbox" checked> 记住本次选择，加入本机常用字体库</label>
+        <label id="fontPersistCheck" class="font-persist-check"><input id="rememberFonts" type="checkbox" checked> 记住本次选择，加入本机常用字体库</label>
         <small id="fontMeta">未选择；常用字体库会自动参与 ASS 字体匹配。</small>
-        <details class="font-library-details">
+        <details id="fontLibraryDetails" class="font-library-details">
           <summary id="savedFontsSummary">常用字体库：加载中…</summary>
           <div id="savedFontsList" class="font-library-list"></div>
           <div class="button-row"><button id="clearSavedFontsBtn" type="button">清空常用字体库</button></div>
         </details>
       </div>
-      <div class="file-row"><label>处理后端</label>
+      <div class="file-row"><label id="backendLabel">处理引擎</label>
         <div id="backendSummary" class="note">正在检测网页 / Android 原生后端…</div>
       </div>
     </div>
@@ -221,7 +221,7 @@ $('fonts').addEventListener('change', async e => {
   state.fonts = [...(e.target.files || [])];
   updateFontMeta();
 
-  if ($('rememberFonts').checked && state.fonts.length) {
+  if (!state.nativeBackend?.available && $('rememberFonts').checked && state.fonts.length) {
     const valid = [];
     for (const file of state.fonts) {
       try {
@@ -328,22 +328,40 @@ bootstrap();
 
 async function bootstrap() {
   detectNativeBackend();
-  if (!state.nativeBackend?.available) {
-    await loadAppReleaseInfo();
-  }
+  const nativeMode = !!state.nativeBackend?.available;
 
-  try {
-    state.savedFonts = await listSavedFonts();
+  if (!nativeMode) {
+    await loadAppReleaseInfo();
+
+    try {
+      state.savedFonts = await listSavedFonts();
+      renderSavedFontLibrary();
+      updateFontMeta();
+      if (state.savedFonts.length) log(`已加载本机常用字体库：${state.savedFonts.length} 个文件。`);
+    } catch (error) {
+      log(`读取常用字体库失败：${error.message}`);
+      renderSavedFontLibrary();
+    }
+  } else {
+    state.savedFonts = [];
     renderSavedFontLibrary();
     updateFontMeta();
-    if (state.savedFonts.length) log(`已加载本机常用字体库：${state.savedFonts.length} 个文件。`);
-  } catch (error) {
-    log(`读取常用字体库失败：${error.message}`);
-    renderSavedFontLibrary();
   }
 
   state.capabilities = await detectCapabilities();
   renderCapabilities();
+
+  if (nativeMode) {
+    // APK uses the ARM64 backend directly. Do not initialize the browser WASM
+    // engine just to discover capabilities the app does not use.
+    $('engineHint').innerHTML =
+      '<span class="ok">Android Native 模式。</span> 正式预览、测试片段和整片压制都直接调用设备内的 FFmpegKitNext / libass；网页后备环境只保留在高级诊断中。';
+    updateEnvironmentSummary(false);
+    refreshAnalyze();
+    recoverNativeJob();
+    return;
+  }
+
   const engineStatus = await state.engine.init();
   if (engineStatus.ready) {
     try {
@@ -356,23 +374,15 @@ async function bootstrap() {
     }
     renderCapabilities();
     updateEnvironmentSummary(true);
-    $('engineHint').innerHTML = state.nativeBackend?.available
-      ? '<span class="ok">Android 原生后端已加载。</span> APK 正式压制使用 ARM64 Native FFmpegKitNext；WebAssembly / SharedArrayBuffer / 跨源隔离只属于网页后备路径，不决定 Native 压制是否可用。'
-      : '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与浏览器原生能力是两套独立路径：dav1d/SVT-AV1 属于网页自带的软件编解码；“播放”表示浏览器能否直接处理该格式，“解码API/编码API”则表示 WebCodecs 是否进一步向网页开放接口。';
+    $('engineHint').innerHTML =
+      '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与浏览器原生能力是两套独立路径。';
   } else {
-    if (state.nativeBackend?.available) {
-      $('engineHint').innerHTML =
-        '<span class="ok">Android 原生后端已加载。</span> SharedArrayBuffer / 跨源隔离属于网页 WASM 后备路径条件，不作为 Android 原生核心故障。APK 正式压制已经接入 Native；通过原生自检、输入探测、真实 libass 预览和安全检查后即可开始。';
-    } else {
-      $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
-      $('envDetails').open = true;
-    }
+    $('engineHint').innerHTML =
+      '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
+    $('envDetails').open = true;
   }
   updateEnvironmentSummary(engineStatus.ready);
   refreshAnalyze();
-  if (state.nativeBackend?.available) {
-    recoverNativeJob();
-  }
 }
 
 function detectNativeBackend() {
@@ -380,12 +390,14 @@ function detectNativeBackend() {
   if (!bridge?.getBackendInfo) {
     state.nativeBackend = null;
     state.nativeSelfTest = null;
+    applyPlatformPresentation();
     renderBackendSummary();
     return;
   }
 
   try {
     state.nativeBackend = JSON.parse(bridge.getBackendInfo());
+    applyPlatformPresentation();
     renderBackendSummary();
     renderAppReleaseCard();
     log(
@@ -584,6 +596,44 @@ async function loadAppReleaseInfo() {
   renderAppReleaseCard();
 }
 
+function applyPlatformPresentation() {
+  const nativeMode = !!state.nativeBackend?.available;
+  document.body.classList.toggle('native-app', nativeMode);
+
+  const hero = $('heroSubtitle');
+  const appTitle = $('appCardTitle');
+  const videoLabel = $('videoLabel');
+  const backendLabel = $('backendLabel');
+  const fontLabel = $('fontLabel');
+  const fontPersist = $('fontPersistCheck');
+  const fontLibrary = $('fontLibraryDetails');
+
+  if (nativeMode) {
+    if (hero) {
+      hero.textContent =
+        '在设备本地使用 Android 原生 FFmpeg 完成 ASS 字幕预检、字体检查、真实预览、编码测试与 H.264 / H.265 / AV1 硬字幕压制。';
+    }
+    if (appTitle) appTitle.textContent = '应用与更新';
+    if (videoLabel) videoLabel.textContent = '视频（通过 Android 系统文件选择器读取）';
+    if (backendLabel) backendLabel.textContent = 'Android 原生处理引擎';
+    if (fontLabel) fontLabel.textContent = '字体（可选，可多选；仅用于本次 Native 任务）';
+    fontPersist?.classList.add('hidden');
+    fontLibrary?.classList.add('hidden');
+    $('envDetails').open = false;
+  } else {
+    if (hero) {
+      hero.textContent =
+        '一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。';
+    }
+    if (appTitle) appTitle.textContent = 'Android 应用';
+    if (videoLabel) videoLabel.textContent = '视频（网页≤ 1 GB）';
+    if (backendLabel) backendLabel.textContent = '处理引擎';
+    if (fontLabel) fontLabel.textContent = '字体（可选，可多选）';
+    fontPersist?.classList.remove('hidden');
+    fontLibrary?.classList.remove('hidden');
+  }
+}
+
 function renderAppReleaseCard() {
   const summary = $('appReleaseSummary');
   const notice = $('appUpdateNotice');
@@ -604,18 +654,19 @@ function renderAppReleaseCard() {
   const isAndroid = /Android/i.test(navigator.userAgent);
 
   if (inApp) {
-    badge.textContent = 'Android App';
+    badge.textContent = 'Native';
     badge.className = 'app-mode-badge ok';
     openBtn.classList.add('hidden');
     checkBtn.classList.remove('hidden');
+    downloadBtn.classList.add('hidden');
 
     const currentName = state.nativeBackend?.appVersionName || state.appUpdateCheck?.installedVersionName || '未知';
     const currentCode = state.nativeBackend?.appVersionCode ?? state.appUpdateCheck?.installedVersionCode;
-    summary.textContent = '当前版本 ' + currentName + (currentCode != null ? ' · versionCode ' + currentCode : '');
+    summary.textContent = '当前版本 ' + currentName + (currentCode != null ? ' · build ' + currentCode : '');
 
     const update = state.appUpdateCheck;
     if (!update) {
-      notice.textContent = '启动后会自动检查更新，也可以手动检查。';
+      notice.textContent = '启动后自动检查更新；也可以手动检查。';
       return;
     }
     if (!update.ok) {
@@ -623,10 +674,12 @@ function renderAppReleaseCard() {
       return;
     }
     if (update.updateAvailable) {
-      const latest = update.latestVersionName || ('versionCode ' + update.latestVersionCode);
+      const latest = update.latestVersionName || ('build ' + update.latestVersionCode);
+      downloadBtn.classList.remove('hidden');
+      downloadBtn.textContent = '下载更新';
       notice.innerHTML =
         '<span class="warn">发现新版本 ' + escapeHtml(latest) + '。</span> ' +
-        '点击“下载最新版 APK”后由 Android 系统安装器确认覆盖更新。';
+        '下载后由 Android 系统安装器确认覆盖更新。';
       return;
     }
     notice.innerHTML = '<span class="ok">当前已是最新版。</span>';
@@ -637,6 +690,8 @@ function renderAppReleaseCard() {
   badge.className = 'app-mode-badge';
   checkBtn.classList.add('hidden');
   openBtn.classList.remove('hidden');
+  downloadBtn.classList.remove('hidden');
+  downloadBtn.textContent = '下载最新版 APK';
 
   if (release?.versionName) {
     summary.textContent =
@@ -663,17 +718,19 @@ function renderBackendSummary() {
   if (!el) return;
 
   if (!state.nativeBackend?.available) {
-    el.innerHTML = '浏览器模式：正式处理仍使用 FFmpeg WASM。Android APK 可提供 ARM64 原生后端；网页保留为免安装后备。';
+    el.innerHTML = '浏览器模式 · FFmpeg WASM；Android APK 可使用 ARM64 原生后端。';
     return;
   }
 
   const t = state.nativeSelfTest;
+  const p = state.nativeInputProbe;
+  const runtime =
+    'ARM64 · FFmpegKitNext ' + escapeHtml(state.nativeBackend.ffmpegKitVersion || 'unknown') +
+    ' · 可用私有空间约 ' + formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0)) +
+    ' · 热状态 ' + escapeHtml(formatThermalStatus(state.nativeBackend.thermalStatus));
+
   if (!t) {
-    el.innerHTML =
-      `Android 原生壳已检测到：${escapeHtml(state.nativeBackend.abi || 'unknown')} · FFmpegKitNext ${escapeHtml(state.nativeBackend.ffmpegKitVersion || 'unknown')}。` +
-      `Native staging 可分配约 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))} · ` +
-      `热状态 ${escapeHtml(formatThermalStatus(state.nativeBackend.thermalStatus))}${state.nativeBackend.powerSaveMode ? ' · 省电模式开启' : ''}。` +
-      '正在执行原生编解码/字幕自检；自检和输入探测通过后，APK 将直接使用 Native 正式压制路径。';
+    el.innerHTML = '<span class="ok">Android Native 已加载。</span> 正在执行原生核心自检。<small class="native-runtime">' + runtime + '</small>';
     return;
   }
 
@@ -687,58 +744,48 @@ function renderBackendSummary() {
     t.ffprobeSmoke
   ];
   const ok = required.every(Boolean);
-  const details = [
-    `x264实际编码 ${t.x264EncodeSmoke ? '✓' : '✗'}`,
-    `x265实际编码 ${t.x265EncodeSmoke ? '✓' : '✗'}`,
-    `SVT-AV1实际编码 ${t.svtAv1EncodeSmoke ? '✓' : '✗'}`,
-    `dav1d ${t.dav1d ? '✓' : '✗'}`,
-    `libass像素验证 ${t.libassVisualSmoke ? '✓' : '✗'}`,
-    `Noto回退 ${t.bundledFallbackReady ? '✓' : '✗'}`,
-    `FFprobe ${t.ffprobeSmoke ? '✓' : '✗'}`
-  ].join(' · ');
 
-  const fontDirs = t.fontDirs
-    ? `<small class="native-font-dirs">字体目录：${escapeHtml(t.fontDirs)}</small>`
-    : '';
-
-  const p = state.nativeInputProbe;
-  const inputProbe = p
+  const inputText = p
     ? p.ok
-      ? `<small class="native-input-probe">当前视频 SAF：${p.seekable ? '可 seek，可直接读取' : '不可 seek，正式 Native 压制将先复制到本地 staging'} · ${escapeHtml(p.videoCodec || 'unknown')} ${Number(p.width || 0)}×${Number(p.height || 0)} · ${Number(p.duration || 0).toFixed(3)} s</small>`
-      : `<small class="native-input-probe warn">当前视频 SAF 探测失败：${escapeHtml(p.error || '未知错误')}</small>`
-    : '';
-
-  const runtime =
-    `<small class="native-runtime">Native staging 可分配约 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))} · ` +
-    `热状态 ${escapeHtml(formatThermalStatus(state.nativeBackend.thermalStatus))}${state.nativeBackend.powerSaveMode ? ' · 省电模式开启' : ''}</small>`;
+      ? '当前视频：' + escapeHtml(p.videoCodec || 'unknown') + ' ' +
+        Number(p.width || 0) + '×' + Number(p.height || 0) +
+        ' · ' + (p.seekable ? 'SAF 直接读取' : '需要 staging')
+      : '当前视频探测失败：' + escapeHtml(p.error || '未知错误')
+    : '选择视频后会进行 SAF 与解码探测';
 
   el.innerHTML =
-    `${ok ? '<span class="ok">Android 原生核心实际自检通过。</span>' : '<span class="warn">Android 原生核心实际自检未完全通过。</span>'} ` +
-    `${details}。${ok ? 'APK 正式压制路径为 Android Native；网页 WASM 仅作为网页模式后备。' : 'Native 正式压制会保持锁定，直到所需原生能力通过检查。'}${fontDirs}${inputProbe}${runtime}`;
+    (ok
+      ? '<span class="ok">Android 原生核心自检通过。</span> '
+      : '<span class="warn">Android 原生核心自检未完全通过。</span> ') +
+    inputText +
+    '<small class="native-runtime">' + runtime +
+    (state.nativeBackend.powerSaveMode ? ' · 省电模式开启' : '') +
+    '</small>';
 }
 
 function renderCapabilities() {
   const c = state.capabilities;
+  if (!c) return;
+
   const sw = state.softwareEncoders;
   const dec = state.softwareDecoders;
+  const nativeMode = !!state.nativeBackend?.available;
+  const t = state.nativeSelfTest;
 
-  const badge = (ok, text) =>
-    `<span class="env-badge ${ok ? 'ok' : 'warn'}">${text}</span>`;
+  const badge = (value, yesText, noText = '不可用') => {
+    if (value === null || value === undefined) {
+      return '<span class="env-badge">检测中</span>';
+    }
+    return '<span class="env-badge ' + (value ? 'ok' : 'warn') + '">' +
+      (value ? yesText : noText) + '</span>';
+  };
 
-  const base = [
+  const webBase = [
     ['WebAssembly', c.webAssembly, c.webAssembly ? '支持' : '不可用'],
     ['Web Worker', c.worker, c.worker ? '支持' : '不可用'],
     ['SharedArrayBuffer', c.sharedArrayBuffer, c.sharedArrayBuffer ? '支持' : '不可用'],
     ['跨源隔离', c.crossOriginIsolated, c.crossOriginIsolated ? '支持' : '未启用']
   ];
-
-  const codecBackend = [
-    ['H.264', 'x264 · 编码', sw.h264, sw.h264 === null ? '检测中' : sw.h264 ? '可用' : '未编入'],
-    ['H.265', 'x265 · 编码', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可用' : '未编入'],
-    ['AV1', 'SVT-AV1 · 编码', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可用' : '未编入'],
-    ['AV1', 'dav1d · 解码', dec.av1Dav1d, dec.av1Dav1d === null ? '检测中' : dec.av1Dav1d ? '可用' : '未编入']
-  ];
-  const nativeMode = !!state.nativeBackend?.available;
 
   const browserMatrix = [
     ['H.264', c.nativePlayback.h264, c.codecs.decode.h264, c.codecs.encode.h264],
@@ -746,30 +793,103 @@ function renderCapabilities() {
     ['AV1', c.nativePlayback.av1, c.codecs.decode.av1, c.codecs.encode.av1]
   ];
 
+  if (nativeMode) {
+    const nativeRows = [
+      ['H.264', 'x264 · 编码', t ? !!t.x264EncodeSmoke : null],
+      ['H.265', 'x265 · 编码', t ? !!t.x265EncodeSmoke : null],
+      ['AV1', 'SVT-AV1 · 编码', t ? !!t.svtAv1EncodeSmoke : null],
+      ['AV1', 'dav1d · 解码', t ? !!t.dav1d : null],
+      ['字幕', 'libass · 实际像素验证', t ? !!t.libassVisualSmoke : null],
+      ['媒体', 'FFprobe · 探测', t ? !!t.ffprobeSmoke : null],
+      ['字体', 'Noto Sans SC · 回退', t ? !!t.bundledFallbackReady : null]
+    ];
+
+    const p = state.nativeInputProbe;
+    const inputStatus = p
+      ? p.ok
+        ? '<span class="ok">' + (p.seekable ? '可直接读取' : '需要 staging') + '</span>'
+        : '<span class="warn">探测失败</span>'
+      : '<span>待选择视频</span>';
+
+    $('capabilities').innerHTML = `
+      <div class="env-group native-primary-group">
+        <div class="env-group-title">Android 原生核心</div>
+        <div class="env-wasm-grid">
+          ${nativeRows.map(([codec, detail, value]) => `
+            <div class="env-codec-card">
+              <div><strong>${codec}</strong><small>${detail}</small></div>
+              ${badge(value, '可用', '异常')}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="env-group">
+        <div class="env-group-title">设备与文件访问</div>
+        <div class="native-runtime-grid">
+          <div class="env-chip"><span>当前视频 SAF</span>${inputStatus}</div>
+          <div class="env-chip"><span>私有工作空间</span><span>${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))}</span></div>
+          <div class="env-chip"><span>热状态</span><span>${escapeHtml(formatThermalStatus(state.nativeBackend.thermalStatus))}</span></div>
+          <div class="env-chip"><span>省电模式</span><span class="${state.nativeBackend.powerSaveMode ? 'warn' : 'ok'}">${state.nativeBackend.powerSaveMode ? '已开启' : '关闭'}</span></div>
+        </div>
+      </div>
+
+      <details class="platform-diagnostics">
+        <summary>高级诊断：WebView / 网页后备环境</summary>
+        <div class="platform-diagnostics-body">
+          <div class="env-chip-grid">
+            ${webBase.map(([name, ok, text]) => `
+              <div class="env-chip"><span>${name}</span><span class="${ok ? 'ok' : 'warn'}">${text}</span></div>
+            `).join('')}
+          </div>
+          <div class="env-matrix env-matrix-four" style="margin-top:10px">
+            <div class="env-matrix-head">格式</div>
+            <div class="env-matrix-head">播放</div>
+            <div class="env-matrix-head">解码API</div>
+            <div class="env-matrix-head">编码API</div>
+            ${browserMatrix.map(([codec, playback, decode, encode]) => `
+              <div class="env-matrix-codec">${codec}</div>
+              <div>${badge(playback, '可播放', '未报告')}</div>
+              <div>${badge(decode, '可用', '未暴露')}</div>
+              <div>${badge(encode, '可用', '未暴露')}</div>
+            `).join('')}
+          </div>
+          <div class="note env-explain">这些项目只描述 APK 内 WebView 的网页能力，不参与 Android Native 正式压制判定。</div>
+        </div>
+      </details>
+    `;
+    return;
+  }
+
+  const codecBackend = [
+    ['H.264', 'x264 · 编码', sw.h264, sw.h264 === null ? '检测中' : sw.h264 ? '可用' : '未编入'],
+    ['H.265', 'x265 · 编码', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可用' : '未编入'],
+    ['AV1', 'SVT-AV1 · 编码', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可用' : '未编入'],
+    ['AV1', 'dav1d · 解码', dec.av1Dav1d, dec.av1Dav1d === null ? '检测中' : dec.av1Dav1d ? '可用' : '未编入']
+  ];
+
   $('capabilities').innerHTML = `
     <div class="env-group">
-      <div class="env-group-title">${nativeMode ? 'WebView / WASM 基础条件（Native 不依赖）' : '基础环境'}</div>
+      <div class="env-group-title">基础环境</div>
       <div class="env-chip-grid">
-        ${base.map(([name, ok, text]) => `
-          <div class="env-chip"><span>${name}</span>${badge(ok, text)}</div>
+        ${webBase.map(([name, ok, text]) => `
+          <div class="env-chip"><span>${name}</span><span class="${ok ? 'ok' : 'warn'}">${text}</span></div>
         `).join('')}
       </div>
     </div>
-
     <div class="env-group">
-      <div class="env-group-title">${nativeMode ? 'Android Native FFmpeg' : 'FFmpeg WASM'}</div>
+      <div class="env-group-title">FFmpeg WASM</div>
       <div class="env-wasm-grid">
         ${codecBackend.map(([codec, detail, ok, text]) => `
           <div class="env-codec-card">
             <div><strong>${codec}</strong><small>${detail}</small></div>
-            ${badge(ok, text)}
+            <span class="env-badge ${ok ? 'ok' : 'warn'}">${text}</span>
           </div>
         `).join('')}
       </div>
     </div>
-
     <div class="env-group">
-      <div class="env-group-title">${nativeMode ? 'WebView 浏览器能力（不代表 Native 编码路径）' : '浏览器原生能力'}</div>
+      <div class="env-group-title">浏览器原生能力</div>
       <div class="env-matrix env-matrix-four">
         <div class="env-matrix-head">格式</div>
         <div class="env-matrix-head">播放</div>
@@ -777,9 +897,9 @@ function renderCapabilities() {
         <div class="env-matrix-head">编码API</div>
         ${browserMatrix.map(([codec, playback, decode, encode]) => `
           <div class="env-matrix-codec">${codec}</div>
-          <div>${badge(playback, playback ? '可播放' : '未报告')}</div>
-          <div>${badge(decode, decode ? '可用' : '未暴露')}</div>
-          <div>${badge(encode, encode ? '可用' : '未暴露')}</div>
+          <div>${badge(playback, '可播放', '未报告')}</div>
+          <div>${badge(decode, '可用', '未暴露')}</div>
+          <div>${badge(encode, '可用', '未暴露')}</div>
         `).join('')}
       </div>
       <div class="note env-explain">“未暴露”只表示 WebCodecs API 没开放给网页，不等于设备硬件不支持该格式。</div>
@@ -811,8 +931,8 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
       t.ffprobeSmoke
     ].every(Boolean);
     $('envSummary').textContent = nativeOk
-      ? 'Android 原生核心自检通过'
-      : 'Android 原生核心自检有问题 · 点此查看';
+      ? '原生环境正常'
+      : '原生环境需要检查 · 点此查看';
     $('envSummary').className = nativeOk ? 'env-summary ok' : 'env-summary warn';
     if (!nativeOk) $('envDetails').open = true;
     return;
@@ -911,6 +1031,14 @@ function getEffectiveFontFiles() {
 
 function updateFontMeta() {
   const selected = state.fonts.length;
+
+  if (state.nativeBackend?.available) {
+    $('fontMeta').textContent = selected
+      ? '本次选择 ' + selected + ' 个字体；Native 任务会复制到私有工作目录并交给 libass/fontconfig 使用。'
+      : '未选择额外字体；缺失字体将使用内置 Noto Sans SC 回退。';
+    return;
+  }
+
   const saved = state.savedFonts.length;
   if (selected || saved) {
     $('fontMeta').textContent = `本次选择 ${selected} 个 · 常用字体库 ${saved} 个；分析时自动合并去重。`;
