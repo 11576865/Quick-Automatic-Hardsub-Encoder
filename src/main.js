@@ -1780,6 +1780,240 @@ function selectCodec(codec) {
   renderPlanOptions();
 }
 
+function qualityCrfRange(codec) {
+  if (codec === 'h264') return { min: 12, max: 30 };
+  if (codec === 'h265') return { min: 14, max: 32 };
+  return { min: 18, max: 42 };
+}
+
+function qualitySampleStarts(duration) {
+  if (state.nativeInputProbe?.seekable === false) return [0];
+
+  const total = Number(state.media?.duration || 0);
+  if (!(total > duration)) return [0];
+
+  const previewTimes = state.assInfo?.previewTimes || [];
+  const targets = [total * 0.35, total * 0.70];
+  const starts = targets.map(target => {
+    const anchor = previewTimes.length
+      ? [...previewTimes].sort((a, b) => Math.abs(a - target) - Math.abs(b - target))[0]
+      : target;
+    return Math.max(0, Math.min(total - duration, anchor - duration * 0.35));
+  });
+
+  return [...new Set(starts.map(v => v.toFixed(3)))].map(Number);
+}
+
+async function evaluateQualityCandidate(codec, crf, preset) {
+  const fps = Number(state.media?.fps || 30);
+  const duration = Math.min(1.0, Math.max(0.7, 30 / Math.max(1, fps)));
+  const starts = qualitySampleStarts(duration);
+  const originalAss = state.activeAssText || state.assText;
+  const results = [];
+
+  for (const start of starts) {
+    const sample = await requestNativeSample({
+      codec,
+      start,
+      duration,
+      withSubtitles: true,
+      measureSsim: true,
+      crf,
+      preset,
+      targetVideoBitrate: 0
+    }, shiftAssForPreview(originalAss, start));
+
+    const ssim = Number(sample.ssim);
+    if (!Number.isFinite(ssim)) {
+      throw new Error(codec.toUpperCase() + ' 未取得有效 SSIM');
+    }
+
+    const measuredDuration = Math.max(0.001, Number(sample.duration || duration));
+    const videoBytes = Number(sample.totalVideoBytes || 0);
+    results.push({
+      ssim,
+      bitrate: videoBytes > 0 ? videoBytes * 8 / measuredDuration : 0,
+      mediaSeconds: measuredDuration,
+      elapsedSeconds: Math.max(0.001, Number(sample.elapsedSeconds || 0))
+    });
+  }
+
+  const totalMedia = results.reduce((sum, x) => sum + x.mediaSeconds, 0);
+  const totalWall = results.reduce((sum, x) => sum + x.elapsedSeconds, 0);
+  const validBitrates = results.map(x => x.bitrate).filter(v => v > 0);
+
+  return {
+    codec,
+    crf,
+    preset,
+    ssim: Math.min(...results.map(x => x.ssim)),
+    averageSsim: results.reduce((sum, x) => sum + x.ssim, 0) / results.length,
+    sampleBitrate: validBitrates.length
+      ? validBitrates.reduce((sum, x) => sum + x, 0) / validBitrates.length
+      : 0,
+    encodeSpeed: totalWall > 0 ? totalMedia / totalWall : 0,
+    sampleCount: results.length
+  };
+}
+
+async function calibrateCodecQuality(codec, target) {
+  const range = qualityCrfRange(codec);
+  const preset = profileFor(codec, 'balanced').preset;
+  let low = range.min;
+  let high = range.max;
+  let best = null;
+  let bestQuality = null;
+  const tested = new Map();
+
+  const test = async crf => {
+    if (tested.has(crf)) return tested.get(crf);
+    $('qualityCalibrationResult').textContent =
+      '正在校准 ' + codec.toUpperCase() +
+      ' · CRF ' + crf +
+      ' · 目标 SSIM ' + target.toFixed(3) + '…';
+    const result = await evaluateQualityCandidate(codec, crf, preset);
+    tested.set(crf, result);
+    if (!bestQuality || result.ssim > bestQuality.ssim) bestQuality = result;
+    log(
+      '目标质量校准 ' + codec.toUpperCase() +
+      ' · CRF ' + crf +
+      ' · SSIM ' + result.ssim.toFixed(5) +
+      ' · ' + formatBitrate(result.sampleBitrate) +
+      ' · ' + result.encodeSpeed.toFixed(2) + '× realtime'
+    );
+    return result;
+  };
+
+  // Find the highest CRF that still clears the target. Higher CRF normally
+  // means lower bitrate / lower quality, so this searches the quality boundary.
+  for (let i = 0; i < 5 && low <= high; i++) {
+    const mid = Math.floor((low + high) / 2);
+    const result = await test(mid);
+    if (result.ssim >= target) {
+      best = result;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  // Binary search may stop one integer before the boundary.
+  if (best && best.crf < range.max) {
+    const next = await test(best.crf + 1);
+    if (next.ssim >= target) best = next;
+  }
+
+  if (!best) {
+    const strongest = await test(range.min);
+    return {
+      ...strongest,
+      targetSsim: target,
+      meetsTarget: strongest.ssim >= target,
+      testedCrfs: [...tested.keys()].sort((a, b) => a - b)
+    };
+  }
+
+  return {
+    ...best,
+    targetSsim: target,
+    meetsTarget: true,
+    testedCrfs: [...tested.keys()].sort((a, b) => a - b)
+  };
+}
+
+function chooseEfficiencyCalibration(calibrations) {
+  const candidates = calibrations.filter(x => x?.meetsTarget && x.sampleBitrate > 0);
+  if (!candidates.length) return null;
+
+  return [...candidates].sort((a, b) => {
+    const rateRatio = Math.max(a.sampleBitrate, b.sampleBitrate) /
+      Math.max(1, Math.min(a.sampleBitrate, b.sampleBitrate));
+
+    // Within 5% bitrate, prefer the materially faster encoder instead of
+    // pretending a tiny sample-size difference is meaningful.
+    if (rateRatio <= 1.05) return b.encodeSpeed - a.encodeSpeed;
+    return a.sampleBitrate - b.sampleBitrate;
+  })[0];
+}
+
+async function runQualityCalibration() {
+  if (!state.nativeBackend?.available) {
+    alert('目标质量校准当前只在 Android Native 模式可用。');
+    return;
+  }
+  if (state.nativeJobId || state.qualityCalibrationBusy) return;
+
+  const target = Number($('qualityTarget')?.value || 0.985);
+  const goal = $('encodeGoal')?.value || 'targetQuality';
+  const codecs = ['h264', 'h265', 'av1'].filter(
+    codec => state.softwareEncoders[codec] !== false
+  );
+
+  state.qualityCalibrationBusy = true;
+  state.qualityCalibration = {};
+  state.qualityCalibrationTarget = target;
+  updateQualityCalibrationControls();
+  refreshBenchmarkEnabled();
+
+  try {
+    for (const codec of codecs) {
+      try {
+        state.qualityCalibration[codec] = await calibrateCodecQuality(codec, target);
+      } catch (error) {
+        state.qualityCalibration[codec] = {
+          codec,
+          targetSsim: target,
+          meetsTarget: false,
+          error: error.message
+        };
+        log('目标质量校准 ' + codec.toUpperCase() + ' 失败：' + error.message);
+      }
+      renderPlanOptions();
+    }
+
+    const values = codecs.map(codec => state.qualityCalibration[codec]);
+    const efficient = chooseEfficiencyCalibration(values);
+
+    if (goal === 'efficiency' && efficient) {
+      state.selectedCodec = efficient.codec;
+    }
+
+    const labels = { h264: 'H.264', h265: 'H.265', av1: 'AV1' };
+    $('qualityCalibrationResult').innerHTML =
+      '<div class="quality-calibration-results">' +
+      codecs.map(codec => {
+        const r = state.qualityCalibration[codec];
+        if (!r || r.error) {
+          return '<div><strong>' + labels[codec] + '</strong>：<span class="bad">' +
+            escapeHtml(r?.error || '校准失败') + '</span></div>';
+        }
+        return '<div><strong>' + labels[codec] + '</strong>：CRF ' + r.crf +
+          ' · SSIM ' + r.ssim.toFixed(5) +
+          ' · ' + formatBitrate(r.sampleBitrate) +
+          ' · ' + r.encodeSpeed.toFixed(2) + '×' +
+          (r.meetsTarget ? '' : ' · <span class="warn">未达到目标</span>') +
+          '</div>';
+      }).join('') +
+      (efficient
+        ? '<div class="quality-efficiency-pick"><strong>等质量压缩效率：</strong>' +
+          labels[efficient.codec] +
+          '（样本码率最低；5% 以内优先更快者）</div>'
+        : '<div class="warn">没有编码器在当前 CRF 搜索范围内达到目标 SSIM。</div>') +
+      '<small>SSIM 以相同字幕渲染后的源画面为参考；取两个代表性短片段中的较低分数作为校准值。它仍不是整片质量保证。</small>' +
+      '</div>';
+
+    renderPlanOptions();
+    refreshBenchmarkEnabled();
+  } catch (error) {
+    $('qualityCalibrationResult').innerHTML =
+      '<span class="bad">目标质量校准失败：' + escapeHtml(error.message) + '</span>';
+    log('目标质量校准失败：' + error.message);
+  } finally {
+    state.qualityCalibrationBusy = false;
+    updateQualityCalibrationControls();
+  }
+}
+
 async function runSelectedTest() {
   if (!state.selectedCodec) return;
   const plan = buildEncodePlan(state.selectedCodec);
