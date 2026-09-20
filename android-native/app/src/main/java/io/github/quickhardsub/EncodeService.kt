@@ -532,13 +532,17 @@ class EncodeService : Service() {
                 )
             }
 
+            updateStatus(jobId, "validating", "正在完整扫描视频 packet", 0.990)
             val videoScan = fullDemuxScan(output.absolutePath, "0:v:0")
             checkCancelled()
+
             val audioScan = if (audioTracks > 0) {
+                updateStatus(jobId, "validating", "正在完整扫描音频 packet", 0.992)
                 fullDemuxScan(output.absolutePath, "0:a")
             } else {
                 null
             }
+
             val videoEnd = videoScan.first
             val audioEnd = audioScan?.first
             val videoDelta = videoEnd - expectedVideoDuration
@@ -575,6 +579,31 @@ class EncodeService : Service() {
                 )
             }
 
+            checkCancelled()
+            updateStatus(jobId, "validating", "packet 扫描通过，正在完整解码视频", 0.994)
+            updateNotification("正在完整解码视频…", 99)
+            val videoDecode = fullDecodeScan(
+                output.absolutePath,
+                mediaType = "video",
+                hasAudio = audioTracks > 0
+            )
+
+            checkCancelled()
+            val audioDecode = if (audioTracks > 0) {
+                updateStatus(jobId, "validating", "视频完整解码通过，正在完整解码音频", 0.997)
+                updateNotification("正在完整解码音频…", 99)
+                fullDecodeScan(
+                    output.absolutePath,
+                    mediaType = "audio",
+                    hasAudio = true
+                )
+            } else {
+                null
+            }
+
+            checkCancelled()
+            updateStatus(jobId, "validating", "完整解码通过，正在计算成品 SHA-256", 0.999)
+            updateNotification("正在计算成品校验值…", 99)
             val sha256 = sha256(output)
             val suggestedName = request.optString("suggestedName", "hardsub_" + codec + ".mkv")
 
@@ -583,7 +612,7 @@ class EncodeService : Service() {
                 jobId,
                 JSONObject()
                     .put("state", "completed")
-                    .put("message", "原生压制与完整性扫描通过")
+                    .put("message", "原生压制、packet 扫描与完整解码验证通过")
                     .put("progress", 1.0)
                     .put("duration", duration)
                     .put("outputDuration", outputDuration)
@@ -599,6 +628,12 @@ class EncodeService : Service() {
                     .put("audioTracks", outputAudioCount)
                     .put("scanOk", true)
                     .put("scanMode", "full-demux-to-null")
+                    .put("decodeOk", true)
+                    .put("decodeMode", "full-decode-to-null-xerror")
+                    .put("videoDecodeEnd", videoDecode.first)
+                    .put("videoDecodeSeconds", videoDecode.second)
+                    .put("audioDecodeEnd", audioDecode?.first ?: JSONObject.NULL)
+                    .put("audioDecodeSeconds", audioDecode?.second ?: JSONObject.NULL)
                     .put("outputBytes", output.length())
                     .put("sha256", sha256)
                     .put("suggestedName", suggestedName)
@@ -682,6 +717,95 @@ class EncodeService : Service() {
             )
         }
         return Pair(lastTimeMs / 1000.0, output)
+    }
+
+    private fun fullDecodeScan(
+        path: String,
+        mediaType: String,
+        hasAudio: Boolean
+    ): Triple<Double, Double, String> {
+        val latch = CountDownLatch(1)
+        var returnCode: ReturnCode? = null
+        var output = ""
+        var lastTimeMs = 0.0
+        val startedNs = System.nanoTime()
+
+        val args = mutableListOf(
+            "-hide_banner",
+            "-v", "error",
+            "-xerror",
+            "-err_detect", "explode",
+            "-i", path
+        )
+
+        when (mediaType) {
+            "video" -> {
+                args.addAll(
+                    listOf(
+                        "-map", "0:v:0",
+                        "-an",
+                        "-sn",
+                        "-dn",
+                        "-f", "null",
+                        "-"
+                    )
+                )
+            }
+            "audio" -> {
+                if (!hasAudio) return Triple(0.0, 0.0, "")
+                args.addAll(
+                    listOf(
+                        "-map", "0:a",
+                        "-vn",
+                        "-sn",
+                        "-dn",
+                        "-f", "null",
+                        "-"
+                    )
+                )
+            }
+            else -> throw IllegalArgumentException("unknown decode scan media type")
+        }
+
+        val session = FFmpegKit.executeWithArgumentsAsync(
+            args.toTypedArray(),
+            { completed ->
+                returnCode = completed.getReturnCode()
+                output = completed.getOutput()
+                latch.countDown()
+            },
+            { log ->
+                if (log.message.isNotBlank()) {
+                    output = (output + log.message).takeLast(8000)
+                }
+            },
+            { statistics ->
+                lastTimeMs = max(lastTimeMs, statistics.time)
+            }
+        )
+        activeSessionId = session.getSessionId()
+
+        while (!latch.await(1, TimeUnit.SECONDS)) {
+            if (cancelRequested) {
+                activeSessionId?.let(FFmpegKit::cancel)
+            }
+        }
+        activeSessionId = null
+
+        if (cancelRequested || ReturnCode.isCancel(returnCode)) {
+            throw InterruptedException("cancelled")
+        }
+        if (!ReturnCode.isSuccess(returnCode)) {
+            val label = if (mediaType == "video") "视频" else "音频"
+            throw IllegalStateException(
+                output.takeLast(2200).ifBlank {
+                    "成品" + label + "完整解码验证失败，返回码=" + returnCode
+                }
+            )
+        }
+
+        val elapsedSeconds = (System.nanoTime() - startedNs) / 1_000_000_000.0
+        return Triple(lastTimeMs / 1000.0, elapsedSeconds, output)
     }
 
     private fun validateEncodeSettings(

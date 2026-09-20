@@ -2603,14 +2603,19 @@ async function monitorNativeJob(jobId) {
       $('progressBar').style.width = '100%';
       $('liveEta').textContent =
         'Native 压制完成 · ' + formatBytes(Number(status.outputBytes || 0)) +
-        ' · 完整性扫描通过 · 点击“保存成品”选择保存位置';
+        ' · packet 扫描 + 完整解码验证通过 · 点击“保存成品”选择保存位置';
       $('encodeBtn').disabled = false;
       $('encodeBtn').textContent = '保存成品';
       log(
         'Android Native 成品验证通过：输出时长 ' +
         Number(status.outputDuration || 0).toFixed(3) +
         ' s · 与输入差 ' + Number(status.durationDelta || 0).toFixed(3) +
-        ' s · SHA-256 ' + (status.sha256 || '')
+        ' s · 视频完整解码 ' + Number(status.videoDecodeSeconds || 0).toFixed(2) +
+        ' s' +
+        (status.audioDecodeSeconds != null
+          ? ' · 音频完整解码 ' + Number(status.audioDecodeSeconds || 0).toFixed(2) + ' s'
+          : '') +
+        ' · SHA-256 ' + (status.sha256 || '')
       );
       return;
     } else if (status.state === 'failed') {
