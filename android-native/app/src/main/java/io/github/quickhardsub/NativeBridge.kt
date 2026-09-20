@@ -560,8 +560,8 @@ class NativeBridge(
             val result = JSONObject().put("requestId", requestId)
             var safUrl: String? = null
             val sampleId = UUID.randomUUID().toString()
-            val sampleFile = NativeSampleStore.file(activity, sampleId)
             val workDir = File(activity.cacheDir, "native-sample-work/" + sampleId)
+            var sampleFile = File(workDir, "sample.mkv")
 
             try {
                 val inputUri = getPickedUris("video").firstOrNull()
@@ -575,6 +575,7 @@ class NativeBridge(
                 val duration = incoming.optDouble("duration", 0.0)
                 val withSubtitles = incoming.optBoolean("withSubtitles", false)
                 val measureSsim = incoming.optBoolean("measureSsim", false)
+                val retainSample = incoming.optBoolean("retainSample", false)
 
                 if (!(duration > 0.0) || duration > 8.0) {
                     throw IllegalStateException("Native 测试片段时长必须在 0–8 秒")
@@ -610,9 +611,12 @@ class NativeBridge(
                     throw IllegalStateException("Native 测试目标码率无效")
                 }
 
-                NativeSampleStore.cleanup(activity)
-                sampleFile.parentFile?.mkdirs()
                 workDir.mkdirs()
+                if (retainSample) {
+                    NativeSampleStore.cleanup(activity)
+                    sampleFile = NativeSampleStore.file(activity, sampleId)
+                }
+                sampleFile.parentFile?.mkdirs()
 
                 val seekable = NativeJobStore.isSeekable(activity, inputUri)
                 val effectiveStart = if (seekable) requestedStart else 0.0
@@ -786,6 +790,7 @@ class NativeBridge(
                     .put("duration", measuredDuration)
                     .put("withSubtitles", withSubtitles)
                     .put("measureSsim", measureSsim)
+                    .put("retained", retainSample)
                     .put("ssim", ssim ?: JSONObject.NULL)
                     .put("sampleBytes", sampleFile.length())
                     .put("packetCount", packetCount)
