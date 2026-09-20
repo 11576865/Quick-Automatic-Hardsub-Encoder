@@ -29,6 +29,9 @@ class NativeBridge(
     companion object {
         private const val UPDATE_MANIFEST_URL =
             "https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/app-update.json"
+        private const val UPDATE_DOWNLOAD_HOST = "11576865.github.io"
+        private const val UPDATE_DOWNLOAD_PATH_PREFIX =
+            "/Quick-Automatic-Hardsub-Encoder/downloads/"
     }
     @Volatile
     private var nextPickerRole: String? = null
@@ -231,7 +234,8 @@ class NativeBridge(
             val result = JSONObject()
             var connection: HttpURLConnection? = null
             try {
-                connection = (URL(UPDATE_MANIFEST_URL).openConnection() as HttpURLConnection).apply {
+                val manifestUrl = UPDATE_MANIFEST_URL + "?t=" + System.currentTimeMillis()
+                connection = (URL(manifestUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 8000
                     readTimeout = 8000
                     useCaches = false
@@ -262,8 +266,13 @@ class NativeBridge(
                 if (latestPackage != activity.packageName) {
                     throw IllegalStateException("更新清单包名不匹配")
                 }
-                if (!apkUri.scheme.equals("https", ignoreCase = true) || apkUri.host.isNullOrBlank()) {
-                    throw IllegalStateException("更新清单 APK 地址不是有效 HTTPS URL")
+                if (
+                    !apkUri.scheme.equals("https", ignoreCase = true) ||
+                    !apkUri.host.equals(UPDATE_DOWNLOAD_HOST, ignoreCase = true) ||
+                    !apkUri.path.orEmpty().startsWith(UPDATE_DOWNLOAD_PATH_PREFIX) ||
+                    !apkUri.path.orEmpty().endsWith(".apk", ignoreCase = true)
+                ) {
+                    throw IllegalStateException("更新清单 APK 地址不在受信任下载路径")
                 }
                 if (sha256.isNotEmpty() && !Regex("^[0-9a-f]{64}$").matches(sha256)) {
                     throw IllegalStateException("更新清单 SHA-256 格式无效")
