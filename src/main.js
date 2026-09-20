@@ -2060,7 +2060,8 @@ async function runSelectedTest() {
         crf: plan.crf,
         preset: plan.preset,
         targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
-        measureSsim: true
+        measureSsim: true,
+        retainSample: true
       }, shiftAssForPreview(originalAss, nativeStart));
 
       r.packetStats = {
