@@ -561,6 +561,10 @@ class NativeBridge(
             val bitrate = incoming.optLong("targetVideoBitrate", 0L)
             val expectedDuration = incoming.optDouble("expectedDuration", 0.0)
             val expectedAudioTracks = incoming.optInt("expectedAudioTracks", -1)
+            val estimatedOutputBytes = incoming.optLong("estimatedOutputBytes", -1L)
+            if (estimatedOutputBytes <= 0L || estimatedOutputBytes > 1_000_000_000_000L) {
+                throw IllegalStateException("缺少合理的成品空间预算")
+            }
             val suggestedName = NativeJobStore.sanitizeFileName(
                 incoming.optString("suggestedName", "hardsub_" + codec + ".mkv")
             ).let { if (it.lowercase().endsWith(".mkv")) it else it + ".mkv" }
@@ -620,6 +624,7 @@ class NativeBridge(
                 .put("targetVideoBitrate", bitrate)
                 .put("expectedDuration", expectedDuration)
                 .put("expectedAudioTracks", expectedAudioTracks)
+                .put("estimatedOutputBytes", estimatedOutputBytes)
                 .put("suggestedName", suggestedName)
 
             NativeJobStore.writeJsonAtomic(
