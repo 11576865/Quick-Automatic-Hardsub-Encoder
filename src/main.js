@@ -836,6 +836,7 @@ function renderCapabilities() {
       ['AV1', 'SVT-AV1 · 编码', t ? !!t.svtAv1EncodeSmoke : null],
       ['AV1', 'dav1d · 解码', t ? !!t.dav1d : null],
       ['字幕', 'libass · 实际像素验证', t ? !!t.libassVisualSmoke : null],
+      ['质量', 'SSIM · 目标质量校准', t ? !!t.ssimFilter : null],
       ['媒体', 'FFprobe · 探测', t ? !!t.ffprobeSmoke : null],
       ['字体', 'Noto Sans SC · 回退', t ? !!t.bundledFallbackReady : null]
     ];
@@ -1680,8 +1681,9 @@ function updateQualityCalibrationControls() {
   if (!active) return;
   const nativeOnly = !state.nativeBackend?.available;
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
+  const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimFilter !== true;
   $('calibrateQualityBtn').disabled =
-    nativeOnly || inputNotReady || state.qualityCalibrationBusy || !!state.nativeJobId;
+    nativeOnly || inputNotReady || ssimUnavailable || state.qualityCalibrationBusy || !!state.nativeJobId;
   $('qualityTarget').disabled = state.qualityCalibrationBusy;
   $('encodeGoal').disabled = state.qualityCalibrationBusy;
 
@@ -1700,6 +1702,9 @@ function updateQualityCalibrationControls() {
   if (nativeOnly) {
     $('qualityCalibrationResult').textContent =
       '当前版本的目标质量校准先在 Android Native 开启；网页模式仍使用固定 CRF / 体积预算方案。';
+  } else if (ssimUnavailable) {
+    $('qualityCalibrationResult').textContent =
+      '当前 Android Native 核心没有通过 SSIM 能力检查，目标质量 / 效率优先暂时不可用。';
   }
 }
 
