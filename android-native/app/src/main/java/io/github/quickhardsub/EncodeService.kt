@@ -472,19 +472,6 @@ class EncodeService : Service() {
             val durationDelta = outputDuration - duration
             val tolerance = max(0.75, if (fps > 0.0) 2.0 / fps else 0.0)
 
-            val scan = FFmpegKit.executeWithArguments(
-                arrayOf(
-                    "-hide_banner",
-                    "-v", "error",
-                    "-i", output.absolutePath,
-                    "-map", "0:v:0",
-                    "-c", "copy",
-                    "-f", "null",
-                    "-"
-                )
-            )
-            val scanOk = ReturnCode.isSuccess(scan.getReturnCode())
-
             if (outputVideoCount != 1) {
                 throw IllegalStateException("成品视频流数量异常：" + outputVideoCount)
             }
@@ -493,15 +480,35 @@ class EncodeService : Service() {
                     "成品音频轨数量异常：" + outputAudioCount + "，输入为 " + audioTracks
                 )
             }
-            if (!(outputDuration > 0.0) || abs(durationDelta) > tolerance) {
+
+            val videoScan = fullDemuxScan(output.absolutePath, "0:v:0")
+            checkCancelled()
+            val audioScan = if (audioTracks > 0) {
+                fullDemuxScan(output.absolutePath, "0:a")
+            } else {
+                null
+            }
+            val videoEnd = videoScan.first
+            val audioEnd = audioScan?.first
+            val videoDelta = videoEnd - duration
+            val audioTolerance = 1.0
+
+            if (!(outputDuration > 0.0) || abs(durationDelta) > max(2.0, tolerance * 2.0)) {
                 throw IllegalStateException(
-                    "成品时长异常：输入 " + String.format("%.3f", duration) +
+                    "成品容器时长异常：输入 " + String.format("%.3f", duration) +
                         " s，输出 " + String.format("%.3f", outputDuration) + " s"
                 )
             }
-            if (!scanOk) {
+            if (!(videoEnd > 0.0) || abs(videoDelta) > tolerance) {
                 throw IllegalStateException(
-                    scan.getOutput().takeLast(1200).ifBlank { "成品全量视频 packet 解复用扫描失败" }
+                    "成品视频 packet 末端异常：输入 " + String.format("%.3f", duration) +
+                        " s，扫描末端 " + String.format("%.3f", videoEnd) + " s"
+                )
+            }
+            if (audioTracks > 0 && (audioEnd == null || !(audioEnd > 0.0) || abs(audioEnd - duration) > audioTolerance)) {
+                throw IllegalStateException(
+                    "成品音频 packet 末端异常：输入 " + String.format("%.3f", duration) +
+                        " s，扫描末端 " + (audioEnd?.let { String.format("%.3f", it) } ?: "N/A") + " s"
                 )
             }
 
@@ -518,9 +525,14 @@ class EncodeService : Service() {
                     .put("duration", duration)
                     .put("outputDuration", outputDuration)
                     .put("durationDelta", durationDelta)
+                    .put("videoEnd", videoEnd)
+                    .put("videoEndDelta", videoDelta)
+                    .put("audioEnd", audioEnd)
                     .put("tolerance", tolerance)
+                    .put("audioTolerance", audioTolerance)
                     .put("audioTracks", outputAudioCount)
                     .put("scanOk", true)
+                    .put("scanMode", "full-demux-to-null")
                     .put("outputBytes", output.length())
                     .put("sha256", sha256)
                     .put("suggestedName", suggestedName)
@@ -549,6 +561,57 @@ class EncodeService : Service() {
             try { stagedInput?.delete() } catch (_: Throwable) {}
             try { fontsDir.deleteRecursively() } catch (_: Throwable) {}
         }
+    }
+
+    private fun fullDemuxScan(path: String, mapSpec: String): Pair<Double, String> {
+        val latch = CountDownLatch(1)
+        var returnCode: ReturnCode? = null
+        var output = ""
+        var lastTimeMs = 0.0
+
+        val session = FFmpegKit.executeWithArgumentsAsync(
+            arrayOf(
+                "-hide_banner",
+                "-v", "error",
+                "-stats",
+                "-i", path,
+                "-map", mapSpec,
+                "-c", "copy",
+                "-f", "null",
+                "-"
+            ),
+            { completed ->
+                returnCode = completed.getReturnCode()
+                output = completed.getOutput()
+                latch.countDown()
+            },
+            { log ->
+                if (log.message.isNotBlank()) {
+                    output = (output + log.message).takeLast(5000)
+                }
+            },
+            { statistics ->
+                lastTimeMs = max(lastTimeMs, statistics.time)
+            }
+        )
+        activeSessionId = session.getSessionId()
+
+        while (!latch.await(1, TimeUnit.SECONDS)) {
+            if (cancelRequested) {
+                activeSessionId?.let(FFmpegKit::cancel)
+            }
+        }
+        activeSessionId = null
+
+        if (cancelRequested || ReturnCode.isCancel(returnCode)) {
+            throw InterruptedException("cancelled")
+        }
+        if (!ReturnCode.isSuccess(returnCode)) {
+            throw IllegalStateException(
+                output.takeLast(1600).ifBlank { "成品 " + mapSpec + " 全量解复用扫描失败" }
+            )
+        }
+        return Pair(lastTimeMs / 1000.0, output)
     }
 
     private fun validateEncodeSettings(
