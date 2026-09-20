@@ -26,6 +26,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 class NativeBridge(
@@ -41,6 +42,8 @@ class NativeBridge(
 
         @Volatile
         private var cachedSelfTestJson: String? = null
+
+        private val diagnosticRunning = AtomicBoolean(false)
     }
     @Volatile
     private var nextPickerRole: String? = null
@@ -537,6 +540,264 @@ class NativeBridge(
         bitmap.compress(Bitmap.CompressFormat.JPEG, 84, bytes)
         return "data:image/jpeg;base64," +
             Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+    }
+
+    @JavascriptInterface
+    fun runNativeSample(requestId: String, requestJson: String, assText: String) {
+        if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
+            postJsonCallback(
+                "__onNativeSample",
+                JSONObject()
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("busy", true)
+                    .put("error", "Android Native 正在执行其他 FFmpeg 任务，请稍后再试")
+            )
+            return
+        }
+
+        thread(name = "native-sample") {
+            val result = JSONObject().put("requestId", requestId)
+            var safUrl: String? = null
+            val sampleId = UUID.randomUUID().toString()
+            val sampleFile = NativeSampleStore.file(activity, sampleId)
+            val workDir = File(activity.cacheDir, "native-sample-work/" + sampleId)
+
+            try {
+                val inputUri = getPickedUris("video").firstOrNull()
+                    ?: throw IllegalStateException("没有可供 Native 测试使用的视频 URI")
+                val incoming = JSONObject(requestJson)
+                val codec = incoming.optString("codec", "")
+                val preset = incoming.optString("preset", "")
+                val crf = incoming.optInt("crf", -1)
+                val targetVideoBitrate = incoming.optLong("targetVideoBitrate", 0L)
+                val requestedStart = incoming.optDouble("start", 0.0).coerceAtLeast(0.0)
+                val duration = incoming.optDouble("duration", 0.0)
+                val withSubtitles = incoming.optBoolean("withSubtitles", false)
+
+                if (!(duration > 0.0) || duration > 8.0) {
+                    throw IllegalStateException("Native 测试片段时长必须在 0–8 秒")
+                }
+
+                val x26xPresets = setOf(
+                    "ultrafast", "superfast", "veryfast", "faster", "fast",
+                    "medium", "slow", "slower", "veryslow"
+                )
+                val encoder = when (codec) {
+                    "h264" -> {
+                        if (preset !in x26xPresets) throw IllegalStateException("x264 preset 无效")
+                        "libx264"
+                    }
+                    "h265" -> {
+                        if (preset !in x26xPresets) throw IllegalStateException("x265 preset 无效")
+                        "libx265"
+                    }
+                    "av1" -> {
+                        val p = preset.toIntOrNull()
+                            ?: throw IllegalStateException("SVT-AV1 preset 必须是整数")
+                        if (p !in 0..13) throw IllegalStateException("SVT-AV1 preset 不在 0..13")
+                        "libsvtav1"
+                    }
+                    else -> throw IllegalStateException("未知测试编码器")
+                }
+
+                val maxCrf = if (codec == "av1") 63 else 51
+                if (targetVideoBitrate <= 0L && crf !in 0..maxCrf) {
+                    throw IllegalStateException("Native 测试 CRF 无效")
+                }
+                if (targetVideoBitrate > 0L && targetVideoBitrate !in 150_000L..200_000_000L) {
+                    throw IllegalStateException("Native 测试目标码率无效")
+                }
+
+                NativeSampleStore.cleanup(activity)
+                sampleFile.parentFile?.mkdirs()
+                workDir.mkdirs()
+
+                val seekable = NativeJobStore.isSeekable(activity, inputUri)
+                val effectiveStart = if (seekable) requestedStart else 0.0
+
+                val filterParts = mutableListOf<String>()
+                if (withSubtitles) {
+                    if (assText.isBlank()) throw IllegalStateException("测试片段要求字幕，但 ASS 为空")
+                    val assFile = File(workDir, "sample.ass")
+                    assFile.writeText(assText, Charsets.UTF_8)
+                    val fontsDir = File(workDir, "fonts")
+                    fontsDir.mkdirs()
+                    getPickedUris("fonts").forEachIndexed { index, uri ->
+                        val name = NativeJobStore.displayName(activity, uri, "font_" + index + ".ttf")
+                        NativeJobStore.copyUriToFile(
+                            activity,
+                            uri,
+                            File(fontsDir, index.toString().padStart(3, '0') + "_" + name)
+                        )
+                    }
+                    NativeJobStore.configureFonts(
+                        activity,
+                        if (fontsDir.listFiles()?.isNotEmpty() == true) {
+                            listOf(fontsDir.absolutePath)
+                        } else {
+                            emptyList()
+                        }
+                    )
+                    filterParts.add(
+                        "ass=" + NativeJobStore.escapeFilterPath(assFile.absolutePath) +
+                            ":fontsdir=" + NativeJobStore.escapeFilterPath(fontsDir.absolutePath)
+                    )
+                }
+
+                safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
+                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 Native 测试 SAF URL")
+
+                val args = mutableListOf(
+                    "-y",
+                    "-hide_banner",
+                    "-ss", String.format(java.util.Locale.US, "%.3f", effectiveStart),
+                    "-i", safUrl,
+                    "-t", String.format(java.util.Locale.US, "%.3f", duration),
+                    "-map", "0:v:0",
+                    "-an",
+                    "-sn"
+                )
+                if (filterParts.isNotEmpty()) {
+                    args.addAll(listOf("-vf", filterParts.joinToString(",")))
+                }
+                args.addAll(listOf("-c:v", encoder, "-preset", preset))
+                if (targetVideoBitrate > 0L) {
+                    args.addAll(listOf("-b:v", targetVideoBitrate.toString()))
+                } else {
+                    args.addAll(listOf("-crf", crf.toString()))
+                }
+                if (codec == "av1") {
+                    val lp = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
+                    args.addAll(listOf("-svtav1-params", "lp=" + lp))
+                }
+                args.addAll(
+                    listOf(
+                        "-pix_fmt", "yuv420p",
+                        "-f", "matroska",
+                        sampleFile.absolutePath
+                    )
+                )
+
+                val startedNs = System.nanoTime()
+                val session = FFmpegKit.executeWithArguments(args.toTypedArray())
+                val elapsedSeconds = (System.nanoTime() - startedNs) / 1_000_000_000.0
+
+                if (!ReturnCode.isSuccess(session.getReturnCode()) ||
+                    !sampleFile.isFile ||
+                    sampleFile.length() <= 0L
+                ) {
+                    throw IllegalStateException(
+                        session.getOutput().takeLast(1600)
+                            .ifBlank { "Android Native 测试片段编码失败" }
+                    )
+                }
+
+                val packetProbe = FFprobeKit.executeWithArguments(
+                    arrayOf(
+                        "-v", "error",
+                        "-select_streams", "v:0",
+                        "-show_packets",
+                        "-show_entries", "packet=size",
+                        "-of", "csv=p=0",
+                        sampleFile.absolutePath
+                    )
+                )
+                if (!ReturnCode.isSuccess(packetProbe.getReturnCode())) {
+                    throw IllegalStateException(
+                        packetProbe.getOutput().takeLast(1200)
+                            .ifBlank { "Native 测试片段 packet 统计失败" }
+                    )
+                }
+
+                var packetCount = 0
+                var totalVideoBytes = 0L
+                packetProbe.getOutput().lineSequence().forEach { line ->
+                    val size = line.trim().substringBefore(',').toLongOrNull()
+                    if (size != null && size > 0L) {
+                        packetCount++
+                        totalVideoBytes += size
+                    }
+                }
+
+                val measuredDuration = FFprobeKit.getMediaInformation(sampleFile.absolutePath)
+                    .getMediaInformation()
+                    ?.getDuration()
+                    ?.toDoubleOrNull()
+                    ?.takeIf { it > 0.0 }
+                    ?: duration
+
+                result
+                    .put("ok", true)
+                    .put("sampleId", sampleId)
+                    .put("codec", codec)
+                    .put("crf", crf)
+                    .put("preset", preset)
+                    .put("targetVideoBitrate", targetVideoBitrate)
+                    .put("requestedStart", requestedStart)
+                    .put("actualStart", effectiveStart)
+                    .put("duration", measuredDuration)
+                    .put("withSubtitles", withSubtitles)
+                    .put("sampleBytes", sampleFile.length())
+                    .put("packetCount", packetCount)
+                    .put("totalVideoBytes", totalVideoBytes)
+                    .put("elapsedSeconds", elapsedSeconds)
+                    .put("encodeSpeed", if (elapsedSeconds > 0.0) measuredDuration / elapsedSeconds else 0.0)
+            } catch (e: Throwable) {
+                try { sampleFile.delete() } catch (_: Throwable) {}
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                if (!safUrl.isNullOrBlank()) {
+                    try { FFmpegKitConfig.unregisterSafProtocolUrl(safUrl) } catch (_: Throwable) {}
+                }
+                try { workDir.deleteRecursively() } catch (_: Throwable) {}
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
+                diagnosticRunning.set(false)
+            }
+
+            postJsonCallback("__onNativeSample", result)
+        }
+    }
+
+    @JavascriptInterface
+    fun requestNativeSampleExport(sampleId: String, suggestedName: String) {
+        if (!NativeSampleStore.isSafeId(sampleId)) return
+        val sample = NativeSampleStore.file(activity, sampleId)
+        if (!sample.isFile || sample.length() <= 0L) return
+        val safeName = NativeJobStore.sanitizeFileName(suggestedName)
+            .let { if (it.lowercase().endsWith(".mkv")) it else it + ".mkv" }
+        (activity as? MainActivity)?.requestNativeSampleExport(sampleId, safeName)
+    }
+
+    fun exportNativeSample(sampleId: String, destination: Uri) {
+        thread(name = "native-sample-export") {
+            val result = JSONObject().put("sampleId", sampleId)
+            try {
+                if (!NativeSampleStore.isSafeId(sampleId)) {
+                    throw IllegalStateException("无效 Native sample id")
+                }
+                val sample = NativeSampleStore.file(activity, sampleId)
+                if (!sample.isFile || sample.length() <= 0L) {
+                    throw IllegalStateException("Native 测试片段不存在")
+                }
+                activity.contentResolver.openOutputStream(destination, "w")?.use { out ->
+                    sample.inputStream().use { input ->
+                        input.copyTo(out, 1024 * 1024)
+                    }
+                } ?: throw IllegalStateException("无法打开测试片段保存位置")
+
+                result
+                    .put("ok", true)
+                    .put("bytes", sample.length())
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            }
+            postJsonCallback("__onNativeSampleExportResult", result)
+        }
     }
 
     @JavascriptInterface
