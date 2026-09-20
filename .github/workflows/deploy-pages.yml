@@ -11,6 +11,7 @@ on:
       - 'vite.config.js'
       - 'scripts/**'
       - 'public/**'
+      - 'android-native/**'
       - '.github/workflows/deploy-pages.yml'
 
 permissions:
