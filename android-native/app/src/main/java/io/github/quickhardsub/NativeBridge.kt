@@ -407,27 +407,34 @@ class NativeBridge(
                 safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
                 if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 Native 预览 SAF URL")
 
-                val common = arrayOf(
+                val scale = "scale=1280:-2:force_original_aspect_ratio=decrease"
+                val base = arrayOf(
                     "-y",
                     "-hide_banner",
                     "-v", "error",
                     "-ss", String.format(java.util.Locale.US, "%.3f", timeSeconds),
                     "-i", safUrl,
                     "-map", "0:v:0",
-                    "-frames:v", "1"
-                )
-                val scale = "scale=1280:-2:force_original_aspect_ratio=decrease"
-                val base = common + arrayOf(
+                    "-an",
+                    "-sn",
+                    "-frames:v", "1",
                     "-vf", scale,
                     "-c:v", "png",
                     basePng.absolutePath
                 )
                 val assFilter =
                     "ass=" + NativeJobStore.escapeFilterPath(assFile.absolutePath) +
-                    ":fontsdir=" + NativeJobStore.escapeFilterPath(fontsDir.absolutePath) +
-                    "," + scale
-                val sub = common + arrayOf(
+                    ":fontsdir=" + NativeJobStore.escapeFilterPath(fontsDir.absolutePath)
+                val sub = arrayOf(
+                    "-y",
+                    "-hide_banner",
+                    "-v", "error",
+                    "-loop", "1",
+                    "-framerate", "10",
+                    "-i", basePng.absolutePath,
                     "-vf", assFilter,
+                    "-ss", "0.500",
+                    "-frames:v", "1",
                     "-c:v", "png",
                     subPng.absolutePath
                 )
