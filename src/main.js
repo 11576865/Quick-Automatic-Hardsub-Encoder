@@ -1803,6 +1803,13 @@ async function runNativeEncode() {
 
   const base = (state.video?.name || 'video').replace(/\.[^.]+$/, '');
   const suggestedName = base + '_hardsub_' + state.selectedCodec + '.mkv';
+  const estimatedOutputBytes = plan.mode === 'budget-rate'
+    ? Math.max(Number(plan.plannedBytes || 0), 64 * 1024 * 1024)
+    : Math.max(
+        Math.ceil(Number(state.video?.size || 0) * 1.5),
+        256 * 1024 * 1024
+      );
+
   const request = {
     codec: state.selectedCodec,
     mode: plan.mode,
@@ -1811,6 +1818,7 @@ async function runNativeEncode() {
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
     expectedDuration: Number(state.media.duration || 0),
     expectedAudioTracks: Number(state.media.audioTracks || 0),
+    estimatedOutputBytes,
     suggestedName
   };
 
