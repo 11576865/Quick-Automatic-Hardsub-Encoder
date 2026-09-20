@@ -274,15 +274,16 @@ class NativeBridge(
                 ) {
                     throw IllegalStateException("更新清单 APK 地址不在受信任下载路径")
                 }
-                if (sha256.isNotEmpty() && !Regex("^[0-9a-f]{64}$").matches(sha256)) {
-                    throw IllegalStateException("更新清单 SHA-256 格式无效")
+                if (!Regex("^[0-9a-f]{64}$").matches(sha256)) {
+                    throw IllegalStateException("更新清单缺少有效 APK SHA-256")
                 }
-                if (signerSha256.isNotEmpty() && !Regex("^[0-9a-f]{64}$").matches(signerSha256)) {
-                    throw IllegalStateException("更新清单签名摘要格式无效")
+                if (!Regex("^[0-9a-f]{64}$").matches(signerSha256)) {
+                    throw IllegalStateException("更新清单缺少有效签名摘要")
                 }
-                if (signerSha256.isNotEmpty() && installedSignerSha256 != null &&
-                    signerSha256 != installedSignerSha256
-                ) {
+                if (installedSignerSha256 == null) {
+                    throw IllegalStateException("无法读取当前应用签名，已拒绝更新")
+                }
+                if (signerSha256 != installedSignerSha256) {
                     throw IllegalStateException("更新包签名与当前应用签名不一致，已拒绝自动引导更新")
                 }
 
@@ -317,7 +318,12 @@ class NativeBridge(
     @JavascriptInterface
     fun openExternalUrl(url: String) {
         val uri = try { Uri.parse(url) } catch (_: Throwable) { return }
-        if (!uri.scheme.equals("https", ignoreCase = true)) return
+        val trusted =
+            uri.scheme.equals("https", ignoreCase = true) &&
+            uri.host.equals(UPDATE_DOWNLOAD_HOST, ignoreCase = true) &&
+            uri.path.orEmpty().startsWith(UPDATE_DOWNLOAD_PATH_PREFIX) &&
+            uri.path.orEmpty().endsWith(".apk", ignoreCase = true)
+        if (!trusted) return
 
         activity.runOnUiThread {
             try {
