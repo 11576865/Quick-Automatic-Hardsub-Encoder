@@ -26,6 +26,21 @@ class MainActivity : ComponentActivity() {
     private val exportRequest = 1402
     private val sampleExportRequest = 1403
 
+    private fun inferPickerRole(params: WebChromeClient.FileChooserParams?): String? {
+        val accepts = params?.acceptTypes
+            ?.joinToString(",")
+            ?.lowercase()
+            .orEmpty()
+
+        return when {
+            params?.mode == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE -> "fonts"
+            accepts.contains(".ass") || accepts.contains("text/plain") -> "ass"
+            accepts.contains(".ttf") || accepts.contains(".otf") ||
+                accepts.contains(".ttc") || accepts.contains(".otc") -> "fonts"
+            else -> "video"
+        }
+    }
+
     private val assetLoader by lazy {
         WebViewAssetLoader.Builder()
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
@@ -73,6 +88,7 @@ class MainActivity : ComponentActivity() {
                 fileCallback?.onReceiveValue(null)
                 fileCallback = callback
                 pendingPickerRole = nativeBridge.consumePickerRole()
+                    ?: inferPickerRole(params)
 
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
@@ -183,6 +199,7 @@ class MainActivity : ComponentActivity() {
         }
 
         if (requestCode == filePickerRequest) {
+            val role = pendingPickerRole
             val result = if (resultCode == RESULT_OK) {
                 val flags = data?.flags ?: 0
                 val uris = mutableListOf<Uri>()
@@ -198,11 +215,27 @@ class MainActivity : ComponentActivity() {
                         uris.add(uri)
                     }
                 }
+                if (uris.isEmpty()) {
+                    data?.dataString
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let(Uri::parse)
+                        ?.let { uri ->
+                            persistUriPermission(uri, flags)
+                            uris.add(uri)
+                        }
+                }
 
-                nativeBridge.recordPickedUris(pendingPickerRole, uris.distinct())
-                WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+                // Some DocumentsProvider/WebView combinations return a perfectly
+                // usable content:// URI that FileChooserParams.parseResult does
+                // not propagate back to the HTML input reliably. We already have
+                // the authoritative URI list, so return it directly.
+                val selected = uris.distinct()
+                nativeBridge.recordPickedUris(role, selected)
+                nativeBridge.notifyPickerResult(role, selected)
+                selected.takeIf { it.isNotEmpty() }?.toTypedArray()
             } else {
-                nativeBridge.recordPickedUris(pendingPickerRole, emptyList())
+                nativeBridge.recordPickedUris(role, emptyList())
+                nativeBridge.notifyPickerResult(role, emptyList())
                 null
             }
 

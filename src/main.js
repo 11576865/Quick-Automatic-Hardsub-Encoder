@@ -234,6 +234,8 @@ $('ass').addEventListener('change', e => {
   state.ass = e.target.files?.[0] || null;
   invalidateQualityCalibration();
   $('assMeta').textContent = state.ass ? state.ass.name : '未选择';
+  $('assMeta').className = '';
+  if (state.ass) log('字幕文件已接收：' + state.ass.name + ' · ' + formatBytes(state.ass.size));
   refreshAnalyze();
 });
 $('fonts').addEventListener('change', async e => {
@@ -444,6 +446,64 @@ function detectNativeBackend() {
       ` · 热状态 ${formatThermalStatus(state.nativeBackend.thermalStatus)}` +
       (state.nativeBackend.powerSaveMode ? ' · 省电模式已开启' : '')
     );
+
+    globalThis.__onNativePickerResult = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { role: '', count: 0, error: '原生文件选择结果解析失败' };
+      }
+
+      const role = data?.role || '';
+      const names = Array.isArray(data?.names) ? data.names : [];
+      if (Number(data?.count || 0) > 0) {
+        log(
+          'Android 系统文件选择器返回：' +
+          (role || 'unknown') + ' · ' +
+          (names.join(' / ') || (data.count + ' 个文件'))
+        );
+      }
+
+      if (role === 'ass' && Number(data?.count || 0) > 0) {
+        // Give Chromium one event-loop turn to publish input.files/change.
+        // If that path fails on a provider/WebView combination, read the same
+        // persisted content:// URI through the Native bridge instead.
+        setTimeout(() => {
+          if (state.ass) return;
+          const bridge = globalThis.NativeHardsub;
+          if (!bridge?.readSelectedAssFile) return;
+          try {
+            const fallback = JSON.parse(bridge.readSelectedAssFile());
+            if (!fallback?.ok || !fallback.base64) {
+              throw new Error(fallback?.error || 'Native ASS fallback 读取失败');
+            }
+
+            const binary = atob(fallback.base64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) {
+              bytes[i] = binary.charCodeAt(i);
+            }
+
+            state.ass = {
+              name: fallback.name || 'subtitles.ass',
+              size: Number(fallback.size || bytes.byteLength),
+              arrayBuffer: async () =>
+                bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+            };
+            invalidateQualityCalibration();
+            $('assMeta').textContent =
+              state.ass.name + ' · Android Native URI 读取';
+            log('WebView 未回填字幕 File，已通过 Android Native URI 自动恢复所选 ASS。');
+            refreshAnalyze();
+          } catch (error) {
+            $('assMeta').textContent = '字幕已由系统选择，但读取失败';
+            $('assMeta').className = 'bad';
+            log('Android Native ASS 选择恢复失败：' + error.message);
+          }
+        }, 150);
+      }
+    };
 
     globalThis.__onNativeInputProbe = payload => {
       try {

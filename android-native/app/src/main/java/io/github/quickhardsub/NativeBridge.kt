@@ -76,6 +76,57 @@ class NativeBridge(
     fun getPickedUris(role: String): List<Uri> =
         synchronized(pickerLock) { pickedUris[role]?.toList() ?: emptyList() }
 
+    fun notifyPickerResult(role: String?, uris: List<Uri>) {
+        val result = JSONObject()
+            .put("role", role ?: "")
+            .put("count", uris.size)
+        val names = JSONArray()
+        uris.forEachIndexed { index, uri ->
+            names.put(displayName(activity, uri, "file_" + index))
+        }
+        result.put("names", names)
+        postJsonCallback("__onNativePickerResult", result)
+    }
+
+    @JavascriptInterface
+    fun readSelectedAssFile(): String {
+        val result = JSONObject()
+        return try {
+            val uri = getPickedUris("ass").firstOrNull()
+                ?: throw IllegalStateException("没有已选择的 ASS URI")
+            val maxBytes = 8 * 1024 * 1024
+            val out = ByteArrayOutputStream()
+            activity.contentResolver.openInputStream(uri)?.use { input ->
+                val buffer = ByteArray(64 * 1024)
+                var total = 0
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read <= 0) break
+                    total += read
+                    if (total > maxBytes) {
+                        throw IllegalStateException("ASS 字幕超过 8 MB 安全上限")
+                    }
+                    out.write(buffer, 0, read)
+                }
+            } ?: throw IllegalStateException("无法读取所选 ASS URI")
+
+            val bytes = out.toByteArray()
+            if (bytes.isEmpty()) throw IllegalStateException("所选 ASS 文件为空")
+
+            result
+                .put("ok", true)
+                .put("name", displayName(activity, uri, "subtitles.ass"))
+                .put("size", bytes.size)
+                .put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+                .toString()
+        } catch (e: Throwable) {
+            result
+                .put("ok", false)
+                .put("error", e.message ?: e.javaClass.simpleName)
+                .toString()
+        }
+    }
+
     @JavascriptInterface
     fun getNativeSelectionState(): String {
         val snapshot = synchronized(pickerLock) {
