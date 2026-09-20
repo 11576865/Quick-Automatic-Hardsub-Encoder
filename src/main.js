@@ -31,6 +31,7 @@ const state = {
   nativeSelfTest: null,
   nativeInputProbe: null,
   nativePreviewWaiters: new Map(),
+  nativeSampleWaiters: new Map(),
   nativeJobId: null,
   nativeCompletedJob: null,
   appRelease: null,
@@ -459,6 +460,36 @@ function detectNativeBackend() {
       clearTimeout(waiter.timer);
       if (data.ok) waiter.resolve(data);
       else waiter.reject(new Error(data.error || 'Native 预览失败'));
+    };
+
+    globalThis.__onNativeSample = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 测试片段结果解析失败' };
+      }
+      const waiter = state.nativeSampleWaiters.get(data.requestId);
+      if (!waiter) return;
+      state.nativeSampleWaiters.delete(data.requestId);
+      clearTimeout(waiter.timer);
+      if (data.ok) waiter.resolve(data);
+      else waiter.reject(new Error(data.error || 'Native 测试片段生成失败'));
+    };
+
+    globalThis.__onNativeSampleExportResult = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 测试片段保存结果解析失败' };
+      }
+      if (data.ok) {
+        log('Android Native 测试片段已保存：' + formatBytes(Number(data.bytes || 0)));
+      } else {
+        log('Android Native 测试片段保存失败：' + (data.error || '未知错误'));
+        alert('测试片段保存失败：' + (data.error || '未知错误'));
+      }
     };
 
     globalThis.__onNativeExportResult = payload => {
@@ -1371,11 +1402,20 @@ function refreshBenchmarkEnabled() {
     !status.unsafeColor &&
     warningsAccepted
   );
+  const nativeDiagnosticReady = !!(
+    state.nativeBackend?.available &&
+    nativeBackendReady() &&
+    state.inputDecodeOk &&
+    !status.unsafeColor &&
+    warningsAccepted &&
+    !state.nativeJobId
+  );
+  const diagnosticReady = state.nativeBackend?.available
+    ? nativeDiagnosticReady
+    : webDiagnosticReady;
 
-  // Browser-only diagnostics remain disabled in the APK until their Native
-  // equivalents are wired. The formal Native full-length path is independent.
-  $('benchmarkBtn').disabled = !webDiagnosticReady;
-  $('testSelectedBtn').disabled = !webDiagnosticReady || !state.selectedCodec;
+  $('benchmarkBtn').disabled = !diagnosticReady;
+  $('testSelectedBtn').disabled = !diagnosticReady || !state.selectedCodec;
 
   const plan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
   const hasRecoveredOutput = !!state.nativeCompletedJob;
@@ -1527,23 +1567,72 @@ async function runSelectedTest() {
     log('所选方案测试：' + state.selectedCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 / 约 ' + Math.round(duration * fps) + ' 帧 · 含真实字幕');
     const originalAss = state.activeAssText || state.assText;
     const shiftedAss = shiftAssForPreview(originalAss, startAt);
-    await state.engine.setAssText(shiftedAss);
     let r;
-    try {
-      r = await state.engine.benchmarkCodec(state.selectedCodec, {
-        start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
-        targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
-        twoPass: false,
-        measureSsim: false,
-        timeoutMs: state.selectedCodec === 'av1' ? 60000 : 45000
-      });
-    } finally {
-      await state.engine.setAssText(originalAss);
+
+    if (state.nativeBackend?.available) {
+      const nativeStart = state.nativeInputProbe?.seekable === false ? 0 : startAt;
+      if (nativeStart !== startAt) {
+        log('当前 SAF 输入不可 seek；Native 测试片段改从视频开头生成。');
+      }
+      r = await requestNativeSample({
+        codec: state.selectedCodec,
+        start: nativeStart,
+        duration,
+        withSubtitles: true,
+        crf: plan.crf,
+        preset: plan.preset,
+        targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0
+      }, shiftAssForPreview(originalAss, nativeStart));
+
+      r.packetStats = {
+        totalVideoBytes: Number(r.totalVideoBytes || 0),
+        packetCount: Number(r.packetCount || 0)
+      };
+    } else {
+      await state.engine.setAssText(shiftedAss);
+      try {
+        r = await state.engine.benchmarkCodec(state.selectedCodec, {
+          start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
+          targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+          twoPass: false,
+          measureSsim: false,
+          timeoutMs: state.selectedCodec === 'av1' ? 60000 : 45000
+        });
+      } finally {
+        await state.engine.setAssText(originalAss);
+      }
     }
+
     if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
     state.selectedTest = r;
-    const sampleBitrate = r.packetStats?.totalVideoBytes ? r.packetStats.totalVideoBytes * 8 / duration : 0;
-    $('selectedTestResult').innerHTML = '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' + r.encodeSpeed.toFixed(2) + '× realtime</span><span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span><a class="button-link" href="' + r.sampleUrl + '" download="hardsub_test_' + state.selectedCodec + '.mkv">下载测试片段查看实际画质</a><small>所选方案测试只验证真实字幕、画质和设备速度，不再额外跑一次 SSIM；这些数字也不外推整片。</small></div>';
+    const measuredDuration = Number(r.duration || duration);
+    const sampleBitrate = r.packetStats?.totalVideoBytes
+      ? r.packetStats.totalVideoBytes * 8 / Math.max(0.001, measuredDuration)
+      : 0;
+
+    if (state.nativeBackend?.available) {
+      $('selectedTestResult').innerHTML =
+        '<div class="test-result"><strong>Native 测试片段完成</strong>' +
+        '<span>实际样本速度：' + Number(r.encodeSpeed || 0).toFixed(2) + '× realtime</span>' +
+        '<span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span>' +
+        '<span>样本大小：' + formatBytes(Number(r.sampleBytes || 0)) + '</span>' +
+        '<button id="saveNativeTestSampleBtn" type="button">保存测试片段查看实际画质</button>' +
+        '<small>该测试使用与正式压制相同的 Android Native 编码器和 libass 字幕路径；短样本速度与码率仍不外推整片。</small></div>';
+      $('saveNativeTestSampleBtn').onclick = () => {
+        globalThis.NativeHardsub?.requestNativeSampleExport?.(
+          r.sampleId,
+          'hardsub_test_' + state.selectedCodec + '.mkv'
+        );
+      };
+    } else {
+      $('selectedTestResult').innerHTML =
+        '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' +
+        r.encodeSpeed.toFixed(2) + '× realtime</span><span>样本视频码率：' +
+        formatBitrate(sampleBitrate) +
+        '</span><a class="button-link" href="' + r.sampleUrl +
+        '" download="hardsub_test_' + state.selectedCodec +
+        '.mkv">下载测试片段查看实际画质</a><small>所选方案测试只验证真实字幕、画质和设备速度，不再额外跑一次 SSIM；这些数字也不外推整片。</small></div>';
+    }
   } catch (e) {
     log('所选方案测试失败：' + e.message);
     $('selectedTestResult').innerHTML = '<div class="error-box">测试失败：' + escapeHtml(e.message) + '</div>';
@@ -1570,14 +1659,48 @@ async function runBenchmarks() {
       }
       try {
         const p = profileFor(codec, 'balanced');
-        state.benchmarks[codec] = await state.engine.benchmarkCodec(codec, { start: startAt, duration, withSubtitles: false, crf: p.crf, preset: p.preset, timeoutMs: codec === 'av1' ? 90000 : codec === 'h265' ? 60000 : 45000 });
+        if (state.nativeBackend?.available) {
+          const nativeStart = state.nativeInputProbe?.seekable === false ? 0 : startAt;
+          const nr = await requestNativeSample({
+            codec,
+            start: nativeStart,
+            duration,
+            withSubtitles: false,
+            crf: p.crf,
+            preset: p.preset,
+            targetVideoBitrate: 0
+          }, '');
+          state.benchmarks[codec] = {
+            codecKey: codec,
+            crf: p.crf,
+            preset: p.preset,
+            encodeSpeed: Number(nr.encodeSpeed || 0),
+            ssim: null,
+            packetStats: {
+              totalVideoBytes: Number(nr.totalVideoBytes || 0),
+              packetCount: Number(nr.packetCount || 0)
+            },
+            duration: Number(nr.duration || duration)
+          };
+        } else {
+          state.benchmarks[codec] = await state.engine.benchmarkCodec(codec, {
+            start: startAt,
+            duration,
+            withSubtitles: false,
+            crf: p.crf,
+            preset: p.preset,
+            timeoutMs: codec === 'av1' ? 90000 : codec === 'h265' ? 60000 : 45000
+          });
+        }
       } catch (e) {
         state.benchmarks[codec] = { codecKey: codec, error: e.message };
       }
       renderCodecCards();
     }
-    try { await state.engine.resetRuntime('高级样本测试完成后清理临时文件'); }
-    catch (e) { log('样本测试后的 runtime 清理失败：' + e.message); }
+    if (!state.nativeBackend?.available) {
+      try { await state.engine.resetRuntime('高级样本测试完成后清理临时文件'); }
+      catch (e) { log('样本测试后的 runtime 清理失败：' + e.message); }
+    }
   } finally {
     refreshBenchmarkEnabled();
   }
@@ -1589,7 +1712,10 @@ function renderCodecCards() {
     const r = state.benchmarks[codec];
     if (!r) return '<div class="codec-card"><h3>' + labels[codec] + '</h3><div class="note">等待测试</div></div>';
     if (r.error) return '<div class="codec-card"><h3>' + labels[codec] + '</h3><div class="bad">测试失败</div><div class="note">' + escapeHtml(r.error.slice(0,180)) + '</div></div>';
-    const sampleDuration = Math.max(0.001, r.packetStats?.packetCount / (state.media?.fps || 30));
+    const sampleDuration = Math.max(
+      0.001,
+      Number(r.duration || 0) || (r.packetStats?.packetCount / (state.media?.fps || 30))
+    );
     const sampleBitrate = r.packetStats?.totalVideoBytes ? r.packetStats.totalVideoBytes * 8 / sampleDuration : 0;
     return '<div class="codec-card"><h3>' + labels[codec] + '</h3><dl>' +
       '<dt>样本速度</dt><dd>' + r.encodeSpeed.toFixed(2) + '× realtime</dd>' +
@@ -1785,6 +1911,30 @@ function requestNativePreview(timeSeconds, assText) {
     }, 90000);
     state.nativePreviewWaiters.set(requestId, { resolve, reject, timer });
     bridge.renderNativePreview(requestId, Number(timeSeconds || 0), assText);
+  });
+}
+
+function requestNativeSample(options, assText) {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.runNativeSample) {
+    return Promise.reject(new Error('Android Native 测试片段桥不可用'));
+  }
+
+  const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
+  const timeoutMs = options.codec === 'av1' ? 120000 : 90000;
+
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      state.nativeSampleWaiters.delete(requestId);
+      reject(new Error('Android Native 测试片段生成超时'));
+    }, timeoutMs);
+
+    state.nativeSampleWaiters.set(requestId, { resolve, reject, timer });
+    bridge.runNativeSample(
+      requestId,
+      JSON.stringify(options),
+      assText || ''
+    );
   });
 }
 
