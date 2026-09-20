@@ -15,11 +15,13 @@ import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
 import com.arthenica.ffmpegkit.FFprobeKit
 import com.arthenica.ffmpegkit.ReturnCode
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.UUID
 import kotlin.concurrent.thread
 
 class NativeBridge(
@@ -117,7 +119,28 @@ class NativeBridge(
                 val streams = info.getStreams()
                 val video = streams.firstOrNull { it.getType() == "video" }
                     ?: throw IllegalStateException("FFprobe 没有发现视频流")
-                val audioTracks = streams.count { it.getType() == "audio" }
+                val audioStreams = streams.filter { it.getType() == "audio" }
+                val audioTracks = audioStreams.size
+                val props = video.getAllProperties()
+                val pixelFormat = video.getFormat() ?: ""
+                val explicitDepth = props?.optString("bits_per_raw_sample", "")?.toIntOrNull() ?: 0
+                val inferredDepth = if (explicitDepth > 0) explicitDepth else {
+                    Regex("(10|12|14|16)(?:le|be)?", RegexOption.IGNORE_CASE)
+                        .find(pixelFormat)
+                        ?.groupValues
+                        ?.getOrNull(1)
+                        ?.toIntOrNull()
+                        ?: 8
+                }
+                val colorTransfer = props?.optString("color_transfer", "") ?: ""
+                val colorPrimaries = props?.optString("color_primaries", "") ?: ""
+                val colorSpace = props?.optString("color_space", "") ?: ""
+                val hdr = colorTransfer.contains("smpte2084", true) ||
+                    colorTransfer.contains("arib-std-b67", true) ||
+                    (colorPrimaries.contains("bt2020", true) && inferredDepth > 8)
+                val audioBitRate = audioStreams.sumOf { stream ->
+                    stream.getBitrate()?.toLongOrNull() ?: 0L
+                }
 
                 result
                     .put("ok", true)
@@ -126,11 +149,22 @@ class NativeBridge(
                     .put("needsInputStaging", !seekable)
                     .put("format", info.getFormat() ?: "")
                     .put("duration", info.getDuration()?.toDoubleOrNull() ?: 0.0)
+                    .put("bitRate", info.getBitrate()?.toLongOrNull() ?: 0L)
                     .put("videoCodec", video.getCodec() ?: "")
+                    .put("videoBitRate", video.getBitrate()?.toLongOrNull() ?: 0L)
                     .put("width", video.getWidth() ?: 0)
                     .put("height", video.getHeight() ?: 0)
                     .put("fps", video.getAverageFrameRate() ?: "")
+                    .put("pixelFormat", pixelFormat)
+                    .put("bitDepth", inferredDepth)
+                    .put("colorTransfer", colorTransfer)
+                    .put("colorPrimaries", colorPrimaries)
+                    .put("colorSpace", colorSpace)
+                    .put("hdr", hdr)
+                    .put("unsafeColorPipeline", hdr || inferredDepth > 8)
                     .put("audioTracks", audioTracks)
+                    .put("audioCodec", audioStreams.firstOrNull()?.getCodec() ?: "")
+                    .put("audioBitRate", audioBitRate)
             } catch (e: Throwable) {
                 result.put("ok", false)
                 result.put("error", e.message ?: e.javaClass.simpleName)
@@ -312,6 +346,194 @@ class NativeBridge(
             }
 
             postJsonCallback("__onNativeUpdateCheck", result)
+        }
+    }
+
+    @JavascriptInterface
+    fun startNativeEncode(requestJson: String, assText: String): String {
+        val result = JSONObject()
+        try {
+            val inputUri = getPickedUris("video").firstOrNull()
+                ?: throw IllegalStateException("没有可供 Native 压制使用的视频 URI")
+            if (assText.isBlank()) throw IllegalStateException("处理后的 ASS 字幕为空")
+            if (assText.toByteArray(Charsets.UTF_8).size > 8 * 1024 * 1024) {
+                throw IllegalStateException("ASS 字幕超过 8 MB 安全上限")
+            }
+
+            val incoming = JSONObject(requestJson)
+            val codec = incoming.optString("codec", "")
+            val mode = incoming.optString("mode", "")
+            val preset = incoming.optString("preset", "")
+            val crf = incoming.optInt("crf", -1)
+            val bitrate = incoming.optLong("targetVideoBitrate", 0L)
+            val expectedDuration = incoming.optDouble("expectedDuration", 0.0)
+            val expectedAudioTracks = incoming.optInt("expectedAudioTracks", -1)
+            val suggestedName = NativeJobStore.sanitizeFileName(
+                incoming.optString("suggestedName", "hardsub_" + codec + ".mkv")
+            ).let { if (it.lowercase().endsWith(".mkv")) it else it + ".mkv" }
+
+            val x26xPresets = setOf(
+                "ultrafast", "superfast", "veryfast", "faster", "fast",
+                "medium", "slow", "slower", "veryslow"
+            )
+            when (codec) {
+                "h264", "h265" -> if (preset !in x26xPresets) {
+                    throw IllegalStateException("x264/x265 preset 不在允许范围")
+                }
+                "av1" -> {
+                    val p = preset.toIntOrNull()
+                        ?: throw IllegalStateException("SVT-AV1 preset 必须是整数")
+                    if (p !in 0..13) throw IllegalStateException("SVT-AV1 preset 不在 0..13")
+                }
+                else -> throw IllegalStateException("未知编码器")
+            }
+            when (mode) {
+                "crf" -> {
+                    val maxCrf = if (codec == "av1") 63 else 51
+                    if (crf !in 0..maxCrf) throw IllegalStateException("CRF 超出允许范围")
+                }
+                "budget-rate" -> {
+                    if (bitrate !in 150_000L..200_000_000L) {
+                        throw IllegalStateException("目标视频码率超出允许范围")
+                    }
+                }
+                else -> throw IllegalStateException("未知码率控制模式")
+            }
+            if (!(expectedDuration > 0.0)) throw IllegalStateException("缺少有效视频时长")
+            if (expectedAudioTracks < 0 || expectedAudioTracks > 32) {
+                throw IllegalStateException("音频轨数量无效")
+            }
+
+            NativeJobStore.cleanupOldJobs(activity)
+
+            val jobId = UUID.randomUUID().toString()
+            val jobDir = NativeJobStore.jobDir(activity, jobId)
+            if (!jobDir.mkdirs() && !jobDir.isDirectory) {
+                throw IllegalStateException("无法创建 Native 任务目录")
+            }
+
+            NativeJobStore.assFile(activity, jobId).writeText(assText, Charsets.UTF_8)
+
+            val fontUris = JSONArray()
+            getPickedUris("fonts").forEach { fontUris.put(it.toString()) }
+
+            val request = JSONObject()
+                .put("inputUri", inputUri.toString())
+                .put("fontUris", fontUris)
+                .put("codec", codec)
+                .put("mode", mode)
+                .put("preset", preset)
+                .put("crf", crf)
+                .put("targetVideoBitrate", bitrate)
+                .put("expectedDuration", expectedDuration)
+                .put("expectedAudioTracks", expectedAudioTracks)
+                .put("suggestedName", suggestedName)
+
+            NativeJobStore.writeJsonAtomic(
+                NativeJobStore.requestFile(activity, jobId),
+                request
+            )
+            NativeJobStore.writeStatus(
+                activity,
+                jobId,
+                JSONObject()
+                    .put("state", "queued")
+                    .put("message", "已创建 Android 原生压制任务")
+                    .put("progress", 0.0)
+                    .put("suggestedName", suggestedName)
+            )
+
+            val intent = Intent(activity, EncodeService::class.java).apply {
+                action = EncodeService.ACTION_START
+                putExtra(EncodeService.EXTRA_JOB_ID, jobId)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                activity.startForegroundService(intent)
+            } else {
+                activity.startService(intent)
+            }
+
+            result.put("ok", true)
+                .put("jobId", jobId)
+                .put("suggestedName", suggestedName)
+        } catch (e: Throwable) {
+            result.put("ok", false)
+                .put("error", e.message ?: e.javaClass.simpleName)
+        }
+        return result.toString()
+    }
+
+    @JavascriptInterface
+    fun getNativeJobStatus(jobId: String): String {
+        if (!NativeJobStore.isSafeJobId(jobId)) {
+            return JSONObject()
+                .put("ok", false)
+                .put("error", "无效 Native job id")
+                .toString()
+        }
+        val status = NativeJobStore.readStatus(activity, jobId)
+            ?: return JSONObject()
+                .put("ok", false)
+                .put("error", "找不到 Native 任务状态")
+                .toString()
+        return status.put("ok", true).toString()
+    }
+
+    @JavascriptInterface
+    fun cancelNativeEncode(jobId: String) {
+        if (!NativeJobStore.isSafeJobId(jobId)) return
+        val intent = Intent(activity, EncodeService::class.java).apply {
+            action = EncodeService.ACTION_CANCEL
+            putExtra(EncodeService.EXTRA_JOB_ID, jobId)
+        }
+        try {
+            activity.startService(intent)
+        } catch (_: Throwable) {
+            FFmpegKit.cancel()
+        }
+    }
+
+    @JavascriptInterface
+    fun requestNativeExport(jobId: String, suggestedName: String) {
+        if (!NativeJobStore.isSafeJobId(jobId)) return
+        val safeName = NativeJobStore.sanitizeFileName(suggestedName)
+            .let { if (it.lowercase().endsWith(".mkv")) it else it + ".mkv" }
+        (activity as? MainActivity)?.requestNativeExport(jobId, safeName)
+    }
+
+    fun exportJobOutput(jobId: String, destination: Uri) {
+        thread(name = "native-export-" + jobId.take(8)) {
+            val result = JSONObject().put("jobId", jobId)
+            try {
+                if (!NativeJobStore.isSafeJobId(jobId)) {
+                    throw IllegalStateException("无效 Native job id")
+                }
+                val status = NativeJobStore.readStatus(activity, jobId)
+                    ?: throw IllegalStateException("找不到 Native 任务")
+                if (status.optString("state") != "completed") {
+                    throw IllegalStateException("Native 压制尚未完成")
+                }
+                val output = NativeJobStore.outputFile(activity, jobId)
+                if (!output.isFile || output.length() <= 0L) {
+                    throw IllegalStateException("Native 成品文件不存在")
+                }
+
+                activity.contentResolver.openOutputStream(destination, "w")?.use { out ->
+                    output.inputStream().use { input ->
+                        input.copyTo(out, 1024 * 1024)
+                    }
+                } ?: throw IllegalStateException("无法打开目标保存位置")
+
+                result
+                    .put("ok", true)
+                    .put("bytes", output.length())
+                    .put("sha256", status.optString("sha256", ""))
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            }
+            postJsonCallback("__onNativeExportResult", result)
         }
     }
 
