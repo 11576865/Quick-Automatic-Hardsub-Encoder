@@ -12,6 +12,7 @@ on:
       - 'index.html'
       - 'package.json'
       - 'vite.config.js'
+      - '.github/workflows/deploy-pages.yml'
 
 concurrency:
   group: android-apk

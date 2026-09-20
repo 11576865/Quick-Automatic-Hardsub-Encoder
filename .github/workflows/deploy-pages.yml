@@ -1,5 +1,7 @@
 name: Deploy Frontend
 
+# Android APK publishing is coupled to this workflow so the page manifest and
+# downloadable APK always come from the same commit.
 on:
   workflow_dispatch:
   push:
