@@ -355,11 +355,13 @@ async function bootstrap() {
     }
     renderCapabilities();
     updateEnvironmentSummary(true);
-    $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与浏览器原生能力是两套独立路径：dav1d/SVT-AV1 属于网页自带的软件编解码；“播放”表示浏览器能否直接处理该格式，“解码API/编码API”则表示 WebCodecs 是否进一步向网页开放接口。';
+    $('engineHint').innerHTML = state.nativeBackend?.available
+      ? '<span class="ok">Android 原生后端已加载。</span> APK 正式压制使用 ARM64 Native FFmpegKitNext；WebAssembly / SharedArrayBuffer / 跨源隔离只属于网页后备路径，不决定 Native 压制是否可用。'
+      : '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与浏览器原生能力是两套独立路径：dav1d/SVT-AV1 属于网页自带的软件编解码；“播放”表示浏览器能否直接处理该格式，“解码API/编码API”则表示 WebCodecs 是否进一步向网页开放接口。';
   } else {
     if (state.nativeBackend?.available) {
       $('engineHint').innerHTML =
-        '<span class="ok">Android 原生后端已加载。</span> SharedArrayBuffer / 跨源隔离属于网页 WASM 后端条件，不作为 Android 原生核心故障。Native 正式压制任务桥接完成前，正式压制按钮仍会保持关闭。';
+        '<span class="ok">Android 原生后端已加载。</span> SharedArrayBuffer / 跨源隔离属于网页 WASM 后备路径条件，不作为 Android 原生核心故障。APK 正式压制已经接入 Native；通过原生自检、输入探测、真实 libass 预览和安全检查后即可开始。';
     } else {
       $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
       $('envDetails').open = true;
@@ -640,7 +642,7 @@ function renderBackendSummary() {
       `Android 原生壳已检测到：${escapeHtml(state.nativeBackend.abi || 'unknown')} · FFmpegKitNext ${escapeHtml(state.nativeBackend.ffmpegKitVersion || 'unknown')}。` +
       `Native staging 可分配约 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))} · ` +
       `热状态 ${escapeHtml(formatThermalStatus(state.nativeBackend.thermalStatus))}${state.nativeBackend.powerSaveMode ? ' · 省电模式开启' : ''}。` +
-      '正在执行原生编解码/字幕自检；当前正式压制仍先保持 WASM，直到原生任务桥接完成。';
+      '正在执行原生编解码/字幕自检；自检和输入探测通过后，APK 将直接使用 Native 正式压制路径。';
     return;
   }
 
@@ -681,7 +683,7 @@ function renderBackendSummary() {
 
   el.innerHTML =
     `${ok ? '<span class="ok">Android 原生核心实际自检通过。</span>' : '<span class="warn">Android 原生核心实际自检未完全通过。</span>'} ` +
-    `${details}。正式压制切换到 Native 之前仍会保持 WASM 后备。${fontDirs}${inputProbe}${runtime}`;
+    `${details}。${ok ? 'APK 正式压制路径为 Android Native；网页 WASM 仅作为网页模式后备。' : 'Native 正式压制会保持锁定，直到所需原生能力通过检查。'}${fontDirs}${inputProbe}${runtime}`;
 }
 
 function renderCapabilities() {
@@ -699,12 +701,13 @@ function renderCapabilities() {
     ['跨源隔离', c.crossOriginIsolated, c.crossOriginIsolated ? '支持' : '未启用']
   ];
 
-  const wasm = [
+  const codecBackend = [
     ['H.264', 'x264 · 编码', sw.h264, sw.h264 === null ? '检测中' : sw.h264 ? '可用' : '未编入'],
     ['H.265', 'x265 · 编码', sw.h265, sw.h265 === null ? '检测中' : sw.h265 ? '可用' : '未编入'],
     ['AV1', 'SVT-AV1 · 编码', sw.av1, sw.av1 === null ? '检测中' : sw.av1 ? '可用' : '未编入'],
     ['AV1', 'dav1d · 解码', dec.av1Dav1d, dec.av1Dav1d === null ? '检测中' : dec.av1Dav1d ? '可用' : '未编入']
   ];
+  const nativeMode = !!state.nativeBackend?.available;
 
   const browserMatrix = [
     ['H.264', c.nativePlayback.h264, c.codecs.decode.h264, c.codecs.encode.h264],
@@ -714,7 +717,7 @@ function renderCapabilities() {
 
   $('capabilities').innerHTML = `
     <div class="env-group">
-      <div class="env-group-title">基础环境</div>
+      <div class="env-group-title">${nativeMode ? 'WebView / WASM 基础条件（Native 不依赖）' : '基础环境'}</div>
       <div class="env-chip-grid">
         ${base.map(([name, ok, text]) => `
           <div class="env-chip"><span>${name}</span>${badge(ok, text)}</div>
@@ -723,9 +726,9 @@ function renderCapabilities() {
     </div>
 
     <div class="env-group">
-      <div class="env-group-title">FFmpeg WASM</div>
+      <div class="env-group-title">${nativeMode ? 'Android Native FFmpeg' : 'FFmpeg WASM'}</div>
       <div class="env-wasm-grid">
-        ${wasm.map(([codec, detail, ok, text]) => `
+        ${codecBackend.map(([codec, detail, ok, text]) => `
           <div class="env-codec-card">
             <div><strong>${codec}</strong><small>${detail}</small></div>
             ${badge(ok, text)}
@@ -735,7 +738,7 @@ function renderCapabilities() {
     </div>
 
     <div class="env-group">
-      <div class="env-group-title">浏览器原生能力</div>
+      <div class="env-group-title">${nativeMode ? 'WebView 浏览器能力（不代表 Native 编码路径）' : '浏览器原生能力'}</div>
       <div class="env-matrix env-matrix-four">
         <div class="env-matrix-head">格式</div>
         <div class="env-matrix-head">播放</div>
