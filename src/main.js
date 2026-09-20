@@ -430,7 +430,7 @@ function detectNativeBackend() {
         av1: !!t.svtAv1EncodeSmoke
       };
       state.softwareDecoders.av1Dav1d = !!t.dav1d;
-      renderCapabilities();
+      if (state.capabilities) renderCapabilities();
       if (state.media) renderPlanOptions();
       refreshAnalyze();
       log(
