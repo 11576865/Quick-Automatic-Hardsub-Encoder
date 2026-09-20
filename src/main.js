@@ -312,7 +312,9 @@ bootstrap();
 
 async function bootstrap() {
   detectNativeBackend();
-  await loadAppReleaseInfo();
+  if (!state.nativeBackend?.available) {
+    await loadAppReleaseInfo();
+  }
 
   try {
     state.savedFonts = await listSavedFonts();
@@ -457,13 +459,22 @@ function validateAppReleaseManifest(manifest) {
   const apkUrl = safeHttpsUrl(manifest.apkUrl);
   if (!apkUrl) throw new Error('更新清单 APK 地址不是有效 HTTPS URL');
 
+  const parsedApkUrl = new URL(apkUrl);
+  if (
+    parsedApkUrl.hostname !== '11576865.github.io' ||
+    !parsedApkUrl.pathname.startsWith('/Quick-Automatic-Hardsub-Encoder/downloads/') ||
+    !parsedApkUrl.pathname.toLowerCase().endsWith('.apk')
+  ) {
+    throw new Error('更新清单 APK 地址不在受信任下载路径');
+  }
+
   const sha256 = String(manifest.sha256 || '').trim().toLowerCase();
-  if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) {
-    throw new Error('更新清单 SHA-256 格式无效');
+  if (!/^[0-9a-f]{64}$/.test(sha256)) {
+    throw new Error('更新清单缺少有效 APK SHA-256');
   }
   const signerSha256 = String(manifest.signerSha256 || '').trim().toLowerCase();
-  if (signerSha256 && !/^[0-9a-f]{64}$/.test(signerSha256)) {
-    throw new Error('更新清单签名摘要格式无效');
+  if (!/^[0-9a-f]{64}$/.test(signerSha256)) {
+    throw new Error('更新清单缺少有效签名摘要');
   }
   return { ...manifest, versionCode, apkUrl, sha256, signerSha256 };
 }
