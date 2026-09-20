@@ -2,6 +2,7 @@ package io.github.quickhardsub
 
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -18,6 +19,7 @@ import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.security.MessageDigest
 import kotlin.concurrent.thread
 
 class NativeBridge(
@@ -173,6 +175,35 @@ class NativeBridge(
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun getCurrentSignerSha256(): String? {
+        return try {
+            val packageInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                activity.packageManager.getPackageInfo(
+                    activity.packageName,
+                    PackageManager.GET_SIGNING_CERTIFICATES
+                )
+            } else {
+                activity.packageManager.getPackageInfo(
+                    activity.packageName,
+                    PackageManager.GET_SIGNATURES
+                )
+            }
+
+            val signature = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.signingInfo?.apkContentsSigners?.firstOrNull()
+            } else {
+                packageInfo.signatures?.firstOrNull()
+            } ?: return null
+
+            MessageDigest.getInstance("SHA-256")
+                .digest(signature.toByteArray())
+                .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     @JavascriptInterface
     fun getBackendInfo(): String {
         val power = activity.getSystemService(PowerManager::class.java)
@@ -183,6 +214,7 @@ class NativeBridge(
             .put("apiLevel", Build.VERSION.SDK_INT)
             .put("appVersionCode", BuildConfig.VERSION_CODE)
             .put("appVersionName", BuildConfig.VERSION_NAME)
+            .put("signerSha256", getCurrentSignerSha256() ?: "")
             .put("ffmpegKitVersion", FFmpegKitConfig.getVersion())
             .put("mediaCodecBuiltIn", true)
             .put("mediaCodecEncodingDefault", false)
@@ -217,19 +249,46 @@ class NativeBridge(
                 val manifest = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
                 val latest = JSONObject(manifest)
                 val latestCode = latest.optLong("versionCode", -1L)
+                val latestPackage = latest.optString("packageName", "")
+                val apkUrl = latest.optString("apkUrl", "")
+                val apkUri = Uri.parse(apkUrl)
+                val sha256 = latest.optString("sha256", "").trim().lowercase()
+                val signerSha256 = latest.optString("signerSha256", "").trim().lowercase()
+                val installedSignerSha256 = getCurrentSignerSha256()?.lowercase()
 
-                if (latestCode < 0) throw IllegalStateException("更新清单缺少 versionCode")
+                if (latestCode < 1 || latestCode > Int.MAX_VALUE) {
+                    throw IllegalStateException("更新清单 versionCode 无效")
+                }
+                if (latestPackage != activity.packageName) {
+                    throw IllegalStateException("更新清单包名不匹配")
+                }
+                if (!apkUri.scheme.equals("https", ignoreCase = true) || apkUri.host.isNullOrBlank()) {
+                    throw IllegalStateException("更新清单 APK 地址不是有效 HTTPS URL")
+                }
+                if (sha256.isNotEmpty() && !Regex("^[0-9a-f]{64}$").matches(sha256)) {
+                    throw IllegalStateException("更新清单 SHA-256 格式无效")
+                }
+                if (signerSha256.isNotEmpty() && !Regex("^[0-9a-f]{64}$").matches(signerSha256)) {
+                    throw IllegalStateException("更新清单签名摘要格式无效")
+                }
+                if (signerSha256.isNotEmpty() && installedSignerSha256 != null &&
+                    signerSha256 != installedSignerSha256
+                ) {
+                    throw IllegalStateException("更新包签名与当前应用签名不一致，已拒绝自动引导更新")
+                }
 
                 result
                     .put("ok", true)
                     .put("manifestUrl", UPDATE_MANIFEST_URL)
                     .put("installedVersionCode", BuildConfig.VERSION_CODE)
                     .put("installedVersionName", BuildConfig.VERSION_NAME)
+                    .put("installedSignerSha256", installedSignerSha256 ?: "")
                     .put("latestVersionCode", latestCode)
                     .put("latestVersionName", latest.optString("versionName", ""))
                     .put("updateAvailable", latestCode > BuildConfig.VERSION_CODE)
-                    .put("apkUrl", latest.optString("apkUrl", ""))
-                    .put("sha256", latest.optString("sha256", ""))
+                    .put("apkUrl", apkUrl)
+                    .put("sha256", sha256)
+                    .put("signerSha256", signerSha256)
                     .put("publishedAt", latest.optString("publishedAt", ""))
                     .put("notes", latest.optJSONArray("notes"))
             } catch (e: Throwable) {
