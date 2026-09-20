@@ -47,6 +47,9 @@ class EncodeService : Service() {
     @Volatile
     private var cancelRequested = false
 
+    @Volatile
+    private var timeoutTriggered = false
+
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
@@ -182,6 +185,7 @@ class EncodeService : Service() {
 
         activeJobId = jobId
         cancelRequested = false
+        timeoutTriggered = false
         promote("准备 Android 原生压制…")
         acquireWakeLock()
 
@@ -192,6 +196,7 @@ class EncodeService : Service() {
                 activeSessionId = null
                 activeJobId = null
                 cancelRequested = false
+                timeoutTriggered = false
                 running.set(false)
                 try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
                 stopEncodeService()
@@ -462,13 +467,15 @@ class EncodeService : Service() {
 
             if (cancelRequested || ReturnCode.isCancel(returnCode)) {
                 output.delete()
-                NativeJobStore.writeStatus(
-                    this,
-                    jobId,
-                    JSONObject()
-                        .put("state", "cancelled")
-                        .put("message", "原生压制已取消")
-                )
+                if (!timeoutTriggered) {
+                    NativeJobStore.writeStatus(
+                        this,
+                        jobId,
+                        JSONObject()
+                            .put("state", "cancelled")
+                            .put("message", "原生压制已取消")
+                    )
+                }
                 return
             }
 
@@ -578,7 +585,11 @@ class EncodeService : Service() {
             )
             updateNotification("压制完成，返回应用保存成品", 100)
         } catch (e: Throwable) {
-            if (cancelRequested) {
+            if (timeoutTriggered) {
+                output.delete()
+                // onTimeout already persisted the system-limit failure. Do not
+                // overwrite it with a generic cancellation from the worker.
+            } else if (cancelRequested) {
                 output.delete()
                 NativeJobStore.writeStatus(
                     this,
@@ -765,6 +776,7 @@ class EncodeService : Service() {
     }
 
     override fun onTimeout(startId: Int, fgsType: Int) {
+        timeoutTriggered = true
         cancelRequested = true
         activeSessionId?.let(FFmpegKit::cancel) ?: FFmpegKit.cancel()
         activeJobId?.let { id ->
