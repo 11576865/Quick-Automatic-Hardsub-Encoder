@@ -470,7 +470,7 @@ function validateAppReleaseManifest(manifest) {
 
 async function loadAppReleaseInfo() {
   try {
-    const response = await fetch(APP_UPDATE_URL, { cache: 'no-store' });
+    const response = await fetch(APP_UPDATE_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!response.ok) throw new Error('HTTP ' + response.status);
     state.appRelease = validateAppReleaseManifest(await response.json());
   } catch (error) {
