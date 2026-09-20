@@ -38,6 +38,9 @@ class NativeBridge(
         private const val UPDATE_DOWNLOAD_HOST = "11576865.github.io"
         private const val UPDATE_DOWNLOAD_PATH_PREFIX =
             "/Quick-Automatic-Hardsub-Encoder/downloads/"
+
+        @Volatile
+        private var cachedSelfTestJson: String? = null
     }
     @Volatile
     private var nextPickerRole: String? = null
@@ -88,6 +91,16 @@ class NativeBridge(
     }
     @JavascriptInterface
     fun probeSelectedVideo() {
+        if (EncodeService.isEncoding()) {
+            postJsonCallback(
+                "__onNativeInputProbe",
+                JSONObject()
+                    .put("ok", false)
+                    .put("busy", true)
+                    .put("error", "Android 原生压制运行中，暂不执行输入探测")
+            )
+            return
+        }
         thread(name = "native-input-probe") {
             val result = JSONObject()
             val uri = getPickedUris("video").firstOrNull()
@@ -370,6 +383,17 @@ class NativeBridge(
 
     @JavascriptInterface
     fun renderNativePreview(requestId: String, timeSeconds: Double, assText: String) {
+        if (EncodeService.isEncoding()) {
+            postJsonCallback(
+                "__onNativePreview",
+                JSONObject()
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("busy", true)
+                    .put("error", "Android 原生压制运行中，暂不生成字幕预览")
+            )
+            return
+        }
         thread(name = "native-preview") {
             val result = JSONObject().put("requestId", requestId)
             var safUrl: String? = null
@@ -519,6 +543,9 @@ class NativeBridge(
     fun startNativeEncode(requestJson: String, assText: String): String {
         val result = JSONObject()
         try {
+            if (EncodeService.isEncoding()) {
+                throw IllegalStateException("已有 Android 原生压制任务正在运行")
+            }
             val inputUri = getPickedUris("video").firstOrNull()
                 ?: throw IllegalStateException("没有可供 Native 压制使用的视频 URI")
             if (assText.isBlank()) throw IllegalStateException("处理后的 ASS 字幕为空")
@@ -833,6 +860,23 @@ class NativeBridge(
 
     @JavascriptInterface
     fun runSelfTest() {
+        if (EncodeService.isEncoding()) {
+            cachedSelfTestJson?.let { cached ->
+                try {
+                    postJsonCallback("__onNativeSelfTest", JSONObject(cached))
+                    return
+                } catch (_: Throwable) {}
+            }
+            postJsonCallback(
+                "__onNativeSelfTest",
+                JSONObject()
+                    .put("available", true)
+                    .put("busy", true)
+                    .put("error", "Android 原生压制运行中，自检暂缓")
+            )
+            return
+        }
+
         thread(name = "native-hardsub-selftest") {
             val result = JSONObject()
             result.put("available", true)
@@ -946,6 +990,11 @@ class NativeBridge(
                 try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
             }
 
+            if (result.optBoolean("softwareEncodeSmoke", false) &&
+                result.optBoolean("ffprobeSmoke", false)
+            ) {
+                cachedSelfTestJson = result.toString()
+            }
             postJsonCallback("__onNativeSelfTest", result)
         }
     }
