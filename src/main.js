@@ -1564,7 +1564,8 @@ function refreshBenchmarkEnabled() {
     state.inputDecodeOk &&
     !status.unsafeColor &&
     warningsAccepted &&
-    !state.nativeJobId
+    !state.nativeJobId &&
+    !state.qualityCalibrationBusy
   );
   const diagnosticReady = state.nativeBackend?.available
     ? nativeDiagnosticReady
@@ -1673,6 +1674,8 @@ function updateQualityCalibrationControls() {
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
   $('calibrateQualityBtn').disabled =
     nativeOnly || inputNotReady || state.qualityCalibrationBusy || !!state.nativeJobId;
+  $('qualityTarget').disabled = state.qualityCalibrationBusy;
+  $('encodeGoal').disabled = state.qualityCalibrationBusy;
   if (nativeOnly) {
     $('qualityCalibrationResult').textContent =
       '当前版本的目标质量校准先在 Android Native 开启；网页模式仍使用固定 CRF / 体积预算方案。';
