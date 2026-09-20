@@ -213,6 +213,7 @@ for (const [inputId, role] of [['video', 'video'], ['ass', 'ass'], ['fonts', 'fo
 $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
   state.nativeInputProbe = null;
+  invalidateQualityCalibration();
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
   const browserTooLarge = !state.nativeBackend?.available && state.video?.size > MAX_BYTES;
   $('videoMeta').className = browserTooLarge ? 'bad' : '';
@@ -230,11 +231,13 @@ $('video').addEventListener('change', e => {
 });
 $('ass').addEventListener('change', e => {
   state.ass = e.target.files?.[0] || null;
+  invalidateQualityCalibration();
   $('assMeta').textContent = state.ass ? state.ass.name : '未选择';
   refreshAnalyze();
 });
 $('fonts').addEventListener('change', async e => {
   state.fonts = [...(e.target.files || [])];
+  invalidateQualityCalibration();
   updateFontMeta();
 
   if (!state.nativeBackend?.available && $('rememberFonts').checked && state.fonts.length) {
@@ -1654,6 +1657,12 @@ function chooseDefaultCodec(goal) {
   return available[0];
 }
 
+function invalidateQualityCalibration() {
+  state.qualityCalibration = {};
+  state.qualityCalibrationTarget = null;
+  if ($('qualityCalibrationResult')) $('qualityCalibrationResult').textContent = '';
+}
+
 function updateQualityCalibrationControls() {
   const goal = $('encodeGoal')?.value || 'balanced';
   const active = goal === 'targetQuality' || goal === 'efficiency';
@@ -1661,7 +1670,9 @@ function updateQualityCalibrationControls() {
 
   if (!active) return;
   const nativeOnly = !state.nativeBackend?.available;
-  $('calibrateQualityBtn').disabled = nativeOnly || state.qualityCalibrationBusy;
+  const inputNotReady = !state.inputDecodeOk || !state.assInfo;
+  $('calibrateQualityBtn').disabled =
+    nativeOnly || inputNotReady || state.qualityCalibrationBusy || !!state.nativeJobId;
   if (nativeOnly) {
     $('qualityCalibrationResult').textContent =
       '当前版本的目标质量校准先在 Android Native 开启；网页模式仍使用固定 CRF / 体积预算方案。';
