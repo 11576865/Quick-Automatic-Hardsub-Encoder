@@ -1654,8 +1654,23 @@ function chooseDefaultCodec(goal) {
   return available[0];
 }
 
+function updateQualityCalibrationControls() {
+  const goal = $('encodeGoal')?.value || 'balanced';
+  const active = goal === 'targetQuality' || goal === 'efficiency';
+  $('qualityCalibrationControls')?.classList.toggle('hidden', !active);
+
+  if (!active) return;
+  const nativeOnly = !state.nativeBackend?.available;
+  $('calibrateQualityBtn').disabled = nativeOnly || state.qualityCalibrationBusy;
+  if (nativeOnly) {
+    $('qualityCalibrationResult').textContent =
+      '当前版本的目标质量校准先在 Android Native 开启；网页模式仍使用固定 CRF / 体积预算方案。';
+  }
+}
+
 function renderPlanOptions() {
   if (!state.media) return;
+  updateQualityCalibrationControls();
   const goal = $('encodeGoal').value;
   if (!state.selectedCodec || state.softwareEncoders[state.selectedCodec] === false) state.selectedCodec = chooseDefaultCodec(goal);
   const sourceRate = getSourceVideoBitrate();
@@ -1667,8 +1682,29 @@ function renderPlanOptions() {
     const plan = available ? buildEncodePlan(codec) : null;
     const selected = state.selectedCodec === codec;
     let param = '不可用';
-    if (plan?.mode === 'crf') param = 'CRF ' + plan.crf + ' · preset ' + plan.preset;
-    else if (plan?.mode === 'budget-rate') param = '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
+    const calibration = state.qualityCalibration[codec];
+    const target = Number($('qualityTarget')?.value || 0.985);
+    const calibrationValid =
+      calibration &&
+      state.qualityCalibrationTarget === target &&
+      calibration.meetsTarget;
+
+    if (plan?.mode === 'crf' && plan.calibration) {
+      param =
+        '实测 CRF ' + plan.crf + ' · ' + plan.preset +
+        ' · SSIM ' + Number(plan.calibration.ssim).toFixed(5) +
+        ' · ' + formatBitrate(plan.calibration.sampleBitrate);
+    } else if (plan?.mode === 'crf') {
+      param = 'CRF ' + plan.crf + ' · preset ' + plan.preset;
+    } else if (plan?.mode === 'budget-rate') {
+      param = '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
+    } else if (
+      available &&
+      (goal === 'targetQuality' || goal === 'efficiency') &&
+      !calibrationValid
+    ) {
+      param = '待实测校准 · 目标 SSIM ' + target.toFixed(3);
+    }
     return '<div class="codec-card plan-codec ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '">' +
       '<h3>' + labels[codec] + '</h3>' +
       '<div class="note">' + codecDescription(codec) + '</div>' +
@@ -1682,13 +1718,46 @@ function renderPlanOptions() {
 }
 
 function updateChosenSummary() {
-  if (!state.selectedCodec) { $('chosenSummary').textContent = '请选择一个编码器。'; return; }
+  if (!state.selectedCodec) {
+    $('chosenSummary').textContent = '请选择一个编码器。';
+    return;
+  }
+
+  const goal = $('encodeGoal')?.value || 'balanced';
   const plan = buildEncodePlan(state.selectedCodec);
-  if (!plan) { $('chosenSummary').textContent = '当前方案无法生成安全参数。'; return; }
+
+  if (!plan) {
+    if (goal === 'targetQuality' || goal === 'efficiency') {
+      $('chosenSummary').textContent =
+        '该模式需要先运行“实测校准目标质量”，校准完成后才会生成正式 CRF 参数。';
+    } else {
+      $('chosenSummary').textContent = '当前方案无法生成安全参数。';
+    }
+    return;
+  }
+
   if (plan.mode === 'crf') {
-    $('chosenSummary').innerHTML = '<strong>' + state.selectedCodec.toUpperCase() + '</strong> · CRF ' + plan.crf + ' · preset ' + plan.preset + '。质量模式不提前给出伪精确的成品体积或总耗时；正式编码后根据实时 statistics 计算 ETA。';
+    if (plan.calibration) {
+      $('chosenSummary').innerHTML =
+        '<strong>' + state.selectedCodec.toUpperCase() + '</strong>' +
+        ' · 实测 CRF ' + plan.crf + ' · preset ' + plan.preset +
+        ' · 校准 SSIM ' + Number(plan.calibration.ssim).toFixed(5) +
+        ' · 样本平均视频码率 ' + formatBitrate(plan.calibration.sampleBitrate) +
+        ' · 样本速度 ' + Number(plan.calibration.encodeSpeed).toFixed(2) + '× realtime。' +
+        '正式整片仍会因场景变化而偏离短样本结果。';
+    } else {
+      $('chosenSummary').innerHTML =
+        '<strong>' + state.selectedCodec.toUpperCase() + '</strong>' +
+        ' · CRF ' + plan.crf + ' · preset ' + plan.preset +
+        '。质量模式不提前给出伪精确的成品体积或总耗时；正式编码后根据实时 statistics 计算 ETA。';
+    }
   } else {
-    $('chosenSummary').innerHTML = '<strong>' + state.selectedCodec.toUpperCase() + '</strong> · 单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate) + '。规划体积约 ' + formatBytes(plan.plannedBytes) + '，预算边界 ' + formatBytes(plan.sizeCeiling) + '。这是参数规划值，不承诺最终字节数严格命中。';
+    $('chosenSummary').innerHTML =
+      '<strong>' + state.selectedCodec.toUpperCase() + '</strong>' +
+      ' · 单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate) +
+      '。规划体积约 ' + formatBytes(plan.plannedBytes) +
+      '，预算边界 ' + formatBytes(plan.sizeCeiling) +
+      '。这是参数规划值，不承诺最终字节数严格命中。';
   }
 }
 
