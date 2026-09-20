@@ -285,6 +285,14 @@ $('acceptWarnings').addEventListener('change', e => {
 $('analyze').addEventListener('click', analyzeAll);
 $('previewBtn').addEventListener('click', renderPreviews);
 $('encodeGoal').addEventListener('change', () => {
+  const goal = $('encodeGoal').value;
+  if (
+    goal === 'efficiency' &&
+    state.qualityCalibrationTarget === Number($('qualityTarget')?.value || 0.985)
+  ) {
+    const pick = chooseEfficiencyCalibration(Object.values(state.qualityCalibration));
+    if (pick) state.selectedCodec = pick.codec;
+  }
   updateQualityCalibrationControls();
   renderPlanOptions();
   refreshBenchmarkEnabled();
