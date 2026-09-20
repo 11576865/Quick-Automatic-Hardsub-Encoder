@@ -121,9 +121,14 @@ jobs:
           test "$(sha256sum "$APK_SRC" | awk '{print $1}')" = "$SHA256"
           test "$(stat -c '%s' "$APK_SRC")" = "$SIZE_BYTES"
 
+          VERSIONED_APK_NAME="quick-automatic-hardsub-encoder-debug-v${VERSION_CODE}.apk"
+          VERSIONED_APK_DST="dist/downloads/${VERSIONED_APK_NAME}"
+          cp "$APK_SRC" "$VERSIONED_APK_DST"
+          # Keep a convenience alias for manual downloads; update manifests always
+          # use the immutable versioned URL to avoid browser/CDN stale-APK caches.
           cp "$APK_SRC" "$APK_DST"
           PUBLISHED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          APK_URL="https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/quick-automatic-hardsub-encoder-debug.apk"
+          APK_URL="https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/${VERSIONED_APK_NAME}"
 
           jq -n \
             --argjson versionCode "$VERSION_CODE" \
