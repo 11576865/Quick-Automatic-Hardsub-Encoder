@@ -1,16 +1,18 @@
 {
-  "versionCode": 2,
-  "versionName": "0.2.0-native",
+  "versionCode": 3,
+  "versionName": "0.2.1-native",
   "packageName": "io.github.quickhardsub",
   "channel": "debug",
   "apkUrl": "https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/quick-automatic-hardsub-encoder-debug.apk",
   "sha256": "",
+  "signerSha256": "36ebb5783f02afb3cba3ad5978202615567ebf93df0866e4f535e75c0f3fd659",
   "sizeBytes": 0,
   "publishedAt": "2026-09-20T00:00:00Z",
   "commitSha": "",
+  "buildRunNumber": 0,
   "notes": [
-    "增加主网页直接拉起 Android App 的入口",
-    "增加 App 启动时与手动检查更新",
-    "GitHub Pages 固定地址提供与当前版本匹配的 APK"
+    "网页可直接拉起 Android App，未安装时回退到 APK 下载",
+    "App 启动时自动检查更新，也支持手动检查",
+    "更新清单绑定实际构建 APK 的版本、SHA-256 与签名摘要"
   ]
 }
