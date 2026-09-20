@@ -30,6 +30,9 @@ const state = {
   nativeBackend: null,
   nativeSelfTest: null,
   nativeInputProbe: null,
+  nativePreviewWaiters: new Map(),
+  nativeJobId: null,
+  nativeCompletedJob: null,
   appRelease: null,
   appUpdateCheck: null,
   softwareEncoders: { h264: null, h265: null, av1: null },
@@ -73,7 +76,7 @@ app.innerHTML = `
   <section class="card">
     <h2>1. 选择文件</h2>
     <div class="grid two">
-      <div class="file-row"><label>视频（≤ 1 GB）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
+      <div class="file-row"><label>视频（网页≤ 1 GB；Android Native 可直接读取更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
       <div class="file-row">
         <label>字体（可选，可多选）</label>
@@ -169,6 +172,7 @@ app.innerHTML = `
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
+      <button id="cancelEncodeBtn" class="hidden" type="button">取消压制</button>
     </div>
     <div class="progress"><div id="progressBar"></div></div>
   </section>
@@ -193,7 +197,8 @@ $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
   state.nativeInputProbe = null;
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
-  $('videoMeta').className = state.video?.size > MAX_BYTES ? 'bad' : '';
+  const browserTooLarge = !state.nativeBackend?.available && state.video?.size > MAX_BYTES;
+  $('videoMeta').className = browserTooLarge ? 'bad' : '';
 
   if (state.video && globalThis.NativeHardsub?.probeSelectedVideo) {
     try {
@@ -266,6 +271,16 @@ $('encodeGoal').addEventListener('change', () => {
 $('benchmarkBtn').addEventListener('click', runBenchmarks);
 $('testSelectedBtn').addEventListener('click', runSelectedTest);
 $('encodeBtn').addEventListener('click', runEncode);
+$('cancelEncodeBtn').addEventListener('click', () => {
+  if (!state.nativeJobId) return;
+  try {
+    globalThis.NativeHardsub?.cancelNativeEncode?.(state.nativeJobId);
+    $('cancelEncodeBtn').disabled = true;
+    $('liveEta').textContent = '正在请求取消 Android 原生压制…';
+  } catch (error) {
+    log('取消 Native 压制失败：' + error.message);
+  }
+});
 $('openAndroidAppBtn').addEventListener('click', () => {
   const fallback = safeHttpsUrl(state.appRelease?.apkUrl, APP_DOWNLOAD_FALLBACK);
   const intentUrl =
@@ -352,6 +367,9 @@ async function bootstrap() {
   }
   updateEnvironmentSummary(engineStatus.ready);
   refreshAnalyze();
+  if (state.nativeBackend?.available) {
+    recoverNativeJob();
+  }
 }
 
 function detectNativeBackend() {
@@ -394,6 +412,7 @@ function detectNativeBackend() {
         log('Android SAF 输入探测失败：' + (p.error || '未知错误'));
       }
       renderBackendSummary();
+      refreshAnalyze();
     };
 
     globalThis.__onNativeSelfTest = payload => {
@@ -405,6 +424,15 @@ function detectNativeBackend() {
       renderBackendSummary();
       updateEnvironmentSummary();
       const t = state.nativeSelfTest || {};
+      state.softwareEncoders = {
+        h264: !!t.x264EncodeSmoke,
+        h265: !!t.x265EncodeSmoke,
+        av1: !!t.svtAv1EncodeSmoke
+      };
+      state.softwareDecoders.av1Dav1d = !!t.dav1d;
+      renderCapabilities();
+      if (state.media) renderPlanOptions();
+      refreshAnalyze();
       log(
         `Android 原生自检：` +
         `x264=${!!t.x264EncodeSmoke} ` +
@@ -414,6 +442,38 @@ function detectNativeBackend() {
         `libass视觉=${!!t.libassVisualSmoke} ` +
         `内置回退字体=${!!t.bundledFallbackReady}`
       );
+    };
+
+    globalThis.__onNativePreview = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 预览结果解析失败' };
+      }
+      const waiter = state.nativePreviewWaiters.get(data.requestId);
+      if (!waiter) return;
+      state.nativePreviewWaiters.delete(data.requestId);
+      clearTimeout(waiter.timer);
+      if (data.ok) waiter.resolve(data);
+      else waiter.reject(new Error(data.error || 'Native 预览失败'));
+    };
+
+    globalThis.__onNativeExportResult = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 导出结果解析失败' };
+      }
+      if (data.ok) {
+        $('liveEta').textContent = '成品已保存 · ' + formatBytes(Number(data.bytes || 0)) +
+          (data.sha256 ? ' · SHA-256 ' + data.sha256.slice(0, 12) + '…' : '');
+        log('Android Native 成品已导出到用户选择的位置。');
+      } else {
+        $('liveEta').textContent = '保存失败：' + (data.error || '未知错误');
+        log('Android Native 成品导出失败：' + (data.error || '未知错误'));
+      }
     };
 
     globalThis.__onNativeUpdateCheck = payload => {
@@ -863,7 +923,12 @@ function renderSavedFontLibrary() {
 }
 
 function refreshAnalyze() {
-  $('analyze').disabled = !(state.video && state.ass && state.video.size <= MAX_BYTES);
+  const hasFiles = !!(state.video && state.ass);
+  if (state.nativeBackend?.available) {
+    $('analyze').disabled = !(hasFiles && state.nativeInputProbe?.ok && state.nativeSelfTest);
+    return;
+  }
+  $('analyze').disabled = !(hasFiles && state.video.size <= MAX_BYTES);
 }
 
 async function analyzeAll() {
@@ -892,7 +957,10 @@ async function analyzeAll() {
     state.fontBindings = {};
     state.autoFontFallbacks = {};
     state.assInfo = parseAss(assText);
-    state.effectiveFonts = getEffectiveFontFiles();
+    state.effectiveFonts = state.nativeBackend?.available ? [...state.fonts] : getEffectiveFontFiles();
+    if (state.nativeBackend?.available && state.savedFonts.length) {
+      log('Android Native 正式压制只直接使用本次通过系统文件选择器选中的字体；浏览器常用字体库暂不传入 Native 服务。');
+    }
     state.fontFaces = [];
     for (const file of state.effectiveFonts) {
       try { state.fontFaces.push(...await inspectFontFile(file)); }
@@ -945,6 +1013,39 @@ async function analyzeAll() {
 
       state.inputDecodeOk = true;
       log('输入视频解码测试通过。');
+    } else if (state.nativeBackend?.available) {
+      const p = state.nativeInputProbe;
+      if (!p?.ok) throw new Error(p?.error || 'Android Native 输入探测尚未完成');
+      state.media = mediaFromNativeProbe(p);
+      if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
+      if (!p.inputDecodeSmoke) {
+        throw new Error('Android Native 输入视频 1 帧实际解码测试失败：' + (p.inputDecodeError || '未知错误'));
+      }
+      state.inputDecodeOk = true;
+
+      if (state.nativeSelfTest?.bundledFallbackReady) {
+        state.autoFontFallbacks = Object.fromEntries(
+          state.fontMatches
+            .filter(m => m.status === 'missing')
+            .map(m => [m.requested, 'Noto Sans SC'])
+        );
+        state.activeAssText = rewriteAssFonts(state.assText, {
+          ...state.autoFontFallbacks,
+          ...state.fontBindings
+        });
+      }
+
+      log(
+        'Android Native FFprobe：' +
+        state.media.videoCodec + ' ' +
+        state.media.width + 'x' + state.media.height + ' ' +
+        state.media.fps.toFixed(2) + ' fps · ' +
+        (state.media.pixelFormat || '未知像素格式') + ' · ' +
+        state.media.bitDepth + '-bit'
+      );
+      log('Android Native 输入视频实际 1 帧解码测试通过。');
+    } else {
+      throw new Error('没有可用的视频处理后端');
     }
     renderSubtitleSummary();
     $('preflightCard').classList.remove('hidden');
@@ -952,7 +1053,9 @@ async function analyzeAll() {
     $('planCard').classList.remove('hidden');
     $('encodeCard').classList.remove('hidden');
     renderPlanOptions();
-    $('previewBtn').disabled = !state.engine.ready || !state.assInfo.previewTimes.length;
+    $('previewBtn').disabled =
+      !(state.engine.ready || state.nativeBackend?.available) ||
+      !state.assInfo.previewTimes.length;
     refreshBenchmarkEnabled();
   } catch (e) {
     log(`分析失败：${e.stack || e.message}`);
@@ -1102,13 +1205,15 @@ function bindFontOverrideControls() {
       }
 
       state.activeAssText = rewriteAssFonts(state.assText, state.fontBindings);
-      try {
-        await state.engine.setFontMappings({ ...state.autoFontFallbacks, ...state.fontBindings });
-        await state.engine.setAssText(state.activeAssText);
-        log(`字体强制映射已生效：${match.requested} → ${state.fontBindings[match.requested] || '取消强制映射'}`);
-      } catch (e) {
-        log(`应用字体强制映射失败：${e.message}`);
+      if (state.engine.ready) {
+        try {
+          await state.engine.setFontMappings({ ...state.autoFontFallbacks, ...state.fontBindings });
+          await state.engine.setAssText(state.activeAssText);
+        } catch (e) {
+          log(`应用字体强制映射失败：${e.message}`);
+        }
       }
+      log(`字体强制映射已生效：${match.requested} → ${state.fontBindings[match.requested] || '取消强制映射'}`);
 
       state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
       state.previewBaseUrls.filter(Boolean).forEach(URL.revokeObjectURL);
@@ -1141,7 +1246,7 @@ async function renderPreviews() {
     log(`预览失败：${e.message}`);
     $('preview').innerHTML = `<div class="error-box">预览失败：${escapeHtml(e.message)}</div>`;
   } finally {
-    $('previewBtn').disabled = !state.engine.ready;
+    $('previewBtn').disabled = !(state.engine.ready || state.nativeBackend?.available);
   }
 }
 
@@ -1154,10 +1259,18 @@ async function loadPreviewAt(index) {
   if (!state.previewUrls[safeIndex]) {
     container.innerHTML = `<div class="preview-placeholder">正在生成第 ${safeIndex + 1}/${times.length} 张真实 libass 预览…<br><small>首张先生成，其余仅在翻页时按需生成。</small></div>`;
     log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
-    const previewCenter = 0.5;
-    const shiftBy = Math.max(0, times[safeIndex] - previewCenter);
-    const previewAss = shiftAssForPreview(state.activeAssText || state.assText, shiftBy);
-    const previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex, previewAss);
+    let previewResult;
+    if (state.nativeBackend?.available) {
+      previewResult = await requestNativePreview(
+        times[safeIndex],
+        state.activeAssText || state.assText
+      );
+    } else {
+      const previewCenter = 0.5;
+      const shiftBy = Math.max(0, times[safeIndex] - previewCenter);
+      const previewAss = shiftAssForPreview(state.activeAssText || state.assText, shiftBy);
+      previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex, previewAss);
+    }
     state.previewUrls[safeIndex] = previewResult.url;
     state.previewBaseUrls[safeIndex] = previewResult.baseUrl || null;
     state.previewFontEvents[safeIndex] = previewResult.fontEvents || [];
@@ -1207,6 +1320,20 @@ function stripAssTags(text = '') {
     .trim();
 }
 
+function nativeBackendReady() {
+  const t = state.nativeSelfTest;
+  return !!(
+    state.nativeBackend?.available &&
+    t?.x264EncodeSmoke &&
+    t?.x265EncodeSmoke &&
+    t?.svtAv1EncodeSmoke &&
+    t?.dav1d &&
+    t?.libassVisualSmoke &&
+    t?.bundledFallbackReady &&
+    t?.ffprobeSmoke
+  );
+}
+
 function workflowReadiness() {
   const previewDone = state.previewUrls.some(Boolean);
   const warnings = state.fontMatches.some(x => x.status !== 'matched');
@@ -1214,28 +1341,46 @@ function workflowReadiness() {
   const rendered = state.previewVisualChange.some(v => v === true);
   const knownChecks = state.previewVisualChange.filter(v => v !== null);
   const previewOk = rendered || (previewDone && knownChecks.length === 0);
+  const backendReady = state.nativeBackend?.available
+    ? nativeBackendReady()
+    : state.engine.ready;
   return {
-    previewDone, warnings, unsafeColor, previewOk,
-    ready: !!(state.engine.ready && state.inputDecodeOk && previewDone && previewOk && !unsafeColor && (!warnings || state.acceptedWarnings))
+    previewDone, warnings, unsafeColor, previewOk, backendReady,
+    ready: !!(backendReady && state.inputDecodeOk && previewDone && previewOk && !unsafeColor && (!warnings || state.acceptedWarnings))
   };
 }
 
 function refreshBenchmarkEnabled() {
   const status = workflowReadiness();
   const warningsAccepted = !status.warnings || state.acceptedWarnings;
-  const basicReady = !!(state.engine.ready && state.inputDecodeOk && !status.unsafeColor && warningsAccepted);
+  const webDiagnosticReady = !!(
+    state.engine.ready &&
+    state.inputDecodeOk &&
+    !status.unsafeColor &&
+    warningsAccepted
+  );
 
-  // Parameter selection and a short test clip are diagnostic tools, so they
-  // must remain available even when the PNG subtitle preview itself failed.
-  $('benchmarkBtn').disabled = !basicReady;
-  $('testSelectedBtn').disabled = !basicReady || !state.selectedCodec;
+  // Browser-only diagnostics remain disabled in the APK until their Native
+  // equivalents are wired. The formal Native full-length path is independent.
+  $('benchmarkBtn').disabled = !webDiagnosticReady;
+  $('testSelectedBtn').disabled = !webDiagnosticReady || !state.selectedCodec;
 
-  // Full-length encoding remains guarded until subtitle rendering is verified.
   const plan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
-  $('encodeBtn').disabled = !status.ready || !state.selectedCodec || !plan;
+  const hasRecoveredOutput = !!state.nativeCompletedJob;
+  $('encodeBtn').disabled = hasRecoveredOutput
+    ? false
+    : (!status.ready || !state.selectedCodec || !plan);
 
-  if (state.selectedCodec && basicReady && !status.previewOk) {
-    $('liveEta').textContent = '参数已选择；字幕预览尚未验证。可以先生成所选方案测试片段，正式全片压制暂时锁定。';
+  if (state.nativeCompletedJob) {
+    $('encodeBtn').textContent = '保存成品';
+    return;
+  }
+
+  $('encodeBtn').textContent = '开始硬字幕压制';
+  if (state.selectedCodec && status.backendReady && !status.previewOk) {
+    $('liveEta').textContent = state.nativeBackend?.available
+      ? '参数已选择；请先生成并验证 Native libass 字幕预览，随后才能正式全片压制。'
+      : '参数已选择；字幕预览尚未验证。可以先生成所选方案测试片段，正式全片压制暂时锁定。';
   }
 }
 
@@ -1445,7 +1590,20 @@ function renderCodecCards() {
 }
 
 async function runEncode() {
+  if (state.nativeCompletedJob && state.nativeBackend?.available) {
+    const bridge = globalThis.NativeHardsub;
+    bridge?.requestNativeExport?.(
+      state.nativeCompletedJob.jobId,
+      state.nativeCompletedJob.suggestedName || 'hardsub.mkv'
+    );
+    return;
+  }
+
   if (!state.selectedCodec) return;
+  if (state.nativeBackend?.available) {
+    await runNativeEncode();
+    return;
+  }
   if (state.media?.unsafeColorPipeline) { alert('检测到 HDR/高位深输入。当前版本不会静默转换，正式压制已锁定。'); return; }
   const plan = buildEncodePlan(state.selectedCodec);
   if (!plan) { alert('无法生成安全的压制方案。'); return; }
@@ -1566,6 +1724,244 @@ async function runEncode() {
   } finally {
     refreshBenchmarkEnabled();
   }
+}
+
+function mediaFromNativeProbe(p) {
+  const fps = parseFpsText(p.fps);
+  const bitDepth = Number(p.bitDepth || 8);
+  return {
+    duration: Number(p.duration || 0),
+    durationSource: 'native-ffprobe',
+    size: Number(p.statSize > 0 ? p.statSize : state.video?.size || 0),
+    bitRate: Number(p.bitRate || 0),
+    videoCodec: p.videoCodec || 'unknown',
+    videoBitRate: Number(p.videoBitRate || 0),
+    width: Number(p.width || 0),
+    height: Number(p.height || 0),
+    fps,
+    pixelFormat: p.pixelFormat || '',
+    bitDepth,
+    colorTransfer: p.colorTransfer || '',
+    colorPrimaries: p.colorPrimaries || '',
+    colorSpace: p.colorSpace || '',
+    hdr: !!p.hdr,
+    highBitDepth: bitDepth > 8,
+    unsafeColorPipeline: !!p.unsafeColorPipeline,
+    audioCodec: p.audioCodec || '',
+    audioTracks: Number(p.audioTracks || 0),
+    audioBitRate: Number(p.audioBitRate || 0)
+  };
+}
+
+function parseFpsText(value) {
+  if (typeof value === 'number') return value;
+  const parts = String(value || '').split('/').map(Number);
+  if (parts.length === 2 && parts[1]) return parts[0] / parts[1];
+  return Number(parts[0] || 0);
+}
+
+function requestNativePreview(timeSeconds, assText) {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.renderNativePreview) {
+    return Promise.reject(new Error('Android Native 预览桥不可用'));
+  }
+  const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      state.nativePreviewWaiters.delete(requestId);
+      reject(new Error('Android Native 字幕预览超时'));
+    }, 90000);
+    state.nativePreviewWaiters.set(requestId, { resolve, reject, timer });
+    bridge.renderNativePreview(requestId, Number(timeSeconds || 0), assText);
+  });
+}
+
+async function runNativeEncode() {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.startNativeEncode || !bridge?.getNativeJobStatus) {
+    throw new Error('Android Native 正式压制桥不可用');
+  }
+  if (state.media?.unsafeColorPipeline) {
+    alert('检测到 HDR/高位深输入。当前 Native 版本不会静默转换，正式压制已锁定。');
+    return;
+  }
+
+  const plan = buildEncodePlan(state.selectedCodec);
+  if (!plan) {
+    alert('无法生成安全的 Native 压制方案。');
+    return;
+  }
+
+  const base = (state.video?.name || 'video').replace(/\.[^.]+$/, '');
+  const suggestedName = base + '_hardsub_' + state.selectedCodec + '.mkv';
+  const request = {
+    codec: state.selectedCodec,
+    mode: plan.mode,
+    crf: plan.crf,
+    preset: plan.preset,
+    targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+    expectedDuration: Number(state.media.duration || 0),
+    expectedAudioTracks: Number(state.media.audioTracks || 0),
+    suggestedName
+  };
+
+  let started;
+  try {
+    started = JSON.parse(
+      bridge.startNativeEncode(
+        JSON.stringify(request),
+        state.activeAssText || state.assText
+      )
+    );
+  } catch (error) {
+    started = { ok: false, error: error.message };
+  }
+  if (!started?.ok || !started.jobId) {
+    throw new Error(started?.error || '无法创建 Android Native 压制任务');
+  }
+
+  state.nativeJobId = started.jobId;
+  state.nativeCompletedJob = null;
+  localStorage.setItem('nativeEncodeJobId', started.jobId);
+  $('encodeBtn').disabled = true;
+  $('cancelEncodeBtn').classList.remove('hidden');
+  $('cancelEncodeBtn').disabled = false;
+  $('progressBar').style.width = '1%';
+  $('liveEta').textContent = 'Android Native 任务已创建，正在准备输入与字体…';
+  log(
+    'Android Native 正式压制：' + state.selectedCodec.toUpperCase() +
+    ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
+    ' · job=' + started.jobId
+  );
+
+  await monitorNativeJob(started.jobId);
+}
+
+async function monitorNativeJob(jobId) {
+  const bridge = globalThis.NativeHardsub;
+  while (state.nativeJobId === jobId) {
+    let status;
+    try {
+      status = JSON.parse(bridge.getNativeJobStatus(jobId));
+    } catch (error) {
+      status = { ok: false, error: error.message };
+    }
+
+    if (!status?.ok) {
+      log('Native 状态读取失败：' + (status?.error || '未知错误'));
+      await sleepMs(1000);
+      continue;
+    }
+
+    const progress = Math.max(0, Math.min(1, Number(status.progress || 0)));
+    $('progressBar').style.width = Math.max(1, progress * 100).toFixed(1) + '%';
+
+    if (status.state === 'encoding') {
+      const speed = Number(status.speed || 0);
+      const timeSec = Number(status.timeMs || 0) / 1000;
+      const remain = speed > 0
+        ? Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec) / speed
+        : null;
+      $('liveEta').textContent =
+        'Android Native · ' + (progress * 100).toFixed(1) + '%' +
+        (speed > 0 ? ' · ' + speed.toFixed(2) + '× realtime' : '') +
+        (remain != null ? ' · 预计剩余 ' + formatDuration(remain) : '');
+    } else if (status.state === 'staging') {
+      $('liveEta').textContent = status.message || '正在准备 Native staging…';
+    } else if (status.state === 'validating') {
+      $('liveEta').textContent = status.message || '正在扫描成品完整性…';
+    } else if (status.state === 'cancelling') {
+      $('liveEta').textContent = '正在取消 Android Native 压制…';
+    } else if (status.state === 'completed') {
+      state.nativeCompletedJob = {
+        jobId,
+        suggestedName: status.suggestedName || 'hardsub.mkv'
+      };
+      state.nativeJobId = null;
+      $('cancelEncodeBtn').classList.add('hidden');
+      $('progressBar').style.width = '100%';
+      $('liveEta').textContent =
+        'Native 压制完成 · ' + formatBytes(Number(status.outputBytes || 0)) +
+        ' · 完整性扫描通过 · 点击“保存成品”选择保存位置';
+      $('encodeBtn').disabled = false;
+      $('encodeBtn').textContent = '保存成品';
+      log(
+        'Android Native 成品验证通过：输出时长 ' +
+        Number(status.outputDuration || 0).toFixed(3) +
+        ' s · 与输入差 ' + Number(status.durationDelta || 0).toFixed(3) +
+        ' s · SHA-256 ' + (status.sha256 || '')
+      );
+      return;
+    } else if (status.state === 'failed') {
+      state.nativeJobId = null;
+      localStorage.removeItem('nativeEncodeJobId');
+      $('cancelEncodeBtn').classList.add('hidden');
+      $('progressBar').style.width = '0%';
+      $('liveEta').textContent = 'Android Native 压制失败。';
+      $('encodeBtn').disabled = false;
+      log('Android Native 压制失败：' + (status.error || status.message || '未知错误'));
+      alert('Android Native 压制失败：' + (status.error || status.message || '未知错误'));
+      refreshBenchmarkEnabled();
+      return;
+    } else if (status.state === 'cancelled') {
+      state.nativeJobId = null;
+      localStorage.removeItem('nativeEncodeJobId');
+      $('cancelEncodeBtn').classList.add('hidden');
+      $('progressBar').style.width = '0%';
+      $('liveEta').textContent = 'Android Native 压制已取消。';
+      refreshBenchmarkEnabled();
+      return;
+    }
+
+    await sleepMs(800);
+  }
+}
+
+function recoverNativeJob() {
+  const bridge = globalThis.NativeHardsub;
+  const jobId = localStorage.getItem('nativeEncodeJobId');
+  if (!jobId || !bridge?.getNativeJobStatus) return;
+
+  try {
+    const status = JSON.parse(bridge.getNativeJobStatus(jobId));
+    if (!status?.ok) {
+      localStorage.removeItem('nativeEncodeJobId');
+      return;
+    }
+
+    $('encodeCard').classList.remove('hidden');
+    if (status.state === 'completed') {
+      state.nativeCompletedJob = {
+        jobId,
+        suggestedName: status.suggestedName || 'hardsub.mkv'
+      };
+      $('progressBar').style.width = '100%';
+      $('liveEta').textContent =
+        '检测到上次已完成的 Native 成品 · ' +
+        formatBytes(Number(status.outputBytes || 0)) +
+        ' · 可直接保存';
+      $('encodeBtn').disabled = false;
+      $('encodeBtn').textContent = '保存上次成品';
+      return;
+    }
+
+    if (['queued', 'staging', 'encoding', 'validating', 'cancelling'].includes(status.state)) {
+      state.nativeJobId = jobId;
+      $('cancelEncodeBtn').classList.remove('hidden');
+      $('encodeBtn').disabled = true;
+      log('恢复 Android Native 任务监视：' + jobId);
+      monitorNativeJob(jobId);
+      return;
+    }
+
+    localStorage.removeItem('nativeEncodeJobId');
+  } catch (error) {
+    log('恢复 Native 任务失败：' + error.message);
+  }
+}
+
+function sleepMs(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function buildEncodePlan(codec) {
