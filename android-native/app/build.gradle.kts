@@ -11,12 +11,24 @@ android {
         applicationId = "io.github.quickhardsub"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0-native"
+        versionCode = 3
+        versionName = "0.2.1-native"
     }
 
     buildFeatures {
         buildConfig = true
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            val ciKey = rootProject.file("../.ci-signing/debug.keystore")
+            if (ciKey.isFile) {
+                storeFile = ciKey
+                storePassword = "android"
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+            }
+        }
     }
 
     buildTypes {

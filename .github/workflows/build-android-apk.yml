@@ -98,10 +98,18 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Restore stable debug signing key
+        id: signing-cache
         uses: actions/cache@v4
         with:
-          path: ~/.android/debug.keystore
-          key: quick-hardsub-debug-keystore-v1
+          path: .ci-signing/debug.keystore
+          key: quick-hardsub-debug-keystore-v2
+
+      - name: Bootstrap stable debug signing key
+        if: steps.signing-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .ci-signing
+          keytool -genkeypair -noprompt             -keystore .ci-signing/debug.keystore             -storepass android             -keypass android             -alias androiddebugkey             -dname "CN=Quick Hardsub CI Debug,O=Quick Hardsub,C=US"             -keyalg RSA             -keysize 2048             -validity 3650
+          test -s .ci-signing/debug.keystore
 
       - name: Build debug APK
         run: gradle -p android-native :app:assembleDebug --stacktrace
@@ -110,7 +118,7 @@ jobs:
         run: |
           APK="android-native/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK"
 
       - name: Verify native ELF segment alignment
