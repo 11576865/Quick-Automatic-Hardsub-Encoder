@@ -1641,7 +1641,7 @@ function profileFor(codec, goal) {
 function codecDescription(codec) {
   if (codec === 'h264') return '兼容性高 · 软件编码较快 · 同等质量通常需要更多码率';
   if (codec === 'h265') return '兼容性与压缩效率较均衡 · 适合多数现代设备';
-  return '压缩效率高 · 当前浏览器 WASM 软件编码较慢；原生后端完成后更有价值';
+  return '压缩效率潜力高 · 软件编码计算量较大 · 更适合对体积敏感的场景';
 }
 
 function chooseDefaultCodec(goal) {
@@ -1734,7 +1734,8 @@ async function runSelectedTest() {
         withSubtitles: true,
         crf: plan.crf,
         preset: plan.preset,
-        targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0
+        targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+        measureSsim: true
       }, shiftAssForPreview(originalAss, nativeStart));
 
       r.packetStats = {
@@ -1768,6 +1769,7 @@ async function runSelectedTest() {
         '<div class="test-result"><strong>Native 测试片段完成</strong>' +
         '<span>实际样本速度：' + Number(r.encodeSpeed || 0).toFixed(2) + '× realtime</span>' +
         '<span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span>' +
+        '<span>SSIM：' + (Number.isFinite(Number(r.ssim)) ? Number(r.ssim).toFixed(5) : '未取得') + '</span>' +
         '<span>样本大小：' + formatBytes(Number(r.sampleBytes || 0)) + '</span>' +
         '<button id="saveNativeTestSampleBtn" type="button">保存测试片段查看实际画质</button>' +
         '<small>该测试使用与正式压制相同的 Android Native 编码器和 libass 字幕路径；短样本速度与码率仍不外推整片。</small></div>';
@@ -1821,14 +1823,15 @@ async function runBenchmarks() {
             withSubtitles: false,
             crf: p.crf,
             preset: p.preset,
-            targetVideoBitrate: 0
+            targetVideoBitrate: 0,
+            measureSsim: true
           }, '');
           state.benchmarks[codec] = {
             codecKey: codec,
             crf: p.crf,
             preset: p.preset,
             encodeSpeed: Number(nr.encodeSpeed || 0),
-            ssim: null,
+            ssim: Number.isFinite(Number(nr.ssim)) ? Number(nr.ssim) : null,
             packetStats: {
               totalVideoBytes: Number(nr.totalVideoBytes || 0),
               packetCount: Number(nr.packetCount || 0)
