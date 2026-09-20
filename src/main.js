@@ -613,6 +613,13 @@ function detectNativeBackend() {
         $('liveEta').textContent = '成品已保存 · ' + formatBytes(Number(data.bytes || 0)) +
           (data.sha256 ? ' · SHA-256 ' + data.sha256.slice(0, 12) + '…' : '');
         log('Android Native 成品已导出到用户选择的位置。');
+        // Exporting succeeded, so this finished job must no longer intercept
+        // later presses as another export request.
+        state.nativeCompletedJob = null;
+        state.nativeJobId = null;
+        localStorage.removeItem('nativeEncodeJobId');
+        $('encodeBtn').textContent = '开始硬字幕压制';
+        refreshBenchmarkEnabled();
       } else {
         $('liveEta').textContent = '保存失败：' + (data.error || '未知错误');
         log('Android Native 成品导出失败：' + (data.error || '未知错误'));
