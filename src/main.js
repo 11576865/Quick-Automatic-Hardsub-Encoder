@@ -968,7 +968,7 @@ async function analyzeAll() {
     }
     state.fontMatches = matchRequestedFonts(state.assInfo.requestedFonts, state.fontFaces);
 
-    if (state.engine.ready) {
+    if (!state.nativeBackend?.available && state.engine.ready) {
       log(`挂载媒体文件与 ${state.effectiveFonts.length} 个可用字体到浏览器 WebAssembly 文件系统…`);
       await state.engine.stageFiles(state.video, state.ass, state.effectiveFonts);
       // Normalize every subtitle path to the exact UTF-8 text parsed by the UI.
@@ -1325,15 +1325,21 @@ function stripAssTags(text = '') {
 
 function nativeBackendReady() {
   const t = state.nativeSelfTest;
+  if (!state.nativeBackend?.available || !t) return false;
+
+  const codecReady = state.selectedCodec
+    ? state.softwareEncoders[state.selectedCodec] === true
+    : (t.x264EncodeSmoke || t.x265EncodeSmoke || t.svtAv1EncodeSmoke);
+
+  const inputDecoderReady =
+    normalizeCodec(state.media?.videoCodec) !== 'av1' || t.dav1d === true;
+
   return !!(
-    state.nativeBackend?.available &&
-    t?.x264EncodeSmoke &&
-    t?.x265EncodeSmoke &&
-    t?.svtAv1EncodeSmoke &&
-    t?.dav1d &&
-    t?.libassVisualSmoke &&
-    t?.bundledFallbackReady &&
-    t?.ffprobeSmoke
+    codecReady &&
+    inputDecoderReady &&
+    t.libassVisualSmoke &&
+    t.bundledFallbackReady &&
+    t.ffprobeSmoke
   );
 }
 
