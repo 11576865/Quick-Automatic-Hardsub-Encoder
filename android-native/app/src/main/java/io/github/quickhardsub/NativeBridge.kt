@@ -3,6 +3,8 @@ package io.github.quickhardsub
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
@@ -10,6 +12,7 @@ import android.os.storage.StorageManager
 import android.system.Os
 import android.system.OsConstants
 import android.webkit.JavascriptInterface
+import android.util.Base64
 import android.webkit.WebView
 import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFmpegKitConfig
@@ -17,6 +20,7 @@ import com.arthenica.ffmpegkit.FFprobeKit
 import com.arthenica.ffmpegkit.ReturnCode
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -142,8 +146,23 @@ class NativeBridge(
                     stream.getBitrate()?.toLongOrNull() ?: 0L
                 }
 
+                val decodeSmoke = FFmpegKit.executeWithArguments(
+                    arrayOf(
+                        "-hide_banner",
+                        "-v", "error",
+                        "-i", safUrl,
+                        "-map", "0:v:0",
+                        "-frames:v", "1",
+                        "-f", "null",
+                        "-"
+                    )
+                )
+                val inputDecodeSmoke = ReturnCode.isSuccess(decodeSmoke.getReturnCode())
+
                 result
                     .put("ok", true)
+                    .put("inputDecodeSmoke", inputDecodeSmoke)
+                    .put("inputDecodeError", if (inputDecodeSmoke) "" else decodeSmoke.getOutput().takeLast(1200))
                     .put("seekable", seekable)
                     .put("statSize", statSize)
                     .put("needsInputStaging", !seekable)
@@ -347,6 +366,146 @@ class NativeBridge(
 
             postJsonCallback("__onNativeUpdateCheck", result)
         }
+    }
+
+    @JavascriptInterface
+    fun renderNativePreview(requestId: String, timeSeconds: Double, assText: String) {
+        thread(name = "native-preview") {
+            val result = JSONObject().put("requestId", requestId)
+            var safUrl: String? = null
+            val previewRoot = File(activity.cacheDir, "native-preview")
+            try {
+                if (assText.isBlank()) throw IllegalStateException("ASS 字幕为空")
+                if (!timeSeconds.isFinite() || timeSeconds < 0.0) {
+                    throw IllegalStateException("预览时间无效")
+                }
+                val inputUri = getPickedUris("video").firstOrNull()
+                    ?: throw IllegalStateException("没有可供 Native 预览使用的视频 URI")
+
+                if (previewRoot.exists()) previewRoot.deleteRecursively()
+                previewRoot.mkdirs()
+                val fontsDir = File(previewRoot, "fonts")
+                fontsDir.mkdirs()
+                getPickedUris("fonts").forEachIndexed { index, uri ->
+                    val name = NativeJobStore.displayName(activity, uri, "font_" + index + ".ttf")
+                    NativeJobStore.copyUriToFile(
+                        activity,
+                        uri,
+                        File(fontsDir, index.toString().padStart(3, '0') + "_" + name)
+                    )
+                }
+                NativeJobStore.configureFonts(
+                    activity,
+                    if (fontsDir.listFiles()?.isNotEmpty() == true) listOf(fontsDir.absolutePath) else emptyList()
+                )
+
+                val assFile = File(previewRoot, "preview.ass")
+                assFile.writeText(assText, Charsets.UTF_8)
+                val subPng = File(previewRoot, "sub.png")
+                val basePng = File(previewRoot, "base.png")
+
+                safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
+                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 Native 预览 SAF URL")
+
+                val common = arrayOf(
+                    "-y",
+                    "-hide_banner",
+                    "-v", "error",
+                    "-ss", String.format(java.util.Locale.US, "%.3f", timeSeconds),
+                    "-i", safUrl,
+                    "-map", "0:v:0",
+                    "-frames:v", "1"
+                )
+                val scale = "scale=1280:-2:force_original_aspect_ratio=decrease"
+                val base = common + arrayOf(
+                    "-vf", scale,
+                    "-c:v", "png",
+                    basePng.absolutePath
+                )
+                val assFilter =
+                    "ass=" + NativeJobStore.escapeFilterPath(assFile.absolutePath) +
+                    ":fontsdir=" + NativeJobStore.escapeFilterPath(fontsDir.absolutePath) +
+                    "," + scale
+                val sub = common + arrayOf(
+                    "-vf", assFilter,
+                    "-c:v", "png",
+                    subPng.absolutePath
+                )
+
+                val baseSession = FFmpegKit.executeWithArguments(base)
+                if (!ReturnCode.isSuccess(baseSession.getReturnCode()) || basePng.length() <= 0L) {
+                    throw IllegalStateException(
+                        baseSession.getOutput().takeLast(1200).ifBlank { "Native 无字幕预览生成失败" }
+                    )
+                }
+                val subSession = FFmpegKit.executeWithArguments(sub)
+                if (!ReturnCode.isSuccess(subSession.getReturnCode()) || subPng.length() <= 0L) {
+                    throw IllegalStateException(
+                        subSession.getOutput().takeLast(1200).ifBlank { "Native 字幕预览生成失败" }
+                    )
+                }
+
+                val baseBitmap = BitmapFactory.decodeFile(basePng.absolutePath)
+                    ?: throw IllegalStateException("无法解码 Native 无字幕预览")
+                val subBitmap = BitmapFactory.decodeFile(subPng.absolutePath)
+                    ?: throw IllegalStateException("无法解码 Native 字幕预览")
+
+                val visualChange = bitmapsDiffer(baseBitmap, subBitmap)
+                val subUrl = bitmapDataUrl(subBitmap)
+                val baseUrl = bitmapDataUrl(baseBitmap)
+                baseBitmap.recycle()
+                subBitmap.recycle()
+
+                result
+                    .put("ok", true)
+                    .put("url", subUrl)
+                    .put("baseUrl", baseUrl)
+                    .put("visualChange", visualChange)
+                    .put("time", timeSeconds)
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                if (!safUrl.isNullOrBlank()) {
+                    try { FFmpegKitConfig.unregisterSafProtocolUrl(safUrl) } catch (_: Throwable) {}
+                }
+                try { previewRoot.deleteRecursively() } catch (_: Throwable) {}
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
+            }
+            postJsonCallback("__onNativePreview", result)
+        }
+    }
+
+    private fun bitmapsDiffer(a: Bitmap, b: Bitmap): Boolean {
+        if (a.width != b.width || a.height != b.height) return true
+        val pixels = a.width.toLong() * a.height.toLong()
+        val step = maxOf(1L, pixels / 250_000L).toInt()
+        var changed = 0
+        var index = 0L
+        while (index < pixels) {
+            val x = (index % a.width).toInt()
+            val y = (index / a.width).toInt()
+            val p1 = a.getPixel(x, y)
+            val p2 = b.getPixel(x, y)
+            if (
+                kotlin.math.abs(android.graphics.Color.red(p1) - android.graphics.Color.red(p2)) > 2 ||
+                kotlin.math.abs(android.graphics.Color.green(p1) - android.graphics.Color.green(p2)) > 2 ||
+                kotlin.math.abs(android.graphics.Color.blue(p1) - android.graphics.Color.blue(p2)) > 2
+            ) {
+                changed++
+                if (changed >= 8) return true
+            }
+            index += step
+        }
+        return false
+    }
+
+    private fun bitmapDataUrl(bitmap: Bitmap): String {
+        val bytes = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 84, bytes)
+        return "data:image/jpeg;base64," +
+            Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
     }
 
     @JavascriptInterface
