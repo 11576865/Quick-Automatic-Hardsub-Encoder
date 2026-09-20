@@ -14,6 +14,7 @@ on:
       - 'scripts/**'
       - 'public/**'
       - 'android-native/**'
+      - '.github/workflows/build-android-apk.yml'
       - '.github/workflows/deploy-pages.yml'
 
 permissions:
@@ -99,30 +100,43 @@ jobs:
             --dir /tmp/quick-hardsub-apk
 
           APK_SRC="/tmp/quick-hardsub-apk/app-debug.apk"
+          META_SRC="/tmp/quick-hardsub-apk/app-build-metadata.json"
           APK_DST="dist/downloads/quick-automatic-hardsub-encoder-debug.apk"
           test -s "$APK_SRC"
-          cp "$APK_SRC" "$APK_DST"
+          test -s "$META_SRC"
 
-          VERSION_CODE="$(sed -n 's/^[[:space:]]*versionCode = \([0-9][0-9]*\).*/\1/p' android-native/app/build.gradle.kts | head -n1)"
-          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' android-native/app/build.gradle.kts | head -n1)"
-          SHA256="$(sha256sum "$APK_DST" | awk '{print $1}')"
-          SIZE_BYTES="$(stat -c '%s' "$APK_DST")"
+          VERSION_CODE="$(jq -er '.versionCode' "$META_SRC")"
+          VERSION_NAME="$(jq -er '.versionName' "$META_SRC")"
+          PACKAGE_NAME="$(jq -er '.packageName' "$META_SRC")"
+          CHANNEL="$(jq -er '.channel' "$META_SRC")"
+          SHA256="$(jq -er '.sha256' "$META_SRC")"
+          SIGNER_SHA256="$(jq -er '.signerSha256' "$META_SRC")"
+          SIZE_BYTES="$(jq -er '.sizeBytes' "$META_SRC")"
+          COMMIT_SHA="$(jq -er '.commitSha' "$META_SRC")"
+          BUILD_RUN_NUMBER="$(jq -er '.workflowRunNumber' "$META_SRC")"
+
+          test "$PACKAGE_NAME" = "io.github.quickhardsub"
+          test "$CHANNEL" = "debug"
+          test "$COMMIT_SHA" = "$GITHUB_SHA"
+          test "$(sha256sum "$APK_SRC" | awk '{print $1}')" = "$SHA256"
+          test "$(stat -c '%s' "$APK_SRC")" = "$SIZE_BYTES"
+
+          cp "$APK_SRC" "$APK_DST"
           PUBLISHED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           APK_URL="https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/quick-automatic-hardsub-encoder-debug.apk"
-
-          test -n "$VERSION_CODE"
-          test -n "$VERSION_NAME"
 
           jq -n \
             --argjson versionCode "$VERSION_CODE" \
             --arg versionName "$VERSION_NAME" \
-            --arg packageName "io.github.quickhardsub" \
-            --arg channel "debug" \
+            --arg packageName "$PACKAGE_NAME" \
+            --arg channel "$CHANNEL" \
             --arg apkUrl "$APK_URL" \
             --arg sha256 "$SHA256" \
+            --arg signerSha256 "$SIGNER_SHA256" \
             --arg publishedAt "$PUBLISHED_AT" \
-            --arg commitSha "$GITHUB_SHA" \
+            --arg commitSha "$COMMIT_SHA" \
             --argjson sizeBytes "$SIZE_BYTES" \
+            --argjson buildRunNumber "$BUILD_RUN_NUMBER" \
             '{
               versionCode: $versionCode,
               versionName: $versionName,
@@ -130,17 +144,19 @@ jobs:
               channel: $channel,
               apkUrl: $apkUrl,
               sha256: $sha256,
+              signerSha256: $signerSha256,
               sizeBytes: $sizeBytes,
               publishedAt: $publishedAt,
               commitSha: $commitSha,
+              buildRunNumber: $buildRunNumber,
               notes: [
-                "增加主网页直接拉起 Android App 的入口",
-                "增加 App 启动时与手动检查更新",
-                "GitHub Pages 固定地址提供与当前版本匹配的 APK"
+                "网页可直接拉起 Android App，未安装时回退到 APK 下载",
+                "App 启动时自动检查更新，也支持手动检查",
+                "更新清单绑定实际构建 APK 的版本、SHA-256 与签名摘要"
               ]
             }' > dist/app-update.json
 
-          echo "Published Android $VERSION_NAME (versionCode $VERSION_CODE), SHA-256 $SHA256"
+          echo "Published Android $VERSION_NAME (versionCode $VERSION_CODE), signer $SIGNER_SHA256"
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
