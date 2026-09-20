@@ -267,7 +267,7 @@ $('benchmarkBtn').addEventListener('click', runBenchmarks);
 $('testSelectedBtn').addEventListener('click', runSelectedTest);
 $('encodeBtn').addEventListener('click', runEncode);
 $('openAndroidAppBtn').addEventListener('click', () => {
-  const fallback = state.appRelease?.apkUrl || APP_DOWNLOAD_FALLBACK;
+  const fallback = safeHttpsUrl(state.appRelease?.apkUrl, APP_DOWNLOAD_FALLBACK);
   const intentUrl =
     'intent://open#Intent;scheme=quickhardsub;package=' + APP_PACKAGE +
     ';S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
@@ -276,7 +276,10 @@ $('openAndroidAppBtn').addEventListener('click', () => {
 
 $('downloadAndroidAppBtn').addEventListener('click', event => {
   const bridge = globalThis.NativeHardsub;
-  const url = state.appUpdateCheck?.apkUrl || state.appRelease?.apkUrl || APP_DOWNLOAD_FALLBACK;
+  const url = safeHttpsUrl(
+    state.appUpdateCheck?.apkUrl || state.appRelease?.apkUrl,
+    APP_DOWNLOAD_FALLBACK
+  );
   if (bridge?.openExternalUrl) {
     event.preventDefault();
     bridge.openExternalUrl(url);
@@ -337,8 +340,13 @@ async function bootstrap() {
     updateEnvironmentSummary(true);
     $('engineHint').innerHTML = '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与浏览器原生能力是两套独立路径：dav1d/SVT-AV1 属于网页自带的软件编解码；“播放”表示浏览器能否直接处理该格式，“解码API/编码API”则表示 WebCodecs 是否进一步向网页开放接口。';
   } else {
-    $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
-    $('envDetails').open = true;
+    if (state.nativeBackend?.available) {
+      $('engineHint').innerHTML =
+        '<span class="ok">Android 原生后端已加载。</span> SharedArrayBuffer / 跨源隔离属于网页 WASM 后端条件，不作为 Android 原生核心故障。Native 正式压制任务桥接完成前，正式压制按钮仍会保持关闭。';
+    } else {
+      $('engineHint').innerHTML = '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
+      $('envDetails').open = true;
+    }
   }
   updateEnvironmentSummary(engineStatus.ready);
   refreshAnalyze();
@@ -393,6 +401,7 @@ function detectNativeBackend() {
         state.nativeSelfTest = { error: '原生自检结果解析失败' };
       }
       renderBackendSummary();
+      updateEnvironmentSummary();
       const t = state.nativeSelfTest || {};
       log(
         `Android 原生自检：` +
@@ -428,11 +437,42 @@ function detectNativeBackend() {
   }
 }
 
+function safeHttpsUrl(value, fallback = '') {
+  try {
+    const url = new URL(value || fallback, location.href);
+    return url.protocol === 'https:' ? url.href : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function validateAppReleaseManifest(manifest) {
+  if (!manifest || manifest.packageName !== APP_PACKAGE) {
+    throw new Error('更新清单包名不匹配');
+  }
+  const versionCode = Number(manifest.versionCode);
+  if (!Number.isInteger(versionCode) || versionCode < 1) {
+    throw new Error('更新清单 versionCode 无效');
+  }
+  const apkUrl = safeHttpsUrl(manifest.apkUrl);
+  if (!apkUrl) throw new Error('更新清单 APK 地址不是有效 HTTPS URL');
+
+  const sha256 = String(manifest.sha256 || '').trim().toLowerCase();
+  if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) {
+    throw new Error('更新清单 SHA-256 格式无效');
+  }
+  const signerSha256 = String(manifest.signerSha256 || '').trim().toLowerCase();
+  if (signerSha256 && !/^[0-9a-f]{64}$/.test(signerSha256)) {
+    throw new Error('更新清单签名摘要格式无效');
+  }
+  return { ...manifest, versionCode, apkUrl, sha256, signerSha256 };
+}
+
 async function loadAppReleaseInfo() {
   try {
     const response = await fetch(APP_UPDATE_URL, { cache: 'no-store' });
     if (!response.ok) throw new Error('HTTP ' + response.status);
-    state.appRelease = await response.json();
+    state.appRelease = validateAppReleaseManifest(await response.json());
   } catch (error) {
     state.appRelease = null;
     log('Android 版本信息读取失败：' + error.message);
@@ -450,7 +490,10 @@ function renderAppReleaseCard() {
   if (!summary || !notice || !badge || !openBtn || !downloadBtn || !checkBtn) return;
 
   const release = state.appRelease;
-  const remoteUrl = state.appUpdateCheck?.apkUrl || release?.apkUrl || APP_DOWNLOAD_FALLBACK;
+  const remoteUrl = safeHttpsUrl(
+    state.appUpdateCheck?.apkUrl || release?.apkUrl,
+    APP_DOWNLOAD_FALLBACK
+  );
   downloadBtn.href = remoteUrl;
 
   const inApp = !!state.nativeBackend?.available;
@@ -643,6 +686,30 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
   const c = state.capabilities;
   if (!c) {
     $('envSummary').textContent = '检测中…';
+    return;
+  }
+
+  if (state.nativeBackend?.available) {
+    const t = state.nativeSelfTest;
+    if (!t) {
+      $('envSummary').textContent = 'Android 原生模式 · 正在自检';
+      $('envSummary').className = 'env-summary';
+      return;
+    }
+    const nativeOk = [
+      t.x264EncodeSmoke,
+      t.x265EncodeSmoke,
+      t.svtAv1EncodeSmoke,
+      t.dav1d,
+      t.libassVisualSmoke,
+      t.bundledFallbackReady,
+      t.ffprobeSmoke
+    ].every(Boolean);
+    $('envSummary').textContent = nativeOk
+      ? 'Android 原生核心自检通过'
+      : 'Android 原生核心自检有问题 · 点此查看';
+    $('envSummary').className = nativeOk ? 'env-summary ok' : 'env-summary warn';
+    if (!nativeOk) $('envDetails').open = true;
     return;
   }
 
