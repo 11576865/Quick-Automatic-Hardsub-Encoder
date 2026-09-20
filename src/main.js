@@ -1261,9 +1261,12 @@ async function loadPreviewAt(index) {
     log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
     let previewResult;
     if (state.nativeBackend?.available) {
+      const previewCenter = 0.5;
+      const shiftBy = Math.max(0, times[safeIndex] - previewCenter);
+      const previewAss = shiftAssForPreview(state.activeAssText || state.assText, shiftBy);
       previewResult = await requestNativePreview(
         times[safeIndex],
-        state.activeAssText || state.assText
+        previewAss
       );
     } else {
       const previewCenter = 0.5;
