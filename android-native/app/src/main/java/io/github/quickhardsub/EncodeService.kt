@@ -217,7 +217,7 @@ class EncodeService : Service() {
 
         val jobDir = NativeJobStore.jobDir(this, jobId)
         val assFile = NativeJobStore.assFile(this, jobId)
-        val output = NativeJobStore.outputFile(this, jobId)
+        val output = NativeJobStore.getOutput()File(this, jobId)
         val fontsDir = File(jobDir, "fonts")
         var stagedInput: File? = null
         var safUrl: String? = null
@@ -283,17 +283,17 @@ class EncodeService : Service() {
             checkCancelled()
 
             val sourceProbe = FFprobeKit.getMediaInformation(inputPath)
-            val sourceInfo = sourceProbe.mediaInformation
+            val sourceInfo = sourceProbe.getMediaInformation()
                 ?: throw IllegalStateException(
-                    sourceProbe.output.takeLast(1200).ifBlank { "FFprobe 无法读取输入视频" }
+                    sourceProbe.getOutput().takeLast(1200).ifBlank { "FFprobe 无法读取输入视频" }
                 )
 
-            val sourceStreams = sourceInfo.streams
-            val video = sourceStreams.firstOrNull { it.type == "video" }
+            val sourceStreams = sourceInfo.getStreams()
+            val video = sourceStreams.firstOrNull { it.getType() == "video" }
                 ?: throw IllegalStateException("输入没有可识别的视频流")
-            val audioTracks = sourceStreams.count { it.type == "audio" }
-            val props = video.allProperties
-            val pixelFormat = video.format.orEmpty()
+            val audioTracks = sourceStreams.count { it.getType() == "audio" }
+            val props = video.getAllProperties()
+            val pixelFormat = video.getFormat().orEmpty()
             val bitDepth = inferBitDepth(props?.optString("bits_per_raw_sample", "").orEmpty(), pixelFormat)
             val transfer = props?.optString("color_transfer", "").orEmpty()
             val primaries = props?.optString("color_primaries", "").orEmpty()
@@ -306,7 +306,7 @@ class EncodeService : Service() {
                 )
             }
 
-            val duration = sourceInfo.duration?.toDoubleOrNull()
+            val duration = sourceInfo.getDuration()?.toDoubleOrNull()
                 ?: request.optDouble("expectedDuration", 0.0)
             if (!(duration > 0.0)) {
                 throw IllegalStateException("无法取得有效视频时长")
@@ -325,8 +325,8 @@ class EncodeService : Service() {
                 "ass=" + NativeJobStore.escapeFilterPath(assFile.absolutePath) +
                     ":fontsdir=" + NativeJobStore.escapeFilterPath(fontsDir.absolutePath)
             )
-            val width = video.width?.toInt() ?: 0
-            val height = video.height?.toInt() ?: 0
+            val width = video.getWidth()?.toInt() ?: 0
+            val height = video.getHeight()?.toInt() ?: 0
             if ((width > 0 && width % 2 != 0) || (height > 0 && height % 2 != 0)) {
                 filterParts.add("pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0")
             }
@@ -338,7 +338,7 @@ class EncodeService : Service() {
                 else -> throw IllegalStateException("未知编码器")
             }
 
-            val fps = parseFps(video.averageFrameRate)
+            val fps = parseFps(video.getAverageFrameRate())
             val gop = max(48, min(300, ((if (fps > 0.0) fps else 30.0) * 5.0).toInt()))
 
             val args = mutableListOf(
@@ -389,8 +389,8 @@ class EncodeService : Service() {
             val session = FFmpegKit.executeWithArgumentsAsync(
                 args.toTypedArray(),
                 { completed ->
-                    returnCode = completed.returnCode
-                    lastOutput = completed.output
+                    returnCode = completed.getReturnCode()
+                    lastOutput = completed.getOutput()
                     latch.countDown()
                 },
                 { log ->
@@ -429,7 +429,7 @@ class EncodeService : Service() {
                     }
                 }
             )
-            activeSessionId = session.sessionId
+            activeSessionId = session.getSessionId()
 
             while (!latch.await(1, TimeUnit.SECONDS)) {
                 if (cancelRequested) {
@@ -461,14 +461,14 @@ class EncodeService : Service() {
             updateNotification("正在验证成品…", 99)
 
             val outputProbe = FFprobeKit.getMediaInformation(output.absolutePath)
-            val outputInfo = outputProbe.mediaInformation
+            val outputInfo = outputProbe.getMediaInformation()
                 ?: throw IllegalStateException(
-                    outputProbe.output.takeLast(1200).ifBlank { "FFprobe 无法读取成品" }
+                    outputProbe.getOutput().takeLast(1200).ifBlank { "FFprobe 无法读取成品" }
                 )
-            val outputStreams = outputInfo.streams
-            val outputVideoCount = outputStreams.count { it.type == "video" }
-            val outputAudioCount = outputStreams.count { it.type == "audio" }
-            val outputDuration = outputInfo.duration?.toDoubleOrNull() ?: 0.0
+            val outputStreams = outputInfo.getStreams()
+            val outputVideoCount = outputStreams.count { it.getType() == "video" }
+            val outputAudioCount = outputStreams.count { it.getType() == "audio" }
+            val outputDuration = outputInfo.getDuration()?.toDoubleOrNull() ?: 0.0
             val durationDelta = outputDuration - duration
             val tolerance = max(0.75, if (fps > 0.0) 2.0 / fps else 0.0)
 
@@ -483,7 +483,7 @@ class EncodeService : Service() {
                     "-"
                 )
             )
-            val scanOk = ReturnCode.isSuccess(scan.returnCode)
+            val scanOk = ReturnCode.isSuccess(scan.getReturnCode())
 
             if (outputVideoCount != 1) {
                 throw IllegalStateException("成品视频流数量异常：" + outputVideoCount)
@@ -495,13 +495,13 @@ class EncodeService : Service() {
             }
             if (!(outputDuration > 0.0) || abs(durationDelta) > tolerance) {
                 throw IllegalStateException(
-                    "成品时长异常：输入 " + String.format("%.3f", duration) +
-                        " s，输出 " + String.format("%.3f", outputDuration) + " s"
+                    "成品时长异常：输入 " + String.getFormat()("%.3f", duration) +
+                        " s，输出 " + String.getFormat()("%.3f", outputDuration) + " s"
                 )
             }
             if (!scanOk) {
                 throw IllegalStateException(
-                    scan.output.takeLast(1200).ifBlank { "成品全量视频 packet 解复用扫描失败" }
+                    scan.getOutput().takeLast(1200).ifBlank { "成品全量视频 packet 解复用扫描失败" }
                 )
             }
 
@@ -651,16 +651,16 @@ class EncodeService : Service() {
             }
         }
         return digest.digest().joinToString("") { byte ->
-            "%02x".format(byte.toInt() and 0xff)
+            "%02x".getFormat()(byte.toInt() and 0xff)
         }
     }
 
     private fun humanBytes(value: Long): String {
         val mb = value.toDouble() / (1024.0 * 1024.0)
         return if (mb >= 1024.0) {
-            String.format("%.2f GB", mb / 1024.0)
+            String.getFormat()("%.2f GB", mb / 1024.0)
         } else {
-            String.format("%.0f MB", mb)
+            String.getFormat()("%.0f MB", mb)
         }
     }
 
