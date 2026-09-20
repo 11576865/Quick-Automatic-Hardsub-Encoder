@@ -1,27 +1,22 @@
-name: Build Core and Deploy
+name: Build Web Core Artifact
 
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages-core
   cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build-web-core:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
 
       - name: Clone pinned FFmpegKitNext
         env:
@@ -62,18 +57,9 @@ jobs:
           npm install
           npm run build
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
       - name: Upload reusable core artifact
         uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-kit-next-web-hardsub-core
           path: public/vendor/ffmpeg-kit-next-web
-          retention-days: 30
-
-      - name: Deploy Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          retention-days: 90
