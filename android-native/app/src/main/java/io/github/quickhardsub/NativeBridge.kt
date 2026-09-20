@@ -884,6 +884,14 @@ class NativeBridge(
             if (assText.toByteArray(Charsets.UTF_8).size > 8 * 1024 * 1024) {
                 throw IllegalStateException("ASS 字幕超过 8 MB 安全上限")
             }
+            assText.lineSequence().forEach { line ->
+                if (line.length > 256 * 1024) {
+                    throw IllegalStateException("ASS 存在超过 256 KiB 的超长单行，已拒绝交给 libass 处理")
+                }
+                if (line.length > 64 * 1024 && line.contains("\\p")) {
+                    throw IllegalStateException("ASS 存在异常巨大的绘图事件，已拒绝以避免 libass 内存失控")
+                }
+            }
 
             val incoming = JSONObject(requestJson)
             val codec = incoming.optString("codec", "")
@@ -950,8 +958,12 @@ class NativeBridge(
 
             NativeJobStore.assFile(activity, jobId).writeText(assText, Charsets.UTF_8)
 
+            val selectedFontUris = getPickedUris("fonts")
+            if (selectedFontUris.size > 64) {
+                throw IllegalStateException("一次任务最多允许 64 个外部字体；过多字体会显著增加 libass/fontconfig 内存占用")
+            }
             val fontUris = JSONArray()
-            getPickedUris("fonts").forEach { fontUris.put(it.toString()) }
+            selectedFontUris.forEach { fontUris.put(it.toString()) }
 
             val request = JSONObject()
                 .put("inputUri", inputUri.toString())
@@ -1013,11 +1025,47 @@ class NativeBridge(
                 .put("error", "无效 Native job id")
                 .toString()
         }
-        val status = NativeJobStore.readStatus(activity, jobId)
+        var status = NativeJobStore.readStatus(activity, jobId)
             ?: return JSONObject()
                 .put("ok", false)
                 .put("error", "找不到 Native 任务状态")
                 .toString()
+
+        val activeStates = setOf("queued", "staging", "encoding", "validating", "cancelling")
+        if (status.optString("state") in activeStates && !EncodeService.isEncoding()) {
+            val updatedAt = status.optLong("updatedAt", 0L)
+            val staleMs = System.currentTimeMillis() - updatedAt
+            if (updatedAt > 0L && staleMs > 15_000L) {
+                val previousState = status.optString("state")
+                try {
+                    val dir = NativeJobStore.jobDir(activity, jobId)
+                    dir.listFiles()?.forEach { file ->
+                        if (
+                            file.name == "output.mkv" ||
+                            file.name == "fonts" ||
+                            file.name.startsWith("input_")
+                        ) {
+                            try {
+                                if (file.isDirectory) file.deleteRecursively() else file.delete()
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                } catch (_: Throwable) {}
+
+                status = JSONObject(status.toString())
+                    .put("state", "failed")
+                    .put("message", "原生压制被系统或应用进程中断")
+                    .put(
+                        "error",
+                        "任务状态停留在 " + previousState +
+                            "，但 Native 前台服务已不在运行。可能是系统/厂商后台管理、进程终止或设备重启导致；未完整成品已清理。"
+                    )
+                    .put("interrupted", true)
+                    .put("previousState", previousState)
+                NativeJobStore.writeStatus(activity, jobId, status)
+            }
+        }
+
         return status.put("ok", true).toString()
     }
 

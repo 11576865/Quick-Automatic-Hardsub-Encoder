@@ -238,16 +238,32 @@ class EncodeService : Service() {
 
             val inputUri = Uri.parse(request.getString("inputUri"))
             val fontUris = request.optJSONArray("fontUris") ?: JSONArray()
+            if (fontUris.length() > 64) {
+                throw IllegalStateException("外部字体数量超过 64 个安全上限")
+            }
 
             if (fontsDir.exists()) fontsDir.deleteRecursively()
             fontsDir.mkdirs()
 
+            var copiedFontBytes = 0L
+            val maxSingleFontBytes = 64L * 1024L * 1024L
+            val maxTotalFontBytes = 256L * 1024L * 1024L
             for (index in 0 until fontUris.length()) {
                 checkCancelled()
                 val uri = Uri.parse(fontUris.getString(index))
                 val originalName = NativeJobStore.displayName(this, uri, "font_" + index + ".ttf")
                 val target = File(fontsDir, index.toString().padStart(3, '0') + "_" + originalName)
                 NativeJobStore.copyUriToFile(this, uri, target)
+                val fontBytes = target.length()
+                if (fontBytes > maxSingleFontBytes) {
+                    throw IllegalStateException(
+                        "字体文件过大：" + originalName + "（超过 64 MiB 安全上限）"
+                    )
+                }
+                copiedFontBytes += fontBytes
+                if (copiedFontBytes > maxTotalFontBytes) {
+                    throw IllegalStateException("本次外部字体总大小超过 256 MiB 安全上限")
+                }
             }
 
             val (_, fallbackReady) = NativeJobStore.configureFonts(
@@ -438,6 +454,8 @@ class EncodeService : Service() {
             var lastOutput = ""
             var lastStatusWrite = 0L
             var lastNotification = 0L
+            var lastStorageCheck = System.currentTimeMillis()
+            var storageAbortMessage: String? = null
 
             val encodeStartedNs = System.nanoTime()
             val session = FFmpegKit.executeWithArgumentsAsync(
@@ -489,12 +507,30 @@ class EncodeService : Service() {
                 if (cancelRequested) {
                     activeSessionId?.let(FFmpegKit::cancel)
                 }
+
+                val now = System.currentTimeMillis()
+                if (now - lastStorageCheck >= 30_000L && storageAbortMessage == null) {
+                    lastStorageCheck = now
+                    val allocatable = NativeJobStore.allocatableBytes(this)
+                    val emergencyReserve = 128L * 1024L * 1024L
+                    if (allocatable < emergencyReserve) {
+                        storageAbortMessage =
+                            "压制过程中应用私有存储仅剩约 " + humanBytes(allocatable) +
+                                " 可分配；为避免写满存储并留下损坏成品，任务已提前终止"
+                        activeSessionId?.let(FFmpegKit::cancel)
+                    }
+                }
             }
             activeSessionId = null
             val encodeElapsedSeconds =
                 (System.nanoTime() - encodeStartedNs) / 1_000_000_000.0
             val averageEncodeSpeed =
                 if (encodeElapsedSeconds > 0.0) duration / encodeElapsedSeconds else 0.0
+
+            if (storageAbortMessage != null) {
+                output.delete()
+                throw IllegalStateException(storageAbortMessage)
+            }
 
             if (cancelRequested || ReturnCode.isCancel(returnCode)) {
                 output.delete()
@@ -657,7 +693,7 @@ class EncodeService : Service() {
                         .put("thermalEnd", thermalEnd)
                         .put("powerSaveStart", powerSaveStart)
                         .put("powerSaveEnd", powerSaveEnd)
-                        .put("validation", "packet-scan")
+                        .put("validation", "packet-scan+full-decode")
                 )
             } catch (_: Throwable) {
                 // Benchmark persistence must never turn an otherwise valid encode into a failure.
