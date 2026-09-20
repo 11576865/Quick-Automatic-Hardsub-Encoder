@@ -574,6 +574,7 @@ class NativeBridge(
                 val requestedStart = incoming.optDouble("start", 0.0).coerceAtLeast(0.0)
                 val duration = incoming.optDouble("duration", 0.0)
                 val withSubtitles = incoming.optBoolean("withSubtitles", false)
+                val measureSsim = incoming.optBoolean("measureSsim", false)
 
                 if (!(duration > 0.0) || duration > 8.0) {
                     throw IllegalStateException("Native 测试片段时长必须在 0–8 秒")
@@ -727,6 +728,52 @@ class NativeBridge(
                     ?.takeIf { it > 0.0 }
                     ?: duration
 
+                var ssim: Double? = null
+                if (measureSsim) {
+                    val referenceChain = buildString {
+                        append("[0:v]setpts=PTS-STARTPTS")
+                        if (withSubtitles) {
+                            val assFile = File(workDir, "sample.ass")
+                            val fontsDir = File(workDir, "fonts")
+                            append(",ass=")
+                            append(NativeJobStore.escapeFilterPath(assFile.absolutePath))
+                            append(":fontsdir=")
+                            append(NativeJobStore.escapeFilterPath(fontsDir.absolutePath))
+                        }
+                        append(",format=yuv420p[ref]")
+                    }
+                    val ssimGraph =
+                        referenceChain +
+                            ";[1:v]setpts=PTS-STARTPTS,format=yuv420p[dist]" +
+                            ";[dist][ref]ssim"
+
+                    val ssimSession = FFmpegKit.executeWithArguments(
+                        arrayOf(
+                            "-hide_banner",
+                            "-v", "info",
+                            "-ss", String.format(java.util.Locale.US, "%.3f", effectiveStart),
+                            "-i", safUrl,
+                            "-i", sampleFile.absolutePath,
+                            "-t", String.format(java.util.Locale.US, "%.3f", measuredDuration),
+                            "-filter_complex", ssimGraph,
+                            "-an",
+                            "-f", "null",
+                            "-"
+                        )
+                    )
+                    if (!ReturnCode.isSuccess(ssimSession.getReturnCode())) {
+                        throw IllegalStateException(
+                            ssimSession.getOutput().takeLast(1600)
+                                .ifBlank { "Native SSIM 比较失败" }
+                        )
+                    }
+                    val match = Regex("""All:([0-9]+(?:\.[0-9]+)?)""")
+                        .findAll(ssimSession.getOutput())
+                        .lastOrNull()
+                    ssim = match?.groupValues?.getOrNull(1)?.toDoubleOrNull()
+                        ?: throw IllegalStateException("Native SSIM 已执行但未解析到 All 分数")
+                }
+
                 result
                     .put("ok", true)
                     .put("sampleId", sampleId)
@@ -738,6 +785,8 @@ class NativeBridge(
                     .put("actualStart", effectiveStart)
                     .put("duration", measuredDuration)
                     .put("withSubtitles", withSubtitles)
+                    .put("measureSsim", measureSsim)
+                    .put("ssim", ssim ?: JSONObject.NULL)
                     .put("sampleBytes", sampleFile.length())
                     .put("packetCount", packetCount)
                     .put("totalVideoBytes", totalVideoBytes)
