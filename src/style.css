@@ -396,3 +396,44 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .app-card-head { align-items: center; }
   .app-card .button-row > * { flex: 1 1 160px; text-align: center; }
 }
+
+
+/* Android Native presentation: keep browser implementation details out of the main flow. */
+.native-app .hero p { max-width: 760px; }
+.native-app .app-card { padding-top: 15px; padding-bottom: 15px; }
+.native-app .env-body { padding-top: 12px; }
+
+.native-runtime {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.native-runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.platform-diagnostics {
+  margin-top: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.platform-diagnostics > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  user-select: none;
+}
+.platform-diagnostics-body {
+  margin-top: 10px;
+}
+.native-primary-group .env-codec-card {
+  min-height: 48px;
+}
+
+@media (max-width: 560px) {
+  .native-runtime-grid { grid-template-columns: 1fr; }
+}
