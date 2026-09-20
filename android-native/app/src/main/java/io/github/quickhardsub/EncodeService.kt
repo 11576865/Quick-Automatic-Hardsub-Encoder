@@ -34,9 +34,11 @@ class EncodeService : Service() {
         const val ACTION_START = "io.github.quickhardsub.action.START_ENCODE"
         const val ACTION_CANCEL = "io.github.quickhardsub.action.CANCEL_ENCODE"
         const val EXTRA_JOB_ID = "job_id"
-    }
 
-    private val running = AtomicBoolean(false)
+        private val processRunning = AtomicBoolean(false)
+
+        fun isEncoding(): Boolean = processRunning.get()
+    }
 
     @Volatile
     private var activeJobId: String? = null
@@ -172,7 +174,7 @@ class EncodeService : Service() {
             return START_NOT_STICKY
         }
 
-        if (!running.compareAndSet(false, true)) {
+        if (!processRunning.compareAndSet(false, true)) {
             NativeJobStore.writeStatus(
                 this,
                 jobId,
@@ -197,7 +199,7 @@ class EncodeService : Service() {
                 activeJobId = null
                 cancelRequested = false
                 timeoutTriggered = false
-                running.set(false)
+                processRunning.set(false)
                 try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
                 stopEncodeService()
             }
