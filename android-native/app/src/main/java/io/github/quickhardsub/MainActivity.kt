@@ -20,7 +20,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var nativeBridge: NativeBridge
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPickerRole: String? = null
+    private var pendingExportJobId: String? = null
     private val filePickerRequest = 1401
+    private val exportRequest = 1402
 
     private val assetLoader by lazy {
         WebViewAssetLoader.Builder()
@@ -93,6 +95,26 @@ class MainActivity : ComponentActivity() {
         })
     }
 
+    fun requestNativeExport(jobId: String, suggestedName: String) {
+        if (!NativeJobStore.isSafeJobId(jobId)) return
+        val output = NativeJobStore.outputFile(this, jobId)
+        if (!output.isFile || output.length() <= 0L) return
+
+        pendingExportJobId = jobId
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "video/x-matroska"
+            putExtra(Intent.EXTRA_TITLE, suggestedName)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
+
+        try {
+            startActivityForResult(intent, exportRequest)
+        } catch (_: Throwable) {
+            pendingExportJobId = null
+        }
+    }
+
     private fun persistUriPermission(uri: Uri, flags: Int) {
         val takeFlags = flags and (
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -108,6 +130,21 @@ class MainActivity : ComponentActivity() {
 
     @Deprecated("Deprecated in Android API; retained for WebView file chooser compatibility.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == exportRequest) {
+            val jobId = pendingExportJobId
+            pendingExportJobId = null
+
+            if (resultCode == RESULT_OK && jobId != null) {
+                val uri = data?.data
+                if (uri != null) {
+                    val flags = data.flags
+                    persistUriPermission(uri, flags)
+                    nativeBridge.exportJobOutput(jobId, uri)
+                }
+            }
+            return
+        }
+
         if (requestCode == filePickerRequest) {
             val result = if (resultCode == RESULT_OK) {
                 val flags = data?.flags ?: 0
