@@ -3,6 +3,9 @@ plugins {
     kotlin("android")
 }
 
+val ciVersionCode = providers.environmentVariable("APP_VERSION_CODE").orNull?.toIntOrNull()
+val ciVersionName = providers.environmentVariable("APP_VERSION_NAME").orNull
+
 android {
     namespace = "io.github.quickhardsub"
     compileSdk = 35
@@ -11,8 +14,8 @@ android {
         applicationId = "io.github.quickhardsub"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.2.1-native"
+        versionCode = ciVersionCode ?: 3
+        versionName = ciVersionName ?: "0.2.1-native"
     }
 
     buildFeatures {
