@@ -259,6 +259,29 @@ class EncodeService : Service() {
             }
 
             val seekable = NativeJobStore.isSeekable(this, inputUri)
+            val sourceSize = try {
+                contentResolver.openFileDescriptor(inputUri, "r")?.use { it.statSize } ?: -1L
+            } catch (_: Throwable) { -1L }
+            val estimatedOutputBytes = request.optLong("estimatedOutputBytes", -1L)
+            if (estimatedOutputBytes <= 0L || estimatedOutputBytes > 1_000_000_000_000L) {
+                throw IllegalStateException("缺少合理的成品空间预算")
+            }
+
+            val safetyReserve = 256L * 1024L * 1024L
+            val allocatableBefore = NativeJobStore.allocatableBytes(this)
+            val knownStagingBytes = if (!seekable && sourceSize > 0L) sourceSize else 0L
+            val requiredBefore = estimatedOutputBytes + knownStagingBytes + safetyReserve
+            if (allocatableBefore < requiredBefore) {
+                throw IllegalStateException(
+                    "应用私有存储空间不足：预计至少需要约 " +
+                        humanBytes(requiredBefore) +
+                        "（成品预算" +
+                        (if (knownStagingBytes > 0L) " + 输入 staging" else "") +
+                        " + 安全余量），当前可分配约 " +
+                        humanBytes(allocatableBefore)
+                )
+            }
+
             val inputPath: String
             if (seekable) {
                 safUrl = FFmpegKitConfig.getSafParameterForRead(this, inputUri, true)
@@ -269,21 +292,18 @@ class EncodeService : Service() {
             } else {
                 val inputName = NativeJobStore.displayName(this, inputUri, "input.bin")
                 stagedInput = File(jobDir, "input_" + inputName)
-                val allocatable = NativeJobStore.allocatableBytes(this)
-                val sourceSize = try {
-                    contentResolver.openFileDescriptor(inputUri, "r")?.use { it.statSize } ?: -1L
-                } catch (_: Throwable) { -1L }
-
-                if (sourceSize > 0L && allocatable < sourceSize + 256L * 1024L * 1024L) {
-                    throw IllegalStateException(
-                        "本地 staging 空间不足：需要至少约 " +
-                            humanBytes(sourceSize + 256L * 1024L * 1024L) +
-                            "，当前可分配约 " + humanBytes(allocatable)
-                    )
-                }
 
                 updateStatus(jobId, "staging", "输入不可 seek，正在复制到应用私有 staging", 0.0)
                 NativeJobStore.copyUriToFile(this, inputUri, stagedInput!!)
+
+                val allocatableAfterStage = NativeJobStore.allocatableBytes(this)
+                if (allocatableAfterStage < estimatedOutputBytes + safetyReserve) {
+                    throw IllegalStateException(
+                        "输入 staging 完成后剩余空间不足以安全写入成品：需要约 " +
+                            humanBytes(estimatedOutputBytes + safetyReserve) +
+                            "，当前可分配约 " + humanBytes(allocatableAfterStage)
+                    )
+                }
                 inputPath = stagedInput!!.absolutePath
             }
 
