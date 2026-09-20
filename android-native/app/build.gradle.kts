@@ -15,6 +15,10 @@ android {
         versionName = "0.2.0-native"
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
