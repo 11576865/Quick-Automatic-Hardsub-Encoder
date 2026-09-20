@@ -45,6 +45,9 @@ const state = {
   previewVisualChange: [],
   previewTimes: [],
   benchmarks: {},
+  qualityCalibration: {},
+  qualityCalibrationTarget: null,
+  qualityCalibrationBusy: false,
   selectedCodec: null,
   selectedTest: null,
   acceptedWarnings: false
@@ -146,8 +149,21 @@ app.innerHTML = `
           <option value="speed">速度优先：CRF 质量模式</option>
           <option value="size16">体积预算：1.6×（用于自动选参数）</option>
           <option value="size20">体积预算：2.0×（用于自动选参数）</option>
+          <option value="targetQuality">目标质量：实测 SSIM 后确定 CRF</option>
+          <option value="efficiency">效率优先：等质量下自动选最低码率</option>
         </select>
-        <small>1.6× / 2.0× 只参与参数规划：结合源码率、音频、时长和目标编码器计算单遍目标平均码率。它不是严格成品大小保证，也不会改变成两遍流程。</small>
+        <small>体积预算按单遍目标平均码率规划；“目标质量 / 效率优先”会先在短样本上实测 SSIM，再确定参数。短样本只能用于校准，不能当成整片质量保证。</small>
+        <div id="qualityCalibrationControls" class="quality-calibration hidden">
+          <label>目标 SSIM</label>
+          <select id="qualityTarget">
+            <option value="0.980">0.980 · 较高</option>
+            <option value="0.985" selected>0.985 · 高</option>
+            <option value="0.990">0.990 · 很高</option>
+          </select>
+          <button id="calibrateQualityBtn" type="button">实测校准目标质量</button>
+          <small>校准会对两个代表性片段反复试编码；“效率优先”定义为达到同一 SSIM 目标后，优先选择样本平均视频码率最低的编码器，码率接近时再偏向更快者。</small>
+          <div id="qualityCalibrationResult" class="note"></div>
+        </div>
       </div>
       <div id="sourceAnchor" class="plan-anchor note">分析完成后显示源码率与压缩密度。</div>
     </div>
@@ -266,9 +282,18 @@ $('acceptWarnings').addEventListener('change', e => {
 $('analyze').addEventListener('click', analyzeAll);
 $('previewBtn').addEventListener('click', renderPreviews);
 $('encodeGoal').addEventListener('change', () => {
+  updateQualityCalibrationControls();
   renderPlanOptions();
   refreshBenchmarkEnabled();
 });
+$('qualityTarget').addEventListener('change', () => {
+  state.qualityCalibration = {};
+  state.qualityCalibrationTarget = null;
+  $('qualityCalibrationResult').textContent = '';
+  renderPlanOptions();
+  refreshBenchmarkEnabled();
+});
+$('calibrateQualityBtn').addEventListener('click', runQualityCalibration);
 $('benchmarkBtn').addEventListener('click', runBenchmarks);
 $('testSelectedBtn').addEventListener('click', runSelectedTest);
 $('encodeBtn').addEventListener('click', runEncode);
