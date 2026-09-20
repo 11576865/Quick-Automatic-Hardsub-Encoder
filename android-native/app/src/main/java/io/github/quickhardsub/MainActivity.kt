@@ -21,8 +21,10 @@ class MainActivity : ComponentActivity() {
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPickerRole: String? = null
     private var pendingExportJobId: String? = null
+    private var pendingSampleExportId: String? = null
     private val filePickerRequest = 1401
     private val exportRequest = 1402
+    private val sampleExportRequest = 1403
 
     private val assetLoader by lazy {
         WebViewAssetLoader.Builder()
@@ -115,6 +117,26 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun requestNativeSampleExport(sampleId: String, suggestedName: String) {
+        if (!NativeSampleStore.isSafeId(sampleId)) return
+        val sample = NativeSampleStore.file(this, sampleId)
+        if (!sample.isFile || sample.length() <= 0L) return
+
+        pendingSampleExportId = sampleId
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "video/x-matroska"
+            putExtra(Intent.EXTRA_TITLE, suggestedName)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
+
+        try {
+            startActivityForResult(intent, sampleExportRequest)
+        } catch (_: Throwable) {
+            pendingSampleExportId = null
+        }
+    }
+
     private fun persistUriPermission(uri: Uri, flags: Int) {
         val takeFlags = flags and (
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
@@ -130,6 +152,21 @@ class MainActivity : ComponentActivity() {
 
     @Deprecated("Deprecated in Android API; retained for WebView file chooser compatibility.")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (requestCode == sampleExportRequest) {
+            val sampleId = pendingSampleExportId
+            pendingSampleExportId = null
+
+            if (resultCode == RESULT_OK && sampleId != null) {
+                val uri = data?.data
+                if (uri != null) {
+                    val flags = data.flags
+                    persistUriPermission(uri, flags)
+                    nativeBridge.exportNativeSample(sampleId, uri)
+                }
+            }
+            return
+        }
+
         if (requestCode == exportRequest) {
             val jobId = pendingExportJobId
             pendingExportJobId = null
