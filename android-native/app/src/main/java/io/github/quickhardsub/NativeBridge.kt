@@ -1115,6 +1115,30 @@ class NativeBridge(
         return ok to session.getOutput()
     }
 
+    private fun ssimSmoke(): Pair<Boolean, String> {
+        val args = arrayOf(
+            "-hide_banner",
+            "-v", "info",
+            "-f", "lavfi",
+            "-i", "testsrc2=size=64x64:rate=6:duration=0.5",
+            "-f", "lavfi",
+            "-i", "testsrc2=size=64x64:rate=6:duration=0.5",
+            "-filter_complex", "[0:v][1:v]ssim",
+            "-an",
+            "-f", "null",
+            "-"
+        )
+        val (ok, logs) = executeOk(args)
+        if (!ok) return false to logs
+        val score = Regex("""All:([0-9]+(?:\.[0-9]+)?)""")
+            .findAll(logs)
+            .lastOrNull()
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toDoubleOrNull()
+        return (score != null && score >= 0.999) to logs
+    }
+
     private fun codecSmoke(
         encoder: String,
         presetArgs: Array<String>,
@@ -1224,6 +1248,11 @@ class NativeBridge(
                 result.put("dav1d", hasDav1d)
                 result.put("assFilter", hasAss)
                 result.put("ssimFilter", hasSsim)
+                val ssimVisual = if (hasSsim) ssimSmoke() else false to "ssim filter missing"
+                result.put("ssimSmoke", ssimVisual.first)
+                if (!ssimVisual.first) {
+                    result.put("ssimError", ssimVisual.second.takeLast(1200))
+                }
                 result.put("h264MediaCodec", encoders.contains("h264_mediacodec"))
                 result.put("hevcMediaCodec", encoders.contains("hevc_mediacodec"))
                 result.put("av1MediaCodec", encoders.contains("av1_mediacodec"))
