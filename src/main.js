@@ -1311,13 +1311,15 @@ async function analyzeAll() {
       // Normalize every subtitle path to the exact UTF-8 text parsed by the UI.
       // This avoids preview/formal-encode differences for UTF-16 BOM files.
       await state.engine.setAssText(state.activeAssText);
-      if (state.engine.hasBundledFallbackFont) {
+      if (state.engine.hasBundledFallbackFont && !state.effectiveFonts.length) {
         state.autoFontFallbacks = Object.fromEntries(
           state.fontMatches
             .filter(m => m.status === 'missing')
             .map(m => [m.requested, state.engine.fallbackFontFamily])
         );
         await state.engine.setFontMappings({ ...state.autoFontFallbacks, ...state.fontBindings });
+      } else if (state.engine.ready) {
+        await state.engine.setFontMappings({ ...state.fontBindings });
       }
       state.media = await state.engine.probe();
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
@@ -1360,7 +1362,7 @@ async function analyzeAll() {
       }
       state.inputDecodeOk = true;
 
-      if (state.nativeSelfTest?.bundledFallbackReady) {
+      if (state.nativeSelfTest?.bundledFallbackReady && !state.effectiveFonts.length) {
         state.autoFontFallbacks = Object.fromEntries(
           state.fontMatches
             .filter(m => m.status === 'missing')
@@ -1368,6 +1370,10 @@ async function analyzeAll() {
         );
         state.activeAssText = rewriteAssFonts(state.assText, {
           ...state.autoFontFallbacks,
+          ...state.fontBindings
+        });
+      } else {
+        state.activeAssText = rewriteAssFonts(state.assText, {
           ...state.fontBindings
         });
       }

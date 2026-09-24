@@ -237,40 +237,14 @@ class EncodeService : Service() {
             }
 
             val inputUri = Uri.parse(request.getString("inputUri"))
-            val fontUris = request.optJSONArray("fontUris") ?: JSONArray()
-            if (fontUris.length() > 64) {
+            val fontUrisJson = request.optJSONArray("fontUris") ?: JSONArray()
+            if (fontUrisJson.length() > 64) {
                 throw IllegalStateException("外部字体数量超过 64 个安全上限")
             }
+            val fontUris = (0 until fontUrisJson.length()).map { Uri.parse(fontUrisJson.getString(it)) }
 
-            if (fontsDir.exists()) fontsDir.deleteRecursively()
-            fontsDir.mkdirs()
-
-            var copiedFontBytes = 0L
-            val maxSingleFontBytes = 64L * 1024L * 1024L
-            val maxTotalFontBytes = 256L * 1024L * 1024L
-            for (index in 0 until fontUris.length()) {
-                checkCancelled()
-                val uri = Uri.parse(fontUris.getString(index))
-                val originalName = NativeJobStore.displayName(this, uri, "font_" + index + ".ttf")
-                val target = File(fontsDir, index.toString().padStart(3, '0') + "_" + originalName)
-                NativeJobStore.copyUriToFile(this, uri, target)
-                val fontBytes = target.length()
-                if (fontBytes > maxSingleFontBytes) {
-                    throw IllegalStateException(
-                        "字体文件过大：" + originalName + "（超过 64 MiB 安全上限）"
-                    )
-                }
-                copiedFontBytes += fontBytes
-                if (copiedFontBytes > maxTotalFontBytes) {
-                    throw IllegalStateException("本次外部字体总大小超过 256 MiB 安全上限")
-                }
-            }
-
-            val (_, fallbackReady) = NativeJobStore.configureFonts(
-                this,
-                if (fontsDir.listFiles()?.isNotEmpty() == true) listOf(fontsDir.absolutePath) else emptyList()
-            )
-            if (!fallbackReady) {
+            val fontPrep = NativeJobStore.prepareTaskFonts(this, fontUris, fontsDir)
+            if (!fontPrep.fallbackReady) {
                 throw IllegalStateException("内置 Noto Sans SC 回退字体不可用")
             }
 

@@ -154,10 +154,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun persistUriPermission(uri: Uri, flags: Int) {
-        val takeFlags = flags and (
+        val takeFlags = (flags and (
             Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        )
-        if (takeFlags == 0) return
+        )).let {
+            if (it != 0) it else Intent.FLAG_GRANT_READ_URI_PERMISSION
+        }
         try {
             contentResolver.takePersistableUriPermission(uri, takeFlags)
         } catch (_: SecurityException) {

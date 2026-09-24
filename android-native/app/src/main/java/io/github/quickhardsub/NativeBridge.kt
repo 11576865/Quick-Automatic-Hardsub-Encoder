@@ -480,18 +480,10 @@ class NativeBridge(
                 if (previewRoot.exists()) previewRoot.deleteRecursively()
                 previewRoot.mkdirs()
                 val fontsDir = File(previewRoot, "fonts")
-                fontsDir.mkdirs()
-                getPickedUris("fonts").forEachIndexed { index, uri ->
-                    val name = NativeJobStore.displayName(activity, uri, "font_" + index + ".ttf")
-                    NativeJobStore.copyUriToFile(
-                        activity,
-                        uri,
-                        File(fontsDir, index.toString().padStart(3, '0') + "_" + name)
-                    )
-                }
-                NativeJobStore.configureFonts(
+                NativeJobStore.prepareTaskFonts(
                     activity,
-                    if (fontsDir.listFiles()?.isNotEmpty() == true) listOf(fontsDir.absolutePath) else emptyList()
+                    getPickedUris("fonts"),
+                    fontsDir
                 )
 
                 val assFile = File(previewRoot, "preview.ass")
@@ -695,22 +687,10 @@ class NativeBridge(
                     val assFile = File(workDir, "sample.ass")
                     assFile.writeText(assText, Charsets.UTF_8)
                     val fontsDir = File(workDir, "fonts")
-                    fontsDir.mkdirs()
-                    getPickedUris("fonts").forEachIndexed { index, uri ->
-                        val name = NativeJobStore.displayName(activity, uri, "font_" + index + ".ttf")
-                        NativeJobStore.copyUriToFile(
-                            activity,
-                            uri,
-                            File(fontsDir, index.toString().padStart(3, '0') + "_" + name)
-                        )
-                    }
-                    NativeJobStore.configureFonts(
+                    NativeJobStore.prepareTaskFonts(
                         activity,
-                        if (fontsDir.listFiles()?.isNotEmpty() == true) {
-                            listOf(fontsDir.absolutePath)
-                        } else {
-                            emptyList()
-                        }
+                        getPickedUris("fonts"),
+                        fontsDir
                     )
                     filterParts.add(
                         "ass=" + NativeJobStore.escapeFilterPath(assFile.absolutePath) +
