@@ -82,7 +82,7 @@ class NativeBridge(
             .put("count", uris.size)
         val names = JSONArray()
         uris.forEachIndexed { index, uri ->
-            names.put(displayName(activity, uri, "file_" + index))
+            names.put(NativeJobStore.displayName(activity, uri, "file_" + index))
         }
         result.put("names", names)
         postJsonCallback("__onNativePickerResult", result)
@@ -115,7 +115,7 @@ class NativeBridge(
 
             result
                 .put("ok", true)
-                .put("name", displayName(activity, uri, "subtitles.ass"))
+                .put("name", NativeJobStore.displayName(activity, uri, "subtitles.ass"))
                 .put("size", bytes.size)
                 .put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
                 .toString()
