@@ -1,4 +1,4 @@
-# Windows 11 local encoder. No Python, Node.js, or administrator rights required.
+﻿# Windows 11 local encoder. No Python, Node.js, or administrator rights required.
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
