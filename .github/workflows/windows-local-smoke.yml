@@ -1,0 +1,54 @@
+name: Windows local smoke
+on:
+  push:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows-local-smoke.yml'
+  pull_request:
+    paths:
+      - 'windows/**'
+      - '.github/workflows/windows-local-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse Windows entry point
+        shell: powershell
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path windows/hardsub_windows.ps1), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
+      - name: Install FFmpeg for encoding smoke
+        shell: powershell
+        run: choco install ffmpeg --yes --no-progress
+      - name: Encode synthetic video with relative ASS path
+        shell: powershell
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP 'hard sub smoke'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          Set-Content -Path (Join-Path $work 'subtitle.ass') -Encoding UTF8 -Value @'
+          [Script Info]
+          ScriptType: v4.00+
+          PlayResX: 320
+          PlayResY: 240
+          [V4+ Styles]
+          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+          Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+          [Events]
+          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+          Dialogue: 0,0:00:00.00,0:00:01.50,Default,,0,0,0,,Sample subtitle
+          '@
+          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'color=c=black:s=320x240:r=15:d=2' -c:v libx264 (Join-Path $work 'input video.mp4')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location $work
+          try {
+            & ffmpeg -hide_banner -loglevel error -y -progress progress.txt -i 'input video.mp4' -map 0:v:0 -map '0:a?' -sn -vf 'ass=subtitle.ass' -c:v libx264 -preset medium -crf 22 -c:a copy 'output video.mkv'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (-not (Test-Path 'output video.mkv') -or -not (Test-Path 'progress.txt')) { exit 1 }
+            & ffprobe -v error -show_entries 'stream=codec_name' -of csv=p=0 'output video.mkv'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }

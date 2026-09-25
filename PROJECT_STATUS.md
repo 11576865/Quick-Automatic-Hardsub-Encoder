@@ -1,6 +1,7 @@
 # Project status — v0.1.0
 
 ## Implemented
+- Windows 11 local PowerShell entry point: FFmpeg detection / optional winget installation, local ASS encode with libass, codec choice, selected font files, progress and cancel (initial implementation; Windows end-to-end validation still needed)
 - Browser UI and ≤1 GiB guard
 - ASS style/dialogue parsing and inline `\\fn` discovery
 - TTF/OTF/TTC/OTC internal name parsing
@@ -21,6 +22,7 @@
 - Manual workflow to build the custom FFmpegKitNext Web core
 
 ## Still required before end-to-end encoding works
+The list below concerns the browser WebAssembly backend. The Windows local entry point uses system/bundled FFmpeg instead.
 1. Run `.github/workflows/build-core.yml` on GitHub or build FFmpegKitNext locally.
 2. Put the resulting package under `public/vendor/ffmpeg-kit-next-web/`.
 3. Verify the exact FFmpegKitNext build flags against the current upstream revision and fix any upstream build regressions.

@@ -8,6 +8,10 @@ https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/
 
 > 在自定义 FFmpeg WebAssembly core 构建完成前，页面可以打开并进行基础文件/ASS/字体分析；真实 libass 预览与硬字幕压制需要完整 core。
 
+## Windows 11 本地压制
+
+下载仓库 ZIP 并解压，双击 `windows/start_windows.bat`。该入口使用 Windows 自带的 PowerShell，调用本机 FFmpeg 完成 ASS 硬字幕压制；可以选择 H.264、H.265、AV1、字体文件与输出位置，显示进度并可取消。已有 FFmpeg 的用户直接使用；没有 FFmpeg 的用户可在界面中使用 winget 安装，或把 `ffmpeg.exe`、`ffprobe.exe` 放入 `tools/ffmpeg/bin/`。不需要安装 Android App、Node.js 或 Python。具体步骤和当前功能边界见 [Windows 说明](windows/README.md)。
+
 ## 目标
 
 面向约 1 GB（含）以下的小视频。用户只需要选择视频、ASS 字幕以及必要时的字体文件；程序负责文件挂载、字幕预检、真实 libass 预览、编码样本测试、方案比较和成品下载，避免手工输入 FFmpeg 命令、整理路径和改文件名。
