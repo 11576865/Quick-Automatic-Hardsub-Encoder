@@ -10,13 +10,14 @@ https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/
 
 ## Windows 11 本地压制
 
-Windows 上推荐使用 **Windows Native**：下载仓库 ZIP 并解压，双击 `windows/start_windows.bat`。程序直接调用本机 FFmpeg，不受网页版 1 GiB 限制。
+Windows 上推荐使用 **Windows Native Bridge**：下载仓库 ZIP 并解压，双击 `windows/start_windows.bat`。启动器在后台运行本机 Bridge，并自动打开同一套现代 Web UI；正常使用不再显示 WinForms 主窗口。
 
-Windows Native 会自动检测 CPU、NVIDIA GPU 与六种编码器：`h264_nvenc`、`hevc_nvenc`、`av1_nvenc`、`libx264`、`libx265`、`libsvtav1`。NVENC 还会执行实际一帧探测，避免 FFmpeg 列出编码器但驱动/GPU 无法使用的假阳性。
+网页负责界面，本机 Bridge 负责系统 FFmpeg、FFprobe、libass、CPU 与 NVIDIA NVENC。可用时自动优先 Windows Native；普通在线打开网页而没有 Bridge 时仍使用 FFmpeg WASM 路径。
 
-界面可以对同一编码格式运行短样本比较，显示实际耗时、实时倍速、文件大小和 SSIM，并在比较后自动切换到建议方案。ASS 继续由 libass 渲染，音频默认 stream copy。
+需要排错时可运行 `windows/start_windows_debug.bat` 查看后台控制台；旧 WinForms 工具保留在 `windows/start_windows_legacy_ui.bat`，只作为备用诊断入口。
 
-没有 FFmpeg 时可在界面中使用 winget 安装，或把 `ffmpeg.exe`、`ffprobe.exe` 放入 `tools/ffmpeg/bin/`。详细说明见 [Windows Native](windows/README.md)。
+详细说明见 [Windows Native](windows/README.md)。
+
 ## 目标
 
 面向约 1 GB（含）以下的小视频。用户只需要选择视频、ASS 字幕以及必要时的字体文件；程序负责文件挂载、字幕预检、真实 libass 预览、编码样本测试、方案比较和成品下载，避免手工输入 FFmpeg 命令、整理路径和改文件名。

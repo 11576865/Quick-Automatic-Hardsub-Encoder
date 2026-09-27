@@ -22,7 +22,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -100,6 +100,52 @@ jobs:
           }
           if ($result.Available -and $result.Bytes -le 0) { throw 'Successful NVENC probe did not produce encoded bytes' }
           if (-not $result.Available -and $null -eq $result.Error) { throw 'Failed NVENC probe did not preserve diagnostics' }
+
+      - name: Smoke Windows localhost bridge
+        shell: powershell
+        run: |
+          $bridge = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile',
+            '-ExecutionPolicy','Bypass',
+            '-File',(Resolve-Path './windows/native-bridge.ps1'),
+            '-NoBrowser',
+            '-Port','8877',
+            '-Token','ci-test-token'
+          )
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Milliseconds 500
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8877/api/health' -Headers @{
+                  'X-Quick-Hardsub-Token'='ci-test-token'
+                  'Origin'='http://127.0.0.1:8877'
+                } -TimeoutSec 3
+                if ($health.backend -eq 'windows-native' -and $health.available) {
+                  $ready = $true
+                  break
+                }
+              } catch {}
+            }
+            if (-not $ready) { throw 'Windows Native Bridge did not become ready' }
+            if (-not $health.ffmpeg -or -not $health.ffprobe) { throw 'Bridge did not expose FFmpeg/FFprobe' }
+            if (-not $health.encoders) { throw 'Bridge did not expose encoder capabilities' }
+
+            $preflight = Invoke-WebRequest -Method Options -Uri 'http://127.0.0.1:8877/api/health' -Headers @{
+              'Origin'='https://11576865.github.io'
+              'Access-Control-Request-Method'='GET'
+              'Access-Control-Request-Headers'='x-quick-hardsub-token'
+              'Access-Control-Request-Private-Network'='true'
+            } -UseBasicParsing
+            if ($preflight.Headers['Access-Control-Allow-Origin'] -ne 'https://11576865.github.io') { throw 'Bridge CORS origin is wrong' }
+            if ($preflight.Headers['Access-Control-Allow-Private-Network'] -ne 'true') { throw 'Bridge private-network opt-in is missing' }
+
+            $utf8Body = '{"requestId":"ci","timeSeconds":0.5,"assText":"中文"}'
+            $bytes = [Text.Encoding]::UTF8.GetByteCount($utf8Body)
+            if ($bytes -le $utf8Body.Length) { throw 'UTF-8 smoke body is not multibyte as expected' }
+          } finally {
+            if ($bridge -and -not $bridge.HasExited) { Stop-Process -Id $bridge.Id -Force }
+          }
 
       - name: Preserve old output until replacement succeeds
         shell: powershell
