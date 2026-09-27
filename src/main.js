@@ -5,6 +5,7 @@ import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedF
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
 import { decodeAssFile } from './ass-decoding.js';
+import { detectWindowsNativeBridge } from './windows-native-client.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -367,8 +368,15 @@ async function runWebTask(task) {
 }
 
 for (const [inputId, role] of [['video', 'video'], ['ass', 'ass'], ['fonts', 'fonts']]) {
-  $(inputId).addEventListener('click', () => {
-    try { globalThis.NativeHardsub?.preparePickerRole?.(role); } catch {}
+  $(inputId).addEventListener('click', event => {
+    try {
+      if (globalThis.NativeHardsub?.__windowsNative) {
+        event.preventDefault();
+        globalThis.NativeHardsub.preparePickerRole?.(role);
+        return;
+      }
+      globalThis.NativeHardsub?.preparePickerRole?.(role);
+    } catch {}
   });
 }
 
@@ -383,7 +391,7 @@ $('video').addEventListener('change', e => {
   if (state.video && globalThis.NativeHardsub?.probeSelectedVideo) {
     try {
       globalThis.NativeHardsub.probeSelectedVideo();
-      log('Android 原生后端：正在直接探测所选 content:// 视频和 SAF 可寻址性…');
+      log('Native 后端：正在直接探测所选 content:// 视频和 SAF 可寻址性…');
     } catch (error) {
       log('Android 原生输入探测启动失败：' + error.message);
     }
@@ -527,6 +535,7 @@ $('clearSavedFontsBtn').addEventListener('click', async () => {
 bootstrap();
 
 async function bootstrap() {
+  await detectWindowsNativeBridge();
   detectNativeBackend();
   const nativeMode = !!state.nativeBackend?.available;
 
@@ -554,11 +563,12 @@ async function bootstrap() {
   if (nativeMode) {
     // APK uses the ARM64 backend directly. Do not initialize the browser WASM
     // engine just to discover capabilities the app does not use.
-    $('engineHint').innerHTML =
-      '<span class="ok">Android Native 模式。</span> 正式预览、测试片段和整片压制都直接调用设备内的 FFmpegKitNext / libass；网页后备环境只保留在高级诊断中。';
+    $('engineHint').innerHTML = state.nativeBackend?.backend === 'windows-native'
+      ? '<span class="ok">Windows Native 模式。</span> 当前网页只是控制台；预览、测试片段和整片压制都由后台系统 FFmpeg / libass / NVENC 执行。'
+      : '<span class="ok">Android Native 模式。</span> 正式预览、测试片段和整片压制都直接调用设备内的 FFmpegKitNext / libass；网页后备环境只保留在高级诊断中。';
     updateEnvironmentSummary(false);
     refreshAnalyze();
-    recoverNativeJob();
+    await recoverNativeJob();
     return;
   }
 
@@ -618,6 +628,42 @@ function detectNativeBackend() {
 
       const role = data?.role || '';
       const names = Array.isArray(data?.names) ? data.names : [];
+
+      if (state.nativeBackend?.backend === 'windows-native' && Number(data?.count || 0) > 0) {
+        const files = Array.isArray(data?.files) ? data.files : [];
+        const fromBase64 = item => {
+          const binary = atob(item.base64 || '');
+          const bytes = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          return new File([bytes], item.name || 'file.bin');
+        };
+
+        if (role === 'video') {
+          const item = files[0];
+          if (item) {
+            state.video = { name: item.name, size: Number(item.size || 0), windowsNative: true };
+            state.nativeInputProbe = null;
+            invalidateAnalysis();
+            $('videoMeta').textContent = item.name + ' · ' + formatBytes(Number(item.size || 0)) + ' · Windows Native';
+            $('videoMeta').className = '';
+            globalThis.NativeHardsub?.probeSelectedVideo?.();
+          }
+        } else if (role === 'ass') {
+          const item = files[0];
+          if (item?.base64) {
+            state.ass = fromBase64(item);
+            invalidateAnalysis();
+            $('assMeta').textContent = state.ass.name + ' · Windows Native';
+            $('assMeta').className = '';
+          }
+        } else if (role === 'fonts') {
+          state.fonts = files.filter(item => item?.base64).map(fromBase64);
+          invalidateAnalysis();
+          updateFontMeta();
+        }
+        refreshAnalyze();
+      }
+
       if (Number(data?.count || 0) > 0) {
         log(
           'Android 系统文件选择器返回：' +
@@ -756,9 +802,9 @@ function detectNativeBackend() {
         data = { ok: false, error: 'Native 测试片段保存结果解析失败' };
       }
       if (data.ok) {
-        log('Android Native 测试片段已保存：' + formatBytes(Number(data.bytes || 0)));
+        log('Native 测试片段已保存：' + formatBytes(Number(data.bytes || 0)));
       } else {
-        log('Android Native 测试片段保存失败：' + (data.error || '未知错误'));
+        log('Native 测试片段保存失败：' + (data.error || '未知错误'));
         alert('测试片段保存失败：' + (data.error || '未知错误'));
       }
     };
@@ -806,7 +852,7 @@ function detectNativeBackend() {
   } catch (error) {
     state.nativeBackend = { available: false, error: error.message };
     renderBackendSummary();
-    log(`Android 原生后端检测失败：${error.message}`);
+    log(`Native 后端检测失败：${error.message}`);
   }
 }
 
@@ -944,13 +990,15 @@ function applyPlatformPresentation() {
   const fontLibrary = $('fontLibraryDetails');
 
   if (nativeMode) {
+    const windowsNative = state.nativeBackend?.backend === 'windows-native';
     if (hero) {
-      hero.textContent =
-        '在设备本地使用 Android 原生 FFmpeg 完成 ASS 字幕预检、字体检查、真实预览、编码测试与 H.264 / H.265 / AV1 硬字幕压制。';
+      hero.textContent = windowsNative
+        ? '在现代 Web UI 中直接调用 Windows 系统 FFmpeg、CPU 与 NVIDIA NVENC 完成字幕预检、测试与硬字幕压制。'
+        : '在设备本地使用 Android 原生 FFmpeg 完成 ASS 字幕预检、字体检查、真实预览、编码测试与 H.264 / H.265 / AV1 硬字幕压制。';
     }
-    if (appTitle) appTitle.textContent = '应用与更新';
-    if (videoLabel) videoLabel.textContent = '视频（通过 Android 系统文件选择器读取）';
-    if (backendLabel) backendLabel.textContent = 'Android 原生处理引擎';
+    if (appTitle) appTitle.textContent = windowsNative ? 'Windows Native' : '应用与更新';
+    if (videoLabel) videoLabel.textContent = windowsNative ? '视频（Windows 原生文件选择器）' : '视频（通过 Android 系统文件选择器读取）';
+    if (backendLabel) backendLabel.textContent = windowsNative ? 'Windows Native 处理引擎' : 'Android 原生处理引擎';
     if (fontLabel) fontLabel.textContent = '字体（可选，可多选；仅用于本次 Native 任务）';
     fontPersist?.classList.add('hidden');
     fontLibrary?.classList.add('hidden');
@@ -1059,6 +1107,29 @@ function renderBackendSummary() {
 
   const t = state.nativeSelfTest;
   const p = state.nativeInputProbe;
+
+  if (state.nativeBackend?.backend === 'windows-native') {
+    const gpu = Array.isArray(state.nativeBackend.gpus) && state.nativeBackend.gpus.length
+      ? state.nativeBackend.gpus.join(' / ')
+      : '未检测到 NVIDIA GPU';
+    const available = Array.isArray(state.nativeBackend.encoders)
+      ? state.nativeBackend.encoders.filter(x => x?.Available || x?.available).map(x => x.Encoder || x.encoder || x.Key || x.key)
+      : [];
+    const inputText = p
+      ? p.ok
+        ? '当前视频：' + escapeHtml(p.videoCodec || 'unknown') + ' ' + Number(p.width || 0) + '×' + Number(p.height || 0)
+        : '当前视频探测失败：' + escapeHtml(p.error || '未知错误')
+      : '选择视频后由系统 FFprobe 直接探测';
+    el.innerHTML =
+      '<span class="ok">Windows Native 已连接。</span> ' + inputText +
+      '<small class="native-runtime">' +
+      escapeHtml(state.nativeBackend.cpu || 'unknown CPU') + ' · ' +
+      escapeHtml(gpu) + ' · ' +
+      escapeHtml(available.join(' / ') || '未发现可用编码器') +
+      '</small>';
+    return;
+  }
+
   const runtime =
     'ARM64 · FFmpegKitNext ' + escapeHtml(state.nativeBackend.ffmpegKitVersion || 'unknown') +
     ' · 可用私有空间约 ' + formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0)) +
@@ -1129,6 +1200,32 @@ function renderCapabilities() {
   ];
 
   if (nativeMode) {
+    if (state.nativeBackend?.backend === 'windows-native') {
+      const encoders = Array.isArray(state.nativeBackend.encoders) ? state.nativeBackend.encoders : [];
+      const encoderRows = encoders.map(e => {
+        const name = e.Label || e.label || e.Encoder || e.encoder || e.Key || e.key || 'encoder';
+        const ok = !!(e.Available ?? e.available);
+        const detail = e.Hardware ?? e.hardware ? 'NVIDIA NVENC' : 'CPU software';
+        const err = e.RuntimeError || e.runtimeError || '';
+        return '<div class="env-codec-card"><div><strong>' + escapeHtml(name) + '</strong><small>' +
+          detail + (err && !ok ? ' · ' + escapeHtml(String(err).split(/\r?\n/)[0].slice(0,120)) : '') +
+          '</small></div>' + badge(ok, '可用', '不可用') + '</div>';
+      }).join('');
+      const gpu = Array.isArray(state.nativeBackend.gpus) && state.nativeBackend.gpus.length
+        ? state.nativeBackend.gpus.join(' / ')
+        : '未检测到 NVIDIA GPU';
+      $('capabilities').innerHTML =
+        '<div class="env-group native-primary-group"><div class="env-group-title">Windows Native</div>' +
+        '<div class="native-runtime-grid">' +
+        '<div class="env-chip"><span>CPU</span><span>' + escapeHtml(state.nativeBackend.cpu || 'unknown') + '</span></div>' +
+        '<div class="env-chip"><span>GPU</span><span>' + escapeHtml(gpu) + '</span></div>' +
+        '<div class="env-chip"><span>FFmpeg</span><span>' + escapeHtml(state.nativeBackend.ffmpeg || 'missing') + '</span></div>' +
+        '<div class="env-chip"><span>libass</span><span class="' + (state.nativeBackend.hasAss ? 'ok' : 'warn') + '">' +
+        (state.nativeBackend.hasAss ? '可用' : '缺失') + '</span></div></div></div>' +
+        '<div class="env-group"><div class="env-group-title">编码器</div><div class="env-wasm-grid">' + encoderRows + '</div></div>';
+      return;
+    }
+
     const nativeRows = [
       ['H.264', 'x264 · 编码', t ? !!t.x264EncodeSmoke : null],
       ['H.265', 'x265 · 编码', t ? !!t.x265EncodeSmoke : null],
@@ -1190,7 +1287,7 @@ function renderCapabilities() {
               <div>${badge(encode, '可用', '未暴露')}</div>
             `).join('')}
           </div>
-          <div class="note env-explain">这些项目只描述 APK 内 WebView 的网页能力，不参与 Android Native 正式压制判定。</div>
+          <div class="note env-explain">这些项目只描述 APK 内 WebView 的网页能力，不参与 Native 正式压制判定。</div>
         </div>
       </details>
     `;
@@ -1252,6 +1349,13 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
 
   if (state.nativeBackend?.available) {
     const t = state.nativeSelfTest;
+    if (state.nativeBackend?.backend === 'windows-native') {
+      const ready = !!(t?.ffprobeSmoke && t?.libassVisualSmoke && (t?.x264EncodeSmoke || t?.x265EncodeSmoke || t?.svtAv1EncodeSmoke));
+      $('envSummary').textContent = ready ? 'Windows Native 环境正常' : 'Windows Native 环境需要检查 · 点此查看';
+      $('envSummary').className = ready ? 'env-summary ok' : 'env-summary warn';
+      if (!ready) $('envDetails').open = true;
+      return;
+    }
     if (!t) {
       $('envSummary').textContent = 'Android 原生模式 · 正在自检';
       $('envSummary').className = 'env-summary';
@@ -1405,7 +1509,7 @@ async function analyzeAll() {
     state.assInfo = parseAss(assText);
     state.effectiveFonts = state.nativeBackend?.available ? [...state.fonts] : getEffectiveFontFiles();
     if (state.nativeBackend?.available && state.savedFonts.length) {
-      log('Android Native 正式压制只直接使用本次通过系统文件选择器选中的字体；浏览器常用字体库暂不传入 Native 服务。');
+      log('Native 正式压制只直接使用本次通过系统文件选择器选中的字体；浏览器常用字体库暂不传入 Native 服务。');
     }
     state.fontFaces = [];
     for (const file of state.effectiveFonts) {
@@ -1467,7 +1571,7 @@ async function analyzeAll() {
       state.media = mediaFromNativeProbe(p);
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       if (!p.inputDecodeSmoke) {
-        throw new Error('Android Native 输入视频 1 帧实际解码测试失败：' + (p.inputDecodeError || '未知错误'));
+        throw new Error('Native 输入视频 1 帧实际解码测试失败：' + (p.inputDecodeError || '未知错误'));
       }
       state.inputDecodeOk = true;
 
@@ -1488,14 +1592,14 @@ async function analyzeAll() {
       }
 
       log(
-        'Android Native FFprobe：' +
+        'Native FFprobe：' +
         state.media.videoCodec + ' ' +
         state.media.width + 'x' + state.media.height + ' ' +
         state.media.fps.toFixed(2) + ' fps · ' +
         (state.media.pixelFormat || '未知像素格式') + ' · ' +
         state.media.bitDepth + '-bit'
       );
-      log('Android Native 输入视频实际 1 帧解码测试通过。');
+      log('Native 输入视频实际 1 帧解码测试通过。');
     } else {
       throw new Error('没有可用的视频处理后端');
     }
@@ -1977,7 +2081,9 @@ function renderPlanOptions() {
   const sourceRate = getSourceVideoBitrate();
   const bppf = getSourceBppf();
   $('sourceAnchor').innerHTML = '<strong>源片锚点</strong><br>' + escapeHtml((state.media.videoCodec || 'unknown').toUpperCase()) + ' · ' + formatBitrate(sourceRate) + ' · ' + formatBppf(bppf) + '<br><span class="note">源码率只作为压缩状态参考，不当成质量分数。</span>';
-  const labels = { h264: 'H.264 / x264', h265: 'H.265 / x265', av1: 'AV1 / SVT-AV1' };
+  const labels = state.nativeBackend?.backend === 'windows-native'
+    ? { h264: 'H.264 / Windows Native', h265: 'H.265 / Windows Native', av1: 'AV1 / Windows Native' }
+    : { h264: 'H.264 / x264', h265: 'H.265 / x265', av1: 'AV1 / SVT-AV1' };
   $('codecPlanGrid').innerHTML = ['h264','h265','av1'].map(codec => {
     const available = state.softwareEncoders[codec] !== false;
     const plan = available ? buildEncodePlan(codec) : null;
@@ -2513,7 +2619,9 @@ async function runBenchmarks() {
 }
 
 function renderCodecCards() {
-  const labels = { h264:'H.264 / x264', h265:'H.265 / x265', av1:'AV1 / SVT-AV1' };
+  const labels = state.nativeBackend?.backend === 'windows-native'
+    ? { h264:'H.264 / Windows Native', h265:'H.265 / Windows Native', av1:'AV1 / Windows Native' }
+    : { h264:'H.264 / x264', h265:'H.265 / x265', av1:'AV1 / SVT-AV1' };
   $('codecGrid').innerHTML = ['h264','h265','av1'].map(codec => {
     const r = state.benchmarks[codec];
     if (!r) return '<div class="codec-card codec-' + codec + '"><h3>' + labels[codec] + '</h3><div class="note">等待测试</div></div>';
@@ -2713,7 +2821,7 @@ function requestNativePreview(timeSeconds, assText) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       state.nativePreviewWaiters.delete(requestId);
-      reject(new Error('Android Native 字幕预览超时'));
+      reject(new Error('Native 字幕预览超时'));
     }, 90000);
     state.nativePreviewWaiters.set(requestId, { resolve, reject, timer });
     bridge.renderNativePreview(requestId, Number(timeSeconds || 0), assText);
@@ -2723,7 +2831,7 @@ function requestNativePreview(timeSeconds, assText) {
 function requestNativeSample(options, assText) {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.runNativeSample) {
-    return Promise.reject(new Error('Android Native 测试片段桥不可用'));
+    return Promise.reject(new Error('Native 测试片段桥不可用'));
   }
 
   const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
@@ -2732,7 +2840,7 @@ function requestNativeSample(options, assText) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       state.nativeSampleWaiters.delete(requestId);
-      reject(new Error('Android Native 测试片段生成超时'));
+      reject(new Error('Native 测试片段生成超时'));
     }, timeoutMs);
 
     state.nativeSampleWaiters.set(requestId, { resolve, reject, timer });
@@ -2747,7 +2855,7 @@ function requestNativeSample(options, assText) {
 async function runNativeEncode() {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.startNativeEncode || !bridge?.getNativeJobStatus) {
-    throw new Error('Android Native 正式压制桥不可用');
+    throw new Error('Native 正式压制桥不可用');
   }
   if (state.media?.unsafeColorPipeline) {
     alert('检测到 HDR/高位深输入。当前 Native 版本不会静默转换，正式压制已锁定。');
@@ -2807,16 +2915,18 @@ async function runNativeEncode() {
   let started;
   try {
     started = JSON.parse(
-      bridge.startNativeEncode(
-        JSON.stringify(request),
-        state.activeAssText || state.assText
+      await Promise.resolve(
+        bridge.startNativeEncode(
+          JSON.stringify(request),
+          state.activeAssText || state.assText
+        )
       )
     );
   } catch (error) {
     started = { ok: false, error: error.message };
   }
   if (!started?.ok || !started.jobId) {
-    throw new Error(started?.error || '无法创建 Android Native 压制任务');
+    throw new Error(started?.error || '无法创建 Native 压制任务');
   }
 
   state.nativeJobId = started.jobId;
@@ -2833,7 +2943,7 @@ async function runNativeEncode() {
       '（' + localPrediction.samples + ' 次记录），开始后会用实时速度修正。'
     : 'Android Native 任务已创建，正在准备输入与字体…';
   log(
-    'Android Native 正式压制：' + state.selectedCodec.toUpperCase() +
+    'Native 正式压制：' + state.selectedCodec.toUpperCase() +
     ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
     ' · job=' + started.jobId
   );
@@ -2846,7 +2956,7 @@ async function monitorNativeJob(jobId) {
   while (state.nativeJobId === jobId) {
     let status;
     try {
-      status = JSON.parse(bridge.getNativeJobStatus(jobId));
+      status = JSON.parse(await Promise.resolve(bridge.getNativeJobStatus(jobId)));
     } catch (error) {
       status = { ok: false, error: error.message };
     }
@@ -2885,7 +2995,7 @@ async function monitorNativeJob(jobId) {
     } else if (status.state === 'validating') {
       $('liveEta').textContent = status.message || '正在扫描成品完整性…';
     } else if (status.state === 'cancelling') {
-      $('liveEta').textContent = '正在取消 Android Native 压制…';
+      $('liveEta').textContent = '正在取消 Native 压制…';
     } else if (status.state === 'completed') {
       state.nativeCompletedJob = {
         jobId,
@@ -2917,10 +3027,10 @@ async function monitorNativeJob(jobId) {
       localStorage.removeItem('nativeEncodeJobId');
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '0%';
-      $('liveEta').textContent = 'Android Native 压制失败。';
+      $('liveEta').textContent = 'Native 压制失败。';
       $('encodeBtn').disabled = false;
-      log('Android Native 压制失败：' + (status.error || status.message || '未知错误'));
-      alert('Android Native 压制失败：' + (status.error || status.message || '未知错误'));
+      log('Native 压制失败：' + (status.error || status.message || '未知错误'));
+      alert('Native 压制失败：' + (status.error || status.message || '未知错误'));
       refreshBenchmarkEnabled();
       return;
     } else if (status.state === 'cancelled') {
@@ -2928,7 +3038,7 @@ async function monitorNativeJob(jobId) {
       localStorage.removeItem('nativeEncodeJobId');
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '0%';
-      $('liveEta').textContent = 'Android Native 压制已取消。';
+      $('liveEta').textContent = 'Native 压制已取消。';
       refreshBenchmarkEnabled();
       return;
     }
@@ -2937,13 +3047,13 @@ async function monitorNativeJob(jobId) {
   }
 }
 
-function recoverNativeJob() {
+async function recoverNativeJob() {
   const bridge = globalThis.NativeHardsub;
   const jobId = localStorage.getItem('nativeEncodeJobId');
   if (!jobId || !bridge?.getNativeJobStatus) return;
 
   try {
-    const status = JSON.parse(bridge.getNativeJobStatus(jobId));
+    const status = JSON.parse(await Promise.resolve(bridge.getNativeJobStatus(jobId)));
     if (!status?.ok) {
       localStorage.removeItem('nativeEncodeJobId');
       return;
