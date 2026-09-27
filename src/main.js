@@ -69,7 +69,7 @@ app.innerHTML = `
     <div class="hero-main">
       <div>
         <h1>快捷自动硬字幕压制器</h1>
-        <p id="heroSubtitle">一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。</p>
+        <p id="heroSubtitle">浏览器可直接本地处理；Windows 建议使用本机后端，以获得系统 FFmpeg、NVENC 与大文件支持。</p>
       </div>
       <div class="hero-tools">
         <div class="theme-control" id="themeControl" aria-label="界面主题">
@@ -90,7 +90,7 @@ app.innerHTML = `
   <section class="card input-card">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
-      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Android Native 可直接读取更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
+      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
       <div class="file-row input-font">
         <label id="fontLabel">字体（可选，可多选）</label>
@@ -104,7 +104,7 @@ app.innerHTML = `
         </details>
       </div>
       <div class="file-row input-engine"><label id="backendLabel">处理引擎</label>
-        <div id="backendSummary" class="note">正在检测网页 / Android 原生后端…</div>
+        <div id="backendSummary" class="note">正在检测当前网页 / 原生运行环境…</div>
       </div>
     </div>
     <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
