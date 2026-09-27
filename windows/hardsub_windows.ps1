@@ -151,8 +151,18 @@ function Refresh-Capabilities {
     Write-Log "CPU: $($script:capabilities.Cpu)"
     Write-Log "GPU: $gpuText"
     foreach($p in $script:capabilities.Encoders){
-        $stateText=if($p.Available){'可用'}elseif($p.Listed -and $p.Hardware){'FFmpeg 已列出，但 NVENC 运行探测失败'}else{'不可用'}
+        if($p.Available){
+            $stateText='可用'
+        }elseif($p.Listed -and $p.Hardware){
+            $stateText="FFmpeg 已列出，但 NVENC 运行探测失败（exit $($p.RuntimeExitCode)）"
+        }else{
+            $stateText='不可用'
+        }
         Write-Log "$($p.Label): $stateText"
+        if($p.Hardware -and $p.Listed -and -not $p.Available -and $p.RuntimeError){
+            $detail=($p.RuntimeError -split "\r?\n" | Where-Object {$_} | Select-Object -First 4) -join ' | '
+            Write-Log "  NVENC 详情：$detail"
+        }
     }
 }
 
@@ -163,7 +173,9 @@ function New-WorkDirectory([string]$Prefix){
 }
 
 function Stage-SubtitleAssets([string]$WorkDir){
-    Copy-Item -LiteralPath $ass.Text -Destination (Join-Path $WorkDir 'subtitle.ass')
+    $normalizedAss = Join-Path $WorkDir 'subtitle.ass'
+    $assInfo = Convert-AssToUtf8Normalized $ass.Text $normalizedAss
+    Write-Log ("ASS 已规范化：{0} -> UTF-8 · {1} 字符" -f $assInfo.Encoding, $assInfo.Characters)
     if($script:selectedFonts.Count){
         $fontDir=Join-Path $WorkDir 'fonts'; [void](New-Item -ItemType Directory -Path $fontDir)
         $n=0
