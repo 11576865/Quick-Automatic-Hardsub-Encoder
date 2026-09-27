@@ -10,6 +10,8 @@ const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
 const APP_PACKAGE = 'io.github.quickhardsub';
 const APP_DOWNLOAD_FALLBACK = 'https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/quick-automatic-hardsub-encoder-debug.apk';
+const WINDOWS_SOURCE_ZIP = 'https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/archive/refs/heads/main.zip';
+const WINDOWS_DOC_URL = 'https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/tree/main/windows';
 
 const state = {
   video: null,
@@ -83,22 +85,8 @@ app.innerHTML = `
     </div>
   </header>
 
-  <section id="androidAppCard" class="card app-card">
-    <div class="app-card-head">
-      <div>
-        <h2 id="appCardTitle">Android 应用</h2>
-        <p id="appReleaseSummary" class="note">正在读取最新版信息…</p>
-      </div>
-      <span id="appModeBadge" class="app-mode-badge">网页</span>
-    </div>
-    <div class="button-row">
-      <button id="openAndroidAppBtn" class="primary" type="button">打开 Android App</button>
-      <a id="downloadAndroidAppBtn" class="button-link" href="${APP_DOWNLOAD_FALLBACK}">下载最新版 APK</a>
-      <button id="checkAppUpdateBtn" class="hidden" type="button">检查更新</button>
-    </div>
-    <div id="appUpdateNotice" class="note app-update-notice">Android 浏览器可直接拉起已安装的 App；未安装时会回退到 APK 下载。</div>
-  </section>
-
+  <div class="workspace-layout">
+    <main class="workflow-main">
   <section class="card input-card">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
@@ -220,6 +208,53 @@ app.innerHTML = `
     <div class="card-heading"><span class="step-no">LOG</span><div><h2>技术日志</h2><p>设备检测、字体匹配、FFmpeg 与任务状态。</p></div></div>
     <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.1.0\n</div>
   </section>
+    </main>
+    <aside class="platform-rail" aria-label="运行方式">
+      <section id="windowsNativeCard" class="card platform-card windows-card">
+        <div class="platform-card-head">
+          <div>
+            <div class="platform-eyebrow">WINDOWS NATIVE · RECOMMENDED</div>
+            <h2>Windows 本机运行</h2>
+            <p class="note">网页不能直接启动本机脚本。下载源码后双击启动器，直接调用本机 FFmpeg；适合长视频和 NVIDIA NVENC。</p>
+          </div>
+          <span class="platform-badge">推荐</span>
+        </div>
+
+        <div class="windows-launch-path">
+          <span>启动入口</span>
+          <code>windows\start_windows.bat</code>
+        </div>
+
+        <div class="platform-facts">
+          <div><span>GPU</span><strong>自动探测 NVENC</strong></div>
+          <div><span>CPU 回退</span><strong>x264 / x265 / SVT-AV1</strong></div>
+          <div><span>依赖</span><strong>FFmpeg + libass</strong></div>
+        </div>
+
+        <div class="button-row platform-actions">
+          <a class="button-link platform-primary-link" href="${WINDOWS_SOURCE_ZIP}">下载 Windows 源码包</a>
+          <a class="button-link" href="${WINDOWS_DOC_URL}" target="_blank" rel="noreferrer">运行说明</a>
+        </div>
+        <p class="note platform-note">缺少 FFmpeg 时，可在 Windows 界面中安装，或运行 <code>winget install --id Gyan.FFmpeg -e --source winget</code>。NVENC 实际启动失败时会保留 CPU 编码路径。</p>
+      </section>
+
+        <section id="androidAppCard" class="card app-card">
+          <div class="app-card-head">
+            <div>
+              <h2 id="appCardTitle">Android 应用</h2>
+              <p id="appReleaseSummary" class="note">正在读取最新版信息…</p>
+            </div>
+            <span id="appModeBadge" class="app-mode-badge">网页</span>
+          </div>
+          <div class="button-row">
+            <button id="openAndroidAppBtn" class="primary" type="button">打开 Android App</button>
+            <a id="downloadAndroidAppBtn" class="button-link" href="${APP_DOWNLOAD_FALLBACK}">下载最新版 APK</a>
+            <button id="checkAppUpdateBtn" class="hidden" type="button">检查更新</button>
+          </div>
+          <div id="appUpdateNotice" class="note app-update-notice">Android 浏览器可直接拉起已安装的 App；未安装时会回退到 APK 下载。</div>
+        </section>
+    </aside>
+  </div>
 </div>`;
 
 const $ = id => document.getElementById(id);
