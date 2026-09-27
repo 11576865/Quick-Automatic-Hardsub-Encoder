@@ -3,10 +3,14 @@ on:
   push:
     paths:
       - 'windows/**'
+      - 'src/main.js'
+      - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
   pull_request:
     paths:
       - 'windows/**'
+      - 'src/main.js'
+      - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
   workflow_dispatch:
 
