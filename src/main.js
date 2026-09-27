@@ -92,11 +92,12 @@ app.innerHTML = `
   <section class="card input-card">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
-      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
-      <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
+      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" type="file"><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
+      <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
       <div class="file-row input-font">
         <label id="fontLabel">字体（可选，可多选）</label>
         <input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc">
+        <button id="fontsNativePickerBtn" class="native-picker-button hidden" type="button">选择字体文件</button>
         <label id="fontPersistCheck" class="font-persist-check"><input id="rememberFonts" type="checkbox" checked> 记住本次选择，加入本机常用字体库</label>
         <small id="fontMeta">未选择；常用字体库会自动参与 ASS 字体匹配。</small>
         <details id="fontLibraryDetails" class="font-library-details">
@@ -368,17 +369,52 @@ async function runWebTask(task) {
   }
 }
 
+const WINDOWS_NATIVE_PICKERS = {
+  video: { inputId: 'video', buttonId: 'videoNativePickerBtn', metaId: 'videoMeta', label: '视频' },
+  ass: { inputId: 'ass', buttonId: 'assNativePickerBtn', metaId: 'assMeta', label: 'ASS 字幕' },
+  fonts: { inputId: 'fonts', buttonId: 'fontsNativePickerBtn', metaId: 'fontMeta', label: '字体' }
+};
+
+function setWindowsNativePickerBusy(role, busy) {
+  const config = WINDOWS_NATIVE_PICKERS[role];
+  const button = config ? $(config.buttonId) : null;
+  if (!button) return;
+  button.disabled = !!busy;
+  button.setAttribute('aria-busy', busy ? 'true' : 'false');
+  button.textContent = busy ? '正在打开系统选择器…' : (role === 'video' ? '选择视频' : role === 'ass' ? '选择 ASS 字幕' : '选择字体文件');
+}
+
+function requestWindowsNativePicker(role) {
+  const config = WINDOWS_NATIVE_PICKERS[role];
+  const bridge = globalThis.NativeHardsub;
+  if (!config || !bridge?.__windowsNative || !bridge?.preparePickerRole) return false;
+  try {
+    setWindowsNativePickerBusy(role, true);
+    bridge.preparePickerRole(role);
+    log('Windows Native：正在打开系统' + config.label + '文件选择器…');
+    return true;
+  } catch (error) {
+    setWindowsNativePickerBusy(role, false);
+    log('Windows Native 文件选择器启动失败：' + (error?.message || error));
+    return false;
+  }
+}
+
 for (const [inputId, role] of [['video', 'video'], ['ass', 'ass'], ['fonts', 'fonts']]) {
   $(inputId).addEventListener('click', event => {
     try {
       if (globalThis.NativeHardsub?.__windowsNative) {
         event.preventDefault();
-        globalThis.NativeHardsub.preparePickerRole?.(role);
+        requestWindowsNativePicker(role);
         return;
       }
       globalThis.NativeHardsub?.preparePickerRole?.(role);
     } catch {}
   });
+}
+
+for (const [role, config] of Object.entries(WINDOWS_NATIVE_PICKERS)) {
+  $(config.buttonId)?.addEventListener('click', () => requestWindowsNativePicker(role));
 }
 
 $('video').addEventListener('change', e => {
@@ -643,6 +679,17 @@ function detectNativeBackend() {
 
       const role = data?.role || '';
       const names = Array.isArray(data?.names) ? data.names : [];
+      if (role) setWindowsNativePickerBusy(role, false);
+
+      if (data?.error) {
+        const config = WINDOWS_NATIVE_PICKERS[role];
+        const message = nativePlatformName() + ' 文件选择失败：' + data.error;
+        log(message);
+        if (config?.metaId && $(config.metaId)) {
+          $(config.metaId).textContent = '选择失败：' + data.error;
+          $(config.metaId).className = 'warn';
+        }
+      }
 
       if (state.nativeBackend?.backend === 'windows-native' && Number(data?.count || 0) > 0) {
         const files = Array.isArray(data?.files) ? data.files : [];
@@ -1061,6 +1108,12 @@ function applyPlatformPresentation() {
   const fontPersist = $('fontPersistCheck');
   const fontLibrary = $('fontLibraryDetails');
 
+  for (const [role, config] of Object.entries(WINDOWS_NATIVE_PICKERS)) {
+    $(config.inputId)?.classList.toggle('hidden', windowsNative);
+    $(config.buttonId)?.classList.toggle('hidden', !windowsNative);
+    if (!windowsNative) setWindowsNativePickerBusy(role, false);
+  }
+
   if (nativeMode) {
     if (hero) {
       hero.textContent = windowsNative
@@ -1287,9 +1340,7 @@ function renderCapabilities() {
           detail + (err && !ok ? ' · ' + escapeHtml(String(err).split(/\r?\n/)[0].slice(0,120)) : '') +
           '</small></div>' + badge(ok, '可用', '不可用') + '</div>';
       }).join('');
-      const gpu = Array.isArray(state.nativeBackend.gpus) && state.nativeBackend.gpus.length
-        ? state.nativeBackend.gpus.join(' / ')
-        : '未检测到 NVIDIA GPU';
+      const gpu = nativeGpuLabel();
       $('capabilities').innerHTML =
         '<div class="env-group native-primary-group"><div class="env-group-title">Windows Native</div>' +
         '<div class="native-runtime-grid">' +
