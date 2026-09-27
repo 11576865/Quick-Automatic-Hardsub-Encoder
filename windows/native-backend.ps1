@@ -151,15 +151,34 @@ function Get-WindowsCpuName {
 
 function Get-WindowsGpuNames([string]$ScriptRoot = $PSScriptRoot) {
     $names = @()
+
+    $smiCandidates = @()
     $smi = Find-NativeTool 'nvidia-smi' $ScriptRoot
-    if ($smi) {
+    if ($smi) { $smiCandidates += $smi }
+
+    if ([Environment]::Is64BitOperatingSystem -and -not [Environment]::Is64BitProcess) {
+        $sysnative = Join-Path $env:WINDIR 'Sysnative\nvidia-smi.exe'
+        if (Test-Path -LiteralPath $sysnative -PathType Leaf) { $smiCandidates += $sysnative }
+    }
+
+    foreach ($root in @($env:ProgramW6432, $env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+        if (-not $root) { continue }
+        $candidate = Join-Path $root 'NVIDIA Corporation\NVSMI\nvidia-smi.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { $smiCandidates += $candidate }
+    }
+
+    foreach ($candidate in @($smiCandidates | Select-Object -Unique)) {
         try {
-            $r = Invoke-NativeTool $smi '--query-gpu=name --format=csv,noheader' -AllowFailure
+            $r = Invoke-NativeTool $candidate '--query-gpu=name --format=csv,noheader' -AllowFailure
             if ($r.ExitCode -eq 0) {
-                $names = @($r.StdOut -split "\r?\n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+                $names = @($r.StdOut -split "\r?\n" |
+                    ForEach-Object { $_.Trim() } |
+                    Where-Object { $_ -match 'NVIDIA' })
+                if ($names.Count) { break }
             }
         } catch {}
     }
+
     if (-not $names.Count) {
         try {
             $names = @(Get-CimInstance Win32_VideoController -ErrorAction Stop |
@@ -168,7 +187,30 @@ function Get-WindowsGpuNames([string]$ScriptRoot = $PSScriptRoot) {
                 Where-Object { $_ })
         } catch {}
     }
-    return $names
+
+    if (-not $names.Count) {
+        try {
+            if (Get-Command Get-PnpDevice -ErrorAction SilentlyContinue) {
+                $names = @(Get-PnpDevice -Class Display -PresentOnly -ErrorAction Stop |
+                    Where-Object { $_.FriendlyName -match 'NVIDIA' } |
+                    ForEach-Object { ([string]$_.FriendlyName).Trim() } |
+                    Where-Object { $_ })
+            }
+        } catch {}
+    }
+
+    if (-not $names.Count) {
+        try {
+            $searcher = New-Object Management.ManagementObjectSearcher('SELECT Name FROM Win32_VideoController')
+            $names = @($searcher.Get() |
+                Where-Object { $_.Name -match 'NVIDIA' } |
+                ForEach-Object { ([string]$_.Name).Trim() } |
+                Where-Object { $_ })
+            $searcher.Dispose()
+        } catch {}
+    }
+
+    return @($names | Select-Object -Unique)
 }
 
 function Test-NvencRuntime([string]$Ffmpeg, [string]$Encoder) {
@@ -263,6 +305,10 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
             RuntimeProbeBytes = $runtimeProbeBytes
             Tune = $tune
         }
+    }
+
+    if (-not $gpus.Count -and @($detected | Where-Object { $_.Hardware -and $_.Available }).Count) {
+        $gpus = @('NVIDIA GPU · NVENC runtime available')
     }
 
     return [pscustomobject]@{

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-test('web shell exposes Windows Native guidance and wide desktop rail', async () => {
+test('web shell keeps platform guidance but uses compact native workbench layout', async () => {
   const [main, css] = await Promise.all([
     readFile(new URL('./main.js', import.meta.url), 'utf8'),
     readFile(new URL('./style.css', import.meta.url), 'utf8'),
@@ -11,13 +11,15 @@ test('web shell exposes Windows Native guidance and wide desktop rail', async ()
   assert.match(main, /id="windowsNativeCard"/);
   assert.match(main, /windows\\start_windows\.bat/);
   assert.match(main, /WINDOWS NATIVE · RECOMMENDED/);
-  assert.match(main, /h264_nvenc|NVENC/);
-  assert.match(main, /libx264|x264/);
-  assert.match(main, /Gyan\.FFmpeg/);
+  assert.match(main, /id="nativeStatusBar"/);
+  assert.match(main, /renderNativeStatusBar/);
+  assert.match(main, /nativeGpuLabel/);
+  assert.match(main, /nativePlatformName\(\) \+ ' 自检：'/);
   assert.match(main, /class="workspace-layout"/);
   assert.match(main, /class="platform-rail"/);
 
-  assert.match(css, /grid-template-columns:\s*minmax\(0, 1fr\) 340px/);
-  assert.match(css, /@media \(max-width: 1180px\)/);
-  assert.match(css, /\.platform-rail\s*\{/);
+  assert.match(css, /\.workspace-layout\s*\{\s*display:\s*block/);
+  assert.match(css, /\.windows-native-connected \.platform-rail\s*\{\s*display:\s*none/);
+  assert.match(css, /\.native-status-bar\s*\{/);
+  assert.match(css, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
 });
