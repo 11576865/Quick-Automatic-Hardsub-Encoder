@@ -84,6 +84,7 @@ app.innerHTML = `
     <div class="workflow-strip" aria-label="工作流程">
       <span>01 输入</span><span>02 预检</span><span>03 预览</span><span>04 方案</span><span>05 压制</span>
     </div>
+    <div id="nativeStatusBar" class="native-status-bar hidden" aria-live="polite"></div>
   </header>
 
   <div class="workspace-layout">
@@ -391,9 +392,11 @@ $('video').addEventListener('change', e => {
   if (state.video && globalThis.NativeHardsub?.probeSelectedVideo) {
     try {
       globalThis.NativeHardsub.probeSelectedVideo();
-      log('Native 后端：正在直接探测所选 content:// 视频和 SAF 可寻址性…');
+      log(state.nativeBackend?.backend === 'windows-native'
+        ? 'Windows Native：正在使用系统 FFprobe 探测所选视频…'
+        : 'Android Native：正在直接探测所选 content:// 视频和 SAF 可寻址性…');
     } catch (error) {
-      log('Android 原生输入探测启动失败：' + error.message);
+      log(nativePlatformName() + ' 输入探测启动失败：' + error.message);
     }
   }
 
@@ -612,9 +615,7 @@ function detectNativeBackend() {
     renderBackendSummary();
     renderAppReleaseCard();
     if (state.nativeBackend?.backend === 'windows-native') {
-      const gpu = Array.isArray(state.nativeBackend.gpus) && state.nativeBackend.gpus.length
-        ? state.nativeBackend.gpus.join(' / ')
-        : '未检测到 NVIDIA GPU';
+      const gpu = nativeGpuLabel();
       const available = Array.isArray(state.nativeBackend.encoders)
         ? state.nativeBackend.encoders.filter(x => x?.Available || x?.available).map(x => x.Encoder || x.encoder || x.Key || x.key)
         : [];
@@ -680,7 +681,7 @@ function detectNativeBackend() {
 
       if (Number(data?.count || 0) > 0) {
         log(
-          'Android 系统文件选择器返回：' +
+          nativePlatformName() + ' 文件选择器返回：' +
           (role || 'unknown') + ' · ' +
           (names.join(' / ') || (data.count + ' 个文件'))
         );
@@ -756,6 +757,7 @@ function detectNativeBackend() {
         state.nativeSelfTest = { error: '原生自检结果解析失败' };
       }
       renderBackendSummary();
+      renderNativeStatusBar();
       updateEnvironmentSummary();
       const t = state.nativeSelfTest || {};
       state.softwareEncoders = {
@@ -768,7 +770,7 @@ function detectNativeBackend() {
       if (state.media) renderPlanOptions();
       refreshAnalyze();
       log(
-        `Android 原生自检：` +
+        nativePlatformName() + ' 自检：' +
         `x264=${!!t.x264EncodeSmoke} ` +
         `x265=${!!t.x265EncodeSmoke} ` +
         `SVT-AV1=${!!t.svtAv1EncodeSmoke} ` +
@@ -833,7 +835,7 @@ function detectNativeBackend() {
       if (data.ok) {
         $('liveEta').textContent = '成品已保存 · ' + formatBytes(Number(data.bytes || 0)) +
           (data.sha256 ? ' · SHA-256 ' + data.sha256.slice(0, 12) + '…' : '');
-        log('Android Native 成品已导出到用户选择的位置。');
+        log(nativePlatformName() + ' 成品已导出到用户选择的位置。');
         // Exporting succeeded, so this finished job must no longer intercept
         // later presses as another export request.
         state.nativeCompletedJob = null;
@@ -843,7 +845,7 @@ function detectNativeBackend() {
         refreshBenchmarkEnabled();
       } else {
         $('liveEta').textContent = '保存失败：' + (data.error || '未知错误');
-        log('Android Native 成品导出失败：' + (data.error || '未知错误'));
+        log(nativePlatformName() + ' 成品导出失败：' + (data.error || '未知错误'));
       }
     };
 
@@ -991,9 +993,65 @@ async function loadAppReleaseInfo() {
   renderAppReleaseCard();
 }
 
+function nativePlatformName() {
+  if (state.nativeBackend?.backend === 'windows-native') return 'Windows Native';
+  if (state.nativeBackend?.backend === 'android-native') return 'Android Native';
+  return 'Native';
+}
+
+function nativeGpuLabel() {
+  if (state.nativeBackend?.backend !== 'windows-native') return '';
+  const gpus = Array.isArray(state.nativeBackend.gpus) ? state.nativeBackend.gpus.filter(Boolean) : [];
+  if (gpus.length) return gpus.join(' / ');
+  const nvencAvailable = Array.isArray(state.nativeBackend.encoders) &&
+    state.nativeBackend.encoders.some(e => (e.Hardware ?? e.hardware) && (e.Available ?? e.available));
+  return nvencAvailable ? 'NVIDIA GPU · NVENC 可用' : '未检测到 NVIDIA GPU';
+}
+
+function renderNativeStatusBar() {
+  const bar = $('nativeStatusBar');
+  if (!bar) return;
+  if (!state.nativeBackend?.available) {
+    bar.classList.add('hidden');
+    bar.innerHTML = '';
+    return;
+  }
+
+  if (state.nativeBackend.backend === 'windows-native') {
+    const encoders = Array.isArray(state.nativeBackend.encoders) ? state.nativeBackend.encoders : [];
+    const nvencCount = encoders.filter(e => (e.Hardware ?? e.hardware) && (e.Available ?? e.available)).length;
+    bar.innerHTML =
+      '<span class="native-status-kind">WINDOWS NATIVE</span>' +
+      '<strong>已连接</strong>' +
+      '<span>' + escapeHtml(state.nativeBackend.cpu || 'CPU unknown') + '</span>' +
+      '<span>' + escapeHtml(nativeGpuLabel()) + '</span>' +
+      '<span>NVENC ' + nvencCount + '</span>' +
+      '<button type="button" id="nativeDiagnosticsBtn">运行环境</button>';
+  } else {
+    bar.innerHTML =
+      '<span class="native-status-kind">ANDROID NATIVE</span>' +
+      '<strong>已连接</strong>' +
+      '<span>ARM64 · ' + escapeHtml(state.nativeBackend.ffmpegKitVersion || 'FFmpegKitNext') + '</span>' +
+      '<button type="button" id="nativeDiagnosticsBtn">运行环境</button>';
+  }
+
+  bar.classList.remove('hidden');
+  const diagnosticsBtn = $('nativeDiagnosticsBtn');
+  if (diagnosticsBtn) {
+    diagnosticsBtn.onclick = () => {
+      $('envDetails').open = true;
+      $('envDetails').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+  }
+}
+
 function applyPlatformPresentation() {
   const nativeMode = !!state.nativeBackend?.available;
+  const windowsNative = state.nativeBackend?.backend === 'windows-native';
+  const androidNative = state.nativeBackend?.backend === 'android-native';
   document.body.classList.toggle('native-app', nativeMode);
+  document.body.classList.toggle('windows-native-connected', windowsNative);
+  document.body.classList.toggle('android-native-connected', androidNative);
 
   const hero = $('heroSubtitle');
   const appTitle = $('appCardTitle');
@@ -1004,7 +1062,6 @@ function applyPlatformPresentation() {
   const fontLibrary = $('fontLibraryDetails');
 
   if (nativeMode) {
-    const windowsNative = state.nativeBackend?.backend === 'windows-native';
     if (hero) {
       hero.textContent = windowsNative
         ? '在现代 Web UI 中直接调用 Windows 系统 FFmpeg、CPU 与 NVIDIA NVENC 完成字幕预检、测试与硬字幕压制。'
@@ -1029,6 +1086,7 @@ function applyPlatformPresentation() {
     fontPersist?.classList.remove('hidden');
     fontLibrary?.classList.remove('hidden');
   }
+  renderNativeStatusBar();
 }
 
 function renderAppReleaseCard() {
@@ -1039,6 +1097,12 @@ function renderAppReleaseCard() {
   const downloadBtn = $('downloadAndroidAppBtn');
   const checkBtn = $('checkAppUpdateBtn');
   if (!summary || !notice || !badge || !openBtn || !downloadBtn || !checkBtn) return;
+
+  if (state.nativeBackend?.backend === 'windows-native') {
+    $('androidAppCard')?.classList.add('hidden');
+    return;
+  }
+  $('androidAppCard')?.classList.remove('hidden');
 
   const release = state.appRelease;
   const remoteUrl = safeHttpsUrl(
@@ -1123,9 +1187,7 @@ function renderBackendSummary() {
   const p = state.nativeInputProbe;
 
   if (state.nativeBackend?.backend === 'windows-native') {
-    const gpu = Array.isArray(state.nativeBackend.gpus) && state.nativeBackend.gpus.length
-      ? state.nativeBackend.gpus.join(' / ')
-      : '未检测到 NVIDIA GPU';
+    const gpu = nativeGpuLabel();
     const available = Array.isArray(state.nativeBackend.encoders)
       ? state.nativeBackend.encoders.filter(x => x?.Available || x?.available).map(x => x.Encoder || x.encoder || x.Key || x.key)
       : [];
