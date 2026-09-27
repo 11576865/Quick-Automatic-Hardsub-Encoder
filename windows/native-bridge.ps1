@@ -92,23 +92,45 @@ function Get-SelectedPath([string]$Role) {
     return [string]$items[0]
 }
 
+function Show-NativeOpenFileDialog([string]$Filter, [bool]$Multiselect = $false) {
+    $owner = New-Object System.Windows.Forms.Form
+    $owner.ShowInTaskbar = $false
+    $owner.StartPosition = 'Manual'
+    $owner.Location = New-Object System.Drawing.Point(-32000, -32000)
+    $owner.Size = New-Object System.Drawing.Size(1, 1)
+    $owner.TopMost = $true
+    $owner.Opacity = 0
+    $dialog = New-Object System.Windows.Forms.OpenFileDialog
+    $dialog.Filter = $Filter
+    $dialog.Multiselect = $Multiselect
+    $dialog.CheckFileExists = $true
+    $dialog.RestoreDirectory = $true
+    try {
+        $owner.Show()
+        $owner.Activate()
+        $result = $dialog.ShowDialog($owner)
+        if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+            return @($dialog.FileNames)
+        }
+        return @()
+    } finally {
+        $dialog.Dispose()
+        $owner.Close()
+        $owner.Dispose()
+    }
+}
+
 function Show-BridgePicker([string]$Role) {
+    $picked = @()
     if ($Role -eq 'video') {
-        $d = New-Object System.Windows.Forms.OpenFileDialog
-        $d.Filter = 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts|All files|*.*'
-        if ($d.ShowDialog() -eq 'OK') { $script:Selections.video = @($d.FileName) }
-        $d.Dispose()
+        $picked = @(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts|All files|*.*')
+        if ($picked.Count) { $script:Selections.video = @($picked[0]) }
     } elseif ($Role -eq 'ass') {
-        $d = New-Object System.Windows.Forms.OpenFileDialog
-        $d.Filter = 'ASS subtitles|*.ass|All files|*.*'
-        if ($d.ShowDialog() -eq 'OK') { $script:Selections.ass = @($d.FileName) }
-        $d.Dispose()
+        $picked = @(Show-NativeOpenFileDialog 'ASS subtitles|*.ass|All files|*.*')
+        if ($picked.Count) { $script:Selections.ass = @($picked[0]) }
     } elseif ($Role -eq 'fonts') {
-        $d = New-Object System.Windows.Forms.OpenFileDialog
-        $d.Filter = 'Font files|*.ttf;*.otf;*.ttc;*.otc|All files|*.*'
-        $d.Multiselect = $true
-        if ($d.ShowDialog() -eq 'OK') { $script:Selections.fonts = @($d.FileNames) }
-        $d.Dispose()
+        $picked = @(Show-NativeOpenFileDialog 'Font files|*.ttf;*.otf;*.ttc;*.otc|All files|*.*' $true)
+        if ($picked.Count) { $script:Selections.fonts = @($picked) }
     } else {
         throw 'Unsupported picker role.'
     }

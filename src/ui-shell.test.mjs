@@ -14,6 +14,10 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /id="nativeStatusBar"/);
   assert.match(main, /renderNativeStatusBar/);
   assert.match(main, /nativeGpuLabel/);
+  assert.match(main, /id="videoNativePickerBtn"/);
+  assert.match(main, /id="assNativePickerBtn"/);
+  assert.match(main, /id="fontsNativePickerBtn"/);
+  assert.match(main, /requestWindowsNativePicker/);
   assert.match(main, /nativePlatformName\(\) \+ ' 自检：'/);
   assert.match(main, /class="workspace-layout"/);
   assert.match(main, /class="platform-rail"/);
@@ -21,5 +25,7 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.workspace-layout\s*\{\s*display:\s*block/);
   assert.match(css, /\.windows-native-connected \.platform-rail\s*\{\s*display:\s*none/);
   assert.match(css, /\.native-status-bar\s*\{/);
-  assert.match(css, /grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /Relaxed desktop workbench v4/);
+  assert.match(css, /\.windows-native-connected \.input-card > \.grid\.two\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.native-picker-button\s*\{/);
 });
