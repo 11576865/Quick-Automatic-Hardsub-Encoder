@@ -18,10 +18,12 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          $tokens = $null
-          $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path windows/hardsub_windows.ps1), [ref]$tokens, [ref]$errors) | Out-Null
-          if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/output-safety.ps1')) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
+          }
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
