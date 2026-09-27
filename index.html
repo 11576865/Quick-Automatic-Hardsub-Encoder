@@ -3,8 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#101218" />
+  <meta name="theme-color" content="#0d1420" />
+  <meta name="color-scheme" content="dark light" />
   <title>快捷自动硬字幕压制器</title>
+  <script>
+    (() => {
+      try {
+        const pref = localStorage.getItem('quick-hardsub-theme-v1') || 'system';
+        const resolved = pref === 'system'
+          ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : pref;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.dataset.themePreference = pref;
+      } catch {
+        document.documentElement.dataset.theme = 'dark';
+        document.documentElement.dataset.themePreference = 'system';
+      }
+    })();
+  </script>
   <script src="./coi-serviceworker.js"></script>
 </head>
 <body>

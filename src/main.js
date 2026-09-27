@@ -69,7 +69,14 @@ app.innerHTML = `
         <h1>快捷自动硬字幕压制器</h1>
         <p id="heroSubtitle">一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。</p>
       </div>
-      <div class="hero-state"><span></span>Local processing</div>
+      <div class="hero-tools">
+        <div class="theme-control" id="themeControl" aria-label="界面主题">
+          <button type="button" data-theme-choice="light" aria-pressed="false">白天</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false">夜间</button>
+          <button type="button" data-theme-choice="system" aria-pressed="false">系统</button>
+        </div>
+        <div class="hero-state"><span></span>Local processing</div>
+      </div>
     </div>
     <div class="workflow-strip" aria-label="工作流程">
       <span>01 输入</span><span>02 预检</span><span>03 预览</span><span>04 方案</span><span>05 压制</span>
@@ -95,9 +102,9 @@ app.innerHTML = `
   <section class="card input-card">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
-      <div class="file-row"><label id="videoLabel">视频（网页≤ 1 GB；Android Native 可直接读取更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
-      <div class="file-row"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
-      <div class="file-row">
+      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Android Native 可直接读取更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
+      <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
+      <div class="file-row input-font">
         <label id="fontLabel">字体（可选，可多选）</label>
         <input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc">
         <label id="fontPersistCheck" class="font-persist-check"><input id="rememberFonts" type="checkbox" checked> 记住本次选择，加入本机常用字体库</label>
@@ -108,7 +115,7 @@ app.innerHTML = `
           <div class="button-row"><button id="clearSavedFontsBtn" type="button">清空常用字体库</button></div>
         </details>
       </div>
-      <div class="file-row"><label id="backendLabel">处理引擎</label>
+      <div class="file-row input-engine"><label id="backendLabel">处理引擎</label>
         <div id="backendSummary" class="note">正在检测网页 / Android 原生后端…</div>
       </div>
     </div>
@@ -216,6 +223,50 @@ app.innerHTML = `
 </div>`;
 
 const $ = id => document.getElementById(id);
+
+const THEME_KEY = 'quick-hardsub-theme-v1';
+const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+let themePreference = localStorage.getItem(THEME_KEY)
+  || document.documentElement.dataset.themePreference
+  || 'system';
+
+function resolvedTheme(preference = themePreference) {
+  if (preference === 'system') return systemThemeQuery.matches ? 'dark' : 'light';
+  return preference === 'light' ? 'light' : 'dark';
+}
+
+function updateThemeMeta(theme) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', theme === 'light' ? '#edf3f8' : '#0d1420');
+}
+
+function updateThemeButtons() {
+  document.documentElement.dataset.themePreference = themePreference;
+  document.querySelectorAll('[data-theme-choice]').forEach(button => {
+    button.setAttribute('aria-pressed', button.dataset.themeChoice === themePreference ? 'true' : 'false');
+  });
+}
+
+function applyTheme(preference, { persist = true } = {}) {
+  themePreference = ['light', 'dark', 'system'].includes(preference) ? preference : 'system';
+  if (persist) localStorage.setItem(THEME_KEY, themePreference);
+  const theme = resolvedTheme(themePreference);
+  document.documentElement.dataset.theme = theme;
+  updateThemeMeta(theme);
+  updateThemeButtons();
+}
+
+document.querySelectorAll('[data-theme-choice]').forEach(button => {
+  button.addEventListener('click', () => applyTheme(button.dataset.themeChoice));
+});
+
+const onSystemThemeChange = () => {
+  if (themePreference === 'system') applyTheme('system', { persist: false });
+};
+if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener('change', onSystemThemeChange);
+else if (systemThemeQuery.addListener) systemThemeQuery.addListener(onSystemThemeChange);
+applyTheme(themePreference, { persist: false });
+
 const log = msg => { $('log').textContent += `${msg}\n`; $('log').scrollTop = $('log').scrollHeight; };
 state.engine = new EncoderEngine(log);
 
@@ -1920,7 +1971,7 @@ function renderPlanOptions() {
     ) {
       param = '待实测校准 · 目标 SSIM ' + target.toFixed(3);
     }
-    return '<div class="codec-card plan-codec ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '">' +
+    return '<div class="codec-card plan-codec codec-' + codec + ' ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '">' +
       '<h3>' + labels[codec] + '</h3>' +
       '<div class="note">' + codecDescription(codec) + '</div>' +
       '<div class="plan-param">' + param + '</div>' +
@@ -2430,14 +2481,14 @@ function renderCodecCards() {
   const labels = { h264:'H.264 / x264', h265:'H.265 / x265', av1:'AV1 / SVT-AV1' };
   $('codecGrid').innerHTML = ['h264','h265','av1'].map(codec => {
     const r = state.benchmarks[codec];
-    if (!r) return '<div class="codec-card"><h3>' + labels[codec] + '</h3><div class="note">等待测试</div></div>';
-    if (r.error) return '<div class="codec-card"><h3>' + labels[codec] + '</h3><div class="bad">测试失败</div><div class="note">' + escapeHtml(r.error.slice(0,180)) + '</div></div>';
+    if (!r) return '<div class="codec-card codec-' + codec + '"><h3>' + labels[codec] + '</h3><div class="note">等待测试</div></div>';
+    if (r.error) return '<div class="codec-card codec-' + codec + '"><h3>' + labels[codec] + '</h3><div class="bad">测试失败</div><div class="note">' + escapeHtml(r.error.slice(0,180)) + '</div></div>';
     const sampleDuration = Math.max(
       0.001,
       Number(r.duration || 0) || (r.packetStats?.packetCount / (state.media?.fps || 30))
     );
     const sampleBitrate = r.packetStats?.totalVideoBytes ? r.packetStats.totalVideoBytes * 8 / sampleDuration : 0;
-    return '<div class="codec-card"><h3>' + labels[codec] + '</h3><dl>' +
+    return '<div class="codec-card codec-' + codec + '"><h3>' + labels[codec] + '</h3><dl>' +
       '<dt>样本速度</dt><dd>' + r.encodeSpeed.toFixed(2) + '× realtime</dd>' +
       '<dt>样本视频码率</dt><dd>' + formatBitrate(sampleBitrate) + '</dd>' +
       '<dt>SSIM</dt><dd>' + (r.ssim ? r.ssim.toFixed(5) : '未取得') + '</dd>' +
