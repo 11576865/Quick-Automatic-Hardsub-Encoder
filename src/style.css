@@ -1686,3 +1686,181 @@ button.primary:hover:not(:disabled) {
     font-size: .68rem;
   }
 }
+
+
+/* Wide desktop platform rail ------------------------------------------------ */
+.app-shell {
+  width: min(1640px, calc(100% - 40px));
+}
+
+.workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 18px;
+  align-items: start;
+}
+
+.workflow-main {
+  min-width: 0;
+}
+
+.platform-rail {
+  min-width: 0;
+  position: sticky;
+  top: 14px;
+}
+
+.platform-rail .card {
+  margin-top: 16px;
+}
+
+.platform-card {
+  border-top-color: var(--video);
+  background:
+    linear-gradient(145deg, color-mix(in srgb,var(--video) 10%,transparent), transparent 44%),
+    var(--surface);
+}
+
+.windows-card {
+  --platform-accent: var(--engine);
+  border-top-color: var(--platform-accent);
+  background:
+    linear-gradient(145deg, color-mix(in srgb,var(--platform-accent) 12%,transparent), transparent 48%),
+    var(--surface);
+}
+
+.platform-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.platform-card-head > div {
+  min-width: 0;
+}
+
+.platform-card-head h2 {
+  margin-top: 4px;
+}
+
+.platform-eyebrow {
+  color: var(--platform-accent);
+  font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .09em;
+}
+
+.platform-badge {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid color-mix(in srgb,var(--platform-accent) 42%,var(--border));
+  background: color-mix(in srgb,var(--platform-accent) 11%,var(--surface-2));
+  color: var(--platform-accent);
+  font-size: .66rem;
+  font-weight: 700;
+}
+
+.windows-launch-path {
+  display: grid;
+  gap: 6px;
+  margin-top: 13px;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb,var(--platform-accent) 30%,var(--border));
+  background: var(--surface-2);
+}
+
+.windows-launch-path span {
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 650;
+}
+
+.windows-launch-path code,
+.platform-note code {
+  color: var(--text-strong);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.platform-facts {
+  display: grid;
+  gap: 1px;
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  background: var(--border);
+}
+
+.platform-facts > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0,1fr);
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface-2);
+}
+
+.platform-facts span {
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.platform-facts strong {
+  color: var(--text);
+  font-size: .71rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.platform-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.platform-actions > * {
+  width: 100%;
+  text-align: center;
+}
+
+.platform-primary-link {
+  background: var(--platform-accent);
+  border-color: var(--platform-accent);
+  color: #061311;
+}
+
+:root[data-theme="light"] .platform-primary-link {
+  color: #fff;
+}
+
+.platform-note {
+  margin: 10px 0 0;
+}
+
+@media (max-width: 1180px) {
+  .app-shell {
+    width: min(100% - 28px, 1240px);
+  }
+
+  .workspace-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 12px;
+  }
+
+  .platform-rail .card {
+    margin-top: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .platform-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-actions {
+    grid-template-columns: 1fr;
+  }
+}
