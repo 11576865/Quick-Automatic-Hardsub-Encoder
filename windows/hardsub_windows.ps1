@@ -2,6 +2,7 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
+. (Join-Path $PSScriptRoot 'output-safety.ps1')
 
 function Find-Tool([string]$Name) {
     $base = Split-Path $PSScriptRoot -Parent
@@ -32,9 +33,11 @@ function Run-Tool([string]$Exe, [string]$Arguments) {
     $p.StartInfo.RedirectStandardError = $true
     try {
         [void]$p.Start()
-        $stdout = $p.StandardOutput.ReadToEnd()
-        $stderr = $p.StandardError.ReadToEnd()
+        $stdoutTask = $p.StandardOutput.ReadToEndAsync()
+        $stderrTask = $p.StandardError.ReadToEndAsync()
         $p.WaitForExit()
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
         if ($p.ExitCode -ne 0) { throw $stderr }
         return $stdout
     } finally { $p.Dispose() }
@@ -45,6 +48,8 @@ $script:ffprobe = Find-Tool 'ffprobe'
 $script:job = $null
 $script:work = $null
 $script:output = $null
+$script:tempOutput = $null
+$script:stderrTask = $null
 $script:duration = 0.0
 $script:cancelled = $false
 
@@ -173,18 +178,26 @@ $timer.Add_Tick({
     if (-not $script:job.HasExited) { return }
     $timer.Stop()
     $exit = $script:job.ExitCode
-    $errorText = $script:job.StandardError.ReadToEnd()
+    $errorText = if ($script:stderrTask) { $script:stderrTask.Result } else { '' }
     $script:job.Dispose(); $script:job = $null
+    $script:stderrTask = $null
     $start.Enabled = $true; $cancel.Enabled = $false
     if ($script:cancelled) {
-        $status.Text = '已取消。'; Write-Log '压制已取消，未完成的输出文件已删除。'
-        if (Test-Path -LiteralPath $script:output) { Remove-Item -LiteralPath $script:output -Force }
-    } elseif ($exit -eq 0 -and (Test-Path -LiteralPath $script:output)) {
-        $bar.Value = 100; $status.Text = "压制完成：$script:output"; Write-Log $status.Text
+        $status.Text = '已取消。'; Write-Log '压制已取消，旧成品未改动。'
+        if (Test-Path -LiteralPath $script:tempOutput) { Remove-Item -LiteralPath $script:tempOutput -Force }
+    } elseif ($exit -eq 0 -and (Test-Path -LiteralPath $script:tempOutput -PathType Leaf) -and
+        (Get-Item -LiteralPath $script:tempOutput).Length -gt 0) {
+        try {
+            Publish-VerifiedOutput $script:tempOutput $script:output
+            $bar.Value = 100; $status.Text = "压制完成：$script:output"; Write-Log $status.Text
+        } catch {
+            $status.Text = '编码完成，但替换旧成品失败；旧成品仍在。'
+            Write-Log "可从临时文件恢复新成品：$script:tempOutput · $($_.Exception.Message)"
+        }
     } else {
-        $status.Text = "压制失败（FFmpeg 退出码 $exit）。"
+        $status.Text = "压制失败（FFmpeg 退出码 $exit，或临时成品为空）。"
         Write-Log (($errorText | Select-Object -Last 1) -join '')
-        if (Test-Path -LiteralPath $script:output) { Remove-Item -LiteralPath $script:output -Force }
+        if (Test-Path -LiteralPath $script:tempOutput) { Remove-Item -LiteralPath $script:tempOutput -Force }
     }
     if (Test-Path -LiteralPath $script:work) { Remove-Item -LiteralPath $script:work -Recurse -Force -ErrorAction SilentlyContinue }
 })
@@ -202,7 +215,11 @@ $start.Add_Click({
         $status.Text = '请先选择视频和 ASS 字幕。'; return
     }
     if (-not $out.Text) { $status.Text = '请先选择输出位置。'; return }
-    if ($out.Text -eq $video.Text -or $out.Text -eq $ass.Text) { $status.Text = '输出文件不能覆盖输入文件。'; return }
+    $outputFull = [IO.Path]::GetFullPath($out.Text)
+    if ([string]::Equals($outputFull, [IO.Path]::GetFullPath($video.Text), [StringComparison]::OrdinalIgnoreCase) -or
+        [string]::Equals($outputFull, [IO.Path]::GetFullPath($ass.Text), [StringComparison]::OrdinalIgnoreCase)) {
+        $status.Text = '输出文件不能覆盖输入文件。'; return
+    }
     if ((Test-Path -LiteralPath $out.Text) -and
         [Windows.Forms.MessageBox]::Show('输出文件已存在，是否覆盖？', '确认覆盖', 'YesNo', 'Warning') -ne 'Yes') { return }
     try {
@@ -232,6 +249,8 @@ $start.Add_Click({
             } catch { Write-Log 'FFprobe 未能取得时长，仍可压制，但无法显示百分比。' }
         }
         $script:output = $out.Text; $script:cancelled = $false; $bar.Value = 0
+        $tempName = '.' + [IO.Path]::GetFileNameWithoutExtension($script:output) + '.quick-hardsub-' + [guid]::NewGuid().ToString('N') + '.tmp.mkv'
+        $script:tempOutput = Join-Path ([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($script:output))) $tempName
         $preset = @('medium', 'medium', '6')[$codec.SelectedIndex]
         $crf = @(22, 27, 32)[$codec.SelectedIndex]
         $assFilter = if ($script:selectedFonts.Count) { 'ass=subtitle.ass:fontsdir=fonts' } else { 'ass=subtitle.ass' }
@@ -239,7 +258,7 @@ $start.Add_Click({
         $args = '-hide_banner -nostdin -loglevel error -y -progress progress.txt -i ' + (Quote-Arg $video.Text) +
             ' -map 0:v:0 -map 0:a? -sn -vf ' + $assFilter +
             ' -c:v ' + $encoder + ' -preset ' + $preset + ' -crf ' + $crf +
-            ' -c:a copy ' + (Quote-Arg $script:output)
+            ' -c:a copy ' + (Quote-Arg $script:tempOutput)
         $script:job = New-Object System.Diagnostics.Process
         $script:job.StartInfo.FileName = $script:ffmpeg
         $script:job.StartInfo.Arguments = $args
@@ -248,12 +267,16 @@ $start.Add_Click({
         $script:job.StartInfo.CreateNoWindow = $true
         $script:job.StartInfo.RedirectStandardError = $true
         [void]$script:job.Start()
+        $script:stderrTask = $script:job.StandardError.ReadToEndAsync()
         $start.Enabled = $false; $cancel.Enabled = $true; $status.Text = '正在压制…'
         Write-Log "开始：$encoder；输出：$script:output"
         $timer.Start()
     } catch {
         $status.Text = "无法开始：$($_.Exception.Message)"
         Write-Log $status.Text
+        if ($script:tempOutput -and (Test-Path -LiteralPath $script:tempOutput)) {
+            Remove-Item -LiteralPath $script:tempOutput -Force -ErrorAction SilentlyContinue
+        }
         if ($script:work -and (Test-Path -LiteralPath $script:work)) {
             Remove-Item -LiteralPath $script:work -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -267,7 +290,7 @@ $form.Add_FormClosing({
             $eventArgs.Cancel = $true; return
         }
         try { $script:job.Kill(); $script:job.WaitForExit() } catch {}
-        if ($script:output -and (Test-Path -LiteralPath $script:output)) { Remove-Item -LiteralPath $script:output -Force -ErrorAction SilentlyContinue }
+        if ($script:tempOutput -and (Test-Path -LiteralPath $script:tempOutput)) { Remove-Item -LiteralPath $script:tempOutput -Force -ErrorAction SilentlyContinue }
     }
     if ($script:work -and (Test-Path -LiteralPath $script:work)) { Remove-Item -LiteralPath $script:work -Recurse -Force -ErrorAction SilentlyContinue }
 })
