@@ -1,4 +1,4 @@
-# Windows 11 native encoder. Uses system/bundled FFmpeg and native GPU/CPU encoders.
+﻿# Windows 11 native encoder. Uses system/bundled FFmpeg and native GPU/CPU encoders.
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
