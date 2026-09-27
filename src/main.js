@@ -63,8 +63,17 @@ const app = document.querySelector('#app');
 app.innerHTML = `
 <div class="app-shell">
   <header class="hero">
-    <h1>快捷自动硬字幕压制器</h1>
-    <p id="heroSubtitle">一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。</p>
+    <div class="hero-kicker">LOCAL ENCODE WORKBENCH</div>
+    <div class="hero-main">
+      <div>
+        <h1>快捷自动硬字幕压制器</h1>
+        <p id="heroSubtitle">一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。</p>
+      </div>
+      <div class="hero-state"><span></span>Local processing</div>
+    </div>
+    <div class="workflow-strip" aria-label="工作流程">
+      <span>01 输入</span><span>02 预检</span><span>03 预览</span><span>04 方案</span><span>05 压制</span>
+    </div>
   </header>
 
   <section id="androidAppCard" class="card app-card">
@@ -83,8 +92,8 @@ app.innerHTML = `
     <div id="appUpdateNotice" class="note app-update-notice">Android 浏览器可直接拉起已安装的 App；未安装时会回退到 APK 下载。</div>
   </section>
 
-  <section class="card">
-    <h2>1. 选择文件</h2>
+  <section class="card input-card">
+    <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
       <div class="file-row"><label id="videoLabel">视频（网页≤ 1 GB；Android Native 可直接读取更大文件）</label><input id="video" type="file"><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><small id="assMeta">未选择</small></div>
@@ -132,9 +141,9 @@ app.innerHTML = `
     </details>
   </section>
 
-  <section id="subtitleCard" class="card hidden">
-    <h2>4. 字幕预览</h2>
-    <p class="note">使用实际 FFmpeg + libass 渲染结果检查字体、位置、描边和回退；预览与上面的媒体信息分开。</p>
+  <section id="subtitleCard" class="card preview-card hidden">
+    <div class="card-heading"><span class="step-no">04</span><div><h2>字幕预览</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
+
     <div class="button-row">
       <button id="previewBtn" disabled>生成真实字幕预览</button>
     </div>
@@ -142,9 +151,9 @@ app.innerHTML = `
     <div id="warningAccept" class="hidden" style="margin-top:12px"><label><input type="checkbox" id="acceptWarnings"> 已查看预览，接受当前字体回退/缺失警告并继续。</label></div>
   </section>
 
-  <section id="planCard" class="card hidden">
-    <h2>5. 选择压制方案</h2>
-    <p class="note">主流程不再先压三种短样本再猜整片。体积约束模式按目标码率控制；质量模式使用 CRF/CQ。测试片段只用于看画质、字幕和当前设备速度。</p>
+  <section id="planCard" class="card plan-card hidden">
+    <div class="card-heading"><span class="step-no">05</span><div><h2>选择压制方案</h2><p>质量、速度、体积预算与实测校准统一在这里完成。</p></div></div>
+    <p class="note section-note">体积约束模式按目标码率控制；质量模式使用 CRF/CQ。测试片段只用于看画质、字幕和当前设备速度。</p>
 
     <div class="grid two plan-controls">
       <div class="file-row">
@@ -190,8 +199,8 @@ app.innerHTML = `
     </details>
   </section>
 
-  <section id="encodeCard" class="card hidden">
-    <h2>6. 正式压制</h2>
+  <section id="encodeCard" class="card encode-card hidden">
+    <div class="card-heading"><span class="step-no">06</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
@@ -200,8 +209,8 @@ app.innerHTML = `
     <div class="progress"><div id="progressBar"></div></div>
   </section>
 
-  <section class="card">
-    <h2>技术日志</h2>
+  <section class="card log-card">
+    <div class="card-heading"><span class="step-no">LOG</span><div><h2>技术日志</h2><p>设备检测、字体匹配、FFmpeg 与任务状态。</p></div></div>
     <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.1.0\n</div>
   </section>
 </div>`;
