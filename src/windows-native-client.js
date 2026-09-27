@@ -25,27 +25,6 @@ function stripLaunchSecrets() {
   history.replaceState(null, '', url.pathname + (url.search ? url.search : '') + url.hash);
 }
 
-function makeSyncRequest(config, method, path, body = null) {
-  const xhr = new XMLHttpRequest();
-  xhr.open(method, config.base + path, false);
-  xhr.setRequestHeader('X-Quick-Hardsub-Token', config.token);
-  if (body != null) xhr.setRequestHeader('Content-Type', 'application/json');
-  try {
-    xhr.send(body == null ? null : JSON.stringify(body));
-  } catch (error) {
-    throw new Error('Windows Native Bridge 请求失败：' + error.message);
-  }
-  if (xhr.status < 200 || xhr.status >= 300) {
-    let message = 'HTTP ' + xhr.status;
-    try {
-      const parsed = JSON.parse(xhr.responseText || '{}');
-      if (parsed.error) message = parsed.error;
-    } catch {}
-    throw new Error(message);
-  }
-  return xhr.responseText || '{}';
-}
-
 async function makeRequest(config, method, path, body = null) {
   const response = await fetch(config.base + path, {
     method,
@@ -68,23 +47,27 @@ function postCallback(name, payload) {
 }
 
 function installWindowsBridge(config, backendInfo) {
+  let lastAssSelection = null;
   const bridge = {
     __windowsNative: true,
     getBackendInfo() {
       return JSON.stringify(backendInfo);
     },
     getLocalBenchmarkHistory() {
-      try { return makeSyncRequest(config, 'GET', '/api/history'); }
-      catch { return JSON.stringify({ records: [] }); }
+      return JSON.stringify({ records: [] });
     },
     preparePickerRole(role) {
       if (!['video', 'ass', 'fonts'].includes(role)) return;
       void makeRequest(config, 'POST', '/api/pick/' + role)
-        .then(payload => postCallback('__onNativePickerResult', payload))
+        .then(payload => {
+          if (role === 'ass') lastAssSelection = payload?.files?.[0] || null;
+          postCallback('__onNativePickerResult', payload);
+        })
         .catch(error => postCallback('__onNativePickerResult', { role, count: 0, error: error.message }));
     },
     readSelectedAssFile() {
-      return makeSyncRequest(config, 'GET', '/api/selection/ass');
+      if (!lastAssSelection?.base64) return JSON.stringify({ ok: false, error: 'No ASS selected.' });
+      return JSON.stringify({ ok: true, ...lastAssSelection });
     },
     probeSelectedVideo() {
       void makeRequest(config, 'POST', '/api/probe')
@@ -113,17 +96,16 @@ function installWindowsBridge(config, backendInfo) {
         .then(payload => postCallback('__onNativeSampleExportResult', payload))
         .catch(error => postCallback('__onNativeSampleExportResult', { ok: false, error: error.message }));
     },
-    startNativeEncode(requestJson, assText) {
+    async startNativeEncode(requestJson, assText) {
       let request = {};
       try { request = JSON.parse(requestJson || '{}'); } catch {}
-      return makeSyncRequest(config, 'POST', '/api/encode', { request, assText });
+      return JSON.stringify(await makeRequest(config, 'POST', '/api/encode', { request, assText }));
     },
-    getNativeJobStatus(jobId) {
-      return makeSyncRequest(config, 'GET', '/api/jobs/' + encodeURIComponent(jobId));
+    async getNativeJobStatus(jobId) {
+      return JSON.stringify(await makeRequest(config, 'GET', '/api/jobs/' + encodeURIComponent(jobId)));
     },
     cancelNativeEncode(jobId) {
-      try { makeSyncRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/cancel'); }
-      catch {}
+      void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/cancel').catch(() => {});
     },
     requestNativeExport(jobId, suggestedName) {
       void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/export', { suggestedName })
