@@ -57,6 +57,11 @@ jobs:
           foreach ($hardware in @($caps.Encoders | Where-Object Hardware)) {
             if ($hardware.Available -and -not $hardware.Runtime) { throw "False-positive NVENC availability: $($hardware.Key)" }
           }
+          $gpuNames = @(Get-WindowsGpuNames (Resolve-Path ./windows))
+          if ($null -eq $gpuNames) { throw 'GPU name detector returned null instead of an array' }
+          if (@($caps.Encoders | Where-Object { $_.Hardware -and $_.Available }).Count -and -not @($caps.Gpus).Count) {
+            throw 'NVENC runtime is available but capability summary still exposes no NVIDIA GPU fallback label'
+          }
       - name: Normalize UTF-16 ASS and validate libass input
         shell: powershell
         run: |
