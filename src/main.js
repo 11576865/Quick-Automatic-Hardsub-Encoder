@@ -611,12 +611,26 @@ function detectNativeBackend() {
     applyPlatformPresentation();
     renderBackendSummary();
     renderAppReleaseCard();
-    log(
-      `检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}` +
-      ` · Native staging 可分配 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))}` +
-      ` · 热状态 ${formatThermalStatus(state.nativeBackend.thermalStatus)}` +
-      (state.nativeBackend.powerSaveMode ? ' · 省电模式已开启' : '')
-    );
+    if (state.nativeBackend?.backend === 'windows-native') {
+      const gpu = Array.isArray(state.nativeBackend.gpus) && state.nativeBackend.gpus.length
+        ? state.nativeBackend.gpus.join(' / ')
+        : '未检测到 NVIDIA GPU';
+      const available = Array.isArray(state.nativeBackend.encoders)
+        ? state.nativeBackend.encoders.filter(x => x?.Available || x?.available).map(x => x.Encoder || x.encoder || x.Key || x.key)
+        : [];
+      log(
+        '检测到 Windows Native Bridge：CPU=' + (state.nativeBackend.cpu || 'unknown') +
+        ' · GPU=' + gpu +
+        ' · encoders=' + (available.join('/') || 'none')
+      );
+    } else {
+      log(
+        `检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}` +
+        ` · Native staging 可分配 ${formatBytes(Number(state.nativeBackend.stagingAllocatableBytes || 0))}` +
+        ` · 热状态 ${formatThermalStatus(state.nativeBackend.thermalStatus)}` +
+        (state.nativeBackend.powerSaveMode ? ' · 省电模式已开启' : '')
+      );
+    }
 
     globalThis.__onNativePickerResult = payload => {
       let data;
@@ -1033,7 +1047,7 @@ function renderAppReleaseCard() {
   );
   downloadBtn.href = remoteUrl;
 
-  const inApp = !!state.nativeBackend?.available;
+  const inApp = state.nativeBackend?.backend === 'android-native';
   const isAndroid = /Android/i.test(navigator.userAgent);
 
   if (inApp) {
@@ -1429,9 +1443,12 @@ function updateFontMeta() {
   const selected = state.fonts.length;
 
   if (state.nativeBackend?.available) {
+    const windowsNative = state.nativeBackend?.backend === 'windows-native';
     $('fontMeta').textContent = selected
-      ? '本次选择 ' + selected + ' 个字体；Native 任务会复制到私有工作目录并交给 libass/fontconfig 使用。'
-      : '未选择额外字体；缺失字体将使用内置 Noto Sans SC 回退。';
+      ? '本次选择 ' + selected + ' 个字体；Native 任务会复制到工作目录并交给 libass/fontconfig 使用。'
+      : windowsNative
+        ? '未选择额外字体；Windows Native 将使用系统字体与 libass/fontconfig 的字体匹配。'
+        : '未选择额外字体；缺失字体将使用内置 Noto Sans SC 回退。';
     return;
   }
 
@@ -1575,7 +1592,8 @@ async function analyzeAll() {
       }
       state.inputDecodeOk = true;
 
-      if (state.nativeSelfTest?.bundledFallbackReady && !state.effectiveFonts.length) {
+      const androidNative = state.nativeBackend?.backend === 'android-native';
+      if (androidNative && state.nativeSelfTest?.bundledFallbackReady && !state.effectiveFonts.length) {
         state.autoFontFallbacks = Object.fromEntries(
           state.fontMatches
             .filter(m => m.status === 'missing')
@@ -1897,7 +1915,7 @@ function nativeBackendReady() {
     codecReady &&
     inputDecoderReady &&
     t.libassVisualSmoke &&
-    t.bundledFallbackReady &&
+    (state.nativeBackend?.backend === 'windows-native' || t.bundledFallbackReady) &&
     t.ffprobeSmoke
   );
 }
