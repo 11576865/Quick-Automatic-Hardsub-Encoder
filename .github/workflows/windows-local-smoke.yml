@@ -25,6 +25,22 @@ jobs:
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
+      - name: Preserve old output until replacement succeeds
+        shell: powershell
+        run: |
+          . ./windows/output-safety.ps1
+          $work = Join-Path $env:RUNNER_TEMP 'output safety'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          $target = Join-Path $work 'finished.mkv'
+          $temporary = Join-Path $work 'new.tmp.mkv'
+          [IO.File]::WriteAllText($target, 'old')
+          [IO.File]::WriteAllBytes($temporary, [byte[]]@())
+          try { Publish-VerifiedOutput $temporary $target; throw 'Expected empty-file rejection' }
+          catch { if ($_.Exception.Message -eq 'Expected empty-file rejection') { throw } }
+          if ([IO.File]::ReadAllText($target) -ne 'old') { throw 'Old output was lost' }
+          [IO.File]::WriteAllText($temporary, 'new')
+          Publish-VerifiedOutput $temporary $target
+          if ([IO.File]::ReadAllText($target) -ne 'new') { throw 'Replacement failed' }
       - name: Encode synthetic video with relative ASS path
         shell: powershell
         run: |

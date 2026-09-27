@@ -4,6 +4,7 @@ import { inspectFontFile, matchRequestedFonts } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
+import { decodeAssFile } from './ass-decoding.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -51,7 +52,11 @@ const state = {
   qualityCalibrationBusy: false,
   selectedCodec: null,
   selectedTest: null,
-  acceptedWarnings: false
+  acceptedWarnings: false,
+  operationBusy: false,
+  analyzedVideo: null,
+  analyzedAss: null,
+  analyzedFontKey: ''
 };
 
 const app = document.querySelector('#app');
@@ -205,6 +210,67 @@ const $ = id => document.getElementById(id);
 const log = msg => { $('log').textContent += `${msg}\n`; $('log').scrollTop = $('log').scrollHeight; };
 state.engine = new EncoderEngine(log);
 
+function currentFontKey() {
+  return state.fonts.map(file => `${file.name}:${file.size}:${file.lastModified}`).join('|');
+}
+
+function invalidateAnalysis() {
+  state.analyzedVideo = null;
+  state.analyzedAss = null;
+  state.analyzedFontKey = '';
+  state.inputDecodeOk = false;
+  state.media = null;
+  state.assInfo = null;
+  state.assText = '';
+  state.activeAssText = '';
+  state.fontMatches = [];
+  state.fontFaces = [];
+  state.selectedCodec = null;
+  state.acceptedWarnings = false;
+  $('acceptWarnings').checked = false;
+  for (const url of [...state.previewUrls, ...state.previewBaseUrls]) {
+    if (url) URL.revokeObjectURL(url);
+  }
+  if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
+  state.selectedTest = null;
+  state.previewUrls = [];
+  state.previewBaseUrls = [];
+  state.previewFontEvents = [];
+  state.previewVisualChange = [];
+  state.previewTimes = [];
+  state.benchmarks = {};
+  invalidateQualityCalibration();
+  $('preview').innerHTML = '<div class="preview-placeholder">输入已变化，请重新分析并生成预览。</div>';
+  $('previewBtn').disabled = true;
+  for (const id of ['preflightCard', 'subtitleCard', 'planCard', 'encodeCard']) $(id).classList.add('hidden');
+  refreshBenchmarkEnabled();
+}
+
+async function runWebTask(task) {
+  if (state.operationBusy) return;
+  state.operationBusy = true;
+  for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget']) $(id).disabled = true;
+  document.querySelectorAll('.font-binding-select').forEach(select => { select.disabled = true; });
+  refreshAnalyze();
+  refreshBenchmarkEnabled();
+  $('previewBtn').disabled = true;
+  $('calibrateQualityBtn').disabled = true;
+  try {
+    await task();
+  } catch (error) {
+    log('任务失败：' + (error?.message || error));
+    alert('任务失败：' + (error?.message || error));
+  } finally {
+    state.operationBusy = false;
+    for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget']) $(id).disabled = false;
+    document.querySelectorAll('.font-binding-select').forEach(select => { select.disabled = false; });
+    refreshAnalyze();
+    refreshBenchmarkEnabled();
+    $('previewBtn').disabled = !state.assInfo?.previewTimes?.length || !state.inputDecodeOk;
+    updateQualityCalibrationControls();
+  }
+}
+
 for (const [inputId, role] of [['video', 'video'], ['ass', 'ass'], ['fonts', 'fonts']]) {
   $(inputId).addEventListener('click', () => {
     try { globalThis.NativeHardsub?.preparePickerRole?.(role); } catch {}
@@ -214,7 +280,7 @@ for (const [inputId, role] of [['video', 'video'], ['ass', 'ass'], ['fonts', 'fo
 $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
   state.nativeInputProbe = null;
-  invalidateQualityCalibration();
+  invalidateAnalysis();
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
   const browserTooLarge = !state.nativeBackend?.available && state.video?.size > MAX_BYTES;
   $('videoMeta').className = browserTooLarge ? 'bad' : '';
@@ -232,7 +298,7 @@ $('video').addEventListener('change', e => {
 });
 $('ass').addEventListener('change', e => {
   state.ass = e.target.files?.[0] || null;
-  invalidateQualityCalibration();
+  invalidateAnalysis();
   $('assMeta').textContent = state.ass ? state.ass.name : '未选择';
   $('assMeta').className = '';
   if (state.ass) log('字幕文件已接收：' + state.ass.name + ' · ' + formatBytes(state.ass.size));
@@ -240,7 +306,7 @@ $('ass').addEventListener('change', e => {
 });
 $('fonts').addEventListener('change', async e => {
   state.fonts = [...(e.target.files || [])];
-  invalidateQualityCalibration();
+  invalidateAnalysis();
   updateFontMeta();
 
   if (!state.nativeBackend?.available && $('rememberFonts').checked && state.fonts.length) {
@@ -285,8 +351,8 @@ $('acceptWarnings').addEventListener('change', e => {
   refreshBenchmarkEnabled();
 });
 
-$('analyze').addEventListener('click', analyzeAll);
-$('previewBtn').addEventListener('click', renderPreviews);
+$('analyze').addEventListener('click', () => runWebTask(analyzeAll));
+$('previewBtn').addEventListener('click', () => runWebTask(renderPreviews));
 $('encodeGoal').addEventListener('change', () => {
   const goal = $('encodeGoal').value;
   if (
@@ -307,10 +373,10 @@ $('qualityTarget').addEventListener('change', () => {
   renderPlanOptions();
   refreshBenchmarkEnabled();
 });
-$('calibrateQualityBtn').addEventListener('click', runQualityCalibration);
-$('benchmarkBtn').addEventListener('click', runBenchmarks);
-$('testSelectedBtn').addEventListener('click', runSelectedTest);
-$('encodeBtn').addEventListener('click', runEncode);
+$('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
+$('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
+$('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
+$('encodeBtn').addEventListener('click', () => runWebTask(runEncode));
 $('cancelEncodeBtn').addEventListener('click', () => {
   if (!state.nativeJobId) return;
   try {
@@ -491,7 +557,7 @@ function detectNativeBackend() {
               arrayBuffer: async () =>
                 bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
             };
-            invalidateQualityCalibration();
+            invalidateAnalysis();
             $('assMeta').textContent =
               state.ass.name + ' · Android Native URI 读取';
             log('WebView 未回填字幕 File，已通过 Android Native URI 自动恢复所选 ASS。');
@@ -1144,50 +1210,6 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
   $('envSummary').className = 'env-summary';
 }
 
-async function decodeAssFile(file) {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  let encoding = 'UTF-8';
-  let offset = 0;
-  let text = '';
-
-  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-    encoding = 'UTF-8 BOM';
-    offset = 3;
-    text = new TextDecoder('utf-8').decode(bytes.subarray(offset));
-  } else if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
-    encoding = 'UTF-16 LE BOM';
-    offset = 2;
-    text = new TextDecoder('utf-16le').decode(bytes.subarray(offset));
-  } else if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
-    encoding = 'UTF-16 BE BOM';
-    offset = 2;
-    try {
-      text = new TextDecoder('utf-16be').decode(bytes.subarray(offset));
-    } catch {
-      const le = new Uint8Array(bytes.length - offset);
-      for (let i = offset, j = 0; i + 1 < bytes.length; i += 2, j += 2) {
-        le[j] = bytes[i + 1];
-        le[j + 1] = bytes[i];
-      }
-      text = new TextDecoder('utf-16le').decode(le);
-    }
-  } else {
-    text = new TextDecoder('utf-8').decode(bytes);
-  }
-
-  const nulMatches = text.match(/\u0000/g);
-  const removedNulls = nulMatches ? nulMatches.length : 0;
-  if (removedNulls) text = text.replaceAll('\u0000', '');
-
-  if (!/\[Events\]/i.test(text) || !/Dialogue\s*:/i.test(text)) {
-    throw new Error(
-      'ASS 文本解析前检查失败：按 ' + encoding + ' 解码后没有找到 [Events]/Dialogue。' +
-      '如果这是旧式 ANSI/GBK/Shift-JIS 字幕，需要先确认原始字符编码，不能静默猜测。'
-    );
-  }
-
-  return { text, encoding, removedNulls };
-}
 function fontFileKey(file) {
   return `${String(file?.name || '').toLowerCase()}::${Number(file?.size || 0)}`;
 }
@@ -1261,6 +1283,7 @@ function renderSavedFontLibrary() {
 
 function refreshAnalyze() {
   const hasFiles = !!(state.video && state.ass);
+  if (state.operationBusy) { $('analyze').disabled = true; return; }
   if (state.nativeBackend?.available) {
     $('analyze').disabled = !(hasFiles && state.nativeInputProbe?.ok && state.nativeSelfTest);
     return;
@@ -1270,17 +1293,8 @@ function refreshAnalyze() {
 
 async function analyzeAll() {
   try {
+    invalidateAnalysis();
     $('analyze').disabled = true;
-    state.acceptedWarnings = false;
-    $('acceptWarnings').checked = false;
-    state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
-    state.previewBaseUrls.filter(Boolean).forEach(URL.revokeObjectURL);
-    state.previewUrls = [];
-    state.previewBaseUrls = [];
-    state.previewFontEvents = [];
-    state.previewVisualChange = [];
-    state.previewTimes = [];
-    state.inputDecodeOk = false;
     log('开始分析 ASS 和字体…');
     const decodedAss = await decodeAssFile(state.ass);
     const assText = decodedAss.text;
@@ -1399,6 +1413,9 @@ async function analyzeAll() {
     $('previewBtn').disabled =
       !(state.engine.ready || state.nativeBackend?.available) ||
       !state.assInfo.previewTimes.length;
+    state.analyzedVideo = state.video;
+    state.analyzedAss = state.ass;
+    state.analyzedFontKey = currentFontKey();
     refreshBenchmarkEnabled();
   } catch (e) {
     log(`分析失败：${e.stack || e.message}`);
@@ -1530,7 +1547,7 @@ function getFontTargetName(face) {
 
 function bindFontOverrideControls() {
   document.querySelectorAll('.font-binding-select').forEach(select => {
-    select.addEventListener('change', async () => {
+    select.addEventListener('change', () => runWebTask(async () => {
       const matchIndex = Number(select.dataset.matchIndex);
       const match = state.fontMatches[matchIndex];
       if (!match) return;
@@ -1570,7 +1587,7 @@ function bindFontOverrideControls() {
       $('preview').innerHTML = '<div class="preview-placeholder">字体映射已变化，请重新生成真实字幕预览。</div>';
       renderSubtitleSummary();
       refreshBenchmarkEnabled(false);
-    });
+    }));
   });
 }
 
@@ -1687,6 +1704,10 @@ function nativeBackendReady() {
 }
 
 function workflowReadiness() {
+  const analyzed = state.analyzedVideo === state.video &&
+    state.analyzedAss === state.ass &&
+    state.analyzedFontKey === currentFontKey() &&
+    !!state.analyzedVideo && !!state.analyzedAss;
   const previewDone = state.previewUrls.some(Boolean);
   const warnings = state.fontMatches.some(x => x.status !== 'matched');
   const unsafeColor = !!state.media?.unsafeColorPipeline;
@@ -1698,12 +1719,13 @@ function workflowReadiness() {
     : state.engine.ready;
   return {
     previewDone, warnings, unsafeColor, previewOk, backendReady,
-    ready: !!(backendReady && state.inputDecodeOk && previewDone && previewOk && !unsafeColor && (!warnings || state.acceptedWarnings))
+    ready: !!(analyzed && backendReady && state.inputDecodeOk && previewDone && previewOk && !unsafeColor && (!warnings || state.acceptedWarnings))
   };
 }
 
 function refreshBenchmarkEnabled() {
   const status = workflowReadiness();
+  const busy = state.operationBusy;
   const warningsAccepted = !status.warnings || state.acceptedWarnings;
   const webDiagnosticReady = !!(
     state.engine.ready &&
@@ -1724,12 +1746,12 @@ function refreshBenchmarkEnabled() {
     ? nativeDiagnosticReady
     : webDiagnosticReady;
 
-  $('benchmarkBtn').disabled = !diagnosticReady;
-  $('testSelectedBtn').disabled = !diagnosticReady || !state.selectedCodec;
+  $('benchmarkBtn').disabled = busy || !diagnosticReady;
+  $('testSelectedBtn').disabled = busy || !diagnosticReady || !state.selectedCodec;
 
   const plan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
   const hasRecoveredOutput = !!state.nativeCompletedJob;
-  $('encodeBtn').disabled = hasRecoveredOutput
+  $('encodeBtn').disabled = busy ? true : hasRecoveredOutput
     ? false
     : (!status.ready || !state.selectedCodec || !plan);
 
@@ -1827,9 +1849,9 @@ function updateQualityCalibrationControls() {
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
   const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
   $('calibrateQualityBtn').disabled =
-    nativeOnly || inputNotReady || ssimUnavailable || state.qualityCalibrationBusy || !!state.nativeJobId;
-  $('qualityTarget').disabled = state.qualityCalibrationBusy;
-  $('encodeGoal').disabled = state.qualityCalibrationBusy;
+    state.operationBusy || nativeOnly || inputNotReady || ssimUnavailable || state.qualityCalibrationBusy || !!state.nativeJobId;
+  $('qualityTarget').disabled = state.operationBusy || state.qualityCalibrationBusy;
+  $('encodeGoal').disabled = state.operationBusy || state.qualityCalibrationBusy;
 
   if (!state.qualityCalibrationBusy) {
     if (goal === 'efficiency') {
@@ -1953,6 +1975,7 @@ function updateChosenSummary() {
 }
 
 function selectCodec(codec) {
+  if (state.operationBusy) return;
   state.selectedCodec = codec;
   if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
   state.selectedTest = null;
