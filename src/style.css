@@ -918,3 +918,68 @@ button:disabled {
     min-height: 150px;
   }
 }
+
+
+.plan-card { min-width: 0; }
+
+.plan-choose,
+.advanced-choose {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 8px;
+}
+
+.font-binding-box {
+  display: grid;
+  gap: 1px;
+  margin-top: 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--border-soft);
+}
+
+.font-binding-title {
+  padding: 8px 10px;
+  background: #0f1318;
+  color: #7f8a96;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+
+.font-binding-row {
+  display: grid;
+  grid-template-columns: minmax(140px, .8fr) minmax(160px, 1.2fr);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  background: var(--surface);
+}
+
+.font-binding-row > span {
+  min-width: 0;
+  color: #b9c1ca;
+  font-size: .74rem;
+  overflow-wrap: anywhere;
+}
+
+.font-binding-select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 6px 8px;
+}
+
+.remove-saved-font {
+  min-height: 30px;
+  padding: 0 9px;
+  color: #b9c1ca;
+}
+
+@media (max-width: 560px) {
+  .font-binding-row {
+    grid-template-columns: 1fr;
+  }
+}
