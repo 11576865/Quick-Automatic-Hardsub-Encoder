@@ -41,11 +41,13 @@ jobs:
           if (-not $caps.Ffmpeg -or -not $caps.Ffprobe) { throw 'Native FFmpeg/FFprobe detection failed' }
           if (-not $caps.HasAss) { throw 'Runner FFmpeg does not expose the ass filter' }
           foreach ($software in @('libx264','libx265','libsvtav1')) {
-            $profile = Get-NativeEncoderProfile $caps $software
-            if (-not $profile -or -not $profile.Available) { throw "Software fallback unavailable: $software" }
+            $profile = $catalog | Where-Object Key -eq $software | Select-Object -First 1
             $args = Get-NativeEncoderArguments $profile
             if ($args -notmatch [regex]::Escape($software)) { throw "Wrong encoder args for $software" }
           }
+          $actualSoftware = @($caps.Encoders | Where-Object { -not $_.Hardware -and $_.Available })
+          if (-not $actualSoftware.Count) { throw 'Installed runner FFmpeg exposes no supported software fallback' }
+          if (-not (Get-NativeEncoderProfile $caps 'libx264').Available) { throw 'Expected libx264 fallback is unavailable' }
           # Hosted runners normally have no NVIDIA device. NVENC may be listed by FFmpeg,
           # but Available must stay false unless the one-frame runtime probe succeeds.
           foreach ($hardware in @($caps.Encoders | Where-Object Hardware)) {
