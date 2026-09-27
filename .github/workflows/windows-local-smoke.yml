@@ -18,7 +18,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/output-safety.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -27,6 +27,30 @@ jobs:
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
+      - name: Validate native encoder catalog and software fallback
+        shell: powershell
+        run: |
+          . ./windows/native-backend.ps1
+          $catalog = @(Get-NativeEncoderCatalog)
+          foreach ($name in @('h264_nvenc','hevc_nvenc','av1_nvenc','libx264','libx265','libsvtav1')) {
+            if (-not ($catalog | Where-Object Key -eq $name)) { throw "Missing encoder profile: $name" }
+          }
+          $ffmpeg = (Get-Command ffmpeg.exe).Source
+          $ffprobe = (Get-Command ffprobe.exe).Source
+          $caps = Get-NativeCapabilities $ffmpeg $ffprobe (Resolve-Path ./windows)
+          if (-not $caps.Ffmpeg -or -not $caps.Ffprobe) { throw 'Native FFmpeg/FFprobe detection failed' }
+          if (-not $caps.HasAss) { throw 'Runner FFmpeg does not expose the ass filter' }
+          foreach ($software in @('libx264','libx265','libsvtav1')) {
+            $profile = Get-NativeEncoderProfile $caps $software
+            if (-not $profile -or -not $profile.Available) { throw "Software fallback unavailable: $software" }
+            $args = Get-NativeEncoderArguments $profile
+            if ($args -notmatch [regex]::Escape($software)) { throw "Wrong encoder args for $software" }
+          }
+          # Hosted runners normally have no NVIDIA device. NVENC may be listed by FFmpeg,
+          # but Available must stay false unless the one-frame runtime probe succeeds.
+          foreach ($hardware in @($caps.Encoders | Where-Object Hardware)) {
+            if ($hardware.Available -and -not $hardware.Runtime) { throw "False-positive NVENC availability: $($hardware.Key)" }
+          }
       - name: Preserve old output until replacement succeeds
         shell: powershell
         run: |
