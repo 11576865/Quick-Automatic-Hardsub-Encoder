@@ -1,4 +1,4 @@
-# Shared Windows Native FFmpeg/NVENC capability and encoder helpers.
+﻿# Shared Windows Native FFmpeg/NVENC capability and encoder helpers.
 # PowerShell 5.1 compatible; safe to dot-source from the WinForms launcher and CI.
 
 function Find-NativeTool([string]$Name, [string]$ScriptRoot = $PSScriptRoot) {
