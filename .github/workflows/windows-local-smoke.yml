@@ -57,6 +57,50 @@ jobs:
           foreach ($hardware in @($caps.Encoders | Where-Object Hardware)) {
             if ($hardware.Available -and -not $hardware.Runtime) { throw "False-positive NVENC availability: $($hardware.Key)" }
           }
+      - name: Normalize UTF-16 ASS and validate libass input
+        shell: powershell
+        run: |
+          . ./windows/native-backend.ps1
+          $work = Join-Path $env:RUNNER_TEMP 'utf16 ass smoke'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          $source = Join-Path $work 'source.ass'
+          $normalized = Join-Path $work 'subtitle.ass'
+          $text = @'
+          [Script Info]
+          ScriptType: v4.00+
+          PlayResX: 320
+          PlayResY: 240
+          [V4+ Styles]
+          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+          Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+          [Events]
+          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+          Dialogue: 0,0:00:00.00,0:00:01.50,Default,,0,0,0,,测试字幕
+          '@
+          [IO.File]::WriteAllText($source, $text, [Text.Encoding]::Unicode)
+          $info = Convert-AssToUtf8Normalized $source $normalized
+          if ($info.Encoding -notmatch 'UTF-16 LE') { throw "Unexpected ASS encoding detection: $($info.Encoding)" }
+          $bytes = [IO.File]::ReadAllBytes($normalized)
+          if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { throw 'Normalized ASS unexpectedly contains UTF-8 BOM' }
+          Push-Location $work
+          try {
+            & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'color=c=black:s=320x240:r=15:d=2' -vf 'ass=subtitle.ass' -c:v libx264 -t 1 'normalized.mkv'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (-not (Test-Path 'normalized.mkv')) { throw 'Normalized ASS encode output missing' }
+          } finally { Pop-Location }
+
+      - name: Validate NVENC runtime probe diagnostics contract
+        shell: powershell
+        run: |
+          . ./windows/native-backend.ps1
+          $ffmpeg = (Get-Command ffmpeg.exe).Source
+          $result = Test-NvencRuntime $ffmpeg 'h264_nvenc'
+          foreach ($name in @('Available','ExitCode','Error','Bytes')) {
+            if ($result.PSObject.Properties.Name -notcontains $name) { throw "NVENC probe missing field: $name" }
+          }
+          if ($result.Available -and $result.Bytes -le 0) { throw 'Successful NVENC probe did not produce encoded bytes' }
+          if (-not $result.Available -and $null -eq $result.Error) { throw 'Failed NVENC probe did not preserve diagnostics' }
+
       - name: Preserve old output until replacement succeeds
         shell: powershell
         run: |
