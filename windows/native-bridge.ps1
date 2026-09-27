@@ -1,6 +1,7 @@
 ﻿param(
     [int]$Port = 8766,
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [string]$Token = ''
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -10,7 +11,7 @@ Add-Type -AssemblyName System.Drawing
 
 $ErrorActionPreference = 'Stop'
 $script:AllowedOrigin = 'https://11576865.github.io'
-$script:Token = [Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '[^A-Za-z0-9]', ''
+$script:Token = if($Token){$Token}else{[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '[^A-Za-z0-9]', ''}
 $script:Selections = @{ video=@(); ass=@(); fonts=@() }
 $script:Jobs = @{}
 $script:Samples = @{}
@@ -410,25 +411,53 @@ function Export-Sample([string]$SampleId,[string]$SuggestedName) {
 
 function Read-HttpRequest($Client) {
     $stream=$Client.GetStream()
-    $reader=New-Object IO.StreamReader($stream,[Text.Encoding]::UTF8,$false,8192,$true)
-    $requestLine=$reader.ReadLine()
-    if(-not $requestLine){return $null}
+    $headerBytes = New-Object 'System.Collections.Generic.List[byte]'
+    $matched = 0
+    while($headerBytes.Count -lt 65536){
+        $value = $stream.ReadByte()
+        if($value -lt 0){break}
+        $b = [byte]$value
+        $headerBytes.Add($b)
+        if(($matched -eq 0 -and $b -eq 13) -or
+           ($matched -eq 1 -and $b -eq 10) -or
+           ($matched -eq 2 -and $b -eq 13) -or
+           ($matched -eq 3 -and $b -eq 10)){
+            $matched++
+            if($matched -eq 4){break}
+        }else{
+            $matched = if($b -eq 13){1}else{0}
+        }
+    }
+    if($headerBytes.Count -eq 0){return $null}
+    if($matched -ne 4){throw 'Malformed HTTP request headers.'}
+
+    $headerText=[Text.Encoding]::ASCII.GetString($headerBytes.ToArray())
+    $lines=$headerText -split "\r\n"
+    $requestLine=$lines[0]
     $parts=$requestLine.Split(' ')
+    if($parts.Count -lt 2){throw 'Malformed HTTP request line.'}
+
     $headers=@{}
-    while($true){
-        $line=$reader.ReadLine()
-        if($null -eq $line -or $line -eq ''){break}
+    foreach($line in $lines[1..($lines.Count-1)]){
+        if(-not $line){continue}
         $idx=$line.IndexOf(':')
         if($idx -gt 0){$headers[$line.Substring(0,$idx).Trim().ToLowerInvariant()]=$line.Substring($idx+1).Trim()}
     }
-    $body=''
+
     $length=0
     if($headers.ContainsKey('content-length')){[void][int]::TryParse($headers['content-length'],[ref]$length)}
+    if($length -lt 0 -or $length -gt 64MB){throw 'HTTP request body exceeds bridge safety limit.'}
+    $body=''
     if($length -gt 0){
-        $chars=New-Object char[] $length
+        $bodyBytes=New-Object byte[] $length
         $read=0
-        while($read -lt $length){$n=$reader.Read($chars,$read,$length-$read);if($n -le 0){break};$read+=$n}
-        if($read -gt 0){$body=-join $chars[0..($read-1)]}
+        while($read -lt $length){
+            $n=$stream.Read($bodyBytes,$read,$length-$read)
+            if($n -le 0){break}
+            $read+=$n
+        }
+        if($read -ne $length){throw 'Incomplete HTTP request body.'}
+        $body=[Text.Encoding]::UTF8.GetString($bodyBytes)
     }
     return [pscustomobject]@{Method=$parts[0];Path=$parts[1].Split('?')[0];Headers=$headers;Body=$body;Stream=$stream}
 }
