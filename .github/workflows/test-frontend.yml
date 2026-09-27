@@ -30,5 +30,6 @@ jobs:
           node-version: 22
       - run: node src/ass.test.mjs
       - run: node src/input-safety.test.mjs
+      - run: node src/ui-shell.test.mjs
       - run: npm ci
       - run: npm run build
