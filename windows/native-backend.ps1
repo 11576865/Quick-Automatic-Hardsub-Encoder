@@ -152,6 +152,8 @@ function Get-WindowsCpuName {
 function Get-WindowsGpuNames([string]$ScriptRoot = $PSScriptRoot) {
     $names = @()
 
+    # Prefer NVIDIA's own tool because it reports the marketing model name
+    # (for example, "NVIDIA GeForce RTX 5070") instead of a generic adapter label.
     $smiCandidates = @()
     $smi = Find-NativeTool 'nvidia-smi' $ScriptRoot
     if ($smi) { $smiCandidates += $smi }
@@ -173,44 +175,94 @@ function Get-WindowsGpuNames([string]$ScriptRoot = $PSScriptRoot) {
             if ($r.ExitCode -eq 0) {
                 $names = @($r.StdOut -split "\r?\n" |
                     ForEach-Object { $_.Trim() } |
-                    Where-Object { $_ -match 'NVIDIA' })
+                    Where-Object { $_ -match '^NVIDIA\b' })
+                if ($names.Count) { break }
+            }
+
+            # Older/driver-specific nvidia-smi builds can reject --query-gpu
+            # while still supporting the stable "-L" listing format.
+            $r = Invoke-NativeTool $candidate '-L' -AllowFailure
+            if ($r.ExitCode -eq 0) {
+                $names = @($r.StdOut -split "\r?\n" |
+                    ForEach-Object {
+                        $line = $_.Trim()
+                        $m = [regex]::Match($line, '^GPU\s+\d+:\s+(?<name>NVIDIA.+?)(?:\s+\(UUID:|$)')
+                        if ($m.Success) { $m.Groups['name'].Value.Trim() }
+                    } |
+                    Where-Object { $_ })
                 if ($names.Count) { break }
             }
         } catch {}
     }
 
+    # Standard Windows display-controller inventory.
     if (-not $names.Count) {
         try {
             $names = @(Get-CimInstance Win32_VideoController -ErrorAction Stop |
-                Where-Object { $_.Name -match 'NVIDIA' } |
+                Where-Object { $_.Name -match '^NVIDIA\b' } |
                 ForEach-Object { ([string]$_.Name).Trim() } |
                 Where-Object { $_ })
         } catch {}
     }
 
+    # PnP inventory is useful on systems where Win32_VideoController is stale.
     if (-not $names.Count) {
         try {
             if (Get-Command Get-PnpDevice -ErrorAction SilentlyContinue) {
                 $names = @(Get-PnpDevice -Class Display -PresentOnly -ErrorAction Stop |
-                    Where-Object { $_.FriendlyName -match 'NVIDIA' } |
+                    Where-Object { $_.FriendlyName -match '^NVIDIA\b' } |
                     ForEach-Object { ([string]$_.FriendlyName).Trim() } |
                     Where-Object { $_ })
             }
         } catch {}
     }
 
+    # CIM PnP fallback does not depend on the Get-PnpDevice module being present.
+    if (-not $names.Count) {
+        try {
+            $names = @(Get-CimInstance Win32_PnPEntity -Filter "PNPClass='Display'" -ErrorAction Stop |
+                Where-Object { $_.Name -match '^NVIDIA\b' } |
+                ForEach-Object { ([string]$_.Name).Trim() } |
+                Where-Object { $_ })
+        } catch {}
+    }
+
+    # Legacy WMI API fallback for Windows PowerShell hosts where CIM is unavailable.
     if (-not $names.Count) {
         try {
             $searcher = New-Object Management.ManagementObjectSearcher('SELECT Name FROM Win32_VideoController')
             $names = @($searcher.Get() |
-                Where-Object { $_.Name -match 'NVIDIA' } |
+                Where-Object { $_.Name -match '^NVIDIA\b' } |
                 ForEach-Object { ([string]$_.Name).Trim() } |
                 Where-Object { $_ })
             $searcher.Dispose()
         } catch {}
     }
 
-    return @($names | Select-Object -Unique)
+    # Last-resort registry inventory. Modern NVIDIA drivers populate DriverDesc
+    # even when WMI/CIM queries are restricted or temporarily unavailable.
+    if (-not $names.Count) {
+        try {
+            $displayClass = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+            $registryNames = @()
+            foreach ($key in @(Get-ChildItem -LiteralPath $displayClass -ErrorAction Stop)) {
+                try {
+                    $props = Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction Stop
+                    foreach ($value in @($props.DriverDesc, $props.'HardwareInformation.AdapterString')) {
+                        if ($value -is [string] -and $value.Trim() -match '^NVIDIA\b') {
+                            $registryNames += $value.Trim()
+                        }
+                    }
+                } catch {}
+            }
+            $names = @($registryNames)
+        } catch {}
+    }
+
+    return @($names |
+        ForEach-Object { ([string]$_).Trim() } |
+        Where-Object { $_ -match '^NVIDIA\b' } |
+        Select-Object -Unique)
 }
 
 function Test-NvencRuntime([string]$Ffmpeg, [string]$Encoder) {

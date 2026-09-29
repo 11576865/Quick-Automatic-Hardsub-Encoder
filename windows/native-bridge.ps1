@@ -153,6 +153,22 @@ function Show-BridgePicker([string]$Role) {
 }
 
 function Get-BackendInfo {
+    # Capability discovery happens at bridge startup, but Windows GPU inventory
+    # can be transiently unavailable during login/driver initialization. Retry
+    # the real model-name lookup before exposing a generic NVENC-only label.
+    if ($script:Capabilities) {
+        $currentGpuNames = @($script:Capabilities.Gpus |
+            Where-Object { $_ -and $_ -ne 'NVIDIA GPU · NVENC runtime available' })
+        if (-not $currentGpuNames.Count) {
+            try {
+                $refreshedGpuNames = @(Get-WindowsGpuNames $PSScriptRoot)
+                if ($refreshedGpuNames.Count) {
+                    $script:Capabilities.Gpus = @($refreshedGpuNames)
+                }
+            } catch {}
+        }
+    }
+
     $available = [bool]($script:Ffmpeg -and $script:Ffprobe -and $script:Capabilities)
     return [pscustomobject]@{
         available=$available
@@ -164,7 +180,7 @@ function Get-BackendInfo {
         ffprobe=$script:Ffprobe
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=if($script:Capabilities){@($script:Capabilities.Encoders)}else{@()}
-        bridgeVersion=1
+        bridgeVersion=2
     }
 }
 
