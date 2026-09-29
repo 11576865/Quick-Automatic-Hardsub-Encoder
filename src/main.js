@@ -1048,7 +1048,10 @@ function nativePlatformName() {
 
 function nativeGpuLabel() {
   if (state.nativeBackend?.backend !== 'windows-native') return '';
-  const gpus = Array.isArray(state.nativeBackend.gpus) ? state.nativeBackend.gpus.filter(Boolean) : [];
+  const rawGpus = state.nativeBackend.gpus;
+  const gpus = Array.isArray(rawGpus)
+    ? rawGpus.filter(Boolean)
+    : (typeof rawGpus === 'string' && rawGpus.trim() ? [rawGpus.trim()] : []);
   if (gpus.length) return gpus.join(' / ');
   const nvencAvailable = Array.isArray(state.nativeBackend.encoders) &&
     state.nativeBackend.encoders.some(e => (e.Hardware ?? e.hardware) && (e.Available ?? e.available));
