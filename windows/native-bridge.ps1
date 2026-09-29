@@ -170,17 +170,29 @@ function Get-BackendInfo {
     }
 
     $available = [bool]($script:Ffmpeg -and $script:Ffprobe -and $script:Capabilities)
+
+    # Do not build array-valued JSON properties through an inline PowerShell
+    # if-expression. Pipeline unrolling can collapse a one-item array (the
+    # normal single-GPU case) into a scalar string, which the web client then
+    # rejects with Array.isArray(...). Keep explicit array variables instead.
+    $gpuList = @()
+    $encoderList = @()
+    if ($script:Capabilities) {
+        $gpuList = @($script:Capabilities.Gpus)
+        $encoderList = @($script:Capabilities.Encoders)
+    }
+
     return [pscustomobject]@{
         available=$available
         backend='windows-native'
         platform='windows'
         cpu=if($script:Capabilities){$script:Capabilities.Cpu}else{$env:PROCESSOR_IDENTIFIER}
-        gpus=if($script:Capabilities){@($script:Capabilities.Gpus)}else{@()}
+        gpus=[object[]]$gpuList
         ffmpeg=$script:Ffmpeg
         ffprobe=$script:Ffprobe
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
-        encoders=if($script:Capabilities){@($script:Capabilities.Encoders)}else{@()}
-        bridgeVersion=2
+        encoders=[object[]]$encoderList
+        bridgeVersion=3
     }
 }
 
