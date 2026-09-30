@@ -72,24 +72,28 @@ const state = {
 const app = document.querySelector('#app');
 app.innerHTML = `
 <div class="app-shell">
-  <header class="hero">
-    <div class="hero-kicker">LOCAL ENCODE WORKBENCH</div>
-    <div class="hero-main">
-      <div>
-        <h1>快捷自动硬字幕压制器</h1>
-        <p id="heroSubtitle">浏览器可直接本地处理；Windows 建议使用本机后端，以获得系统 FFmpeg、NVENC 与大文件支持。</p>
-      </div>
-      <div class="hero-tools">
-        <div class="theme-control" id="themeControl" aria-label="界面主题">
-          <button type="button" data-theme-choice="dark" aria-pressed="false">夜间</button>
-          <button type="button" data-theme-choice="system" aria-pressed="false">系统</button>
+  <header class="hero app-header">
+    <div class="app-header-main">
+      <div class="app-brand">
+        <div class="app-mark" aria-hidden="true"><span>Q</span></div>
+        <div class="app-brand-copy">
+          <div class="hero-kicker">HARDSUB WORKBENCH</div>
+          <h1>快捷自动硬字幕压制器</h1>
         </div>
-        <div class="hero-state"><span></span>Local processing</div>
+      </div>
+      <div class="hero-state" aria-label="处理状态">
+        <span class="hero-state-dot"></span>
+        <div><strong>本地处理</strong><small>文件默认不上传</small></div>
       </div>
     </div>
-    <div class="workflow-strip" aria-label="工作流程">
-      <span>01 输入</span><span>02 环境 / 预检</span><span>03 预览</span><span>04 方案</span><span>05 压制</span>
-    </div>
+    <p id="heroSubtitle" class="hero-subtitle">浏览器可直接本地处理；Windows 建议使用本机后端，以获得系统 FFmpeg、NVENC 与大文件支持。</p>
+    <nav class="workflow-strip" aria-label="工作流程">
+      <span data-workflow-step="input"><b>01</b>输入</span>
+      <span data-workflow-step="preflight"><b>02</b>预检</span>
+      <span data-workflow-step="preview"><b>03</b>预览</span>
+      <span data-workflow-step="plan"><b>04</b>方案</span>
+      <span data-workflow-step="encode"><b>05</b>压制</span>
+    </nav>
     <div id="nativeStatusBar" class="native-status-bar hidden" aria-live="polite"></div>
   </header>
 
@@ -315,59 +319,19 @@ app.innerHTML = `
 
 const $ = id => document.getElementById(id);
 
-const THEME_KEY = 'quick-hardsub-theme-v1';
-const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-let themePreference = localStorage.getItem(THEME_KEY)
-  || document.documentElement.dataset.themePreference
-  || 'system';
-if (themePreference === 'light') themePreference = 'system';
-
-function resolvedTheme(preference = themePreference) {
-  if (preference === 'system') return systemThemeQuery.matches ? 'dark' : 'light';
-  return 'dark';
-}
-
-function updateThemeMeta(theme) {
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'light' ? '#edf3f8' : '#0d1420');
-}
-
-function updateThemeButtons() {
-  document.documentElement.dataset.themePreference = themePreference;
-  document.querySelectorAll('[data-theme-choice]').forEach(button => {
-    button.setAttribute('aria-pressed', button.dataset.themeChoice === themePreference ? 'true' : 'false');
-  });
-}
-
-function applyTheme(preference, { persist = true } = {}) {
-  themePreference = ['dark', 'system'].includes(preference) ? preference : 'system';
-  if (persist) localStorage.setItem(THEME_KEY, themePreference);
-  const theme = resolvedTheme(themePreference);
-  document.documentElement.dataset.theme = theme;
-  updateThemeMeta(theme);
-  updateThemeButtons();
-}
-
-document.querySelectorAll('[data-theme-choice]').forEach(button => {
-  button.addEventListener('click', () => applyTheme(button.dataset.themeChoice));
-});
-
-const onSystemThemeChange = () => {
-  if (themePreference === 'system') applyTheme('system', { persist: false });
-};
-if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener('change', onSystemThemeChange);
-else if (systemThemeQuery.addListener) systemThemeQuery.addListener(onSystemThemeChange);
-applyTheme(themePreference, { persist: false });
-
 const WINDOW_SIZE_CLASS = Object.freeze({
-  compactMax: 719,
-  mediumMax: 1099
+  compactMax: 599,
+  mediumMax: 839,
+  expandedMax: 1199,
+  largeMax: 1599
 });
 
 function resolveWindowSizeClass(width = window.innerWidth) {
   if (width <= WINDOW_SIZE_CLASS.compactMax) return 'compact';
   if (width <= WINDOW_SIZE_CLASS.mediumMax) return 'medium';
-  return 'expanded';
+  if (width <= WINDOW_SIZE_CLASS.expandedMax) return 'expanded';
+  if (width <= WINDOW_SIZE_CLASS.largeMax) return 'large';
+  return 'extra-large';
 }
 
 function applyWindowSizeClass() {
