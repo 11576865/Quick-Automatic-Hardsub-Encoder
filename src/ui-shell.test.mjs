@@ -80,6 +80,7 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.runtime-font-diagnostics\s*\{/);
   assert.match(css, /\.runtime-font-row\s*\{/);
   assert.match(css, /Adaptive workbench v7/);
+  assert.equal((css.match(/\{/g) || []).length, (css.match(/\}/g) || []).length);
   assert.match(css, /data-window-size="compact"\] \.setup-region/);
   assert.match(css, /data-window-size="medium"\] \.production-region/);
   assert.doesNotMatch(css, /System may still resolve\s+to light/);
