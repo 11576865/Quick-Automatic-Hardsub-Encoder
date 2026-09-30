@@ -107,34 +107,47 @@ app.innerHTML = `
     </button>
   </nav>
 
-  <details class="mobile-runtime-help">
-    <summary>本机运行帮助 <span>可选</span></summary>
-    <div class="mobile-runtime-help-body">
-      <section>
-        <strong>Android App</strong>
-        <ol>
-          <li>下载最新版 APK；若系统拦截，按提示允许当前来源安装。</li>
-          <li>安装后打开 App，用系统文件选择器选择视频、ASS 与字体。</li>
-          <li>长任务由前台服务持有，可从通知栏查看进度或取消。</li>
-        </ol>
-        <div class="runtime-help-actions">
-          <a class="runtime-help-link" href="${APP_DOWNLOAD_FALLBACK}">下载 APK</a>
-        </div>
-      </section>
-      <section>
-        <strong>Windows 本地运行</strong>
-        <ol>
-          <li>下载源码 ZIP 并完整解压。</li>
-          <li>确认 FFmpeg 可用；缺少时可用 WinGet 安装 Gyan.FFmpeg。</li>
-          <li>双击 <code>windows/start_windows.bat</code>，浏览器会自动连接本机 Bridge。</li>
-        </ol>
-        <div class="runtime-help-actions">
-          <a class="runtime-help-link" href="${WINDOWS_SOURCE_ZIP}">下载源码</a>
-          <a class="runtime-help-link" href="${WINDOWS_DOC_URL}" target="_blank" rel="noreferrer">详细说明</a>
-        </div>
-      </section>
+  <section class="mobile-runtime-help" aria-label="本机运行教程">
+    <div class="mobile-runtime-help-title">
+      <strong>本机运行</strong>
+      <span>可选 · 需要更快或更稳定时再用</span>
     </div>
-  </details>
+    <div class="mobile-runtime-help-grid">
+      <details class="mobile-runtime-option android">
+        <summary>
+          <span class="runtime-option-icon">A</span>
+          <span><strong>Android App</strong><small>安装 APK · 后台压制</small></span>
+          <span class="runtime-option-arrow">›</span>
+        </summary>
+        <div class="runtime-option-body">
+          <ol>
+            <li>下载最新版 APK；若系统拦截，按提示允许当前来源安装。</li>
+            <li>安装后打开 App，用系统文件选择器选择视频、ASS 与字体。</li>
+            <li>长任务由前台服务持有，可从通知栏查看进度或取消。</li>
+          </ol>
+          <a class="runtime-help-link runtime-help-android" href="${APP_DOWNLOAD_FALLBACK}">下载 Android APK</a>
+        </div>
+      </details>
+      <details class="mobile-runtime-option windows">
+        <summary>
+          <span class="runtime-option-icon">W</span>
+          <span><strong>Windows 本地</strong><small>FFmpeg · NVENC · 大文件</small></span>
+          <span class="runtime-option-arrow">›</span>
+        </summary>
+        <div class="runtime-option-body">
+          <ol>
+            <li>下载源码 ZIP 并完整解压。</li>
+            <li>确认 FFmpeg 可用；缺少时可用 WinGet 安装 Gyan.FFmpeg。</li>
+            <li>双击 <code>windows/start_windows.bat</code>，浏览器会自动连接本机 Bridge。</li>
+          </ol>
+          <div class="runtime-help-actions">
+            <a class="runtime-help-link runtime-help-windows" href="${WINDOWS_SOURCE_ZIP}">下载 Windows 包</a>
+            <a class="runtime-help-link" href="${WINDOWS_DOC_URL}" target="_blank" rel="noreferrer">详细说明</a>
+          </div>
+        </div>
+      </details>
+    </div>
+  </section>
 
   <div class="workspace-layout">
     <main class="workflow-main">
