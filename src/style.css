@@ -1904,7 +1904,7 @@ button.primary:hover:not(:disabled) {
 
 .size-snap-row {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -3314,10 +3314,8 @@ body.ui-mobile [data-mobile-stage-section] {
   display: none !important;
 }
 
-body.ui-mobile[data-mobile-stage="setup"] [data-mobile-stage-section="setup"]:not(.hidden),
-body.ui-mobile[data-mobile-stage="preflight"] [data-mobile-stage-section="preflight"]:not(.hidden),
-body.ui-mobile[data-mobile-stage="plan"] [data-mobile-stage-section="plan"]:not(.hidden),
-body.ui-mobile[data-mobile-stage="encode"] [data-mobile-stage-section="encode"]:not(.hidden) {
+body.ui-mobile[data-mobile-stage="prepare"] [data-mobile-stage-section="prepare"]:not(.hidden),
+body.ui-mobile[data-mobile-stage="produce"] [data-mobile-stage-section="produce"]:not(.hidden) {
   display: block !important;
 }
 
@@ -3549,7 +3547,7 @@ body.ui-mobile .preview-lightbox {
 }
 
 @media (orientation: landscape) and (max-height: 600px) {
-  body.ui-mobile[data-mobile-stage="plan"] .production-region {
+  body.ui-mobile[data-mobile-stage="produce"] .production-region {
     display: grid;
     grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
     gap: 8px;
@@ -3801,4 +3799,58 @@ body.ui-mobile .preview-lightbox {
     min-width: 0;
   }
 }
+}
+
+/* Mobile two-page correction ------------------------------------------------ */
+body.ui-mobile .mobile-stage-nav {
+  max-width: 420px;
+  margin-inline: auto;
+  left: max(10px, calc((100vw - 420px) / 2));
+  right: max(10px, calc((100vw - 420px) / 2));
+}
+
+body.ui-mobile .mobile-stage-nav button {
+  min-height: 50px;
+  font-size: .74rem;
+}
+
+body.ui-mobile[data-mobile-stage="prepare"] .env-card {
+  order: 2;
+}
+
+body.ui-mobile[data-mobile-stage="prepare"] .preflight-card {
+  order: 3;
+}
+
+body.ui-mobile[data-mobile-stage="prepare"] .preflight-details:not([open]) {
+  padding-bottom: 0;
+}
+
+body.ui-mobile[data-mobile-stage="prepare"] .preflight-details:not([open]) .preflight-body {
+  display: none;
+}
+
+body.ui-mobile[data-mobile-stage="produce"] .preview-card,
+body.ui-mobile[data-mobile-stage="produce"] .plan-card,
+body.ui-mobile[data-mobile-stage="produce"] .encode-card {
+  display: block;
+}
+
+body.ui-mobile[data-mobile-stage="produce"] .encode-card {
+  min-height: 0;
+}
+
+body.ui-mobile[data-mobile-stage="produce"] .encode-card .button-row {
+  position: static;
+  padding-top: 8px;
+  background: none;
+}
+
+body.ui-mobile[data-mobile-stage="produce"] .production-controls {
+  display: block;
+}
+
+body.ui-mobile[data-mobile-stage="produce"] .plan-card,
+body.ui-mobile[data-mobile-stage="produce"] .encode-card {
+  margin-top: 10px;
 }
