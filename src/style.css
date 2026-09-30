@@ -2995,6 +2995,180 @@ button.primary {
   }
 }
 
+
+/* Space-fit workflow pass --------------------------------------------------- */
+.input-card .file-row,
+.windows-native-connected .input-card .file-row {
+  min-height: 0;
+  padding: 12px;
+  align-content: start;
+}
+
+.input-card .file-row > label:first-child {
+  margin-bottom: 2px;
+}
+
+.input-card .file-picker-trigger,
+.input-card .native-picker-button {
+  min-height: 34px;
+  padding-inline: 11px;
+}
+
+.input-card .input-engine {
+  min-height: 0 !important;
+  padding-block: 10px;
+}
+
+.input-card > .button-row {
+  margin-top: 9px;
+}
+
+.env-card .env-body {
+  max-height: min(52vh, 460px);
+}
+
+.env-card .status-list {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.env-card .status-item {
+  min-height: 46px;
+  padding: 7px 9px;
+}
+
+.preflight-card .status-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.preflight-card .status-item {
+  flex: 1 1 170px;
+  min-width: min(170px, 100%);
+  min-height: 52px;
+}
+
+.preflight-card .status-item:nth-last-child(-n+3) {
+  flex-grow: .72;
+}
+
+.plan-controls {
+  display: block;
+}
+
+.plan-anchor {
+  margin-top: 8px;
+  min-height: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  line-height: 1.35;
+}
+
+.preview-wrap {
+  max-width: none;
+}
+
+.preview-image {
+  display: block;
+  width: 100%;
+  max-height: 58vh;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.preview-nav {
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
+}
+
+.preview-position {
+  padding: 8px;
+}
+
+.preview-lightbox {
+  width: min(96vw, 1680px);
+  max-width: none;
+  height: min(94vh, 1080px);
+  max-height: none;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: #05080d;
+  color: var(--text);
+}
+
+.preview-lightbox::backdrop {
+  background: rgb(0 0 0 / .82);
+  backdrop-filter: blur(5px);
+}
+
+.preview-lightbox-bar {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.preview-lightbox-bar button {
+  margin-left: auto;
+}
+
+.preview-lightbox-stage {
+  height: calc(100% - 52px);
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 12px;
+}
+
+.preview-lightbox-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+:root[data-window-size="expanded"] .production-region,
+:root[data-window-size="large"] .production-region,
+:root[data-window-size="extra-large"] .production-region {
+  grid-template-columns: minmax(420px, .86fr) minmax(0, 1.14fr);
+}
+
+:root[data-window-size="large"] .preview-wrap,
+:root[data-window-size="extra-large"] .preview-wrap {
+  max-width: none;
+}
+
+:root[data-window-size="large"] .plan-controls,
+:root[data-window-size="extra-large"] .plan-controls {
+  grid-template-columns: none;
+}
+
+@media (max-width: 839px) {
+  .preflight-card .status-list {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .preflight-card .status-item {
+    min-width: 0;
+  }
+
+  .preview-lightbox {
+    width: 100vw;
+    height: 100dvh;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
 /* Current adaptive window layout ------------------------------------------- */
 /* Window classes control composition. No device-name assumptions. */
 .app-shell {
