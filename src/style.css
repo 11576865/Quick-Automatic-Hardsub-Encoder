@@ -2166,3 +2166,261 @@ button.primary:hover:not(:disabled) {
     min-height: 42px;
   }
 }
+
+
+/* Slider-first encode planning UI */
+.plan-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 2px 0 14px;
+}
+
+.plan-mode-tab {
+  display: grid;
+  gap: 3px;
+  min-height: 62px;
+  padding: 10px 12px;
+  text-align: left;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.plan-mode-tab strong {
+  font-size: .82rem;
+  color: var(--text);
+}
+
+.plan-mode-tab small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.plan-mode-tab.selected {
+  border-color: color-mix(in srgb,var(--plan) 68%,var(--border));
+  background: linear-gradient(135deg,var(--plan-soft),var(--surface) 72%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--plan) 24%,transparent);
+}
+
+.plan-mode-stack {
+  min-width: 0;
+}
+
+.plan-mode-panel {
+  display: grid;
+  gap: 10px;
+  min-height: 224px;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+.plan-mode-panel.hidden {
+  display: none;
+}
+
+.plan-slider-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-slider-head > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.plan-slider-head small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.plan-slider-value {
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb,var(--plan) 36%,var(--border));
+  border-radius: 4px;
+  background: var(--plan-soft);
+  color: var(--text);
+  text-align: center;
+  font-size: .8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-slider {
+  --slider-progress: 50%;
+  width: 100%;
+  height: 24px;
+  margin: 2px 0 -2px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.plan-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--plan) 0,
+    var(--plan) var(--slider-progress),
+    var(--surface-3) var(--slider-progress),
+    var(--surface-3) 100%
+  );
+}
+
+.plan-slider::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--plan);
+  box-shadow: 0 0 0 1px color-mix(in srgb,var(--plan) 70%,var(--border));
+  -webkit-appearance: none;
+}
+
+.plan-slider::-moz-range-track {
+  height: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.plan-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--plan);
+}
+
+.plan-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--plan);
+  box-shadow: 0 0 0 1px color-mix(in srgb,var(--plan) 70%,var(--border));
+}
+
+.plan-slider:focus-visible {
+  outline: 2px solid color-mix(in srgb,var(--plan) 70%,transparent);
+  outline-offset: 4px;
+}
+
+.plan-slider-scale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: .66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-slider-scale span:nth-child(2) {
+  text-align: center;
+}
+
+.plan-slider-scale span:last-child {
+  text-align: right;
+}
+
+.plan-value-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 7px;
+  align-items: center;
+}
+
+.plan-value-detail {
+  min-width: 0;
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.4;
+}
+
+.range-step,
+.range-reset,
+.size-snap-row button {
+  min-height: 34px;
+  padding: 0 10px;
+}
+
+.range-step {
+  min-width: 38px;
+  font-size: 1rem;
+}
+
+.range-reset {
+  color: var(--muted);
+}
+
+.size-snap-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.size-snap-row button {
+  font-variant-numeric: tabular-nums;
+}
+
+.size-snap-row button.selected {
+  border-color: color-mix(in srgb,var(--plan) 62%,var(--border));
+  background: var(--plan-soft);
+  color: var(--text);
+}
+
+.quality-auto-codec {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: .73rem;
+  line-height: 1.45;
+}
+
+.quality-auto-codec input {
+  width: auto;
+  margin-top: 2px;
+}
+
+.quality-calibration {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .plan-mode-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-mode-tab {
+    min-height: 0;
+  }
+
+  .plan-value-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .range-reset {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .size-snap-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .plan-slider-head {
+    align-items: center;
+  }
+}

@@ -40,4 +40,22 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.doesNotMatch(selectBlock, /revokeObjectURL/);
   assert.match(main, /id="nextP" type="button"/);
   assert.match(main, />下一条<\/button>/);
+
+  assert.match(main, /data-plan-mode="quick"/);
+  assert.match(main, /data-plan-mode="quality"/);
+  assert.match(main, /data-plan-mode="size"/);
+  assert.match(main, /id="quickPresetRange" class="plan-slider plan-interaction" type="range"/);
+  assert.match(main, /id="qualityTargetRange" class="plan-slider plan-interaction" type="range"/);
+  assert.match(main, /id="sizeBudgetRange" class="plan-slider plan-interaction" type="range"/);
+  assert.match(main, /id="qualityAutoCodec"/);
+  assert.match(main, /id="sizeBudgetMultiplier" type="hidden"/);
+  assert.match(main, /function commitQualityTarget\(\)/);
+  assert.match(main, /function commitSizeBudget\(\)/);
+  assert.match(main, /goal !== 'sizeBudget'/);
+  assert.doesNotMatch(main, /<option value="quality">质量优先/);
+  assert.doesNotMatch(main, /体积预算：1\.6×/);
+  assert.match(main, /诊断：固定参数编码器基准测试/);
+  assert.match(css, /\.plan-mode-tabs\s*\{/);
+  assert.match(css, /\.plan-slider::-webkit-slider-runnable-track/);
+  assert.match(css, /--slider-progress/);
 });

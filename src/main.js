@@ -155,34 +155,74 @@ app.innerHTML = `
     <div class="card-heading"><span class="step-no">05</span><div><h2>选择压制方案</h2><p>质量、速度、体积预算与实测校准统一在这里完成。</p></div></div>
     <p class="note section-note">体积约束模式按目标码率控制；质量模式使用 CRF/CQ。测试片段只用于看画质、字幕和当前设备速度。</p>
 
+    <input id="encodeGoal" type="hidden" value="balanced">
+    <input id="qualityTarget" type="hidden" value="0.985">
+    <input id="sizeBudgetMultiplier" type="hidden" value="1.60">
+
+    <div class="plan-mode-tabs" role="tablist" aria-label="压制方式">
+      <button type="button" class="plan-mode-tab plan-interaction selected" data-plan-mode="quick" aria-pressed="true">
+        <strong>快速预设</strong><small>无需实测，直接生成稳妥参数</small>
+      </button>
+      <button type="button" class="plan-mode-tab plan-interaction" data-plan-mode="quality" aria-pressed="false">
+        <strong>目标质量</strong><small>短样本实测 SSIM 后确定参数</small>
+      </button>
+      <button type="button" class="plan-mode-tab plan-interaction" data-plan-mode="size" aria-pressed="false">
+        <strong>目标体积</strong><small>按最终文件预算反推平均码率</small>
+      </button>
+    </div>
+
     <div class="grid two plan-controls">
-      <div class="file-row">
-        <label>压制目标</label>
-        <select id="encodeGoal">
-          <option value="balanced">均衡：CRF 质量模式</option>
-          <option value="quality">质量优先：CRF 质量模式</option>
-          <option value="speed">速度优先：CRF 质量模式</option>
-          <option value="size16">体积预算：1.6×（用于自动选参数）</option>
-          <option value="size20">体积预算：2.0×（用于自动选参数）</option>
-          <option value="targetQuality">目标质量：实测 SSIM 后确定 CRF</option>
-          <option value="efficiency">效率优先：等质量下自动选最低码率</option>
-        </select>
-        <small>体积预算按单遍目标平均码率规划；“目标质量 / 效率优先”会先在短样本上实测 SSIM，再确定参数。短样本只能用于校准，不能当成整片质量保证。</small>
-        <div id="qualityCalibrationControls" class="quality-calibration hidden">
-          <label>目标 SSIM</label>
-          <select id="qualityTarget">
-            <option value="0.980">0.980 · 较高</option>
-            <option value="0.985" selected>0.985 · 高</option>
-            <option value="0.990">0.990 · 很高</option>
-          </select>
-          <button id="calibrateQualityBtn" type="button">实测校准目标质量</button>
-          <small>校准会对两个代表性片段反复试编码；“效率优先”定义为达到同一 SSIM 目标后，优先选择样本平均视频码率最低的编码器，码率接近时再偏向更快者。</small>
-          <div id="qualityCalibrationResult" class="note"></div>
+      <div class="plan-mode-stack">
+        <div id="quickPlanPanel" class="plan-mode-panel" data-plan-panel="quick">
+          <div class="plan-slider-head"><div><strong>预设倾向</strong><small>滑动只预览；松手后才提交参数。</small></div><output id="quickPresetValue" class="plan-slider-value">均衡</output></div>
+          <input id="quickPresetRange" class="plan-slider plan-interaction" type="range" min="0" max="2" step="1" value="1" aria-label="快速预设倾向">
+          <div class="plan-slider-scale"><span>更快</span><span>均衡</span><span>更精细</span></div>
+          <div class="plan-value-row">
+            <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="-1" aria-label="降低预设倾向">−</button>
+            <div id="quickPresetDetail" class="plan-value-detail">固定 CRF / preset，不运行质量校准。</div>
+            <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="1" aria-label="提高预设倾向">＋</button>
+            <button type="button" class="range-reset plan-interaction" data-range-reset="quick">默认</button>
+          </div>
+        </div>
+
+        <div id="qualityPlanPanel" class="plan-mode-panel hidden" data-plan-panel="quality">
+          <div class="plan-slider-head"><div><strong>目标 SSIM</strong><small>这是校准阈值，不是跨片源通用的绝对画质等级。</small></div><output id="qualityTargetValue" class="plan-slider-value">0.985</output></div>
+          <input id="qualityTargetRange" class="plan-slider plan-interaction" type="range" min="0.980" max="0.990" step="0.001" value="0.985" aria-label="目标 SSIM">
+          <div class="plan-slider-scale"><span>较宽松 · 0.980</span><span>默认 · 0.985</span><span>较严格 · 0.990</span></div>
+          <div class="plan-value-row">
+            <button type="button" class="range-step plan-interaction" data-range-step="quality" data-delta="-0.001" aria-label="降低目标 SSIM">−</button>
+            <div id="qualityTargetDetail" class="plan-value-detail">当前阈值 0.985；改动后需要重新校准。</div>
+            <button type="button" class="range-step plan-interaction" data-range-step="quality" data-delta="0.001" aria-label="提高目标 SSIM">＋</button>
+            <button type="button" class="range-reset plan-interaction" data-range-reset="quality">默认</button>
+          </div>
+          <label class="quality-auto-codec"><input id="qualityAutoCodec" class="plan-interaction" type="checkbox" checked> 自动比较可用编码器，在达到同一 SSIM 后优先选择更低样本码率；差异很小时偏向更快者。</label>
+          <div id="qualityCalibrationControls" class="quality-calibration">
+            <button id="calibrateQualityBtn" type="button">比较可用编码器并校准</button>
+            <small>校准会对代表性短片段反复试编码。短样本用于寻找参数边界，不是整片质量保证。</small>
+            <div id="qualityCalibrationResult" class="note"></div>
+          </div>
+        </div>
+
+        <div id="sizePlanPanel" class="plan-mode-panel hidden" data-plan-panel="size">
+          <div class="plan-slider-head"><div><strong>目标输出上限</strong><small>以源文件大小为锚点；滑动时只预览预算，松手后提交。</small></div><output id="sizeBudgetValue" class="plan-slider-value">×1.60</output></div>
+          <input id="sizeBudgetRange" class="plan-slider plan-interaction" type="range" min="0.75" max="2.00" step="0.05" value="1.60" aria-label="目标输出体积相对源文件倍率">
+          <div class="plan-slider-scale"><span>更紧</span><span>源文件 ×1.0</span><span>更宽松</span></div>
+          <div class="size-snap-row" aria-label="体积预算快捷值">
+            <button type="button" class="plan-interaction" data-size-multiplier="1.00">×1.00</button>
+            <button type="button" class="plan-interaction" data-size-multiplier="1.25">×1.25</button>
+            <button type="button" class="plan-interaction" data-size-multiplier="1.60">×1.60</button>
+            <button type="button" class="plan-interaction" data-size-multiplier="2.00">×2.00</button>
+          </div>
+          <div class="plan-value-row">
+            <button type="button" class="range-step plan-interaction" data-range-step="size" data-delta="-0.05" aria-label="降低体积预算">−</button>
+            <div id="sizeBudgetDetail" class="plan-value-detail">选择视频后显示对应的实际字节上限。</div>
+            <button type="button" class="range-step plan-interaction" data-range-step="size" data-delta="0.05" aria-label="提高体积预算">＋</button>
+            <button type="button" class="range-reset plan-interaction" data-range-reset="size">默认</button>
+          </div>
         </div>
       </div>
       <div id="sourceAnchor" class="plan-anchor note">分析完成后显示源码率与压缩密度。</div>
     </div>
-
     <div id="codecPlanGrid" class="grid three codec-plan-grid" style="margin-top:14px"></div>
     <div id="chosenSummary" class="note plan-summary">请选择一个编码器。</div>
 
@@ -192,8 +232,8 @@ app.innerHTML = `
     <div id="selectedTestResult" class="hidden"></div>
 
     <details class="advanced-box">
-      <summary>高级：三编码器比较实验</summary>
-      <p class="note">固定一组参考 CRF/preset，快速观察这台设备上的编码速度、SSIM 与样本码率；三者不是等质量条件，不能据此直接判定谁的压缩效率更高。要做等质量比较，请使用上方“目标质量 / 效率优先”实测校准。</p>
+      <summary>诊断：固定参数编码器基准测试</summary>
+      <p class="note">固定一组参考 CRF/preset，观察当前设备上的编码速度、SSIM 与样本码率。它不参与自动选参，也不是等质量比较；等质量选择请使用上方“目标质量”的自动编码器模式。</p>
       <div class="button-row"><button id="benchmarkBtn" disabled>比较 H.264 / H.265 / AV1</button></div>
       <div id="codecGrid" class="grid three" style="margin-top:14px"></div>
     </details>
@@ -367,8 +407,8 @@ function clearSelectedTestCache() {
 async function runWebTask(task) {
   if (state.operationBusy) return;
   state.operationBusy = true;
-  for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget']) $(id).disabled = true;
-  document.querySelectorAll('.font-binding-select').forEach(select => { select.disabled = true; });
+  for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) $(id).disabled = true;
+  document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control => { control.disabled = true; });
   refreshAnalyze();
   refreshBenchmarkEnabled();
   $('previewBtn').disabled = true;
@@ -380,8 +420,8 @@ async function runWebTask(task) {
     alert('任务失败：' + (error?.message || error));
   } finally {
     state.operationBusy = false;
-    for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget']) $(id).disabled = false;
-    document.querySelectorAll('.font-binding-select').forEach(select => { select.disabled = false; });
+    for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) $(id).disabled = false;
+    document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control => { control.disabled = false; });
     refreshAnalyze();
     refreshBenchmarkEnabled();
     $('previewBtn').disabled = !state.assInfo?.previewTimes?.length || !state.inputDecodeOk;
@@ -515,6 +555,132 @@ $('acceptWarnings').addEventListener('change', e => {
 
 $('analyze').addEventListener('click', () => runWebTask(analyzeAll));
 $('previewBtn').addEventListener('click', () => runWebTask(renderPreviews));
+const QUICK_PRESET_GOALS = ['speed', 'balanced', 'quality'];
+const QUICK_PRESET_LABELS = ['更快', '均衡', '更精细'];
+
+function planModeFromGoal(goal) {
+  if (QUICK_PRESET_GOALS.includes(goal)) return 'quick';
+  if (goal === 'targetQuality' || goal === 'efficiency') return 'quality';
+  return 'size';
+}
+
+function setSliderProgress(input) {
+  if (!input) return;
+  const min = Number(input.min || 0);
+  const max = Number(input.max || 100);
+  const value = Number(input.value || min);
+  const pct = max > min ? ((value - min) / (max - min)) * 100 : 0;
+  input.style.setProperty('--slider-progress', Math.max(0, Math.min(100, pct)).toFixed(2) + '%');
+}
+
+function updateQuickPresetPreview() {
+  const range = $('quickPresetRange');
+  if (!range) return;
+  const index = Math.max(0, Math.min(2, Math.round(Number(range.value) || 0)));
+  const goal = QUICK_PRESET_GOALS[index];
+  $('quickPresetValue').textContent = QUICK_PRESET_LABELS[index];
+  const codec = state.selectedCodec || chooseDefaultCodec(goal);
+  if (codec) {
+    const p = profileFor(codec, goal);
+    $('quickPresetDetail').textContent =
+      codec.toUpperCase() + ' · CRF ' + p.crf + ' · preset ' + p.preset +
+      '；固定预设，不运行 SSIM 校准。';
+  } else {
+    $('quickPresetDetail').textContent = '固定 CRF / preset，不运行 SSIM 校准。';
+  }
+  setSliderProgress(range);
+}
+
+function updateQualityTargetPreview() {
+  const range = $('qualityTargetRange');
+  if (!range) return;
+  const preview = Number(range.value || 0.985);
+  const committed = Number($('qualityTarget')?.value || 0.985);
+  $('qualityTargetValue').textContent = preview.toFixed(3);
+  $('qualityTargetDetail').textContent =
+    Math.abs(preview - committed) > 0.0001
+      ? '预览阈值 ' + preview.toFixed(3) + '；松手后提交并要求重新校准。'
+      : '当前阈值 ' + committed.toFixed(3) +
+        (state.qualityCalibrationTarget === committed ? '；已有校准结果可复用。' : '；需要实测校准。');
+  setSliderProgress(range);
+}
+
+function updateSizeBudgetPreview() {
+  const range = $('sizeBudgetRange');
+  if (!range) return;
+  const multiplier = Number(range.value || 1.6);
+  $('sizeBudgetValue').textContent = '×' + multiplier.toFixed(2);
+  $('sizeBudgetDetail').textContent = state.video
+    ? '预览上限 ' + formatBytes(Math.floor(state.video.size * multiplier)) +
+      ' · 源文件 ' + formatBytes(state.video.size) + ' · 松手后提交。'
+    : '相对源文件 ×' + multiplier.toFixed(2) + '；选择视频后显示实际字节上限。';
+  document.querySelectorAll('[data-size-multiplier]').forEach(button => {
+    button.classList.toggle('selected', Math.abs(Number(button.dataset.sizeMultiplier) - multiplier) < 0.001);
+  });
+  setSliderProgress(range);
+}
+
+function syncPlanModeUI() {
+  const goal = $('encodeGoal')?.value || 'balanced';
+  const mode = planModeFromGoal(goal);
+  document.querySelectorAll('.plan-mode-tab').forEach(button => {
+    const selected = button.dataset.planMode === mode;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-plan-panel]').forEach(panel => {
+    panel.classList.toggle('hidden', panel.dataset.planPanel !== mode);
+  });
+
+  if (mode === 'quick') {
+    const index = QUICK_PRESET_GOALS.indexOf(goal);
+    if (index >= 0) $('quickPresetRange').value = String(index);
+  } else if (mode === 'quality') {
+    $('qualityAutoCodec').checked = goal === 'efficiency';
+  }
+
+  updateQuickPresetPreview();
+  updateQualityTargetPreview();
+  updateSizeBudgetPreview();
+}
+
+function commitEncodeGoal(goal) {
+  if (!$('encodeGoal')) return;
+  if ($('encodeGoal').value === goal) {
+    syncPlanModeUI();
+    renderPlanOptions();
+    refreshBenchmarkEnabled();
+    return;
+  }
+  $('encodeGoal').value = goal;
+  $('encodeGoal').dispatchEvent(new Event('change'));
+}
+
+function commitQuickPreset() {
+  const index = Math.max(0, Math.min(2, Math.round(Number($('quickPresetRange').value) || 0)));
+  commitEncodeGoal(QUICK_PRESET_GOALS[index]);
+}
+
+function commitQualityTarget() {
+  const value = Math.max(0.980, Math.min(0.990, Number($('qualityTargetRange').value || 0.985)));
+  $('qualityTargetRange').value = value.toFixed(3);
+  if (Math.abs(Number($('qualityTarget').value) - value) < 0.0001) {
+    updateQualityTargetPreview();
+    return;
+  }
+  $('qualityTarget').value = value.toFixed(3);
+  $('qualityTarget').dispatchEvent(new Event('change'));
+}
+
+function commitSizeBudget() {
+  const value = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetRange').value || 1.6)));
+  $('sizeBudgetRange').value = value.toFixed(2);
+  $('sizeBudgetMultiplier').value = value.toFixed(2);
+  updateSizeBudgetPreview();
+  renderPlanOptions();
+  refreshBenchmarkEnabled();
+}
+
 $('encodeGoal').addEventListener('change', () => {
   const goal = $('encodeGoal').value;
   if (
@@ -524,16 +690,85 @@ $('encodeGoal').addEventListener('change', () => {
     const pick = chooseEfficiencyCalibration(Object.values(state.qualityCalibration));
     if (pick) state.selectedCodec = pick.codec;
   }
+  syncPlanModeUI();
   updateQualityCalibrationControls();
   renderPlanOptions();
   refreshBenchmarkEnabled();
 });
+
 $('qualityTarget').addEventListener('change', () => {
   state.qualityCalibration = {};
   state.qualityCalibrationTarget = null;
   $('qualityCalibrationResult').textContent = '';
+  updateQualityTargetPreview();
   renderPlanOptions();
   refreshBenchmarkEnabled();
+});
+
+document.querySelectorAll('.plan-mode-tab').forEach(button => {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.planMode;
+    if (mode === 'quick') {
+      commitQuickPreset();
+    } else if (mode === 'quality') {
+      commitEncodeGoal($('qualityAutoCodec').checked ? 'efficiency' : 'targetQuality');
+    } else {
+      commitEncodeGoal('sizeBudget');
+    }
+  });
+});
+
+$('quickPresetRange').addEventListener('input', updateQuickPresetPreview);
+$('quickPresetRange').addEventListener('change', commitQuickPreset);
+$('qualityTargetRange').addEventListener('input', updateQualityTargetPreview);
+$('qualityTargetRange').addEventListener('change', commitQualityTarget);
+$('sizeBudgetRange').addEventListener('input', updateSizeBudgetPreview);
+$('sizeBudgetRange').addEventListener('change', commitSizeBudget);
+
+$('qualityAutoCodec').addEventListener('change', () => {
+  commitEncodeGoal($('qualityAutoCodec').checked ? 'efficiency' : 'targetQuality');
+});
+
+document.querySelectorAll('[data-range-step]').forEach(button => {
+  button.addEventListener('click', () => {
+    const kind = button.dataset.rangeStep;
+    const delta = Number(button.dataset.delta || 0);
+    const range = kind === 'quick'
+      ? $('quickPresetRange')
+      : kind === 'quality'
+        ? $('qualityTargetRange')
+        : $('sizeBudgetRange');
+    const min = Number(range.min);
+    const max = Number(range.max);
+    const value = Math.max(min, Math.min(max, Number(range.value) + delta));
+    range.value = kind === 'quality' ? value.toFixed(3) : kind === 'size' ? value.toFixed(2) : String(Math.round(value));
+    if (kind === 'quick') commitQuickPreset();
+    else if (kind === 'quality') commitQualityTarget();
+    else commitSizeBudget();
+  });
+});
+
+document.querySelectorAll('[data-range-reset]').forEach(button => {
+  button.addEventListener('click', () => {
+    const kind = button.dataset.rangeReset;
+    if (kind === 'quick') {
+      $('quickPresetRange').value = '1';
+      commitQuickPreset();
+    } else if (kind === 'quality') {
+      $('qualityTargetRange').value = '0.985';
+      commitQualityTarget();
+    } else {
+      $('sizeBudgetRange').value = '1.60';
+      commitSizeBudget();
+    }
+  });
+});
+
+document.querySelectorAll('[data-size-multiplier]').forEach(button => {
+  button.addEventListener('click', () => {
+    $('sizeBudgetRange').value = Number(button.dataset.sizeMultiplier).toFixed(2);
+    commitSizeBudget();
+  });
 });
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
@@ -591,6 +826,7 @@ $('clearSavedFontsBtn').addEventListener('click', async () => {
   }
 });
 
+syncPlanModeUI();
 bootstrap();
 
 async function bootstrap() {
@@ -2211,8 +2447,12 @@ function updateQualityCalibrationControls() {
   const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
   $('calibrateQualityBtn').disabled =
     state.operationBusy || nativeOnly || inputNotReady || ssimUnavailable || state.qualityCalibrationBusy || !!state.nativeJobId;
-  $('qualityTarget').disabled = state.operationBusy || state.qualityCalibrationBusy;
-  $('encodeGoal').disabled = state.operationBusy || state.qualityCalibrationBusy;
+  const controlsLocked = state.operationBusy || state.qualityCalibrationBusy;
+  $('qualityTarget').disabled = controlsLocked;
+  $('encodeGoal').disabled = controlsLocked;
+  if ($('qualityTargetRange')) $('qualityTargetRange').disabled = controlsLocked;
+  if ($('qualityAutoCodec')) $('qualityAutoCodec').disabled = controlsLocked;
+  document.querySelectorAll('.plan-mode-tab').forEach(button => { button.disabled = controlsLocked; });
 
   if (!state.qualityCalibrationBusy) {
     if (goal === 'efficiency') {
@@ -2231,12 +2471,16 @@ function updateQualityCalibrationControls() {
       '当前版本的目标质量校准先在 Android Native 开启；网页模式仍使用固定 CRF / 体积预算方案。';
   } else if (ssimUnavailable) {
     $('qualityCalibrationResult').textContent =
-      '当前 Android Native 核心没有通过 SSIM 能力检查，目标质量 / 效率优先暂时不可用。';
+      '当前 Android Native 核心没有通过 SSIM 能力检查，目标质量暂时不可用。';
   }
 }
 
 function renderPlanOptions() {
-  if (!state.media) return;
+  if (!state.media) {
+    syncPlanModeUI();
+    return;
+  }
+  syncPlanModeUI();
   updateQualityCalibrationControls();
   const goal = $('encodeGoal').value;
   if (!state.selectedCodec || state.softwareEncoders[state.selectedCodec] === false) state.selectedCodec = chooseDefaultCodec(goal);
@@ -2602,7 +2846,7 @@ async function runQualityCalibration() {
   }
 
   // “目标质量”只校准当前选择，避免用户只想用 H.265 时还被迫等待 AV1。
-  // “效率优先”才需要把三个编码器拉到同一质量线后比较。
+  // “目标质量自动选择”才需要把三个编码器拉到同一质量线后比较。
   const codecs = goal === 'efficiency'
     ? available
     : [state.selectedCodec];
@@ -3356,7 +3600,8 @@ function buildEncodePlan(codec) {
     };
   }
 
-  const multiplier = goal === 'size20' ? 2.0 : 1.6;
+  if (goal !== 'sizeBudget') return null;
+  const multiplier = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetMultiplier')?.value || 1.6)));
   const sizeCeiling = Math.floor(state.video.size * multiplier);
   const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
   const containerReserveBytes = Math.max(256 * 1024, Math.floor(safeBudgetBytes * 0.01));
@@ -3368,7 +3613,10 @@ function buildEncodePlan(codec) {
   const ceilingVideoBitrate = Math.floor(((safeBudgetBytes - containerReserveBytes) * 8 / media.duration) - audioBitRate);
   if (!(ceilingVideoBitrate > 150000)) return null;
   const sourceCodec = normalizeCodec(media.videoCodec);
-  const sourceEquivalent = sourceVideoBitrate > 0 ? sourceVideoBitrate * (codecEfficiency(sourceCodec) / codecEfficiency(codec)) * (multiplier === 2.0 ? 1.12 : 1.05) : ceilingVideoBitrate;
+  const budgetHeadroom = 1.05 + Math.max(0, Math.min(1, (multiplier - 0.75) / 1.25)) * 0.07;
+  const sourceEquivalent = sourceVideoBitrate > 0
+    ? sourceVideoBitrate * (codecEfficiency(sourceCodec) / codecEfficiency(codec)) * budgetHeadroom
+    : ceilingVideoBitrate;
   const targetVideoBitrate = Math.floor(Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent)));
   const plannedBytes = Math.round(((targetVideoBitrate + audioBitRate) * media.duration / 8) + containerReserveBytes);
   const p = profileFor(codec, 'balanced');
