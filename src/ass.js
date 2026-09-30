@@ -239,7 +239,7 @@ export function findGlyphRiskPreviewTimes(assInfo, glyphCoverage, limit = 6) {
 
   return [...new Set(
     chosen.map(v => Math.max(0, Math.round(v * 100) / 100))
-  )].sort((a, b) => a - b).slice(0, max);
+  )].slice(0, max);
 }
 
 function addAssTextSegment(segment, fontName, addCodePoint) {
