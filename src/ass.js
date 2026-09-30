@@ -242,6 +242,53 @@ export function findGlyphRiskPreviewTimes(assInfo, glyphCoverage, limit = 6) {
   )].slice(0, max);
 }
 
+export function mergePreviewTimes(riskTimes = [], baseTimes = [], limit = 6) {
+  const max = Math.max(1, Math.min(12, Number(limit) || 6));
+  const close = (a, b) => Math.abs(Number(a) - Number(b)) < 0.005;
+  const round = value => Math.max(0, Math.round(Number(value) * 100) / 100);
+  const combined = [];
+
+  const add = value => {
+    if (!Number.isFinite(Number(value))) return;
+    const rounded = round(value);
+    if (combined.some(existing => close(existing, rounded))) return;
+    combined.push(rounded);
+  };
+
+  riskTimes.forEach(add);
+  baseTimes.forEach(add);
+
+  let selected = combined.slice(0, max);
+
+  // Risk samples stay first, but reserve the final slot for broad context only
+  // when that context is not already present. The previous replacement logic
+  // could replace slot 6 with a time already in slots 1-5, producing identical
+  // first/last preview samples.
+  if (selected.length >= max && max > 1 && baseTimes.length) {
+    const retained = selected.slice(0, max - 1);
+    const context = baseTimes
+      .map(Number)
+      .find(time =>
+        Number.isFinite(time) &&
+        !riskTimes.some(risk => close(risk, time)) &&
+        !retained.some(existing => close(existing, time))
+      );
+    if (context != null) selected[max - 1] = round(context);
+  }
+
+  selected = selected.filter((time, index, all) =>
+    all.findIndex(other => close(other, time)) === index
+  );
+
+  const selectedRisk = riskTimes
+    .map(Number)
+    .filter(time => Number.isFinite(time) && selected.some(chosen => close(chosen, time)))
+    .filter((time, index, all) => all.findIndex(other => close(other, time)) === index)
+    .map(round);
+
+  return { times: selected, riskTimes: selectedRisk };
+}
+
 function addAssTextSegment(segment, fontName, addCodePoint) {
   const decoded = String(segment)
     .replace(/\\[Nn]/g, '\n')
