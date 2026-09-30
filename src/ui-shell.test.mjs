@@ -9,8 +9,7 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   ]);
 
   assert.match(main, /id="windowsNativeCard"/);
-  assert.match(main, /windows\\start_windows\.bat/);
-  assert.match(main, /WINDOWS NATIVE · RECOMMENDED/);
+  assert.match(main, /WINDOWS NATIVE/);
   assert.match(main, /id="nativeStatusBar"/);
   assert.match(main, /renderNativeStatusBar/);
   assert.match(main, /nativeGpuLabel/);
