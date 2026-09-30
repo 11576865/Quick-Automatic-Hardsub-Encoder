@@ -2,7 +2,7 @@ import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
-import { detectCapabilities } from './capabilities.js';
+import { detectBasicCapabilities, detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
 import { decodeAssFile } from './ass-decoding.js';
 import { detectWindowsNativeBridge } from './windows-native-client.js';
@@ -98,16 +98,14 @@ app.innerHTML = `
   </header>
 
   <nav id="mobileStageNav" class="mobile-stage-nav" aria-label="移动端任务阶段">
-    <button type="button" data-mobile-stage-target="setup" aria-current="step"><span>01</span>输入</button>
-    <button type="button" data-mobile-stage-target="preflight" disabled><span>02</span>预检</button>
-    <button type="button" data-mobile-stage-target="plan" disabled><span>03</span>预览与方案</button>
-    <button type="button" data-mobile-stage-target="encode" disabled><span>04</span>压制</button>
+    <button type="button" data-mobile-stage-target="prepare" aria-current="step"><span>01</span>准备</button>
+    <button type="button" data-mobile-stage-target="produce" disabled><span>02</span>制作</button>
   </nav>
 
   <div class="workspace-layout">
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
-  <section id="inputCard" class="card input-card" data-mobile-stage-section="setup">
+  <section id="inputCard" class="card input-card" data-mobile-stage-section="prepare">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
@@ -132,7 +130,7 @@ app.innerHTML = `
     <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
   </section>
 
-  <section id="envCard" class="card env-card" data-mobile-stage-section="setup">
+  <section id="envCard" class="card env-card" data-mobile-stage-section="prepare">
     <details id="envDetails" class="env-details">
       <summary>
         <span class="env-heading">2. 运行环境</span>
@@ -146,7 +144,7 @@ app.innerHTML = `
   </section>
   </div>
 
-  <section id="preflightCard" class="card preflight-card hidden" data-mobile-stage-section="preflight">
+  <section id="preflightCard" class="card preflight-card hidden" data-mobile-stage-section="prepare">
     <details id="preflightDetails" class="preflight-details">
       <summary>
         <span class="preflight-heading">3. 媒体与字幕预检</span>
@@ -160,7 +158,7 @@ app.innerHTML = `
   </section>
 
   <div class="adaptive-region production-region">
-  <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="plan">
+  <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">03</span><div><h2>字幕预览</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
 
     <div class="button-row">
@@ -171,7 +169,7 @@ app.innerHTML = `
   </section>
 
   <div class="production-controls">
-  <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="plan">
+  <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">04</span><div><h2>压制方案</h2><p>选择目标，再决定编码器。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
@@ -243,7 +241,7 @@ app.innerHTML = `
     </details>
   </section>
 
-  <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="encode">
+  <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">05</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
@@ -319,7 +317,7 @@ function applyWindowSizeClass() {
   document.documentElement.dataset.windowSize = resolveWindowSizeClass();
 }
 
-const MOBILE_STAGE_ORDER = ['setup', 'preflight', 'plan', 'encode'];
+const MOBILE_STAGE_ORDER = ['prepare', 'produce'];
 
 function devicePrefersMobileShell() {
   if (state.nativeBackend?.backend === 'android-native') return true;
@@ -335,24 +333,24 @@ function applyPresentationShell() {
   document.body.classList.toggle('ui-mobile', mobile);
   document.body.classList.toggle('ui-desktop', !mobile);
   document.documentElement.dataset.uiShell = mobile ? 'mobile' : 'desktop';
-  if (!document.body.dataset.mobileStage) document.body.dataset.mobileStage = 'setup';
+  if (!document.body.dataset.mobileStage) document.body.dataset.mobileStage = 'prepare';
   syncMobileStageNav();
 }
 
 function mobileStageAvailable(stage) {
-  if (stage === 'setup') return true;
-  if (stage === 'preflight') return !$('preflightCard')?.classList.contains('hidden');
-  if (stage === 'plan') {
-    return !$('subtitleCard')?.classList.contains('hidden') && !$('planCard')?.classList.contains('hidden');
+  if (stage === 'prepare') return true;
+  if (stage === 'produce') {
+    return !$('subtitleCard')?.classList.contains('hidden') &&
+      !$('planCard')?.classList.contains('hidden') &&
+      !$('encodeCard')?.classList.contains('hidden');
   }
-  if (stage === 'encode') return !$('encodeCard')?.classList.contains('hidden');
   return false;
 }
 
 function syncMobileStageNav() {
   const nav = $('mobileStageNav');
   if (!nav) return;
-  const current = document.body.dataset.mobileStage || 'setup';
+  const current = document.body.dataset.mobileStage || 'prepare';
   for (const button of nav.querySelectorAll('[data-mobile-stage-target]')) {
     const stage = button.dataset.mobileStageTarget;
     button.disabled = !mobileStageAvailable(stage);
@@ -366,9 +364,7 @@ function setMobileStage(stage, { scroll = true } = {}) {
   document.body.dataset.mobileStage = stage;
   syncMobileStageNav();
   if (document.body.classList.contains('ui-mobile') && scroll) {
-    const target = stage === 'setup' ? $('inputCard') :
-      stage === 'preflight' ? $('preflightCard') :
-      stage === 'plan' ? $('subtitleCard') : $('encodeCard');
+    const target = stage === 'prepare' ? $('inputCard') : $('subtitleCard');
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
@@ -422,7 +418,7 @@ function invalidateAnalysis() {
   $('preview').innerHTML = '<div class="preview-placeholder">输入已变化，请重新分析并生成预览。</div>';
   $('previewBtn').disabled = true;
   for (const id of ['preflightCard', 'subtitleCard', 'planCard', 'encodeCard']) $(id).classList.add('hidden');
-  setMobileStage('setup', { scroll: false });
+  setMobileStage('prepare', { scroll: false });
   syncMobileStageNav();
   refreshBenchmarkEnabled();
 }
@@ -896,7 +892,7 @@ async function bootstrap() {
     updateFontMeta();
   }
 
-  state.capabilities = await detectCapabilities();
+  state.capabilities = detectBasicCapabilities();
   renderCapabilities();
 
   if (nativeMode) {
@@ -911,11 +907,21 @@ async function bootstrap() {
     return;
   }
 
+  const detailedCapabilitiesPromise = detectCapabilities()
+    .then(capabilities => {
+      state.capabilities = capabilities;
+      renderCapabilities();
+      updateEnvironmentSummary(state.engine?.ready);
+    })
+    .catch(error => log('浏览器详细能力检测失败：' + error.message));
+
   const engineStatus = await state.engine.init();
   if (engineStatus.ready) {
     try {
-      state.softwareEncoders = await state.engine.detectSoftwareEncoders();
-      state.softwareDecoders = await state.engine.detectSoftwareDecoders();
+      [state.softwareEncoders, state.softwareDecoders] = await Promise.all([
+        state.engine.detectSoftwareEncoders(),
+        state.engine.detectSoftwareDecoders()
+      ]);
       log(`WASM 软件编码器：x264=${state.softwareEncoders.h264} x265=${state.softwareEncoders.h265} SVT-AV1=${state.softwareEncoders.av1}`);
       log(`WASM 软件解码器：dav1d=${state.softwareDecoders.av1Dav1d}`);
     } catch (e) {
@@ -932,6 +938,7 @@ async function bootstrap() {
   }
   updateEnvironmentSummary(engineStatus.ready);
   refreshAnalyze();
+  void detailedCapabilitiesPromise;
 }
 
 function detectNativeBackend() {
@@ -2047,7 +2054,6 @@ async function analyzeAll() {
     $('planCard').classList.remove('hidden');
     $('encodeCard').classList.remove('hidden');
     syncMobileStageNav();
-    if (document.body.classList.contains('ui-mobile')) setMobileStage('preflight');
     renderPlanOptions();
     $('previewBtn').disabled =
       !(state.engine.ready || state.nativeBackend?.available) ||
@@ -3840,7 +3846,7 @@ async function recoverNativeJob() {
 
     $('encodeCard').classList.remove('hidden');
     syncMobileStageNav();
-    if (document.body.classList.contains('ui-mobile')) setMobileStage('encode', { scroll: false });
+    if (document.body.classList.contains('ui-mobile')) setMobileStage('produce', { scroll: false });
     if (status.state === 'completed') {
       state.nativeCompletedJob = {
         jobId,
