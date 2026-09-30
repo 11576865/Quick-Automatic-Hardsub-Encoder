@@ -46,7 +46,7 @@ const context = vm.createContext({
   state, $: element, document: { querySelectorAll: () => [] },
   URL: { revokeObjectURL: url => revoked.push(url) },
   invalidateQualityCalibration() {}, refreshBenchmarkEnabled() {}, refreshAnalyze() {},
-  updateQualityCalibrationControls() {}, log() {}, alert() {}
+  updateQualityCalibrationControls() {}, setMobileStage() {}, syncMobileStageNav() {}, log() {}, alert() {}
 });
 vm.runInContext(source.slice(start, end), context);
 context.invalidateAnalysis();
