@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseAss } from './ass.js';
+import { parseAss, mergePreviewTimes } from './ass.js';
 
 const sample = `[V4+ Styles]
 Format: Name, Fontname, Fontsize
@@ -94,3 +94,12 @@ const unresolvedTimes = (await import('./ass.js')).findGlyphRiskPreviewTimes(
   4
 );
 assert.deepEqual(unresolvedTimes, [10.5]);
+
+
+const mergedPreview = mergePreviewTimes(
+  [1.5, 4.5, 7.5, 10.5, 13.5, 16.5],
+  [1.5, 4.5, 7.5, 10.5, 13.5, 19.5],
+  6
+);
+assert.deepEqual(mergedPreview.times, [1.5, 4.5, 7.5, 10.5, 13.5, 19.5]);
+assert.equal(new Set(mergedPreview.times.map(v => v.toFixed(2))).size, mergedPreview.times.length);
