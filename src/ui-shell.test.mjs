@@ -52,7 +52,9 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /data-mobile-stage-target="produce"/);
   assert.equal((main.match(/data-mobile-stage-target="/g) || []).length, 2);
   assert.match(main, /function devicePrefersMobileShell\(\)/);
-  assert.match(main, /document\.body\.classList\.toggle\('ui-mobile', mobile\)/);
+  assert.match(main, /document\.body\.classList\.add\('ui-mobile'\)/);
+  assert.match(main, /document\.body\.classList\.remove\('ui-desktop'\)/);
+  assert.doesNotMatch(main, /classList\.toggle\('ui-mobile'/);
   assert.match(main, /function setMobileStage\(stage/);
   assert.match(css, /body\.ui-desktop \.production-region/);
   assert.match(css, /body\.ui-mobile \.mobile-stage-nav/);
