@@ -276,6 +276,18 @@ function Get-SelfTest {
     }
 }
 
+
+function Get-LibassFontEvents([string]$Text) {
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($line in ($Text -split '\r?\n')) {
+        if ($line -match '(?i)fontselect:|Glyph .* not found|failed to find.*fallback|font provider') {
+            $clean = $line -replace '^.*?(?=(?i:fontselect:|Glyph |failed to find|font provider))',''
+            if ($clean.Trim()) { [void]$out.Add($clean.Trim()) }
+        }
+    }
+    return @($out)
+}
+
 function Invoke-Preview($Body) {
     $video = Get-SelectedPath 'video'
     if (-not $video) { throw 'No video selected.' }
@@ -289,7 +301,7 @@ function Invoke-Preview($Body) {
             ' -i ' + (Quote-NativeArg $video) + ' -map 0:v:0 -an -sn -frames:v 1 -vf scale=1280:-2:force_original_aspect_ratio=decrease -c:v png ' + (Quote-NativeArg $base)
         $r1 = Invoke-BridgeTool $script:Ffmpeg $baseArgs $work
         if ($r1.ExitCode -ne 0 -or -not(Test-Path $base)) { throw ($r1.StdErr.Trim()) }
-        $r2 = Invoke-BridgeTool $script:Ffmpeg '-hide_banner -loglevel error -y -loop 1 -framerate 10 -i base.png -vf "ass=subtitle.ass:fontsdir=fonts" -ss 0.500 -frames:v 1 -c:v png sub.png' $work
+        $r2 = Invoke-BridgeTool $script:Ffmpeg '-hide_banner -loglevel info -y -loop 1 -framerate 10 -i base.png -vf "ass=subtitle.ass:fontsdir=fonts" -ss 0.500 -frames:v 1 -c:v png sub.png' $work
         if ($r2.ExitCode -ne 0 -or -not(Test-Path $sub)) { throw ($r2.StdErr.Trim()) }
         $baseBytes=[IO.File]::ReadAllBytes($base); $subBytes=[IO.File]::ReadAllBytes($sub)
         $sha = [Security.Cryptography.SHA256]::Create()
@@ -299,7 +311,8 @@ function Invoke-Preview($Body) {
             requestId=[string]$Body.requestId; ok=$true
             url=('data:image/png;base64,'+[Convert]::ToBase64String($subBytes))
             baseUrl=('data:image/png;base64,'+[Convert]::ToBase64String($baseBytes))
-            visualChange=(-not $same); time=$time; fontEvents=@()
+            visualChange=(-not $same); time=$time
+            fontEvents=@(Get-LibassFontEvents ($r2.StdErr+[Environment]::NewLine+$r2.StdOut))
         }
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
