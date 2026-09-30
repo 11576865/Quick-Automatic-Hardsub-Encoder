@@ -55,6 +55,8 @@ const state = {
   qualityCalibrationBusy: false,
   selectedCodec: null,
   selectedTest: null,
+  selectedTests: {},
+  latestNativeSampleId: null,
   acceptedWarnings: false,
   operationBusy: false,
   analyzedVideo: null,
@@ -329,8 +331,7 @@ function invalidateAnalysis() {
   for (const url of [...state.previewUrls, ...state.previewBaseUrls]) {
     if (url) URL.revokeObjectURL(url);
   }
-  if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
-  state.selectedTest = null;
+  clearSelectedTestCache();
   state.previewUrls = [];
   state.previewBaseUrls = [];
   state.previewFontEvents = [];
@@ -342,6 +343,25 @@ function invalidateAnalysis() {
   $('previewBtn').disabled = true;
   for (const id of ['preflightCard', 'subtitleCard', 'planCard', 'encodeCard']) $(id).classList.add('hidden');
   refreshBenchmarkEnabled();
+}
+
+function clearSelectedTestCache() {
+  const sampleUrls = new Set();
+  for (const result of Object.values(state.selectedTests || {})) {
+    if (result?.sampleUrl) sampleUrls.add(result.sampleUrl);
+  }
+  if (state.selectedTest?.sampleUrl) sampleUrls.add(state.selectedTest.sampleUrl);
+  for (const url of sampleUrls) URL.revokeObjectURL(url);
+
+  state.selectedTests = {};
+  state.selectedTest = null;
+  state.latestNativeSampleId = null;
+
+  const resultBox = $('selectedTestResult');
+  if (resultBox) {
+    resultBox.classList.add('hidden');
+    resultBox.innerHTML = '';
+  }
 }
 
 async function runWebTask(task) {
@@ -1915,6 +1935,7 @@ function bindFontOverrideControls() {
       state.previewFontEvents = [];
       state.previewVisualChange = [];
       state.previewTimes = [];
+      clearSelectedTestCache();
       state.acceptedWarnings = false;
       $('acceptWarnings').checked = false;
       $('preview').innerHTML = '<div class="preview-placeholder">字体映射已变化，请重新生成真实字幕预览。</div>';
@@ -1946,7 +1967,7 @@ async function renderPreviews() {
 async function loadPreviewAt(index) {
   const times = state.previewTimes;
   if (!times.length) return;
-  const safeIndex = (index + times.length) % times.length;
+  const safeIndex = Math.max(0, Math.min(Number(index) || 0, times.length - 1));
   const container = $('preview');
 
   if (!state.previewUrls[safeIndex]) {
@@ -1993,9 +2014,16 @@ async function loadPreviewAt(index) {
          <details class="note" style="padding:0 12px 10px"><summary>查看无字幕底图</summary><img src="${state.previewBaseUrls[safeIndex] || ''}" alt="无字幕底图" style="width:100%;margin-top:8px;border-radius:8px"></details>`
       : '<div class="warning-box" style="margin:0 12px 10px">浏览器无法自动完成像素差校验，请人工确认预览中确实出现了字幕。</div>';
 
-  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP">上一张</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP">下一张</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">只生成你实际查看的预览帧，避免一次等待全部采样点。</div>${fontInfo}</div>`;
-  $('prevP').onclick = () => loadPreviewAt(safeIndex - 1);
-  $('nextP').onclick = () => loadPreviewAt(safeIndex + 1);
+  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">按字幕采样点逐条按需生成真实渲染预览，避免一次等待全部帧。</div>${fontInfo}</div>`;
+  const navigatePreview = targetIndex => {
+    if (targetIndex < 0 || targetIndex >= times.length) return;
+    loadPreviewAt(targetIndex).catch(error => {
+      log(`预览翻页失败：${error.message}`);
+      loadPreviewAt(safeIndex).catch(() => {});
+    });
+  };
+  $('prevP').onclick = () => navigatePreview(safeIndex - 1);
+  $('nextP').onclick = () => navigatePreview(safeIndex + 1);
 }
 
 function getActiveDialogue(timeSeconds) {
@@ -2255,6 +2283,7 @@ function renderPlanOptions() {
   }).join('');
   document.querySelectorAll('.plan-choose').forEach(btn => btn.onclick = () => selectCodec(btn.dataset.codec));
   updateChosenSummary();
+  restoreSelectedTestForCurrentPlan();
   refreshBenchmarkEnabled();
 }
 
@@ -2309,12 +2338,80 @@ function updateChosenSummary() {
   }
 }
 
+function selectedTestCacheKey(codec, plan) {
+  if (!codec || !plan) return '';
+  const backend = state.nativeBackend?.backend || 'web';
+  return [
+    backend,
+    codec,
+    plan.mode || '',
+    Number.isFinite(Number(plan.crf)) ? Number(plan.crf) : '',
+    String(plan.preset ?? ''),
+    Number(plan.targetVideoBitrate || 0)
+  ].join('|');
+}
+
+function restoreSelectedTestForCurrentPlan() {
+  const plan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
+  const key = selectedTestCacheKey(state.selectedCodec, plan);
+  state.selectedTest = key ? (state.selectedTests?.[key] || null) : null;
+  renderSelectedTestResult();
+}
+
+function renderSelectedTestResult() {
+  const box = $('selectedTestResult');
+  if (!box) return;
+  const r = state.selectedTest;
+
+  if (!r) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
+    return;
+  }
+
+  box.classList.remove('hidden');
+  const codec = r._testCodec || state.selectedCodec || '';
+  const sampleBitrate = Number(r._sampleBitrate || 0);
+
+  if (r._native) {
+    const exportAvailable = !!r.sampleId && r.sampleId === state.latestNativeSampleId;
+    box.innerHTML =
+      '<div class="test-result"><strong>Native 测试片段完成</strong>' +
+      '<span>实际样本速度：' + Number(r.encodeSpeed || 0).toFixed(2) + '× realtime</span>' +
+      '<span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span>' +
+      '<span>SSIM：' + (Number.isFinite(Number(r.ssim)) ? Number(r.ssim).toFixed(5) : '未取得') + '</span>' +
+      '<span>样本大小：' + formatBytes(Number(r.sampleBytes || 0)) + '</span>' +
+      (exportAvailable
+        ? '<button id="saveNativeTestSampleBtn" type="button">保存测试片段查看实际画质</button>'
+        : '<small>该方案的实测参数已保留；测试片段文件已被后续测试替换，如需再次查看视频才需要重新生成片段。</small>') +
+      '<small>切换压制方案不会清空这组实测参数；只有输入、字幕字体映射或实际参数变化时才会失效。</small></div>';
+
+    const saveButton = $('saveNativeTestSampleBtn');
+    if (saveButton && exportAvailable) {
+      saveButton.onclick = () => {
+        globalThis.NativeHardsub?.requestNativeSampleExport?.(
+          r.sampleId,
+          'hardsub_test_' + codec + '.mkv'
+        );
+      };
+    }
+    return;
+  }
+
+  box.innerHTML =
+    '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' +
+    Number(r.encodeSpeed || 0).toFixed(2) + '× realtime</span><span>样本视频码率：' +
+    formatBitrate(sampleBitrate) +
+    '</span>' +
+    (r.sampleUrl
+      ? '<a class="button-link" href="' + r.sampleUrl + '" download="hardsub_test_' + codec + '.mkv">下载测试片段查看实际画质</a>'
+      : '') +
+    '<small>该方案的实测参数会在切换压制方案后保留；这些短样本数字仍不外推整片。</small></div>';
+}
+
 function selectCodec(codec) {
   if (state.operationBusy) return;
   state.selectedCodec = codec;
-  if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
-  state.selectedTest = null;
-  $('selectedTestResult').classList.add('hidden');
   renderPlanOptions();
 }
 
@@ -2591,14 +2688,16 @@ async function runQualityCalibration() {
 
 async function runSelectedTest() {
   if (!state.selectedCodec) return;
-  const plan = buildEncodePlan(state.selectedCodec);
+  const testCodec = state.selectedCodec;
+  const plan = buildEncodePlan(testCodec);
   if (!plan) return;
+  const testKey = selectedTestCacheKey(testCodec, plan);
   try {
     $('testSelectedBtn').disabled = true;
     $('selectedTestResult').classList.remove('hidden');
     $('selectedTestResult').innerHTML = '<div class="note">正在生成所选方案测试片段…</div>';
     const fps = state.media?.fps || 30;
-    const targetFrames = state.selectedCodec === 'av1' ? 24 : 45;
+    const targetFrames = testCodec === 'av1' ? 24 : 45;
     const duration = Math.min(1.5, Math.max(0.6, targetFrames / fps));
     const total = state.media?.duration || 0;
     const candidates = state.assInfo?.previewTimes || [];
@@ -2606,7 +2705,7 @@ async function runSelectedTest() {
       ? [...candidates].sort((a,b) => Math.abs(a - total * 0.45) - Math.abs(b - total * 0.45))[0]
       : total * 0.45;
     const startAt = Math.max(0, Math.min(Math.max(0, total - duration), anchor - 0.45));
-    log('所选方案测试：' + state.selectedCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 / 约 ' + Math.round(duration * fps) + ' 帧 · 含真实字幕');
+    log('所选方案测试：' + testCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 / 约 ' + Math.round(duration * fps) + ' 帧 · 含真实字幕');
     const originalAss = state.activeAssText || state.assText;
     const shiftedAss = shiftAssForPreview(originalAss, startAt);
     let r;
@@ -2617,7 +2716,7 @@ async function runSelectedTest() {
         log('当前 SAF 输入不可 seek；Native 测试片段改从视频开头生成。');
       }
       r = await requestNativeSample({
-        codec: state.selectedCodec,
+        codec: testCodec,
         start: nativeStart,
         duration,
         withSubtitles: true,
@@ -2635,49 +2734,38 @@ async function runSelectedTest() {
     } else {
       await state.engine.setAssText(shiftedAss);
       try {
-        r = await state.engine.benchmarkCodec(state.selectedCodec, {
+        r = await state.engine.benchmarkCodec(testCodec, {
           start: startAt, duration, withSubtitles: true, crf: plan.crf, preset: plan.preset,
           targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
           twoPass: false,
           measureSsim: false,
-          timeoutMs: state.selectedCodec === 'av1' ? 60000 : 45000
+          timeoutMs: testCodec === 'av1' ? 60000 : 45000
         });
       } finally {
         await state.engine.setAssText(originalAss);
       }
     }
 
-    if (state.selectedTest?.sampleUrl) URL.revokeObjectURL(state.selectedTest.sampleUrl);
-    state.selectedTest = r;
     const measuredDuration = Number(r.duration || duration);
     const sampleBitrate = r.packetStats?.totalVideoBytes
       ? r.packetStats.totalVideoBytes * 8 / Math.max(0.001, measuredDuration)
       : 0;
 
-    if (state.nativeBackend?.available) {
-      $('selectedTestResult').innerHTML =
-        '<div class="test-result"><strong>Native 测试片段完成</strong>' +
-        '<span>实际样本速度：' + Number(r.encodeSpeed || 0).toFixed(2) + '× realtime</span>' +
-        '<span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span>' +
-        '<span>SSIM：' + (Number.isFinite(Number(r.ssim)) ? Number(r.ssim).toFixed(5) : '未取得') + '</span>' +
-        '<span>样本大小：' + formatBytes(Number(r.sampleBytes || 0)) + '</span>' +
-        '<button id="saveNativeTestSampleBtn" type="button">保存测试片段查看实际画质</button>' +
-        '<small>该测试使用与正式压制相同的 Android Native 编码器和 libass 字幕路径；短样本速度与码率仍不外推整片。</small></div>';
-      $('saveNativeTestSampleBtn').onclick = () => {
-        globalThis.NativeHardsub?.requestNativeSampleExport?.(
-          r.sampleId,
-          'hardsub_test_' + state.selectedCodec + '.mkv'
-        );
-      };
-    } else {
-      $('selectedTestResult').innerHTML =
-        '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' +
-        r.encodeSpeed.toFixed(2) + '× realtime</span><span>样本视频码率：' +
-        formatBitrate(sampleBitrate) +
-        '</span><a class="button-link" href="' + r.sampleUrl +
-        '" download="hardsub_test_' + state.selectedCodec +
-        '.mkv">下载测试片段查看实际画质</a><small>所选方案测试只验证真实字幕、画质和设备速度，不再额外跑一次 SSIM；这些数字也不外推整片。</small></div>';
+    const previous = state.selectedTests?.[testKey];
+    if (previous?.sampleUrl && previous.sampleUrl !== r.sampleUrl) {
+      URL.revokeObjectURL(previous.sampleUrl);
     }
+
+    r._testCodec = testCodec;
+    r._testDuration = measuredDuration;
+    r._sampleBitrate = sampleBitrate;
+    r._native = !!state.nativeBackend?.available;
+
+    if (!state.selectedTests) state.selectedTests = {};
+    state.selectedTests[testKey] = r;
+    state.selectedTest = r;
+    if (r._native && r.sampleId) state.latestNativeSampleId = r.sampleId;
+    renderSelectedTestResult();
   } catch (e) {
     log('所选方案测试失败：' + e.message);
     $('selectedTestResult').innerHTML = '<div class="error-box">测试失败：' + escapeHtml(e.message) + '</div>';

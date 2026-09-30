@@ -87,23 +87,44 @@ function choosePreviewTimes(dialogue, styles) {
   const chosen = [];
   const seenStyles = new Set();
 
+  const addEvent = event => {
+    if (!event || !Number.isFinite(event.startSeconds)) return;
+    chosen.push(midpoint(event));
+  };
+
+  // Keep the original intent: cover distinct styles and special override cases first.
   for (const e of dialogue) {
     if (!Number.isFinite(e.startSeconds)) continue;
     const key = e.style || 'Default';
     if (!seenStyles.has(key)) {
-      chosen.push(midpoint(e));
+      addEvent(e);
       seenStyles.add(key);
     }
-    if (chosen.length >= 4) break;
+    if (seenStyles.size >= 4) break;
   }
 
-  const inlineFont = dialogue.find(e => /\\fn/.test(e.text || ''));
-  if (inlineFont) chosen.push(midpoint(inlineFont));
+  addEvent(dialogue.find(e => /\\fn/.test(e.text || '')));
+  addEvent(dialogue.find(e => /\\(?:pos|move|an\d)/.test(e.text || '')));
 
-  const positioned = dialogue.find(e => /\\(?:pos|move|an\d)/.test(e.text || ''));
-  if (positioned) chosen.push(midpoint(positioned));
+  // A common ASS has only one style. Previously that produced one preview point,
+  // so “next” wrapped back to the same frame and looked broken. Fill remaining
+  // slots with dialogue events spread across the file so navigation always has
+  // meaningful later samples when the subtitle actually contains them.
+  if (chosen.length < 6) {
+    const count = Math.min(6, dialogue.length);
+    for (let i = 0; i < count; i++) {
+      const index = count === 1
+        ? 0
+        : Math.round(i * (dialogue.length - 1) / (count - 1));
+      addEvent(dialogue[index]);
+    }
+  }
 
-  const dedup = [...new Set(chosen.filter(Number.isFinite).map(v => Math.max(0, Math.round(v * 100) / 100)))];
+  const dedup = [...new Set(
+    chosen
+      .filter(Number.isFinite)
+      .map(v => Math.max(0, Math.round(v * 100) / 100))
+  )].sort((a, b) => a - b);
   return dedup.slice(0, 6);
 }
 

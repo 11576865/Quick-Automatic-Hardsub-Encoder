@@ -28,4 +28,16 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /Relaxed desktop workbench v4/);
   assert.match(css, /\.windows-native-connected \.input-card > \.grid\.two\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.native-picker-button\s*\{/);
+
+  assert.match(main, /selectedTests:\s*\{\}/);
+  assert.match(main, /function restoreSelectedTestForCurrentPlan\(\)/);
+  assert.match(main, /function selectedTestCacheKey\(codec, plan\)/);
+  const selectStart = main.indexOf('function selectCodec(codec)');
+  const selectEnd = main.indexOf('function qualityCrfRange', selectStart);
+  assert.ok(selectStart > 0 && selectEnd > selectStart);
+  const selectBlock = main.slice(selectStart, selectEnd);
+  assert.doesNotMatch(selectBlock, /state\.selectedTest\s*=\s*null/);
+  assert.doesNotMatch(selectBlock, /revokeObjectURL/);
+  assert.match(main, /id="nextP" type="button"/);
+  assert.match(main, />下一条<\/button>/);
 });

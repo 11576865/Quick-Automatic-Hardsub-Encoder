@@ -32,7 +32,13 @@ const state = {
   analyzedFontKey: 'old.ttf', inputDecodeOk: true, media: { duration: 10 },
   assInfo: { previewTimes: [1] }, selectedCodec: 'h264', acceptedWarnings: true,
   previewUrls: ['blob:old'], previewBaseUrls: ['blob:base'], previewVisualChange: [true],
-  selectedTest: { sampleUrl: 'blob:sample' }, benchmarks: { h264: {} },
+  selectedTest: { sampleUrl: 'blob:sample-a' },
+  selectedTests: {
+    a: { sampleUrl: 'blob:sample-a' },
+    b: { sampleUrl: 'blob:sample-b' }
+  },
+  latestNativeSampleId: 'sample-id',
+  benchmarks: { h264: {} },
   operationBusy: false
 };
 let runs = 0;
@@ -48,7 +54,9 @@ assert.equal(state.inputDecodeOk, false);
 assert.equal(state.analyzedVideo, null);
 assert.equal(state.media, null);
 assert.equal(state.selectedCodec, null);
-assert.deepEqual(revoked, ['blob:old', 'blob:base', 'blob:sample']);
+assert.deepEqual(revoked, ['blob:old', 'blob:base', 'blob:sample-a', 'blob:sample-b']);
+assert.deepEqual(state.selectedTests, {});
+assert.equal(state.latestNativeSampleId, null);
 assert.equal(element('previewBtn').disabled, true);
 
 let release;
