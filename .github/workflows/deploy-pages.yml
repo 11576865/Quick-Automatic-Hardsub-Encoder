@@ -68,7 +68,8 @@ jobs:
               cd /tmp/quick-web-core
               sha256sum -c "$WEB_SHA_ASSET"
             )
-            tar -C public/vendor -xzf "/tmp/quick-web-core/$WEB_ASSET"
+            mkdir -p public/vendor/ffmpeg-kit-next-web
+            tar -C public/vendor/ffmpeg-kit-next-web --strip-components=1 -xzf "/tmp/quick-web-core/$WEB_ASSET"
           else
             echo "::warning::Locked Web core release is not published yet; using the latest non-expired legacy Actions artifact for this migration run."
             RUN_ID="$(gh run list --workflow build-core.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
