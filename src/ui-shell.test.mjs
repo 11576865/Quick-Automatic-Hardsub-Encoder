@@ -66,6 +66,12 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /function ensureWebEngineReady\(\)/);
   assert.match(main, /function ensureNativeSelfTestStarted\(\)/);
   assert.match(main, /首张真实预览已成功解码输入视频/);
+  assert.match(main, /id="continueToProduceBtn"/);
+  assert.match(main, /mobile-stage-copy/);
+  assert.match(main, /预览与压制/);
+  assert.match(css, /Mobile task shell v2/);
+  assert.match(css, /body\.ui-mobile \.mobile-preflight-action/);
+  assert.match(css, /body\.ui-mobile \.mobile-stage-nav \{/);
   assert.doesNotMatch(main, /执行输入解码 smoke test/);
   assert.match(main, /id="previewZoom"/);
   assert.match(main, /class="preview-image"/);
