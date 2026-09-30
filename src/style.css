@@ -2475,3 +2475,75 @@ button.primary:hover:not(:disabled) {
     gap: 3px;
   }
 }
+
+
+/* Runtime libass font diagnostics */
+.runtime-font-diagnostics {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.runtime-font-summary {
+  margin: 0 !important;
+}
+
+.runtime-font-list {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--border-soft);
+  background: var(--border-soft);
+}
+
+.runtime-font-row {
+  display: grid;
+  grid-template-columns: minmax(90px,.55fr) minmax(0,1.45fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  background: var(--surface);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+.runtime-font-row strong {
+  overflow-wrap: anywhere;
+}
+
+.runtime-font-row span {
+  color: var(--muted);
+}
+
+.runtime-font-row b {
+  font-size: .66rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.runtime-font-row.resolved b {
+  color: var(--warn);
+}
+
+.runtime-font-row.danger b {
+  color: var(--danger);
+}
+
+.runtime-font-row.clean b {
+  color: var(--ok);
+}
+
+.runtime-font-raw {
+  padding: 0 !important;
+}
+
+.runtime-font-raw .log {
+  max-height: 160px;
+  margin-top: 8px;
+}
+
+@media (max-width: 620px) {
+  .runtime-font-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
