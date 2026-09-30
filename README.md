@@ -201,7 +201,7 @@ Android MediaCodec 会被探测，但 **当前不会因为存在 encoder 名称�
 - pthreads
 - FFprobe
 
-GitHub Pages 部署会复用已构建的 Web core artifact。
+GitHub Pages 部署会按 `.github/core-lock.json` 下载固定版本的 Web core Release asset，并校验 SHA-256。
 
 WebAssembly 路径适合作为：
 
@@ -544,29 +544,22 @@ GitHub Pages 无法直接设置这些响应头，因此静态部署使用 `coi-s
 
 仓库目前包含独立工作流：
 
-### Web core
+### FFmpeg core Release
 
 ```text
-Build Web Core Artifact
+Build Web Core Release
+Build Android Native Core Release
 ```
 
-固定 FFmpegKitNext revision，并构建 GPL WebAssembly core。
+`.github/core-lock.json` 固定 FFmpegKitNext revision、Release tag 与 asset 名称。WebAssembly core 和 Android ARM64 Maven bundle 被发布为长期 Release assets，并附带 SHA-256 校验文件；普通应用构建不再依赖 90 天 Actions artifact。
 
-### Android native core
+### Android APK + Pages
 
 ```text
-Build Android Native Core
+Build Android and Deploy Frontend
 ```
 
-生成 ARM64 FFmpegKitNext Maven bundle。
-
-### Android APK
-
-```text
-Build Android APK
-```
-
-复用 native core，构建 APK、验证签名和 16 KiB 对齐，并上传发布 artifact。
+同一个 workflow 从锁定的 Core Release 构建 Android APK 与 Web 前端，验证 APK 签名、package、16 KiB ZIP/ELF alignment 后，把 APK 发布到 rolling development Release，并生成指向该不可变版本 APK 的 `app-update.json`。GitHub Pages 只保存网页与更新清单，不再长期保存 APK。
 
 ### Windows smoke
 
@@ -590,14 +583,16 @@ Windows local smoke
 
 ### Pages
 
-Pages 部署会：
+Pages 发布现在与 Android APK 构建合并在同一个 workflow 中：
 
-1. 复用最近成功 Web core；
-2. 构建前端；
-3. 等待同 commit Android APK；
-4. 校验 APK metadata；
-5. 同步发布 APK 与 update manifest；
-6. 部署 GitHub Pages。
+1. 读取并校验固定 Core Release；
+2. 构建前端与 Android APK；
+3. 校验 APK metadata、签名和 16 KiB 对齐；
+4. 将版本化 APK 发布到 `dev-builds` prerelease；
+5. 生成与该 APK 同 commit、同 SHA-256 的 `app-update.json`；
+6. 仅将 Web 资源和更新清单部署到 GitHub Pages。
+
+这样不再需要跨 workflow 轮询 Android artifact，也不会让普通 APK artifact 保留 90 天。
 
 ## 故障预防原则
 

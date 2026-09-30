@@ -10,7 +10,7 @@ import { detectWindowsNativeBridge } from './windows-native-client.js';
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
 const APP_PACKAGE = 'io.github.quickhardsub';
-const APP_DOWNLOAD_FALLBACK = 'https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/quick-automatic-hardsub-encoder-debug.apk';
+const APP_DOWNLOAD_FALLBACK = 'https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/releases/download/dev-builds/quick-automatic-hardsub-encoder-debug.apk';
 const WINDOWS_SOURCE_ZIP = 'https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/archive/refs/heads/main.zip';
 const WINDOWS_DOC_URL = 'https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/tree/main/windows';
 

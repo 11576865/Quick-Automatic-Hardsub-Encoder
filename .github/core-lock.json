@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "tag": "core-ffmpegkitnext-5e51b2da-r1",
+  "ffmpegKitNextCommit": "5e51b2da4c3593c0f2f9b49f53eeb497d93e39d3",
+  "web": {
+    "asset": "ffmpeg-web-wasm32.tar.gz",
+    "sha256Asset": "ffmpeg-web-wasm32.tar.gz.sha256"
+  },
+  "android": {
+    "asset": "ffmpeg-android-arm64-maven.tar.gz",
+    "sha256Asset": "ffmpeg-android-arm64-maven.tar.gz.sha256"
+  }
+}

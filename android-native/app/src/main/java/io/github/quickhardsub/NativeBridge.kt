@@ -36,9 +36,9 @@ class NativeBridge(
     companion object {
         private const val UPDATE_MANIFEST_URL =
             "https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/app-update.json"
-        private const val UPDATE_DOWNLOAD_HOST = "11576865.github.io"
+        private const val UPDATE_DOWNLOAD_HOST = "github.com"
         private const val UPDATE_DOWNLOAD_PATH_PREFIX =
-            "/Quick-Automatic-Hardsub-Encoder/downloads/"
+            "/11576865/Quick-Automatic-Hardsub-Encoder/releases/download/dev-builds/"
 
         @Volatile
         private var cachedSelfTestJson: String? = null
