@@ -97,10 +97,17 @@ app.innerHTML = `
     <div id="nativeStatusBar" class="native-status-bar hidden" aria-live="polite"></div>
   </header>
 
+  <nav id="mobileStageNav" class="mobile-stage-nav" aria-label="移动端任务阶段">
+    <button type="button" data-mobile-stage-target="setup" aria-current="step"><span>01</span>输入</button>
+    <button type="button" data-mobile-stage-target="preflight" disabled><span>02</span>预检</button>
+    <button type="button" data-mobile-stage-target="plan" disabled><span>03</span>预览与方案</button>
+    <button type="button" data-mobile-stage-target="encode" disabled><span>04</span>压制</button>
+  </nav>
+
   <div class="workspace-layout">
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
-  <section class="card input-card">
+  <section id="inputCard" class="card input-card" data-mobile-stage-section="setup">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
@@ -125,7 +132,7 @@ app.innerHTML = `
     <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
   </section>
 
-  <section class="card env-card">
+  <section id="envCard" class="card env-card" data-mobile-stage-section="setup">
     <details id="envDetails" class="env-details">
       <summary>
         <span class="env-heading">2. 运行环境</span>
@@ -139,7 +146,7 @@ app.innerHTML = `
   </section>
   </div>
 
-  <section id="preflightCard" class="card preflight-card hidden">
+  <section id="preflightCard" class="card preflight-card hidden" data-mobile-stage-section="preflight">
     <details id="preflightDetails" class="preflight-details">
       <summary>
         <span class="preflight-heading">3. 媒体与字幕预检</span>
@@ -153,7 +160,7 @@ app.innerHTML = `
   </section>
 
   <div class="adaptive-region production-region">
-  <section id="subtitleCard" class="card preview-card hidden">
+  <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="plan">
     <div class="card-heading"><span class="step-no">03</span><div><h2>字幕预览</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
 
     <div class="button-row">
@@ -164,7 +171,7 @@ app.innerHTML = `
   </section>
 
   <div class="production-controls">
-  <section id="planCard" class="card plan-card hidden">
+  <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="plan">
     <div class="card-heading"><span class="step-no">04</span><div><h2>压制方案</h2><p>选择目标，再决定编码器。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
@@ -236,7 +243,7 @@ app.innerHTML = `
     </details>
   </section>
 
-  <section id="encodeCard" class="card encode-card hidden">
+  <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="encode">
     <div class="card-heading"><span class="step-no">05</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
@@ -312,7 +319,68 @@ function applyWindowSizeClass() {
   document.documentElement.dataset.windowSize = resolveWindowSizeClass();
 }
 
+const MOBILE_STAGE_ORDER = ['setup', 'preflight', 'plan', 'encode'];
+
+function devicePrefersMobileShell() {
+  if (state.nativeBackend?.backend === 'android-native') return true;
+  if (state.nativeBackend?.backend === 'windows-native') return false;
+  if (navigator.userAgentData?.mobile === true) return true;
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return true;
+  return window.matchMedia?.('(pointer: coarse) and (hover: none)')?.matches === true &&
+    Math.min(screen.width || window.innerWidth, screen.height || window.innerHeight) <= 1024;
+}
+
+function applyPresentationShell() {
+  const mobile = devicePrefersMobileShell();
+  document.body.classList.toggle('ui-mobile', mobile);
+  document.body.classList.toggle('ui-desktop', !mobile);
+  document.documentElement.dataset.uiShell = mobile ? 'mobile' : 'desktop';
+  if (!document.body.dataset.mobileStage) document.body.dataset.mobileStage = 'setup';
+  syncMobileStageNav();
+}
+
+function mobileStageAvailable(stage) {
+  if (stage === 'setup') return true;
+  if (stage === 'preflight') return !$('preflightCard')?.classList.contains('hidden');
+  if (stage === 'plan') {
+    return !$('subtitleCard')?.classList.contains('hidden') && !$('planCard')?.classList.contains('hidden');
+  }
+  if (stage === 'encode') return !$('encodeCard')?.classList.contains('hidden');
+  return false;
+}
+
+function syncMobileStageNav() {
+  const nav = $('mobileStageNav');
+  if (!nav) return;
+  const current = document.body.dataset.mobileStage || 'setup';
+  for (const button of nav.querySelectorAll('[data-mobile-stage-target]')) {
+    const stage = button.dataset.mobileStageTarget;
+    button.disabled = !mobileStageAvailable(stage);
+    if (stage === current) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  }
+}
+
+function setMobileStage(stage, { scroll = true } = {}) {
+  if (!MOBILE_STAGE_ORDER.includes(stage) || !mobileStageAvailable(stage)) return;
+  document.body.dataset.mobileStage = stage;
+  syncMobileStageNav();
+  if (document.body.classList.contains('ui-mobile') && scroll) {
+    const target = stage === 'setup' ? $('inputCard') :
+      stage === 'preflight' ? $('preflightCard') :
+      stage === 'plan' ? $('subtitleCard') : $('encodeCard');
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+$('mobileStageNav')?.addEventListener('click', event => {
+  const button = event.target.closest('[data-mobile-stage-target]');
+  if (!button || button.disabled) return;
+  setMobileStage(button.dataset.mobileStageTarget);
+});
+
 applyWindowSizeClass();
+applyPresentationShell();
 window.addEventListener('resize', applyWindowSizeClass, { passive: true });
 
 const log = msg => { $('log').textContent += `${msg}\n`; $('log').scrollTop = $('log').scrollHeight; };
@@ -354,6 +422,8 @@ function invalidateAnalysis() {
   $('preview').innerHTML = '<div class="preview-placeholder">输入已变化，请重新分析并生成预览。</div>';
   $('previewBtn').disabled = true;
   for (const id of ['preflightCard', 'subtitleCard', 'planCard', 'encodeCard']) $(id).classList.add('hidden');
+  setMobileStage('setup', { scroll: false });
+  syncMobileStageNav();
   refreshBenchmarkEnabled();
 }
 
@@ -1373,6 +1443,7 @@ function applyPlatformPresentation() {
     fontPersist?.classList.remove('hidden');
     fontLibrary?.classList.remove('hidden');
   }
+  applyPresentationShell();
   renderNativeStatusBar();
 }
 
@@ -1975,6 +2046,8 @@ async function analyzeAll() {
     $('subtitleCard').classList.remove('hidden');
     $('planCard').classList.remove('hidden');
     $('encodeCard').classList.remove('hidden');
+    syncMobileStageNav();
+    if (document.body.classList.contains('ui-mobile')) setMobileStage('preflight');
     renderPlanOptions();
     $('previewBtn').disabled =
       !(state.engine.ready || state.nativeBackend?.available) ||
@@ -3766,6 +3839,8 @@ async function recoverNativeJob() {
     }
 
     $('encodeCard').classList.remove('hidden');
+    syncMobileStageNav();
+    if (document.body.classList.contains('ui-mobile')) setMobileStage('encode', { scroll: false });
     if (status.state === 'completed') {
       state.nativeCompletedJob = {
         jobId,
