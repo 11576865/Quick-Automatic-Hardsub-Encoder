@@ -1,5 +1,5 @@
 import './style.css';
-import { parseAss, rewriteAssFonts, shiftAssForPreview } from './ass.js';
+import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
 import { detectCapabilities } from './capabilities.js';
@@ -53,6 +53,7 @@ const state = {
   previewFontDiagnostics: [],
   previewVisualChange: [],
   previewTimes: [],
+  previewRiskTimes: [],
   benchmarks: {},
   qualityCalibration: {},
   qualityCalibrationTarget: null,
@@ -384,6 +385,7 @@ function invalidateAnalysis() {
   state.previewFontDiagnostics = [];
   state.previewVisualChange = [];
   state.previewTimes = [];
+  state.previewRiskTimes = [];
   state.benchmarks = {};
   invalidateQualityCalibration();
   $('preview').innerHTML = '<div class="preview-placeholder">输入已变化，请重新分析并生成预览。</div>';
@@ -2111,7 +2113,9 @@ function renderSubtitleSummary() {
             : '已采样，未见缺字')
       : '等待真实预览'],
     ['常用字体库', `${state.savedFonts.length} 个文件`],
-    ['预览采样点', `${a.previewTimes.length} 个`],
+    ['预览采样点', state.previewTimes.length
+      ? `${state.previewTimes.length} 个 · 其中 ${state.previewRiskTimes.length} 个风险导向`
+      : `${a.previewTimes.length} 个候选`],
     ...mediaRows
   ].map(([k,v]) => `<div class="status-item"><span>${k}</span><span>${v}</span></div>`).join('');
 
@@ -2292,6 +2296,7 @@ function bindFontOverrideControls() {
       state.previewFontDiagnostics = [];
       state.previewVisualChange = [];
       state.previewTimes = [];
+      state.previewRiskTimes = [];
       clearSelectedTestCache();
       state.acceptedWarnings = false;
       $('acceptWarnings').checked = false;
@@ -2303,16 +2308,61 @@ function bindFontOverrideControls() {
   });
 }
 
+
+function buildPreviewPlan(limit = 6) {
+  const max = Math.max(1, Number(limit) || 6);
+  const riskTimes = findGlyphRiskPreviewTimes(state.assInfo, state.glyphCoverage, max);
+  const baseTimes = state.assInfo?.previewTimes || [];
+  const combined = [];
+  const seen = new Set();
+
+  const add = value => {
+    if (!Number.isFinite(value)) return;
+    const rounded = Math.max(0, Math.round(value * 100) / 100);
+    const key = rounded.toFixed(2);
+    if (seen.has(key)) return;
+    seen.add(key);
+    combined.push(rounded);
+  };
+
+  riskTimes.forEach(add);
+  baseTimes.forEach(add);
+
+  // If risk sampling filled all slots, preserve at least one broad-context sample
+  // when it is distinct. This keeps the preview useful beyond only pathological lines.
+  if (combined.length >= max && baseTimes.length) {
+    const context = baseTimes.find(time => !riskTimes.some(risk => Math.abs(risk - time) < 0.005));
+    if (context != null && max > 1) {
+      combined.splice(max - 1, 1, Math.max(0, Math.round(context * 100) / 100));
+    }
+  }
+
+  const selected = combined.slice(0, max).sort((a, b) => a - b);
+  const selectedRisk = riskTimes.filter(time =>
+    selected.some(chosen => Math.abs(chosen - time) < 0.005)
+  );
+  return { times: selected, riskTimes: selectedRisk };
+}
+
+function isRiskPreviewTime(time) {
+  return state.previewRiskTimes.some(value => Math.abs(value - time) < 0.005);
+}
+
 async function renderPreviews() {
   try {
     $('previewBtn').disabled = true;
-    state.previewTimes = state.assInfo.previewTimes.slice(0, 6);
+    const previewPlan = buildPreviewPlan(6);
+    state.previewTimes = previewPlan.times;
+    state.previewRiskTimes = previewPlan.riskTimes;
     state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
     state.previewUrls = new Array(state.previewTimes.length).fill(null);
     state.previewBaseUrls = new Array(state.previewTimes.length).fill(null);
     state.previewFontEvents = new Array(state.previewTimes.length).fill(null);
     state.previewFontDiagnostics = new Array(state.previewTimes.length).fill(null);
     state.previewVisualChange = new Array(state.previewTimes.length).fill(null);
+    if (state.previewRiskTimes.length) {
+      log('风险导向预览：已将 ' + state.previewRiskTimes.length + ' 个静态缺字/字体风险采样点优先加入预览计划。');
+    }
     await loadPreviewAt(0);
     refreshBenchmarkEnabled(true);
   } catch (e) {
@@ -2370,6 +2420,9 @@ async function loadPreviewAt(index) {
     parseLibassFontDiagnostics(fontEvents);
   const fontInfo = renderRuntimeFontDiagnostics(fontDiagnostics, fontEvents);
 
+  const riskBadge = isRiskPreviewTime(times[safeIndex])
+    ? '<span class="preview-risk-badge">字体风险采样</span>'
+    : '';
   const activeEvents = getActiveDialogue(times[safeIndex]);
   const dialogueInfo = activeEvents.length
     ? `<div class="note" style="padding:0 12px 10px">ASS 在此时刻有 ${activeEvents.length} 条活跃对白：${escapeHtml(activeEvents.slice(0,2).map(e => stripAssTags(e.text || '')).join(' / ').slice(0,180))}</div>`
@@ -2383,7 +2436,7 @@ async function loadPreviewAt(index) {
          <details class="note" style="padding:0 12px 10px"><summary>查看无字幕底图</summary><img src="${state.previewBaseUrls[safeIndex] || ''}" alt="无字幕底图" style="width:100%;margin-top:8px;border-radius:8px"></details>`
       : '<div class="warning-box" style="margin:0 12px 10px">浏览器无法自动完成像素差校验，请人工确认预览中确实出现了字幕。</div>';
 
-  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">按字幕采样点逐条按需生成真实渲染预览，避免一次等待全部帧。</div>${fontInfo}</div>`;
+  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s ${riskBadge}</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">按字幕采样点逐条按需生成真实渲染预览，避免一次等待全部帧。</div>${fontInfo}</div>`;
   const navigatePreview = targetIndex => {
     if (targetIndex < 0 || targetIndex >= times.length) return;
     loadPreviewAt(targetIndex).catch(error => {
