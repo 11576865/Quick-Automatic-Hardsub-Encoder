@@ -988,49 +988,7 @@ button:disabled {
 }
 
 
-/* Semantic contrast + adaptive theme v2 ---------------------------------- */
-:root {
-  color-scheme: dark;
-
-  --bg: #0d1420;
-  --surface: #152131;
-  --surface-2: #1a293b;
-  --surface-3: #213349;
-  --surface-4: #283b52;
-  --border: #30455e;
-  --border-soft: #26394e;
-  --border-strong: #4d6680;
-  --muted: #91a4b8;
-  --text: #eef5fb;
-  --text-strong: #ffffff;
-
-  --video: #4ea1ff;
-  --subtitle: #a77cff;
-  --font: #55d88a;
-  --engine: #32c6c1;
-  --preflight: #f0b84b;
-  --preview: #a77cff;
-  --plan: #48b7e8;
-  --encode: #55d88a;
-  --ok: #55d88a;
-  --warn: #f0b84b;
-  --bad: #ef7380;
-
-  --h264: #4ea1ff;
-  --h265: #32c6c1;
-  --av1: #a77cff;
-
-  --video-soft: rgba(78,161,255,.12);
-  --subtitle-soft: rgba(167,124,255,.12);
-  --font-soft: rgba(85,216,138,.12);
-  --engine-soft: rgba(50,198,193,.12);
-  --preflight-soft: rgba(240,184,75,.12);
-  --preview-soft: rgba(167,124,255,.12);
-  --plan-soft: rgba(72,183,232,.11);
-  --encode-soft: rgba(85,216,138,.12);
-  --bad-soft: rgba(239,115,128,.11);
-  --shadow: 0 18px 46px rgba(0,0,0,.22);
-}
+/* Semantic component foundation ------------------------------------------- */
 
 
 
@@ -1582,45 +1540,15 @@ button.primary:hover:not(:disabled) {
 }
 
 
-/* Wide desktop platform rail ------------------------------------------------ */
-.app-shell {
-  width: min(1640px, calc(100% - 40px));
+/* Platform and native component primitives -------------------------------- */
+.workspace-layout,
+.workflow-main,
+.platform-rail {
+  min-width: 0;
 }
 
 .workspace-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 18px;
-  align-items: start;
-}
-
-.workflow-main {
-  min-width: 0;
-}
-
-.platform-rail {
-  min-width: 0;
-  position: sticky;
-  top: 14px;
-}
-
-.platform-rail .card {
-  margin-top: 16px;
-}
-
-.platform-card {
-  border-top-color: var(--video);
-  background:
-    linear-gradient(145deg, color-mix(in srgb,var(--video) 10%,transparent), transparent 44%),
-    var(--surface);
-}
-
-.windows-card {
-  --platform-accent: var(--engine);
-  border-top-color: var(--platform-accent);
-  background:
-    linear-gradient(145deg, color-mix(in srgb,var(--platform-accent) 12%,transparent), transparent 48%),
-    var(--surface);
+  display: block;
 }
 
 .platform-card-head {
@@ -1654,13 +1582,17 @@ button.primary:hover:not(:disabled) {
   font-weight: 700;
 }
 
+.windows-card {
+  --platform-accent: var(--engine);
+}
+
 .windows-launch-path {
   display: grid;
-  gap: 6px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
   margin-top: 13px;
   padding: 10px 11px;
-  border: 1px solid color-mix(in srgb,var(--platform-accent) 30%,var(--border));
-  background: var(--surface-2);
 }
 
 .windows-launch-path span {
@@ -1678,18 +1610,16 @@ button.primary:hover:not(:disabled) {
 
 .platform-facts {
   display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1px;
   margin-top: 10px;
-  border: 1px solid var(--border);
-  background: var(--border);
 }
 
 .platform-facts > div {
   display: grid;
-  grid-template-columns: 82px minmax(0,1fr);
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 4px;
   padding: 8px 10px;
-  background: var(--surface-2);
 }
 
 .platform-facts span {
@@ -1701,16 +1631,17 @@ button.primary:hover:not(:disabled) {
   color: var(--text);
   font-size: .71rem;
   font-weight: 600;
-  text-align: right;
+  text-align: left;
 }
 
 .platform-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .platform-actions > * {
-  width: 100%;
+  width: auto;
+  flex: 1 1 160px;
   text-align: center;
 }
 
@@ -1720,71 +1651,8 @@ button.primary:hover:not(:disabled) {
   color: #061311;
 }
 
-
-
 .platform-note {
   margin: 10px 0 0;
-}
-
-@media (max-width: 1180px) {
-  .app-shell {
-    width: min(100% - 28px, 1240px);
-  }
-
-  .workspace-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .platform-rail {
-    position: static;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0,1fr));
-    gap: 12px;
-  }
-
-  .platform-rail .card {
-    margin-top: 16px;
-  }
-}
-
-@media (max-width: 760px) {
-  .platform-rail {
-    grid-template-columns: 1fr;
-  }
-
-  .platform-actions {
-    grid-template-columns: 1fr;
-  }
-}
-
-
-/* Compact workbench layout v3 --------------------------------------------- */
-.app-shell {
-  width: min(1360px, calc(100% - 32px));
-}
-
-.workspace-layout {
-  display: block;
-}
-
-.workflow-main {
-  width: 100%;
-}
-
-.platform-rail {
-  position: static;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.platform-rail .card {
-  margin-top: 0;
-}
-
-.windows-native-connected .platform-rail {
-  display: none;
 }
 
 .native-status-bar {
@@ -1792,11 +1660,8 @@ button.primary:hover:not(:disabled) {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px 14px;
-  margin-top: 16px;
+  margin-top: 10px;
   padding: 9px 11px;
-  border: 1px solid color-mix(in srgb,var(--engine) 34%,var(--border));
-  border-left: 3px solid var(--engine);
-  background: linear-gradient(90deg,var(--engine-soft),var(--surface) 42%);
   color: var(--muted);
   font-size: .72rem;
 }
@@ -1819,114 +1684,17 @@ button.primary:hover:not(:disabled) {
   font-size: .68rem;
 }
 
-.windows-native-connected .input-card .input-engine {
-  min-height: 88px;
-}
-
-.windows-native-connected .input-card .file-row {
-  min-height: 108px;
-}
-
-.windows-native-connected .input-card > .grid.two {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.windows-native-connected .input-engine {
-  grid-column: 1 / -1;
-}
-
-.windows-native-connected .env-card {
-  margin-top: 12px;
-}
-
 .windows-native-connected .env-details > summary {
-  padding: 0 0 10px;
-}
-
-.windows-native-connected .native-primary-group .native-runtime-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.windows-native-connected .env-wasm-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.windows-native-connected .log-card {
-  margin-top: 14px;
-}
-
-.platform-card,
-.app-card {
-  padding: 15px;
-}
-
-.platform-card-head h2,
-.app-card-head h2 {
-  font-size: .94rem;
-}
-
-.platform-card .platform-note,
-.app-card .app-update-notice {
-  margin-top: 7px;
-}
-
-.platform-facts {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1px;
-}
-
-.platform-facts > div {
-  grid-template-columns: 1fr;
-  gap: 4px;
-}
-
-.platform-facts strong {
-  text-align: left;
-}
-
-.windows-launch-path {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.platform-actions {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.platform-actions > * {
-  width: auto;
-  flex: 1 1 160px;
-}
-
-@media (max-width: 980px) {
-  .windows-native-connected .input-card > .grid.two {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .windows-native-connected .input-engine {
-    grid-column: auto;
-  }
-
-  .windows-native-connected .native-primary-group .native-runtime-grid,
-  .windows-native-connected .env-wasm-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .platform-rail {
-    grid-template-columns: 1fr;
-  }
+  padding-bottom: 10px;
 }
 
 @media (max-width: 700px) {
-  .app-shell {
-    width: min(100% - 18px, 1360px);
+  .platform-facts {
+    grid-template-columns: 1fr;
   }
 
-  .windows-native-connected .input-card > .grid.two,
-  .windows-native-connected .native-primary-group .native-runtime-grid,
-  .windows-native-connected .env-wasm-grid {
+  .platform-actions {
+    display: grid;
     grid-template-columns: 1fr;
   }
 
@@ -1937,125 +1705,6 @@ button.primary:hover:not(:disabled) {
   .native-status-bar button {
     width: 100%;
     margin-left: 0;
-  }
-
-  .platform-facts {
-    grid-template-columns: 1fr;
-  }
-}
-
-
-/* Relaxed desktop workbench v4 -------------------------------------------- */
-@media (min-width: 981px) {
-  .app-shell {
-    width: min(1520px, calc(100% - 56px));
-    padding-top: 34px;
-  }
-
-  .hero {
-    padding-bottom: 28px;
-  }
-
-  .hero-main {
-    gap: 40px;
-  }
-
-  .workflow-strip {
-    margin-top: 20px;
-    gap: 10px;
-  }
-
-  .workflow-main > .card {
-    margin-top: 22px;
-  }
-
-  .card {
-    padding: 22px;
-  }
-
-  .card-heading {
-    margin-bottom: 18px;
-  }
-
-  .input-card > .grid.two {
-    gap: 14px;
-    border: 0;
-    background: transparent;
-  }
-
-  .windows-native-connected .input-card > .grid.two {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .windows-native-connected .input-engine {
-    grid-column: 1 / -1;
-  }
-
-  .input-card .file-row,
-  .windows-native-connected .input-card .file-row {
-    min-height: 148px;
-    padding: 18px;
-    border: 1px solid var(--border-soft);
-    border-radius: 8px;
-    background: var(--surface);
-  }
-
-  .file-row {
-    gap: 10px;
-  }
-
-  input[type=file],
-  select,
-  .native-picker-button {
-    min-height: 46px;
-  }
-
-  .native-picker-button {
-    width: 100%;
-    border: 1px solid var(--border-strong);
-    border-radius: 6px;
-    background: var(--surface-2);
-    color: var(--text);
-    padding: 10px 12px;
-    text-align: left;
-  }
-
-  .native-picker-button:hover:not(:disabled) {
-    border-color: var(--engine);
-    background: color-mix(in srgb,var(--engine) 10%,var(--surface-2));
-  }
-
-  .native-picker-button[aria-busy="true"] {
-    color: var(--muted);
-  }
-
-  .windows-native-connected .env-card {
-    margin-top: 22px;
-  }
-
-  .windows-native-connected .native-primary-group .native-runtime-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .windows-native-connected .env-wasm-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .native-status-bar {
-    margin-top: 20px;
-    padding: 12px 14px;
-    gap: 10px 18px;
-  }
-
-  .log-card {
-    margin-top: 22px;
-  }
-}
-
-@media (max-width: 980px) {
-  .native-picker-button {
-    width: 100%;
-    min-height: 42px;
   }
 }
 
@@ -2417,7 +2066,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .runtime-font-row.danger b {
-  color: var(--danger);
+  color: var(--bad);
 }
 
 .runtime-font-row.clean b {
@@ -2459,7 +2108,7 @@ button.primary:hover:not(:disabled) {
 }
 
 @layer current {
-/* Modern dark workbench v6 -------------------------------------------------- */
+/* Current dark workbench ---------------------------------------------------- */
 :root {
   color-scheme: dark;
   --bg: #080b10;
@@ -2485,6 +2134,9 @@ button.primary:hover:not(:disabled) {
   --ok: #69d89a;
   --warn: #e9bd63;
   --bad: #ef7d88;
+  --h264: #6aa9ff;
+  --h265: #57d5d0;
+  --av1: #b795ff;
 
   --video-soft: rgba(106,169,255,.09);
   --subtitle-soft: rgba(183,149,255,.09);
@@ -3092,7 +2744,7 @@ button.primary {
 }
 
 
-/* Adaptive workbench v7 ----------------------------------------------------- */
+/* Current adaptive window layout ------------------------------------------- */
 /* Window classes control composition. No device-name assumptions. */
 .app-shell {
   width: min(1760px, calc(100% - 28px));
@@ -3252,6 +2904,13 @@ button.primary {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+:root[data-window-size="medium"] .windows-native-connected .input-engine,
+:root[data-window-size="expanded"] .windows-native-connected .input-engine,
+:root[data-window-size="large"] .windows-native-connected .input-engine,
+:root[data-window-size="extra-large"] .windows-native-connected .input-engine {
+  grid-column: 1 / -1;
+}
+
 :root[data-window-size="medium"] .plan-controls {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -3262,11 +2921,16 @@ button.primary {
 }
 
 :root[data-window-size="expanded"] .setup-region {
+  display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(260px, .55fr);
+  gap: 14px;
 }
 
 :root[data-window-size="expanded"] .production-region {
+  display: grid;
   grid-template-columns: minmax(300px, .78fr) minmax(0, 1.22fr);
+  gap: 14px;
+  align-items: start;
 }
 
 :root[data-window-size="expanded"] .plan-controls {
@@ -3280,12 +2944,17 @@ button.primary {
 
 :root[data-window-size="large"] .setup-region,
 :root[data-window-size="extra-large"] .setup-region {
+  display: grid;
   grid-template-columns: minmax(0, 1.6fr) minmax(280px, .4fr);
+  gap: 16px;
 }
 
 :root[data-window-size="large"] .production-region,
 :root[data-window-size="extra-large"] .production-region {
+  display: grid;
   grid-template-columns: minmax(360px, .82fr) minmax(0, 1.18fr);
+  gap: 16px;
+  align-items: start;
 }
 
 :root[data-window-size="large"] .plan-controls,
