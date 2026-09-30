@@ -113,7 +113,7 @@ function collectAssFontUsage(dialogue, styles) {
       }
 
       const block = text.slice(open + 1, close);
-      const tagPattern = /\\(fn|r|p)([^\\}]*)/gi;
+      const tagPattern = /\\(fn|r|p(?=[\s+-]?\d|\\|}|$))([^\\}]*)/gi;
       let match;
       while ((match = tagPattern.exec(block))) {
         const tag = match[1].toLowerCase();
