@@ -55,7 +55,7 @@ assert.equal(state.analyzedVideo, null);
 assert.equal(state.media, null);
 assert.equal(state.selectedCodec, null);
 assert.deepEqual(revoked, ['blob:old', 'blob:base', 'blob:sample-a', 'blob:sample-b']);
-assert.deepEqual(state.selectedTests, {});
+assert.equal(Object.keys(state.selectedTests).length, 0);
 assert.equal(state.latestNativeSampleId, null);
 assert.equal(element('previewBtn').disabled, true);
 
