@@ -64,3 +64,33 @@ assert.deepEqual(
   positionUsage.get('Arial'),
   [...'Visible'].map(ch => ch.codePointAt(0)).filter((v, i, a) => a.indexOf(v) === i).sort((a,b) => a-b)
 );
+
+
+const riskDirectedSample = `[V4+ Styles]
+Format: Name, Fontname, Fontsize
+Style: Default,Arial,48
+Style: Rare,RareFont,48
+[Events]
+Format: Layer, Start, End, Style, Text
+Dialogue: 0,0:00:01.00,0:00:02.00,Default,ordinary
+Dialogue: 0,0:00:10.00,0:00:11.00,Rare,ABC
+Dialogue: 0,0:00:20.00,0:00:21.00,Rare,𠮷
+Dialogue: 0,0:00:30.00,0:00:31.00,Default,tail`;
+
+const riskParsed = parseAss(riskDirectedSample);
+const riskCoverage = [
+  {
+    requested: 'RareFont',
+    status: 'partial',
+    missingCodePoints: ['𠮷'.codePointAt(0)]
+  }
+];
+const riskTimes = (await import('./ass.js')).findGlyphRiskPreviewTimes(riskParsed, riskCoverage, 4);
+assert.deepEqual(riskTimes, [20.5]);
+
+const unresolvedTimes = (await import('./ass.js')).findGlyphRiskPreviewTimes(
+  riskParsed,
+  [{ requested: 'RareFont', status: 'unresolved', missingCodePoints: [] }],
+  4
+);
+assert.deepEqual(unresolvedTimes, [10.5]);
