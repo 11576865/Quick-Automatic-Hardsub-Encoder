@@ -306,7 +306,7 @@ app.innerHTML = `
 
   <details class="card log-card">
     <summary class="log-summary"><span class="step-no">LOG</span><strong>技术日志</strong><span>仅在排错时展开</span></summary>
-    <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.1.0\n</div>
+    <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.1.1\n</div>
   </details>
     </main>
     <aside class="platform-rail" aria-label="运行方式">
