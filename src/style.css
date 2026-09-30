@@ -4623,3 +4623,277 @@ body.ui-mobile .mobile-runtime-help-body li + li {
 body.ui-desktop .platform-guide[open] {
   padding-bottom: 4px;
 }
+
+
+/* Mobile color pass ---------------------------------------------------------
+   Dark remains the canvas; interaction and wayfinding use clear sky/grass
+   accents so controls are readable without turning the app into neon UI. */
+body.ui-mobile {
+  --mobile-sky: #55b9ff;
+  --mobile-sky-strong: #8bd0ff;
+  --mobile-sky-soft: rgba(85,185,255,.16);
+  --mobile-grass: #72d66c;
+  --mobile-grass-strong: #a1ea91;
+  --mobile-grass-soft: rgba(114,214,108,.15);
+  --mobile-violet: #b79aff;
+}
+
+body.ui-mobile .mobile-stage-nav button:first-child[aria-current="step"] {
+  color: #eaf7ff;
+  background: linear-gradient(145deg,rgba(85,185,255,.27),rgba(34,103,158,.18));
+  box-shadow: inset 0 0 0 1px rgba(139,208,255,.28);
+}
+
+body.ui-mobile .mobile-stage-nav button:first-child[aria-current="step"] .mobile-stage-index {
+  color: var(--mobile-sky-strong);
+  border-color: rgba(139,208,255,.48);
+  background: rgba(85,185,255,.14);
+}
+
+body.ui-mobile .mobile-stage-nav button:last-child[aria-current="step"] {
+  color: #efffeb;
+  background: linear-gradient(145deg,rgba(114,214,108,.25),rgba(43,123,58,.17));
+  box-shadow: inset 0 0 0 1px rgba(161,234,145,.25);
+}
+
+body.ui-mobile .mobile-stage-nav button:last-child[aria-current="step"] .mobile-stage-index {
+  color: var(--mobile-grass-strong);
+  border-color: rgba(161,234,145,.44);
+  background: rgba(114,214,108,.13);
+}
+
+body.ui-mobile .input-video {
+  border-color: rgba(85,185,255,.19) !important;
+  background: linear-gradient(145deg,rgba(85,185,255,.07),rgba(255,255,255,.018)) !important;
+}
+
+body.ui-mobile .input-ass {
+  border-color: rgba(183,154,255,.18) !important;
+  background: linear-gradient(145deg,rgba(183,154,255,.065),rgba(255,255,255,.018)) !important;
+}
+
+body.ui-mobile .input-font {
+  border-color: rgba(114,214,108,.18) !important;
+  background: linear-gradient(145deg,rgba(114,214,108,.06),rgba(255,255,255,.018)) !important;
+}
+
+body.ui-mobile .input-video .file-picker-trigger,
+body.ui-mobile .input-video .native-picker-button {
+  border-color: rgba(85,185,255,.38);
+  background: var(--mobile-sky-soft);
+  color: var(--mobile-sky-strong);
+}
+
+body.ui-mobile .input-ass .file-picker-trigger,
+body.ui-mobile .input-ass .native-picker-button {
+  border-color: rgba(183,154,255,.35);
+  background: rgba(183,154,255,.13);
+  color: #d5c5ff;
+}
+
+body.ui-mobile .input-font .file-picker-trigger,
+body.ui-mobile .input-font .native-picker-button {
+  border-color: rgba(114,214,108,.34);
+  background: var(--mobile-grass-soft);
+  color: var(--mobile-grass-strong);
+}
+
+body.ui-mobile #analyze {
+  border-color: #70c9ff;
+  background: linear-gradient(135deg,#67c5ff,#52aef2);
+  color: #04131d;
+  box-shadow: 0 8px 22px rgba(61,160,224,.18);
+}
+
+body.ui-mobile #analyze:hover:not(:disabled) {
+  border-color: #96d8ff;
+  background: linear-gradient(135deg,#80d0ff,#60baff);
+  color: #04131d;
+}
+
+body.ui-mobile #continueToProduceBtn,
+body.ui-mobile #encodeBtn {
+  border-color: #8be47f;
+  background: linear-gradient(135deg,#83df77,#67c961);
+  color: #071507;
+  box-shadow: 0 8px 22px rgba(76,174,77,.17);
+}
+
+body.ui-mobile #continueToProduceBtn:hover:not(:disabled),
+body.ui-mobile #encodeBtn:hover:not(:disabled) {
+  border-color: #a9ee9d;
+  background: linear-gradient(135deg,#9bea8e,#76d66d);
+  color: #071507;
+}
+
+/* Native tutorials: visible cards, secondary scale. */
+body.ui-mobile .mobile-runtime-help {
+  display: block;
+  margin: 10px 0 3px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 15px;
+  background: rgba(255,255,255,.025);
+  color: var(--text);
+}
+
+body.ui-mobile .mobile-runtime-help-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+body.ui-mobile .mobile-runtime-help-title strong {
+  font-size: .72rem;
+  font-weight: 680;
+}
+
+body.ui-mobile .mobile-runtime-help-title span {
+  color: var(--muted);
+  font-size: .58rem;
+  text-align: right;
+}
+
+body.ui-mobile .mobile-runtime-help-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+}
+
+body.ui-mobile .mobile-runtime-option {
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+body.ui-mobile .mobile-runtime-option.android {
+  border: 1px solid rgba(114,214,108,.24);
+  background: linear-gradient(135deg,rgba(114,214,108,.12),rgba(26,61,31,.09));
+}
+
+body.ui-mobile .mobile-runtime-option.windows {
+  border: 1px solid rgba(85,185,255,.25);
+  background: linear-gradient(135deg,rgba(85,185,255,.13),rgba(24,56,82,.09));
+}
+
+body.ui-mobile .mobile-runtime-option > summary {
+  min-height: 58px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: 34px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  list-style: none;
+}
+
+body.ui-mobile .mobile-runtime-option > summary::-webkit-details-marker {
+  display: none;
+}
+
+body.ui-mobile .mobile-runtime-option > summary > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+body.ui-mobile .mobile-runtime-option > summary strong {
+  font-size: .72rem;
+  font-weight: 700;
+}
+
+body.ui-mobile .mobile-runtime-option > summary small {
+  color: var(--muted);
+  font-size: .6rem;
+}
+
+body.ui-mobile .runtime-option-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font: 800 .72rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+body.ui-mobile .mobile-runtime-option.android .runtime-option-icon {
+  color: #071507;
+  background: var(--mobile-grass);
+}
+
+body.ui-mobile .mobile-runtime-option.windows .runtime-option-icon {
+  color: #06131c;
+  background: var(--mobile-sky);
+}
+
+body.ui-mobile .runtime-option-arrow {
+  color: var(--muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  transform: rotate(0);
+  transition: transform .15s ease;
+}
+
+body.ui-mobile .mobile-runtime-option[open] .runtime-option-arrow {
+  transform: rotate(90deg);
+}
+
+body.ui-mobile .runtime-option-body {
+  padding: 0 11px 11px 53px;
+}
+
+body.ui-mobile .runtime-option-body ol {
+  margin: 0 0 9px 16px;
+  padding: 0;
+  color: #c3ccd6;
+  font-size: .63rem;
+  line-height: 1.5;
+}
+
+body.ui-mobile .runtime-option-body li + li {
+  margin-top: 4px;
+}
+
+body.ui-mobile .runtime-help-link {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: .63rem;
+  font-weight: 650;
+}
+
+body.ui-mobile .runtime-help-android {
+  border-color: rgba(114,214,108,.38);
+  background: var(--mobile-grass-soft);
+  color: var(--mobile-grass-strong);
+}
+
+body.ui-mobile .runtime-help-windows {
+  border-color: rgba(85,185,255,.4);
+  background: var(--mobile-sky-soft);
+  color: var(--mobile-sky-strong);
+}
+
+body.ui-mobile .runtime-help-link:hover {
+  color: var(--text);
+}
+
+/* Preview / plan use color as state, not decoration everywhere. */
+body.ui-mobile .preview-card {
+  border-color: rgba(183,154,255,.18);
+}
+
+body.ui-mobile .plan-card {
+  border-color: rgba(85,185,255,.16);
+}
+
+body.ui-mobile .plan-mode-tab.selected {
+  border-color: rgba(85,185,255,.35);
+  background: rgba(85,185,255,.12);
+  color: #dff3ff;
+}
+
+body.ui-mobile input[type="range"] {
+  accent-color: var(--mobile-sky);
+}
