@@ -60,6 +60,13 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /body\.ui-mobile\[data-mobile-stage="prepare"\]/);
   assert.match(css, /body\.ui-mobile\[data-mobile-stage="produce"\]/);
   assert.match(main, /detectBasicCapabilities/);
+  assert.match(main, /data-workflow-step="prepare"/);
+  assert.match(main, /data-workflow-step="produce"/);
+  assert.equal((main.match(/data-workflow-step="/g) || []).length, 2);
+  assert.match(main, /function ensureWebEngineReady\(\)/);
+  assert.match(main, /function ensureNativeSelfTestStarted\(\)/);
+  assert.match(main, /首张真实预览已成功解码输入视频/);
+  assert.doesNotMatch(main, /执行输入解码 smoke test/);
   assert.match(main, /id="previewZoom"/);
   assert.match(main, /class="preview-image"/);
   assert.match(css, /\.preview-lightbox\s*\{/);
