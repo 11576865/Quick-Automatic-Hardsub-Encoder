@@ -1,5 +1,5 @@
 import './style.css';
-import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes } from './ass.js';
+import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
 import { detectCapabilities } from './capabilities.js';
@@ -78,15 +78,15 @@ app.innerHTML = `
         <div class="app-mark" aria-hidden="true"><span>Q</span></div>
         <div class="app-brand-copy">
           <div class="hero-kicker">HARDSUB WORKBENCH</div>
-          <h1>快捷自动硬字幕压制器</h1>
+          <h1>硬字幕压制</h1>
         </div>
       </div>
       <div class="hero-state" aria-label="处理状态">
         <span class="hero-state-dot"></span>
-        <div><strong>本地处理</strong><small>文件默认不上传</small></div>
+        <div><strong>本地处理</strong><small>默认不上传</small></div>
       </div>
     </div>
-    <p id="heroSubtitle" class="hero-subtitle">浏览器可直接本地处理；Windows 建议使用本机后端，以获得系统 FFmpeg、NVENC 与大文件支持。</p>
+    <p id="heroSubtitle" class="hero-subtitle">ASS 预检、真实预览、参数测试与硬字幕压制。</p>
     <nav class="workflow-strip" aria-label="工作流程">
       <span data-workflow-step="input"><b>01</b>输入</span>
       <span data-workflow-step="preflight"><b>02</b>预检</span>
@@ -164,8 +164,7 @@ app.innerHTML = `
 
   <div class="production-controls">
   <section id="planCard" class="card plan-card hidden">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>选择压制方案</h2><p>质量、速度、体积预算与实测校准统一在这里完成。</p></div></div>
-    <p class="note section-note">体积约束模式按目标码率控制；质量模式使用 CRF/CQ。测试片段只用于看画质、字幕和当前设备速度。</p>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>压制方案</h2><p>选择目标，再决定编码器。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -173,32 +172,32 @@ app.innerHTML = `
 
     <div class="plan-mode-tabs" role="tablist" aria-label="压制方式">
       <button type="button" class="plan-mode-tab plan-interaction selected" data-plan-mode="quick" aria-pressed="true">
-        <strong>快速预设</strong><small>无需实测，直接生成稳妥参数</small>
+        <strong>快速预设</strong><small>直接生成参数</small>
       </button>
       <button type="button" class="plan-mode-tab plan-interaction" data-plan-mode="quality" aria-pressed="false">
-        <strong>目标质量</strong><small>短样本实测 SSIM 后确定参数</small>
+        <strong>目标质量</strong><small>实测后校准</small>
       </button>
       <button type="button" class="plan-mode-tab plan-interaction" data-plan-mode="size" aria-pressed="false">
-        <strong>目标体积</strong><small>按最终文件预算反推平均码率</small>
+        <strong>目标体积</strong><small>按预算反推码率</small>
       </button>
     </div>
 
     <div class="grid two plan-controls">
       <div class="plan-mode-stack">
         <div id="quickPlanPanel" class="plan-mode-panel" data-plan-panel="quick">
-          <div class="plan-slider-head"><div><strong>预设倾向</strong><small>滑动只预览；松手后才提交参数。</small></div><output id="quickPresetValue" class="plan-slider-value">均衡</output></div>
+          <div class="plan-slider-head"><div><strong>预设倾向</strong></div><output id="quickPresetValue" class="plan-slider-value">均衡</output></div>
           <input id="quickPresetRange" class="plan-slider plan-interaction" type="range" min="0" max="2" step="1" value="1" aria-label="快速预设倾向">
           <div class="plan-slider-scale"><span>更快</span><span>均衡</span><span>更精细</span></div>
           <div class="plan-value-row">
             <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="-1" aria-label="降低预设倾向">−</button>
-            <div id="quickPresetDetail" class="plan-value-detail">固定 CRF / preset，不运行质量校准。</div>
+            <div id="quickPresetDetail" class="plan-value-detail">AV1 使用独立参数尺度；测试结果按实际编码器报告。</div>
             <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="1" aria-label="提高预设倾向">＋</button>
             <button type="button" class="range-reset plan-interaction" data-range-reset="quick">默认</button>
           </div>
         </div>
 
         <div id="qualityPlanPanel" class="plan-mode-panel hidden" data-plan-panel="quality">
-          <div class="plan-slider-head"><div><strong>目标 SSIM</strong><small>这是校准阈值，不是跨片源通用的绝对画质等级。</small></div><output id="qualityTargetValue" class="plan-slider-value">0.985</output></div>
+          <div class="plan-slider-head"><div><strong>目标 SSIM</strong></div><output id="qualityTargetValue" class="plan-slider-value">0.985</output></div>
           <input id="qualityTargetRange" class="plan-slider plan-interaction" type="range" min="0.980" max="0.990" step="0.001" value="0.985" aria-label="目标 SSIM">
           <div class="plan-slider-scale"><span>较宽松 · 0.980</span><span>默认 · 0.985</span><span>较严格 · 0.990</span></div>
           <div class="plan-value-row">
@@ -216,7 +215,7 @@ app.innerHTML = `
         </div>
 
         <div id="sizePlanPanel" class="plan-mode-panel hidden" data-plan-panel="size">
-          <div class="plan-slider-head"><div><strong>目标输出上限</strong><small>以源文件大小为锚点；滑动时只预览预算，松手后提交。</small></div><output id="sizeBudgetValue" class="plan-slider-value">×1.60</output></div>
+          <div class="plan-slider-head"><div><strong>目标输出上限</strong></div><output id="sizeBudgetValue" class="plan-slider-value">×1.60</output></div>
           <input id="sizeBudgetRange" class="plan-slider plan-interaction" type="range" min="0.75" max="2.00" step="0.05" value="1.60" aria-label="目标输出体积相对源文件倍率">
           <div class="plan-slider-scale"><span>更紧</span><span>源文件 ×1.0</span><span>更宽松</span></div>
           <div class="size-snap-row" aria-label="体积预算快捷值">
@@ -233,7 +232,7 @@ app.innerHTML = `
           </div>
         </div>
       </div>
-      <div id="sourceAnchor" class="plan-anchor note">分析完成后显示源码率与压缩密度。</div>
+      <div id="sourceAnchor" class="plan-anchor note">分析后显示源片锚点。</div>
     </div>
     <div id="codecPlanGrid" class="grid three codec-plan-grid" style="margin-top:14px"></div>
     <div id="chosenSummary" class="note plan-summary">请选择一个编码器。</div>
@@ -2304,36 +2303,7 @@ function bindFontOverrideControls() {
 function buildPreviewPlan(limit = 6) {
   const max = Math.max(1, Number(limit) || 6);
   const riskTimes = findGlyphRiskPreviewTimes(state.assInfo, state.glyphCoverage, max);
-  const baseTimes = state.assInfo?.previewTimes || [];
-  const combined = [];
-  const seen = new Set();
-
-  const add = value => {
-    if (!Number.isFinite(value)) return;
-    const rounded = Math.max(0, Math.round(value * 100) / 100);
-    const key = rounded.toFixed(2);
-    if (seen.has(key)) return;
-    seen.add(key);
-    combined.push(rounded);
-  };
-
-  riskTimes.forEach(add);
-  baseTimes.forEach(add);
-
-  // If risk sampling filled all slots, preserve at least one broad-context sample
-  // when it is distinct. This keeps the preview useful beyond only pathological lines.
-  if (combined.length >= max && baseTimes.length) {
-    const context = baseTimes.find(time => !riskTimes.some(risk => Math.abs(risk - time) < 0.005));
-    if (context != null && max > 1) {
-      combined.splice(max - 1, 1, Math.max(0, Math.round(context * 100) / 100));
-    }
-  }
-
-  const selected = combined.slice(0, max);
-  const selectedRisk = riskTimes.filter(time =>
-    selected.some(chosen => Math.abs(chosen - time) < 0.005)
-  );
-  return { times: selected, riskTimes: selectedRisk };
+  return mergePreviewTimes(riskTimes, state.assInfo?.previewTimes || [], max);
 }
 
 function isRiskPreviewTime(time) {
@@ -2748,7 +2718,7 @@ function renderPlanOptions() {
   if (!state.selectedCodec || state.softwareEncoders[state.selectedCodec] === false) state.selectedCodec = chooseDefaultCodec(goal);
   const sourceRate = getSourceVideoBitrate();
   const bppf = getSourceBppf();
-  $('sourceAnchor').innerHTML = '<strong>源片锚点</strong><br>' + escapeHtml((state.media.videoCodec || 'unknown').toUpperCase()) + ' · ' + formatBitrate(sourceRate) + ' · ' + formatBppf(bppf) + '<br><span class="note">源码率只作为压缩状态参考，不当成质量分数。</span>';
+  $('sourceAnchor').innerHTML = '<strong>源片</strong><br>' + escapeHtml((state.media.videoCodec || 'unknown').toUpperCase()) + ' · ' + formatBitrate(sourceRate) + ' · ' + formatBppf(bppf);
   const labels = state.nativeBackend?.backend === 'windows-native'
     ? { h264: 'H.264 / Windows Native', h265: 'H.265 / Windows Native', av1: 'AV1 / Windows Native' }
     : { h264: 'H.264 / x264', h265: 'H.265 / x265', av1: 'AV1 / SVT-AV1' };
@@ -2782,7 +2752,7 @@ function renderPlanOptions() {
     }
     return '<div class="codec-card plan-codec codec-' + codec + ' ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '">' +
       '<h3>' + labels[codec] + '</h3>' +
-      '<div class="note">' + codecDescription(codec) + '</div>' +
+      '<div class="note codec-description">' + codecDescription(codec) + '</div>' +
       '<div class="plan-param">' + param + '</div>' +
       '<button class="plan-choose" data-codec="' + codec + '" ' + (available ? '' : 'disabled') + '>' + (selected ? '已选择' : '选择') + '</button>' +
       '</div>';
@@ -2884,7 +2854,7 @@ function renderSelectedTestResult() {
     box.innerHTML =
       '<div class="test-result"><strong>Native 测试片段完成</strong>' +
       '<span>实际样本速度：' + Number(r.encodeSpeed || 0).toFixed(2) + '× realtime</span>' +
-      '<span>样本视频码率：' + formatBitrate(sampleBitrate) + '</span>' +
+      '<span>样本视频码率：' + formatBitrate(sampleBitrate) + (codec === 'av1' ? '（短样本估计）' : '') + '</span>' +
       '<span>SSIM：' + (Number.isFinite(Number(r.ssim)) ? Number(r.ssim).toFixed(5) : '未取得') + '</span>' +
       '<span>样本大小：' + formatBytes(Number(r.sampleBytes || 0)) + '</span>' +
       (exportAvailable
@@ -2907,7 +2877,7 @@ function renderSelectedTestResult() {
   box.innerHTML =
     '<div class="test-result"><strong>测试片段完成</strong><span>实际样本速度：' +
     Number(r.encodeSpeed || 0).toFixed(2) + '× realtime</span><span>样本视频码率：' +
-    formatBitrate(sampleBitrate) +
+    formatBitrate(sampleBitrate) + (codec === 'av1' ? '（短样本估计）' : '') +
     '</span>' +
     (r.sampleUrl
       ? '<a class="button-link" href="' + r.sampleUrl + '" download="hardsub_test_' + codec + '.mkv">下载测试片段查看实际画质</a>'
@@ -3203,15 +3173,17 @@ async function runSelectedTest() {
     $('selectedTestResult').classList.remove('hidden');
     $('selectedTestResult').innerHTML = '<div class="note">正在生成所选方案测试片段…</div>';
     const fps = state.media?.fps || 30;
-    const targetFrames = testCodec === 'av1' ? 24 : 45;
-    const duration = Math.min(1.5, Math.max(0.6, targetFrames / fps));
+    const targetFrames = testCodec === 'av1' ? 120 : 72;
+    const maxSampleSeconds = testCodec === 'av1' ? 4.0 : 2.4;
+    const minSampleSeconds = testCodec === 'av1' ? 2.5 : 1.2;
+    const duration = Math.min(maxSampleSeconds, Math.max(minSampleSeconds, targetFrames / fps));
     const total = state.media?.duration || 0;
     const candidates = state.assInfo?.previewTimes || [];
     const anchor = candidates.length
       ? [...candidates].sort((a,b) => Math.abs(a - total * 0.45) - Math.abs(b - total * 0.45))[0]
       : total * 0.45;
     const startAt = Math.max(0, Math.min(Math.max(0, total - duration), anchor - 0.45));
-    log('所选方案测试：' + testCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 / 约 ' + Math.round(duration * fps) + ' 帧 · 含真实字幕');
+    log('所选方案测试：' + testCodec.toUpperCase() + ' · ' + duration.toFixed(2) + ' 秒 / 约 ' + Math.round(duration * fps) + ' 帧 · 含真实字幕' + (testCodec === 'av1' ? ' · AV1 使用较长样本降低首个关键帧/启动开销对码率与速度的偏差' : ''));
     const originalAss = state.activeAssText || state.assText;
     const shiftedAss = shiftAssForPreview(originalAss, startAt);
     let r;
@@ -3245,7 +3217,7 @@ async function runSelectedTest() {
           targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
           twoPass: false,
           measureSsim: false,
-          timeoutMs: testCodec === 'av1' ? 60000 : 45000
+          timeoutMs: testCodec === 'av1' ? 120000 : 60000
         });
       } finally {
         await state.engine.setAssText(originalAss);
