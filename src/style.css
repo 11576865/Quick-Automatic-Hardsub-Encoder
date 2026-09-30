@@ -2424,3 +2424,54 @@ button.primary:hover:not(:disabled) {
     align-items: center;
   }
 }
+
+
+/* Static glyph coverage audit */
+.glyph-audit {
+  display: grid;
+  gap: 8px;
+}
+
+.glyph-audit > small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.glyph-audit-list {
+  display: grid;
+  gap: 1px;
+  border: 1px solid var(--border-soft);
+  background: var(--border-soft);
+}
+
+.glyph-audit-row {
+  display: grid;
+  grid-template-columns: minmax(120px, .7fr) minmax(0, 1.3fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px 10px;
+  background: var(--surface);
+  font-size: .72rem;
+  line-height: 1.5;
+}
+
+.glyph-audit-row strong {
+  overflow-wrap: anywhere;
+}
+
+.glyph-audit-row span {
+  color: var(--muted);
+}
+
+.glyph-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: .68rem;
+  color: var(--muted);
+}
+
+@media (max-width: 620px) {
+  .glyph-audit-row {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
