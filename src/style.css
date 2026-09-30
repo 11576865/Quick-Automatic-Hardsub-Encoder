@@ -2646,12 +2646,6 @@ button.primary:hover:not(:disabled) {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-/* Explicit light is no longer a user-selectable mode. System may still resolve
-   to light when the OS requests it, so light theme variables remain available. */
-@media (max-width: 430px) {
-  
-
-
 /* Modern dark workbench v6 -------------------------------------------------- */
 :root {
   color-scheme: dark;
@@ -3281,5 +3275,231 @@ button.primary {
   button,
   .button-link {
     transition: none;
+  }
+}
+
+
+/* Adaptive workbench v7 ----------------------------------------------------- */
+/* Window classes control composition. No device-name assumptions. */
+.app-shell {
+  width: min(1760px, calc(100% - 28px));
+}
+
+.app-header {
+  padding: 12px 14px;
+}
+
+.app-mark {
+  flex-basis: 34px;
+  width: 34px;
+  height: 34px;
+}
+
+.app-header h1 {
+  font-size: clamp(1.02rem, 1.45vw, 1.28rem);
+}
+
+.hero-subtitle {
+  margin-top: 7px;
+}
+
+.workflow-strip {
+  margin-top: 9px;
+  padding-top: 9px;
+}
+
+.plan-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.plan-mode-tab {
+  min-width: 0;
+  min-height: 52px;
+  padding: 9px 11px;
+}
+
+.plan-mode-tab strong,
+.plan-mode-tab small {
+  overflow-wrap: anywhere;
+}
+
+.plan-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, .42fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.plan-anchor {
+  min-width: 0;
+  padding: 13px;
+}
+
+.codec-description {
+  display: none;
+}
+
+.preview-wrap img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.platform-card-head > div,
+.app-card-head > div {
+  min-width: 0;
+}
+
+.windows-launch-path,
+.platform-facts {
+  min-width: 0;
+}
+
+.windows-launch-path code,
+.platform-note code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+:root[data-window-size="compact"] .app-shell {
+  width: min(100% - 12px, 1760px);
+}
+
+:root[data-window-size="compact"] .app-header-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+:root[data-window-size="compact"] .app-mark,
+:root[data-window-size="compact"] .hero-kicker,
+:root[data-window-size="compact"] .hero-state small,
+:root[data-window-size="compact"] .hero-subtitle {
+  display: none;
+}
+
+:root[data-window-size="compact"] .app-brand {
+  gap: 0;
+}
+
+:root[data-window-size="compact"] .app-header h1 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+:root[data-window-size="compact"] .workflow-strip {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+:root[data-window-size="compact"] .setup-region,
+:root[data-window-size="compact"] .production-region,
+:root[data-window-size="compact"] .plan-controls,
+:root[data-window-size="compact"] .grid.two,
+:root[data-window-size="compact"] .grid.three,
+:root[data-window-size="compact"] .input-card > .grid.two,
+:root[data-window-size="compact"] .codec-plan-grid,
+:root[data-window-size="compact"] #codecGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+:root[data-window-size="compact"] .plan-mode-tabs {
+  display: flex;
+  overflow-x: auto;
+  gap: 6px;
+  scrollbar-width: none;
+}
+
+:root[data-window-size="compact"] .plan-mode-tab {
+  flex: 0 0 min(76vw, 250px);
+}
+
+:root[data-window-size="compact"] .plan-slider-head {
+  align-items: center;
+}
+
+:root[data-window-size="compact"] .plan-slider-scale {
+  font-size: .62rem;
+}
+
+:root[data-window-size="compact"] .platform-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-window-size="medium"] .setup-region,
+:root[data-window-size="medium"] .production-region {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-window-size="medium"] .input-card > .grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-window-size="medium"] .plan-controls {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-window-size="medium"] .platform-rail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-window-size="expanded"] .setup-region {
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, .55fr);
+}
+
+:root[data-window-size="expanded"] .production-region {
+  grid-template-columns: minmax(300px, .78fr) minmax(0, 1.22fr);
+}
+
+:root[data-window-size="expanded"] .plan-controls {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+:root[data-window-size="expanded"] .platform-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-window-size="large"] .setup-region,
+:root[data-window-size="extra-large"] .setup-region {
+  grid-template-columns: minmax(0, 1.6fr) minmax(280px, .4fr);
+}
+
+:root[data-window-size="large"] .production-region,
+:root[data-window-size="extra-large"] .production-region {
+  grid-template-columns: minmax(360px, .82fr) minmax(0, 1.18fr);
+}
+
+:root[data-window-size="large"] .plan-controls,
+:root[data-window-size="extra-large"] .plan-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(190px, .38fr);
+}
+
+:root[data-window-size="large"] .platform-rail,
+:root[data-window-size="extra-large"] .platform-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.windows-native-connected .platform-rail {
+  display: none !important;
+}
+
+@media (max-width: 599px) {
+  .plan-value-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .plan-value-row .range-reset {
+    grid-column: 1 / -1;
+  }
+
+  .button-row > * {
+    min-width: 0;
   }
 }
