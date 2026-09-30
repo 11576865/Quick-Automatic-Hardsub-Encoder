@@ -234,7 +234,8 @@ WebAssembly 路径适合作为：
 - 按 ASS 实际 Dialogue 跟踪 Style、`\fn`、`\r` 与绘图模式后的字体/字符使用；
 - 上传字体与 ASS family 的匹配；
 - 主字体缺字 / 需要 fallback 的静态预警；
-- 字体警告与 fallback 状态。
+- Web、Windows Native、Android Native 真实 libass 预览中的 `fontselect` / missing-glyph / fallback 日志；
+- 将运行时日志结构化为“主字体缺字 → 已找到 fallback / fallback 未确认”的逐字符诊断。
 
 Windows 端会把 UTF-16 ASS 安全规范化成 libass 可处理的 UTF-8 临时文件，避免 BOM / UTF-16 直接送入 FFmpeg 造成乱码或字体识别异常。
 
@@ -258,7 +259,7 @@ FFmpeg + libass
 预览图
 ```
 
-因此字体、位置、描边等关键效果以实际 libass 渲染结果为准。
+因此字体、位置、描边等关键效果以实际 libass 渲染结果为准。预览还会把 libass 的字体选择日志结构化：当主字体缺少某个 Unicode 字形时，会区分“已选择后备字体”和“仍未确认可用 fallback”，并保留原始日志供核对。
 
 这也是正式压制前最重要的一道人工确认。
 
