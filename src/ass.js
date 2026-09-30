@@ -51,14 +51,112 @@ export function parseAss(text) {
 
   const dialogue = events.filter(e => e.kind?.toLowerCase() === 'dialogue');
   const previewTimes = choosePreviewTimes(dialogue, styles);
+  const fontUsage = collectAssFontUsage(dialogue, styles);
 
   return {
     styles,
     events,
     requestedFonts: [...requestedFonts],
+    fontUsage,
     previewTimes,
     dialogueCount: dialogue.length
   };
+}
+
+
+function collectAssFontUsage(dialogue, styles) {
+  const usage = new Map();
+  const styleEntries = [...styles.entries()];
+  const defaultStyle = styles.get('Default') || styleEntries[0]?.[1] || null;
+
+  const resolveStyle = name => {
+    if (name && styles.has(name)) return styles.get(name);
+    if (name) {
+      const folded = String(name).trim().toLowerCase();
+      const hit = styleEntries.find(([key]) => String(key).trim().toLowerCase() === folded);
+      if (hit) return hit[1];
+    }
+    return defaultStyle;
+  };
+
+  const addCodePoint = (fontName, cp) => {
+    const name = String(fontName || '').trim();
+    if (!name || !isRenderableCodePoint(cp)) return;
+    let set = usage.get(name);
+    if (!set) usage.set(name, set = new Set());
+    set.add(cp);
+  };
+
+  for (const event of dialogue) {
+    const baseStyle = resolveStyle(event.style);
+    let activeStyle = baseStyle;
+    let activeFont = String(activeStyle?.fontname || '').trim();
+    let drawingMode = 0;
+    const text = String(event.text || '');
+    let cursor = 0;
+
+    while (cursor < text.length) {
+      const open = text.indexOf('{', cursor);
+      if (open < 0) {
+        if (drawingMode <= 0) addAssTextSegment(text.slice(cursor), activeFont, addCodePoint);
+        break;
+      }
+
+      if (open > cursor && drawingMode <= 0) {
+        addAssTextSegment(text.slice(cursor, open), activeFont, addCodePoint);
+      }
+
+      const close = text.indexOf('}', open + 1);
+      if (close < 0) {
+        if (drawingMode <= 0) addAssTextSegment(text.slice(open), activeFont, addCodePoint);
+        break;
+      }
+
+      const block = text.slice(open + 1, close);
+      const tagPattern = /\\(fn|r|p)([^\\}]*)/gi;
+      let match;
+      while ((match = tagPattern.exec(block))) {
+        const tag = match[1].toLowerCase();
+        const arg = String(match[2] || '').trim();
+        if (tag === 'fn') {
+          activeFont = arg || String(activeStyle?.fontname || '').trim();
+        } else if (tag === 'r') {
+          activeStyle = arg ? resolveStyle(arg) : baseStyle;
+          activeFont = String(activeStyle?.fontname || '').trim();
+          drawingMode = 0;
+        } else if (tag === 'p') {
+          const value = Number.parseInt(arg, 10);
+          drawingMode = Number.isFinite(value) ? Math.max(0, value) : 0;
+        }
+      }
+      cursor = close + 1;
+    }
+  }
+
+  return [...usage.entries()]
+    .map(([fontName, set]) => ({ fontName, codePoints: [...set].sort((a, b) => a - b) }))
+    .sort((a, b) => a.fontName.localeCompare(b.fontName));
+}
+
+function addAssTextSegment(segment, fontName, addCodePoint) {
+  const decoded = String(segment)
+    .replace(/\\[Nn]/g, '\n')
+    .replace(/\\h/g, ' ');
+  for (const char of decoded) addCodePoint(fontName, char.codePointAt(0));
+}
+
+function isRenderableCodePoint(cp) {
+  if (!Number.isInteger(cp) || cp < 0 || cp > 0x10FFFF) return false;
+  if (cp <= 0x20 || (cp >= 0x7F && cp <= 0x9F)) return false;
+  if (cp === 0x00A0) return false;
+  if (cp >= 0x200B && cp <= 0x200F) return false;
+  if (cp >= 0x202A && cp <= 0x202E) return false;
+  if (cp >= 0x2060 && cp <= 0x206F) return false;
+  if (cp === 0xFEFF) return false;
+  if (cp >= 0xFE00 && cp <= 0xFE0F) return false;
+  if (cp >= 0xE0100 && cp <= 0xE01EF) return false;
+  if (cp >= 0xE0000 && cp <= 0xE007F) return false;
+  return true;
 }
 
 function splitCsvLimited(text, count) {
