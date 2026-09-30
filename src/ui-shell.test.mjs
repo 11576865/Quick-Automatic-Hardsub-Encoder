@@ -51,6 +51,8 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.doesNotMatch(selectBlock, /state\.selectedTest\s*=\s*null/);
   assert.doesNotMatch(selectBlock, /revokeObjectURL/);
   assert.match(main, /id="nextP" type="button"/);
+  assert.match(main, /const targetFrames = testCodec === 'av1' \? 120 : 72/);
+  assert.match(main, /const maxSampleSeconds = testCodec === 'av1' \? 4\.0 : 2\.4/);
   assert.match(main, />下一条<\/button>/);
 
   assert.match(main, /data-plan-mode="quick"/);
