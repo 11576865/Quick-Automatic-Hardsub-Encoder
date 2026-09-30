@@ -21,6 +21,13 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /nativePlatformName\(\) \+ ' 自检：'/);
   assert.match(main, /class="workspace-layout"/);
   assert.match(main, /class="platform-rail"/);
+  assert.match(main, /class="adaptive-region setup-region"/);
+  assert.match(main, /class="adaptive-region production-region"/);
+  assert.match(main, /class="production-controls"/);
+  assert.match(main, /function resolveWindowSizeClass\(width = window\.innerWidth\)/);
+  assert.match(main, /data-theme-choice="dark"/);
+  assert.match(main, /data-theme-choice="system"/);
+  assert.doesNotMatch(main, /data-theme-choice="light"/);
 
   assert.match(css, /\.workspace-layout\s*\{\s*display:\s*block/);
   assert.match(css, /\.windows-native-connected \.platform-rail\s*\{\s*display:\s*none/);
