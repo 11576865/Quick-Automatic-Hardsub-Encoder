@@ -2077,6 +2077,10 @@ function renderSubtitleSummary() {
   const a = state.assInfo;
   const missing = state.fontMatches.filter(x => x.status === 'missing');
   const probable = state.fontMatches.filter(x => x.status === 'probable');
+  const runtimeDiagnostics = state.previewFontDiagnostics.filter(Boolean);
+  const runtimeFallbackFrames = runtimeDiagnostics.filter(item => item.hasFallback).length;
+  const runtimeUnresolvedFrames = runtimeDiagnostics.filter(item => item.hasUnresolvedRisk).length;
+  const runtimeRiskFrames = runtimeDiagnostics.filter(item => item.hasRisk).length;
   const mediaRows = state.media ? [
     ['视频', `${state.media.videoCodec} · ${state.media.width}×${state.media.height} · ${state.media.fps.toFixed(2)} fps`],
     ['时长', formatDuration(state.media.duration) + (state.media.durationSource === 'packet-scan' ? ' · packet 扫描恢复' : '')],
@@ -2099,6 +2103,13 @@ function renderSubtitleSummary() {
     ['静态字形覆盖', state.glyphCoverage.length
       ? (staticGlyphWarningCount() ? `${staticGlyphWarningCount()} 组需确认` : '已覆盖')
       : '无可核对文本'],
+    ['运行时字体', runtimeDiagnostics.length
+      ? (runtimeUnresolvedFrames
+          ? `${runtimeUnresolvedFrames} 个采样点仍有高风险`
+          : runtimeFallbackFrames
+            ? `${runtimeFallbackFrames} 个采样点已使用 fallback`
+            : '已采样，未见缺字')
+      : '等待真实预览'],
     ['常用字体库', `${state.savedFonts.length} 个文件`],
     ['预览采样点', `${a.previewTimes.length} 个`],
     ...mediaRows
@@ -2139,6 +2150,21 @@ function renderSubtitleSummary() {
   }).join('');
 
   const notices = [];
+  if (runtimeDiagnostics.length) {
+    if (runtimeUnresolvedFrames) {
+      notices.push('<div class="error-box" style="margin-top:12px">运行时字体检查：' +
+        runtimeUnresolvedFrames + '/' + runtimeDiagnostics.length +
+        ' 个已生成预览的采样点仍存在未确认解决的缺字 / fallback 风险。请逐条查看字幕预览中的结构化 libass 诊断。</div>');
+    } else if (runtimeFallbackFrames) {
+      notices.push('<div class="warning-box" style="margin-top:12px">运行时字体检查：' +
+        runtimeFallbackFrames + '/' + runtimeDiagnostics.length +
+        ' 个已生成预览的采样点发生了字体 fallback；libass 已找到后备字体，但字形外观可能与原设计不同。</div>');
+    } else {
+      notices.push('<div class="ok-box" style="margin-top:12px">运行时字体检查：已生成的 ' +
+        runtimeDiagnostics.length + ' 个预览采样点未记录 missing-glyph / fallback 风险。</div>');
+    }
+  }
+
   if (glyphAuditRows) {
     const auditClass = glyphPartial.length || glyphUnknown.length ? 'warning-box' : 'note';
     notices.push('<div class="' + auditClass + ' glyph-audit" style="margin-top:12px"><strong>字形覆盖（cmap）</strong>' +
@@ -2156,7 +2182,7 @@ function renderSubtitleSummary() {
     notices.push(`<div class="note" style="margin-top:12px">检测到奇数宽/高。x264 等 4:2:0 编码路径常会直接报 “width/height not divisible by 2”。正式压制会先按原始尺寸完成 libass 字幕渲染，再只在右侧/底部补最多 1 px，使输出成为 ${outW}×${outH}；不会缩放原画面或改变 ASS 坐标。</div>`);
   }
 
-  if (missing.length || probable.length || glyphPartial.length || glyphUnknown.length) {
+  if (missing.length || probable.length || glyphPartial.length || glyphUnknown.length || runtimeRiskFrames) {
     let bindingUi = '';
     if (state.fontFaces.length) {
       const risky = state.fontMatches
@@ -2195,7 +2221,7 @@ function renderSubtitleSummary() {
   $('fontWarnings').innerHTML = notices.join('');
   bindFontOverrideControls();
 
-  const fontRisk = missing.length + probable.length + glyphPartial.length + glyphUnknown.length;
+  const fontRisk = missing.length + probable.length + glyphPartial.length + glyphUnknown.length + runtimeRiskFrames;
   const mediaRisk = state.media?.unsafeColorPipeline ? 1 : 0;
   const decodeRisk = state.inputDecodeOk ? 0 : 1;
   const riskCount = fontRisk + mediaRisk + decodeRisk;
@@ -2333,8 +2359,9 @@ async function loadPreviewAt(index) {
       state.acceptedWarnings = false;
       $('acceptWarnings').checked = false;
       $('warningAccept').classList.remove('hidden');
-      refreshBenchmarkEnabled(false);
     }
+    renderSubtitleSummary();
+    refreshBenchmarkEnabled(false);
   }
 
   const fontEvents = state.previewFontEvents[safeIndex] || [];
