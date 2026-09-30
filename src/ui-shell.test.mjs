@@ -51,6 +51,9 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /id="sizeBudgetMultiplier" type="hidden"/);
   assert.match(main, /function commitQualityTarget\(\)/);
   assert.match(main, /function commitSizeBudget\(\)/);
+  assert.match(main, /parseLibassFontDiagnostics/);
+  assert.match(main, /renderRuntimeFontDiagnostics/);
+  assert.match(main, /previewFontDiagnostics/);
   assert.match(main, /goal !== 'sizeBudget'/);
   assert.doesNotMatch(main, /<option value="quality">质量优先/);
   assert.doesNotMatch(main, /体积预算：1\.6×/);
@@ -58,4 +61,6 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.plan-mode-tabs\s*\{/);
   assert.match(css, /\.plan-slider::-webkit-slider-runnable-track/);
   assert.match(css, /--slider-progress/);
+  assert.match(css, /\.runtime-font-diagnostics\s*\{/);
+  assert.match(css, /\.runtime-font-row\s*\{/);
 });
