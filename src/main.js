@@ -103,11 +103,12 @@ app.innerHTML = `
   <section class="card input-card">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
-      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" type="file"><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；使用通用文件选择器，视频格式交给 FFprobe 判断。</small></div>
-      <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" type="file" accept=".ass,text/plain"><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
+      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
+      <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
       <div class="file-row input-font">
         <label id="fontLabel">字体（可选，可多选）</label>
-        <input id="fonts" type="file" multiple accept=".ttf,.otf,.ttc,.otc">
+        <input id="fonts" class="file-input-control" type="file" multiple accept=".ttf,.otf,.ttc,.otc">
+        <label id="fontsWebPicker" class="file-picker-trigger" for="fonts">选择字体文件</label>
         <button id="fontsNativePickerBtn" class="native-picker-button hidden" type="button">选择字体文件</button>
         <label id="fontPersistCheck" class="font-persist-check"><input id="rememberFonts" type="checkbox" checked> 记住本次选择，加入本机常用字体库</label>
         <small id="fontMeta">未选择；常用字体库会自动参与 ASS 字体匹配。</small>
@@ -188,24 +189,14 @@ app.innerHTML = `
           <div class="plan-slider-head"><div><strong>预设倾向</strong></div><output id="quickPresetValue" class="plan-slider-value">均衡</output></div>
           <input id="quickPresetRange" class="plan-slider plan-interaction" type="range" min="0" max="2" step="1" value="1" aria-label="快速预设倾向">
           <div class="plan-slider-scale"><span>更快</span><span>均衡</span><span>更精细</span></div>
-          <div class="plan-value-row">
-            <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="-1" aria-label="降低预设倾向">−</button>
-            <div id="quickPresetDetail" class="plan-value-detail"></div>
-            <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="1" aria-label="提高预设倾向">＋</button>
-            <button type="button" class="range-reset plan-interaction" data-range-reset="quick">默认</button>
-          </div>
+          <div id="quickPresetDetail" class="plan-value-detail plan-slider-feedback"></div>
         </div>
 
         <div id="qualityPlanPanel" class="plan-mode-panel hidden" data-plan-panel="quality">
           <div class="plan-slider-head"><div><strong>目标 SSIM</strong></div><output id="qualityTargetValue" class="plan-slider-value">0.985</output></div>
           <input id="qualityTargetRange" class="plan-slider plan-interaction" type="range" min="0.980" max="0.990" step="0.001" value="0.985" aria-label="目标 SSIM">
           <div class="plan-slider-scale"><span>较宽松 · 0.980</span><span>默认 · 0.985</span><span>较严格 · 0.990</span></div>
-          <div class="plan-value-row">
-            <button type="button" class="range-step plan-interaction" data-range-step="quality" data-delta="-0.001" aria-label="降低目标 SSIM">−</button>
-            <div id="qualityTargetDetail" class="plan-value-detail">当前阈值 0.985；改动后需要重新校准。</div>
-            <button type="button" class="range-step plan-interaction" data-range-step="quality" data-delta="0.001" aria-label="提高目标 SSIM">＋</button>
-            <button type="button" class="range-reset plan-interaction" data-range-reset="quality">默认</button>
-          </div>
+          <div id="qualityTargetDetail" class="plan-value-detail plan-slider-feedback">当前阈值 0.985；改动后需要重新校准。</div>
           <label class="quality-auto-codec"><input id="qualityAutoCodec" class="plan-interaction" type="checkbox" checked> 自动比较可用编码器，在达到同一 SSIM 后优先选择更低样本码率；差异很小时偏向更快者。</label>
           <div id="qualityCalibrationControls" class="quality-calibration">
             <button id="calibrateQualityBtn" type="button">比较可用编码器并校准</button>
@@ -224,12 +215,7 @@ app.innerHTML = `
             <button type="button" class="plan-interaction" data-size-multiplier="1.60">×1.60</button>
             <button type="button" class="plan-interaction" data-size-multiplier="2.00">×2.00</button>
           </div>
-          <div class="plan-value-row">
-            <button type="button" class="range-step plan-interaction" data-range-step="size" data-delta="-0.05" aria-label="降低体积预算">−</button>
-            <div id="sizeBudgetDetail" class="plan-value-detail">选择视频后显示对应的实际字节上限。</div>
-            <button type="button" class="range-step plan-interaction" data-range-step="size" data-delta="0.05" aria-label="提高体积预算">＋</button>
-            <button type="button" class="range-reset plan-interaction" data-range-reset="size">默认</button>
-          </div>
+          <div id="sizeBudgetDetail" class="plan-value-detail plan-slider-feedback">选择视频后显示对应的实际字节上限。</div>
         </div>
       </div>
       <div id="sourceAnchor" class="plan-anchor note">分析后显示源片锚点。</div>
@@ -263,55 +249,35 @@ app.innerHTML = `
   </div>
   </div>
 
-  <section class="card log-card">
-    <div class="card-heading"><span class="step-no">LOG</span><div><h2>技术日志</h2><p>设备检测、字体匹配、FFmpeg 与任务状态。</p></div></div>
+  <details class="card log-card">
+    <summary class="log-summary"><span class="step-no">LOG</span><strong>技术日志</strong><span>仅在排错时展开</span></summary>
     <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.1.0\n</div>
-  </section>
+  </details>
     </main>
     <aside class="platform-rail" aria-label="运行方式">
       <section id="windowsNativeCard" class="card platform-card windows-card">
         <div class="platform-card-head">
-          <div>
-            <div class="platform-eyebrow">WINDOWS NATIVE · RECOMMENDED</div>
-            <h2>Windows 本机运行</h2>
-            <p class="note">网页不能直接启动本机脚本。下载源码后双击启动器，直接调用本机 FFmpeg；适合长视频和 NVIDIA NVENC。</p>
-          </div>
+          <div><div class="platform-eyebrow">WINDOWS NATIVE</div><h2>Windows 本机运行</h2><p class="note">长视频、系统 FFmpeg 与 NVIDIA NVENC。</p></div>
           <span class="platform-badge">推荐</span>
         </div>
-
-        <div class="windows-launch-path">
-          <span>启动入口</span>
-          <code>windows\start_windows.bat</code>
-        </div>
-
-        <div class="platform-facts">
-          <div><span>GPU</span><strong>自动探测 NVENC</strong></div>
-          <div><span>CPU 回退</span><strong>x264 / x265 / SVT-AV1</strong></div>
-          <div><span>依赖</span><strong>FFmpeg + libass</strong></div>
-        </div>
-
         <div class="button-row platform-actions">
           <a class="button-link platform-primary-link" href="${WINDOWS_SOURCE_ZIP}">下载 Windows 源码包</a>
           <a class="button-link" href="${WINDOWS_DOC_URL}" target="_blank" rel="noreferrer">运行说明</a>
         </div>
-        <p class="note platform-note">缺少 FFmpeg 时，可在 Windows 界面中安装，或运行 <code>winget install --id Gyan.FFmpeg -e --source winget</code>。NVENC 实际启动失败时会保留 CPU 编码路径。</p>
       </section>
 
-        <section id="androidAppCard" class="card app-card">
-          <div class="app-card-head">
-            <div>
-              <h2 id="appCardTitle">Android 应用</h2>
-              <p id="appReleaseSummary" class="note">正在读取最新版信息…</p>
-            </div>
-            <span id="appModeBadge" class="app-mode-badge">网页</span>
-          </div>
-          <div class="button-row">
-            <button id="openAndroidAppBtn" class="primary" type="button">打开 Android App</button>
-            <a id="downloadAndroidAppBtn" class="button-link" href="${APP_DOWNLOAD_FALLBACK}">下载最新版 APK</a>
-            <button id="checkAppUpdateBtn" class="hidden" type="button">检查更新</button>
-          </div>
-          <div id="appUpdateNotice" class="note app-update-notice">Android 浏览器可直接拉起已安装的 App；未安装时会回退到 APK 下载。</div>
-        </section>
+      <section id="androidAppCard" class="card app-card">
+        <div class="app-card-head">
+          <div><h2 id="appCardTitle">Android 应用</h2><p id="appReleaseSummary" class="note">正在读取最新版信息…</p></div>
+          <span id="appModeBadge" class="app-mode-badge">网页</span>
+        </div>
+        <div class="button-row platform-actions">
+          <button id="openAndroidAppBtn" class="primary" type="button">打开 Android App</button>
+          <a id="downloadAndroidAppBtn" class="button-link" href="${APP_DOWNLOAD_FALLBACK}">下载最新版 APK</a>
+          <button id="checkAppUpdateBtn" class="hidden" type="button">检查更新</button>
+        </div>
+        <div id="appUpdateNotice" class="note app-update-notice">Android 浏览器可直接拉起已安装的 App；未安装时回退到 APK 下载。</div>
+      </section>
     </aside>
   </div>
 </div>`;
@@ -479,6 +445,7 @@ $('video').addEventListener('change', e => {
   state.nativeInputProbe = null;
   invalidateAnalysis();
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
+  if ($('videoWebPicker')) $('videoWebPicker').textContent = state.video ? '更换视频' : '选择视频';
   const browserTooLarge = !state.nativeBackend?.available && state.video?.size > MAX_BYTES;
   $('videoMeta').className = browserTooLarge ? 'bad' : '';
 
@@ -499,6 +466,7 @@ $('ass').addEventListener('change', e => {
   state.ass = e.target.files?.[0] || null;
   invalidateAnalysis();
   $('assMeta').textContent = state.ass ? state.ass.name : '未选择';
+  if ($('assWebPicker')) $('assWebPicker').textContent = state.ass ? '更换字幕' : '选择 ASS 字幕';
   $('assMeta').className = '';
   if (state.ass) log('字幕文件已接收：' + state.ass.name + ' · ' + formatBytes(state.ass.size));
   refreshAnalyze();
@@ -507,6 +475,7 @@ $('fonts').addEventListener('change', async e => {
   state.fonts = [...(e.target.files || [])];
   invalidateAnalysis();
   updateFontMeta();
+  if ($('fontsWebPicker')) $('fontsWebPicker').textContent = state.fonts.length ? '更换字体' : '选择字体文件';
 
   if (!state.nativeBackend?.available && $('rememberFonts').checked && state.fonts.length) {
     const valid = [];
@@ -1366,6 +1335,7 @@ function applyPlatformPresentation() {
   for (const [role, config] of Object.entries(WINDOWS_NATIVE_PICKERS)) {
     $(config.inputId)?.classList.toggle('hidden', windowsNative);
     $(config.buttonId)?.classList.toggle('hidden', !windowsNative);
+    $({ video: 'videoWebPicker', ass: 'assWebPicker', fonts: 'fontsWebPicker' }[role])?.classList.toggle('hidden', windowsNative);
     if (!windowsNative) setWindowsNativePickerBusy(role, false);
   }
 
