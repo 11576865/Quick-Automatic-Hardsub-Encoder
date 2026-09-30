@@ -97,8 +97,14 @@ app.innerHTML = `
   </header>
 
   <nav id="mobileStageNav" class="mobile-stage-nav" aria-label="移动端任务阶段">
-    <button type="button" data-mobile-stage-target="prepare" aria-current="step"><span>01</span>准备</button>
-    <button type="button" data-mobile-stage-target="produce" disabled><span>02</span>制作</button>
+    <button type="button" data-mobile-stage-target="prepare" aria-current="step">
+      <span class="mobile-stage-index">01</span>
+      <span class="mobile-stage-copy"><strong>准备素材</strong><small>视频 · 字幕 · 字体</small></span>
+    </button>
+    <button type="button" data-mobile-stage-target="produce" disabled>
+      <span class="mobile-stage-index">02</span>
+      <span class="mobile-stage-copy"><strong>预览与压制</strong><small>画面 · 方案 · 输出</small></span>
+    </button>
   </nav>
 
   <div class="workspace-layout">
@@ -152,6 +158,9 @@ app.innerHTML = `
       <div class="preflight-body">
         <div id="subtitleSummary" class="status-list"></div>
         <div id="fontWarnings"></div>
+        <div class="mobile-preflight-action">
+          <button id="continueToProduceBtn" class="primary" type="button">进入预览与压制</button>
+        </div>
       </div>
     </details>
   </section>
@@ -350,6 +359,12 @@ function syncMobileStageNav() {
   const nav = $('mobileStageNav');
   if (!nav) return;
   const current = document.body.dataset.mobileStage || 'prepare';
+  const mobileTitle = document.querySelector('.app-brand-copy h1');
+  if (mobileTitle && document.body.classList.contains('ui-mobile')) {
+    mobileTitle.textContent = current === 'produce' ? '预览与压制' : '硬字幕压制';
+  } else if (mobileTitle) {
+    mobileTitle.textContent = '硬字幕压制';
+  }
   for (const button of nav.querySelectorAll('[data-mobile-stage-target]')) {
     const stage = button.dataset.mobileStageTarget;
     button.disabled = !mobileStageAvailable(stage);
@@ -373,6 +388,10 @@ $('mobileStageNav')?.addEventListener('click', event => {
   const button = event.target.closest('[data-mobile-stage-target]');
   if (!button || button.disabled) return;
   setMobileStage(button.dataset.mobileStageTarget);
+});
+
+$('continueToProduceBtn')?.addEventListener('click', () => {
+  setMobileStage('produce');
 });
 
 applyWindowSizeClass();
