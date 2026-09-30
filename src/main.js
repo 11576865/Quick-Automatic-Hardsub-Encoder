@@ -580,10 +580,9 @@ function updateQuickPresetPreview() {
   if (codec) {
     const p = profileFor(codec, goal);
     $('quickPresetDetail').textContent =
-      codec.toUpperCase() + ' · CRF ' + p.crf + ' · preset ' + p.preset +
-      '；固定预设，不运行 SSIM 校准。';
+      codec.toUpperCase() + ' · CRF ' + p.crf + ' · ' + p.preset;
   } else {
-    $('quickPresetDetail').textContent = '固定 CRF / preset，不运行 SSIM 校准。';
+    $('quickPresetDetail').textContent = '';
   }
   setSliderProgress(range);
 }
