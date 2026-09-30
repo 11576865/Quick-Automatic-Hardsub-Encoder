@@ -1573,11 +1573,10 @@ button.primary:hover:not(:disabled) {
   .hero-main {
     gap: 12px;
   }
-
-  
+}
 
 @media (max-width: 430px) {
-  
+}
 
 
 /* Wide desktop platform rail ------------------------------------------------ */
