@@ -515,7 +515,7 @@ class NativeBridge(
                 val sub = arrayOf(
                     "-y",
                     "-hide_banner",
-                    "-v", "error",
+                    "-v", "info",
                     "-loop", "1",
                     "-framerate", "10",
                     "-i", basePng.absolutePath,
@@ -550,12 +550,31 @@ class NativeBridge(
                 baseBitmap.recycle()
                 subBitmap.recycle()
 
+                val fontEvents = JSONArray()
+                subSession.getOutput()
+                    .lineSequence()
+                    .filter {
+                        it.contains("fontselect:", ignoreCase = true) ||
+                            Regex("Glyph .* not found", RegexOption.IGNORE_CASE).containsMatchIn(it) ||
+                            Regex("failed to find.*fallback", RegexOption.IGNORE_CASE).containsMatchIn(it) ||
+                            it.contains("font provider", ignoreCase = true)
+                    }
+                    .map {
+                        it.replace(
+                            Regex("^.*?(?=(?:fontselect:|Glyph |failed to find|font provider))", RegexOption.IGNORE_CASE),
+                            ""
+                        ).trim()
+                    }
+                    .filter { it.isNotBlank() }
+                    .forEach { fontEvents.put(it) }
+
                 result
                     .put("ok", true)
                     .put("url", subUrl)
                     .put("baseUrl", baseUrl)
                     .put("visualChange", visualChange)
                     .put("time", timeSeconds)
+                    .put("fontEvents", fontEvents)
             } catch (e: Throwable) {
                 result
                     .put("ok", false)
