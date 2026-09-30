@@ -1,6 +1,6 @@
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview } from './ass.js';
-import { inspectFontFile, matchRequestedFonts } from './fonts.js';
+import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
 import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
@@ -27,7 +27,9 @@ const state = {
   fontBindings: {},
   autoFontFallbacks: {},
   fontFaces: [],
+  fallbackFontFaces: [],
   fontMatches: [],
+  glyphCoverage: [],
   media: null,
   engine: null,
   capabilities: null,
@@ -365,6 +367,8 @@ function invalidateAnalysis() {
   state.activeAssText = '';
   state.fontMatches = [];
   state.fontFaces = [];
+  state.fallbackFontFaces = [];
+  state.glyphCoverage = [];
   state.selectedCodec = null;
   state.acceptedWarnings = false;
   $('acceptWarnings').checked = false;
@@ -1993,6 +1997,7 @@ async function analyzeAll() {
     } else {
       throw new Error('没有可用的视频处理后端');
     }
+    await refreshGlyphCoverage();
     renderSubtitleSummary();
     $('preflightCard').classList.remove('hidden');
     $('subtitleCard').classList.remove('hidden');
@@ -2012,6 +2017,57 @@ async function analyzeAll() {
   } finally {
     refreshAnalyze();
   }
+}
+
+
+async function ensureBundledFallbackFontFaces() {
+  const fallbackNames = new Set(Object.values(state.autoFontFallbacks || {}).filter(Boolean));
+  if (!fallbackNames.has('Noto Sans SC')) return;
+  if (state.fallbackFontFaces.length) return;
+
+  try {
+    const response = await fetch('./vendor/fallback-fonts/NotoSansSC-Regular.otf', { cache: 'force-cache' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const blob = await response.blob();
+    const file = new File([blob], 'NotoSansSC-Regular.otf', { type: 'font/otf' });
+    state.fallbackFontFaces = await inspectFontFile(file);
+    log('已载入内置 Noto Sans SC 的 cmap，用于静态字形覆盖检查。');
+  } catch (error) {
+    log('无法读取内置回退字体的 cmap；将把这部分覆盖状态标记为未静态验证：' + error.message);
+  }
+}
+
+async function refreshGlyphCoverage() {
+  if (!state.assInfo) {
+    state.glyphCoverage = [];
+    return;
+  }
+  await ensureBundledFallbackFontFaces();
+  const faces = [...state.fontFaces, ...state.fallbackFontFaces];
+  state.glyphCoverage = analyzeFontUsageCoverage(
+    state.assInfo.fontUsage || [],
+    faces,
+    { ...state.autoFontFallbacks, ...state.fontBindings }
+  );
+}
+
+function glyphCodePointLabel(codePoint) {
+  let char = '';
+  try { char = String.fromCodePoint(codePoint); } catch {}
+  const hex = Number(codePoint).toString(16).toUpperCase().padStart(codePoint > 0xFFFF ? 6 : 4, '0');
+  return escapeHtml(char || '�') + ' <span class="glyph-code">U+' + hex + '</span>';
+}
+
+function formatMissingGlyphs(codePoints, limit = 18) {
+  const list = (codePoints || []).slice(0, limit).map(glyphCodePointLabel).join(' · ');
+  const more = (codePoints || []).length > limit
+    ? ' · … 另有 ' + ((codePoints || []).length - limit) + ' 个'
+    : '';
+  return list + more;
+}
+
+function staticGlyphWarningCount() {
+  return state.glyphCoverage.filter(item => item.status === 'partial' || item.status === 'unknown').length;
 }
 
 function renderSubtitleSummary() {
@@ -2035,7 +2091,11 @@ function renderSubtitleSummary() {
   $('subtitleSummary').innerHTML = [
     ['ASS 对话', `${a.dialogueCount} 条`],
     ['ASS 请求字体', `${a.requestedFonts.length} 个`],
+    ['实际字形使用', `${(a.fontUsage || []).reduce((sum, item) => sum + item.codePoints.length, 0)} 个去重码点`],
     ['可用字体 face', `${state.fontFaces.length} 个`],
+    ['静态字形覆盖', state.glyphCoverage.length
+      ? (staticGlyphWarningCount() ? `${staticGlyphWarningCount()} 组需确认` : '已覆盖')
+      : '无可核对文本'],
     ['常用字体库', `${state.savedFonts.length} 个文件`],
     ['预览采样点', `${a.previewTimes.length} 个`],
     ...mediaRows
@@ -2051,7 +2111,38 @@ function renderSubtitleSummary() {
     return `✗ ${escapeHtml(m.requested)} → 未在用户提供字体中找到，且当前没有可用内置回退字体`;
   }).join('<br>');
 
+  const glyphPartial = state.glyphCoverage.filter(item => item.status === 'partial');
+  const glyphUnknown = state.glyphCoverage.filter(item => item.status === 'unknown');
+
+  const glyphAuditRows = state.glyphCoverage.map(item => {
+    const faceLabel = item.face
+      ? (item.face.fullName || item.face.family || item.face.fileName)
+      : item.resolved || item.requested || '未知字体';
+    if (item.status === 'covered') {
+      return '<div class="glyph-audit-row ok"><strong>✓ ' + escapeHtml(item.requested) + '</strong><span>' +
+        escapeHtml(faceLabel) + ' · ' + item.codePointCount + ' 个实际码点均存在于 cmap</span></div>';
+    }
+    if (item.status === 'partial') {
+      return '<div class="glyph-audit-row warn"><strong>△ ' + escapeHtml(item.requested) + '</strong><span>' +
+        escapeHtml(faceLabel) + ' · 主字体缺少 ' + item.missingCodePoints.length + '/' + item.codePointCount +
+        ' 个实际码点：' + formatMissingGlyphs(item.missingCodePoints) + '</span></div>';
+    }
+    if (item.status === 'unknown') {
+      return '<div class="glyph-audit-row warn"><strong>? ' + escapeHtml(item.requested) + '</strong><span>' +
+        escapeHtml(faceLabel) + ' · 字体文件可识别，但 cmap 格式无法静态核对</span></div>';
+    }
+    return '<div class="glyph-audit-row muted"><strong>· ' + escapeHtml(item.requested) + '</strong><span>' +
+      escapeHtml(item.resolved || item.requested) + ' · 当前没有可读取 cmap 的实际字体文件；依赖 libass/fontconfig 运行时选择</span></div>';
+  }).join('');
+
   const notices = [];
+  if (glyphAuditRows) {
+    const auditClass = glyphPartial.length || glyphUnknown.length ? 'warning-box' : 'note';
+    notices.push('<div class="' + auditClass + ' glyph-audit" style="margin-top:12px"><strong>字形覆盖（cmap）</strong>' +
+      '<div class="glyph-audit-list">' + glyphAuditRows + '</div>' +
+      '<small>这里检查的是 ASS 实际 Dialogue 使用到的 Unicode 码点，并跟踪 Style、\\fn、\\r 与绘图模式。主字体缺字并不等于最终画面一定出现方块：libass 仍可能选择 fallback；真实预览和 fontselect 日志是下一层验证。</small></div>');
+  }
+
   if (state.media?.unsafeColorPipeline) {
     notices.push(`<div class="error-box" style="margin-top:12px">检测到 ${state.media.bitDepth}-bit / HDR 或高位深视频。当前版本尚未实现可靠的 10-bit/HDR 色彩保持，因此允许生成字幕预览，但会锁定编码测试与正式压制，避免静默转换成 8-bit/SDR。</div>`);
   }
@@ -2062,7 +2153,7 @@ function renderSubtitleSummary() {
     notices.push(`<div class="note" style="margin-top:12px">检测到奇数宽/高。x264 等 4:2:0 编码路径常会直接报 “width/height not divisible by 2”。正式压制会先按原始尺寸完成 libass 字幕渲染，再只在右侧/底部补最多 1 px，使输出成为 ${outW}×${outH}；不会缩放原画面或改变 ASS 坐标。</div>`);
   }
 
-  if (missing.length || probable.length) {
+  if (missing.length || probable.length || glyphPartial.length || glyphUnknown.length) {
     let bindingUi = '';
     if (state.fontFaces.length) {
       const risky = state.fontMatches
@@ -2101,7 +2192,7 @@ function renderSubtitleSummary() {
   $('fontWarnings').innerHTML = notices.join('');
   bindFontOverrideControls();
 
-  const fontRisk = missing.length + probable.length;
+  const fontRisk = missing.length + probable.length + glyphPartial.length + glyphUnknown.length;
   const mediaRisk = state.media?.unsafeColorPipeline ? 1 : 0;
   const decodeRisk = state.inputDecodeOk ? 0 : 1;
   const riskCount = fontRisk + mediaRisk + decodeRisk;
@@ -2175,6 +2266,7 @@ function bindFontOverrideControls() {
       state.acceptedWarnings = false;
       $('acceptWarnings').checked = false;
       $('preview').innerHTML = '<div class="preview-placeholder">字体映射已变化，请重新生成真实字幕预览。</div>';
+      await refreshGlyphCoverage();
       renderSubtitleSummary();
       refreshBenchmarkEnabled(false);
     }));
@@ -2233,8 +2325,12 @@ async function loadPreviewAt(index) {
     }
   }
 
-  const fontInfo = state.previewFontEvents[safeIndex]?.length
-    ? `<details class="note" style="padding:0 12px 12px"><summary>查看 libass 实际字体选择</summary><pre class="log" style="max-height:140px">${escapeHtml(state.previewFontEvents[safeIndex].join('\n'))}</pre></details>`
+  const fontEvents = state.previewFontEvents[safeIndex] || [];
+  const glyphFallbackEvents = fontEvents.filter(line => /Glyph .* not found|failed to find.*fallback/i.test(line));
+  const fontInfo = fontEvents.length
+    ? `<div>${glyphFallbackEvents.length
+        ? '<div class="warning-box" style="margin:0 12px 10px">libass 在此采样帧记录了 ' + glyphFallbackEvents.length + ' 条缺字/回退事件。它可能已经找到后备字体，请展开日志核对实际 fontselect 链。</div>'
+        : ''}<details class="note" style="padding:0 12px 12px"><summary>查看 libass 实际字体选择</summary><pre class="log" style="max-height:140px">${escapeHtml(fontEvents.join('\n'))}</pre></details></div>`
     : '<div class="note" style="text-align:center;padding:0 10px 10px">此帧未捕获到 fontselect 警告/记录。</div>';
 
   const activeEvents = getActiveDialogue(times[safeIndex]);
@@ -2306,7 +2402,9 @@ function workflowReadiness() {
     state.analyzedFontKey === currentFontKey() &&
     !!state.analyzedVideo && !!state.analyzedAss;
   const previewDone = state.previewUrls.some(Boolean);
-  const warnings = state.fontMatches.some(x => x.status !== 'matched');
+  const warnings =
+    state.fontMatches.some(x => x.status !== 'matched') ||
+    state.glyphCoverage.some(x => x.status === 'partial' || x.status === 'unknown');
   const unsafeColor = !!state.media?.unsafeColorPipeline;
   const rendered = state.previewVisualChange.some(v => v === true);
   const knownChecks = state.previewVisualChange.filter(v => v !== null);
