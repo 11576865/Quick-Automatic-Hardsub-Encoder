@@ -3169,6 +3169,397 @@ button.primary {
   }
 }
 
+
+/* Distinct presentation shells --------------------------------------------- */
+/* Desktop = information-dense workbench. Mobile = staged touch workflow.
+   Window-size classes only adapt inside the active shell. */
+.mobile-stage-nav {
+  display: none;
+}
+
+body.ui-desktop .workflow-main {
+  min-width: 0;
+}
+
+body.ui-desktop .setup-region {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.ui-desktop .production-region {
+  display: grid;
+  grid-template-columns: minmax(440px, .9fr) minmax(0, 1.1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+body.ui-desktop .preview-card {
+  position: sticky;
+  top: 12px;
+}
+
+body.ui-desktop .preflight-card .status-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+body.ui-desktop .plan-card .codec-plan-grid,
+body.ui-desktop .plan-card #codecGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+body.ui-mobile {
+  --mobile-bottom-safe: max(12px, env(safe-area-inset-bottom));
+}
+
+body.ui-mobile .app-shell {
+  width: 100%;
+  max-width: none;
+  padding: 0 10px calc(82px + var(--mobile-bottom-safe));
+}
+
+body.ui-mobile .app-header {
+  margin: 0 -10px;
+  padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+  border-inline: 0;
+  border-radius: 0;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb,var(--surface) 94%,transparent);
+  backdrop-filter: blur(16px);
+}
+
+body.ui-mobile .app-header-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+body.ui-mobile .app-mark,
+body.ui-mobile .hero-kicker,
+body.ui-mobile .hero-subtitle,
+body.ui-mobile .workflow-strip,
+body.ui-mobile .hero-state small {
+  display: none;
+}
+
+body.ui-mobile .app-brand {
+  gap: 0;
+}
+
+body.ui-mobile .app-header h1 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+body.ui-mobile .native-status-bar {
+  margin-top: 8px;
+  padding: 7px 9px;
+}
+
+body.ui-mobile .mobile-stage-nav {
+  position: fixed;
+  z-index: 80;
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: var(--mobile-bottom-safe);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 16px;
+  background: color-mix(in srgb,var(--surface) 96%,transparent);
+  box-shadow: 0 16px 44px rgb(0 0 0 / .42);
+  backdrop-filter: blur(18px);
+}
+
+body.ui-mobile .mobile-stage-nav button {
+  min-width: 0;
+  min-height: 48px;
+  padding: 5px 4px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  font-size: .68rem;
+}
+
+body.ui-mobile .mobile-stage-nav button span {
+  font: 700 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+body.ui-mobile .mobile-stage-nav button[aria-current="step"] {
+  background: color-mix(in srgb,var(--engine) 16%,var(--surface-2));
+  color: var(--text);
+}
+
+body.ui-mobile .mobile-stage-nav button:disabled {
+  opacity: .36;
+}
+
+body.ui-mobile .workspace-layout,
+body.ui-mobile .workflow-main,
+body.ui-mobile .setup-region,
+body.ui-mobile .production-region,
+body.ui-mobile .production-controls {
+  display: contents;
+}
+
+body.ui-mobile [data-mobile-stage-section] {
+  display: none !important;
+}
+
+body.ui-mobile[data-mobile-stage="setup"] [data-mobile-stage-section="setup"]:not(.hidden),
+body.ui-mobile[data-mobile-stage="preflight"] [data-mobile-stage-section="preflight"]:not(.hidden),
+body.ui-mobile[data-mobile-stage="plan"] [data-mobile-stage-section="plan"]:not(.hidden),
+body.ui-mobile[data-mobile-stage="encode"] [data-mobile-stage-section="encode"]:not(.hidden) {
+  display: block !important;
+}
+
+body.ui-mobile .card {
+  margin-top: 10px;
+  padding: 13px;
+  border-radius: 14px;
+}
+
+body.ui-mobile .card-heading {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+body.ui-mobile .card-heading h2 {
+  font-size: .92rem;
+}
+
+body.ui-mobile .card-heading p {
+  display: none;
+}
+
+body.ui-mobile .input-card > .grid.two {
+  display: grid;
+  grid-template-columns: 1fr !important;
+  gap: 8px;
+}
+
+body.ui-mobile .input-card .file-row {
+  padding: 11px;
+  min-height: 0;
+}
+
+body.ui-mobile .file-picker-trigger,
+body.ui-mobile .native-picker-button {
+  width: 100%;
+  min-height: 46px;
+}
+
+body.ui-mobile .input-engine {
+  display: none;
+}
+
+body.ui-mobile .input-card > .button-row {
+  position: sticky;
+  bottom: calc(68px + var(--mobile-bottom-safe));
+  z-index: 20;
+  margin: 12px -2px 0;
+  padding-top: 8px;
+  background: linear-gradient(to bottom,transparent,var(--bg) 30%);
+}
+
+body.ui-mobile #analyze {
+  width: 100%;
+  min-height: 50px;
+}
+
+body.ui-mobile .env-card {
+  padding: 0 12px;
+}
+
+body.ui-mobile .env-details > summary {
+  min-height: 48px;
+}
+
+body.ui-mobile .env-body {
+  max-height: none;
+}
+
+body.ui-mobile .env-card .status-list,
+body.ui-mobile .preflight-card .status-list {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+body.ui-mobile .preflight-card {
+  padding: 0 12px 12px;
+}
+
+body.ui-mobile .preflight-details > summary {
+  min-height: 54px;
+}
+
+body.ui-mobile .preflight-body {
+  max-height: none;
+  overflow: visible;
+  padding-top: 8px;
+}
+
+body.ui-mobile .preflight-card .status-item {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+}
+
+body.ui-mobile .preflight-card .status-item > span:last-child {
+  text-align: right;
+}
+
+body.ui-mobile .preview-card {
+  position: static;
+  padding: 0;
+  overflow: hidden;
+}
+
+body.ui-mobile .preview-card > .card-heading,
+body.ui-mobile .preview-card > .button-row,
+body.ui-mobile .preview-card > #warningAccept {
+  margin-inline: 12px;
+}
+
+body.ui-mobile .preview-card > .card-heading {
+  padding-top: 12px;
+}
+
+body.ui-mobile .preview-wrap {
+  width: 100%;
+  margin: 0;
+}
+
+body.ui-mobile .preview-image {
+  max-height: 44vh;
+  border-radius: 0;
+}
+
+body.ui-mobile .preview-nav {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  padding: 8px 10px;
+}
+
+body.ui-mobile .preview-nav #previewZoom {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+body.ui-mobile .plan-card {
+  margin-top: 10px;
+}
+
+body.ui-mobile .plan-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: visible;
+  gap: 5px;
+}
+
+body.ui-mobile .plan-mode-tab {
+  min-height: 52px;
+  padding: 7px 5px;
+}
+
+body.ui-mobile .plan-mode-tab small {
+  display: none;
+}
+
+body.ui-mobile .plan-controls {
+  display: block;
+}
+
+body.ui-mobile .plan-slider {
+  min-height: 38px;
+}
+
+body.ui-mobile .plan-slider-scale {
+  font-size: .62rem;
+}
+
+body.ui-mobile .codec-plan-grid,
+body.ui-mobile #codecGrid {
+  display: grid;
+  grid-template-columns: 1fr !important;
+  gap: 7px;
+}
+
+body.ui-mobile .codec-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 10px;
+  align-items: center;
+}
+
+body.ui-mobile .codec-card > button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 82px;
+  min-height: 44px;
+}
+
+body.ui-mobile .advanced-box,
+body.ui-mobile .plan-anchor {
+  font-size: .68rem;
+}
+
+body.ui-mobile .encode-card {
+  min-height: calc(100dvh - 150px);
+  display: flex !important;
+  flex-direction: column;
+}
+
+body.ui-mobile .encode-card .button-row {
+  margin-top: auto;
+  position: sticky;
+  bottom: calc(68px + var(--mobile-bottom-safe));
+  z-index: 20;
+  padding-top: 12px;
+  background: linear-gradient(to bottom,transparent,var(--surface) 32%);
+}
+
+body.ui-mobile #encodeBtn,
+body.ui-mobile #cancelEncodeBtn {
+  width: 100%;
+  min-height: 52px;
+}
+
+body.ui-mobile .log-card,
+body.ui-mobile .platform-rail {
+  display: none !important;
+}
+
+body.ui-mobile .preview-lightbox {
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+@media (orientation: landscape) and (max-height: 600px) {
+  body.ui-mobile[data-mobile-stage="plan"] .production-region {
+    display: grid;
+    grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr);
+    gap: 8px;
+  }
+
+  body.ui-mobile .preview-image {
+    max-height: 66vh;
+  }
+}
+
 /* Current adaptive window layout ------------------------------------------- */
 /* Window classes control composition. No device-name assumptions. */
 .app-shell {
