@@ -17,6 +17,9 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /id="videoNativePickerBtn"/);
   assert.match(main, /id="assNativePickerBtn"/);
   assert.match(main, /id="fontsNativePickerBtn"/);
+  assert.match(main, /id="videoWebPicker" class="file-picker-trigger"/);
+  assert.match(main, /id="assWebPicker" class="file-picker-trigger"/);
+  assert.match(main, /id="fontsWebPicker" class="file-picker-trigger"/);
   assert.match(main, /requestWindowsNativePicker/);
   assert.match(main, /nativePlatformName\(\) \+ ' 自检：'/);
   assert.match(main, /class="workspace-layout"/);
@@ -39,6 +42,13 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.native-status-bar\s*\{/);
   assert.match(css, /data-window-size="medium"\] \.input-card > \.grid\.two\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.native-picker-button\s*\{/);
+  assert.match(css, /\.file-input-control\s*\{/);
+  assert.match(css, /\.file-picker-trigger,/);
+  assert.match(css, /\.status-list\s*\{[\s\S]*?repeat\(auto-fit, minmax\(205px, 1fr\)\)/);
+  assert.match(css, /\.preview-wrap\s*\{[\s\S]*?max-width:\s*760px/);
+  assert.match(main, /<details class="card log-card">/);
+  assert.doesNotMatch(main, /data-range-step="quick"/);
+  assert.doesNotMatch(main, /data-range-reset="quick"/);
 
   assert.match(main, /selectedTests:\s*\{\}/);
   assert.match(main, /function restoreSelectedTestForCurrentPlan\(\)/);
