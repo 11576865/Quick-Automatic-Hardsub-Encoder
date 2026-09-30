@@ -33,9 +33,11 @@ const state = {
   glyphCoverage: [],
   media: null,
   engine: null,
+  webEngineInitPromise: null,
   capabilities: null,
   nativeBackend: null,
   nativeSelfTest: null,
+  nativeSelfTestStarted: false,
   nativeInputProbe: null,
   nativePreviewWaiters: new Map(),
   nativeSampleWaiters: new Map(),
@@ -88,11 +90,8 @@ app.innerHTML = `
     </div>
     <p id="heroSubtitle" class="hero-subtitle">ASS 预检、真实预览、参数测试与硬字幕压制。</p>
     <nav class="workflow-strip" aria-label="工作流程">
-      <span data-workflow-step="input"><b>01</b>输入</span>
-      <span data-workflow-step="preflight"><b>02</b>预检</span>
-      <span data-workflow-step="preview"><b>03</b>预览</span>
-      <span data-workflow-step="plan"><b>04</b>方案</span>
-      <span data-workflow-step="encode"><b>05</b>压制</span>
+      <span data-workflow-step="prepare"><b>01</b>准备</span>
+      <span data-workflow-step="produce"><b>02</b>制作</span>
     </nav>
     <div id="nativeStatusBar" class="native-status-bar hidden" aria-live="polite"></div>
   </header>
@@ -106,7 +105,7 @@ app.innerHTML = `
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
   <section id="inputCard" class="card input-card" data-mobile-stage-section="prepare">
-    <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
@@ -133,7 +132,7 @@ app.innerHTML = `
   <section id="envCard" class="card env-card" data-mobile-stage-section="prepare">
     <details id="envDetails" class="env-details">
       <summary>
-        <span class="env-heading">2. 运行环境</span>
+        <span class="env-heading">运行环境 · 诊断</span>
         <span id="envSummary" class="env-summary">检测中…</span>
       </summary>
       <div class="env-body">
@@ -147,7 +146,7 @@ app.innerHTML = `
   <section id="preflightCard" class="card preflight-card hidden" data-mobile-stage-section="prepare">
     <details id="preflightDetails" class="preflight-details">
       <summary>
-        <span class="preflight-heading">3. 媒体与字幕预检</span>
+        <span class="preflight-heading">媒体与字幕预检</span>
         <span id="preflightStatus" class="preflight-status">等待分析</span>
       </summary>
       <div class="preflight-body">
@@ -159,7 +158,7 @@ app.innerHTML = `
 
   <div class="adaptive-region production-region">
   <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">03</span><div><h2>字幕预览</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
+    <div class="card-heading"><span class="step-no">02</span><div><h2>预览与制作</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
 
     <div class="button-row">
       <button id="previewBtn" disabled>生成真实字幕预览</button>
@@ -170,7 +169,7 @@ app.innerHTML = `
 
   <div class="production-controls">
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>压制方案</h2><p>选择目标，再决定编码器。</p></div></div>
+    <div class="card-heading"><span class="step-no">•</span><div><h2>压制方案</h2><p>选择目标，再决定编码器。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -242,7 +241,7 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">05</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">•</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
@@ -363,6 +362,7 @@ function setMobileStage(stage, { scroll = true } = {}) {
   if (!MOBILE_STAGE_ORDER.includes(stage) || !mobileStageAvailable(stage)) return;
   document.body.dataset.mobileStage = stage;
   syncMobileStageNav();
+  if (stage === 'produce') ensureNativeSelfTestStarted();
   if (document.body.classList.contains('ui-mobile') && scroll) {
     const target = stage === 'prepare' ? $('inputCard') : $('subtitleCard');
     target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -462,7 +462,9 @@ async function runWebTask(task) {
     document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control => { control.disabled = false; });
     refreshAnalyze();
     refreshBenchmarkEnabled();
-    $('previewBtn').disabled = !state.assInfo?.previewTimes?.length || !state.inputDecodeOk;
+    $('previewBtn').disabled =
+      !state.assInfo?.previewTimes?.length ||
+      !(state.engine.ready || state.nativeBackend?.available);
     updateQualityCalibrationControls();
   }
 }
@@ -533,6 +535,10 @@ $('video').addEventListener('change', e => {
     } catch (error) {
       log(nativePlatformName() + ' 输入探测启动失败：' + error.message);
     }
+  }
+
+  if (state.video && !state.nativeBackend?.available) {
+    void ensureWebEngineReady().catch(() => {});
   }
 
   refreshAnalyze();
@@ -869,6 +875,68 @@ $('clearSavedFontsBtn').addEventListener('click', async () => {
 syncPlanModeUI();
 bootstrap();
 
+function ensureNativeSelfTestStarted() {
+  if (!state.nativeBackend?.available || state.nativeSelfTest || state.nativeSelfTestStarted) return;
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.runSelfTest) return;
+  state.nativeSelfTestStarted = true;
+  log(nativePlatformName() + '：开始按需验证编码器 / libass；预览仍可先进行。');
+  try {
+    bridge.runSelfTest();
+  } catch (error) {
+    state.nativeSelfTestStarted = false;
+    log(nativePlatformName() + ' 自检启动失败：' + error.message);
+  }
+}
+
+async function ensureWebEngineReady() {
+  if (state.engine.ready) return true;
+  if (state.webEngineInitPromise) return state.webEngineInitPromise;
+
+  state.webEngineInitPromise = (async () => {
+    $('engineHint').innerHTML = '<span class="note">正在按需加载 Web 压制核心…</span>';
+    const detailedCapabilitiesPromise = detectCapabilities()
+      .then(capabilities => {
+        state.capabilities = capabilities;
+        renderCapabilities();
+        updateEnvironmentSummary(state.engine.ready);
+      })
+      .catch(error => log('浏览器详细能力检测失败：' + error.message));
+
+    const engineStatus = await state.engine.init();
+    if (!engineStatus.ready) {
+      $('engineHint').innerHTML =
+        '<span class="warn">FFmpegKitNext Web 核心不可用。</span> 字幕文本仍可解析，但真实预览与压制不可用。';
+      updateEnvironmentSummary(false);
+      return false;
+    }
+
+    try {
+      [state.softwareEncoders, state.softwareDecoders] = await Promise.all([
+        state.engine.detectSoftwareEncoders(),
+        state.engine.detectSoftwareDecoders()
+      ]);
+      log(`WASM 软件编码器：x264=${state.softwareEncoders.h264} x265=${state.softwareEncoders.h265} SVT-AV1=${state.softwareEncoders.av1}`);
+      log(`WASM 软件解码器：dav1d=${state.softwareDecoders.av1Dav1d}`);
+    } catch (error) {
+      log('WASM 编解码器清单读取失败：' + error.message);
+    }
+
+    renderCapabilities();
+    updateEnvironmentSummary(true);
+    $('engineHint').innerHTML =
+      '<span class="ok">Web 压制核心已就绪。</span> 详细能力在需要时检测，不阻塞页面打开。';
+    void detailedCapabilitiesPromise;
+    return true;
+  })().catch(error => {
+    state.webEngineInitPromise = null;
+    log('Web 压制核心初始化失败：' + error.message);
+    throw error;
+  });
+
+  return state.webEngineInitPromise;
+}
+
 async function bootstrap() {
   await detectWindowsNativeBridge();
   detectNativeBackend();
@@ -907,38 +975,10 @@ async function bootstrap() {
     return;
   }
 
-  const detailedCapabilitiesPromise = detectCapabilities()
-    .then(capabilities => {
-      state.capabilities = capabilities;
-      renderCapabilities();
-      updateEnvironmentSummary(state.engine?.ready);
-    })
-    .catch(error => log('浏览器详细能力检测失败：' + error.message));
-
-  const engineStatus = await state.engine.init();
-  if (engineStatus.ready) {
-    try {
-      [state.softwareEncoders, state.softwareDecoders] = await Promise.all([
-        state.engine.detectSoftwareEncoders(),
-        state.engine.detectSoftwareDecoders()
-      ]);
-      log(`WASM 软件编码器：x264=${state.softwareEncoders.h264} x265=${state.softwareEncoders.h265} SVT-AV1=${state.softwareEncoders.av1}`);
-      log(`WASM 软件解码器：dav1d=${state.softwareDecoders.av1Dav1d}`);
-    } catch (e) {
-      log(`软件编码器检测失败：${e.message}`);
-    }
-    renderCapabilities();
-    updateEnvironmentSummary(true);
-    $('engineHint').innerHTML =
-      '<span class="ok">FFmpegKitNext Web 核心已加载。</span> FFmpeg WASM 与浏览器原生能力是两套独立路径。';
-  } else {
-    $('engineHint').innerHTML =
-      '<span class="warn">FFmpegKitNext Web 核心尚未放入 vendor。</span> 当前可使用文件/ASS/字体分析和浏览器能力检测；真实预览与压制按钮会保持关闭。';
-    $('envDetails').open = true;
-  }
-  updateEnvironmentSummary(engineStatus.ready);
+  $('engineHint').innerHTML =
+    '<span class="note">Web 压制核心按需加载。</span> 先选择视频与 ASS；大型 WASM 与详细编解码能力不会阻塞页面打开。';
+  updateEnvironmentSummary(false);
   refreshAnalyze();
-  void detailedCapabilitiesPromise;
 }
 
 function detectNativeBackend() {
@@ -1216,7 +1256,8 @@ function detectNativeBackend() {
       bridge.checkForUpdate();
     }
 
-    if (bridge.runSelfTest) {
+    if (bridge.runSelfTest && state.nativeBackend?.backend === 'windows-native') {
+      state.nativeSelfTestStarted = true;
       bridge.runSelfTest();
     }
   } catch (error) {
@@ -1927,7 +1968,7 @@ function refreshAnalyze() {
   const hasFiles = !!(state.video && state.ass);
   if (state.operationBusy) { $('analyze').disabled = true; return; }
   if (state.nativeBackend?.available) {
-    $('analyze').disabled = !(hasFiles && state.nativeInputProbe?.ok && state.nativeSelfTest);
+    $('analyze').disabled = !(hasFiles && state.nativeInputProbe?.ok);
     return;
   }
   $('analyze').disabled = !(hasFiles && state.video.size <= MAX_BYTES);
@@ -1936,6 +1977,10 @@ function refreshAnalyze() {
 async function analyzeAll() {
   try {
     invalidateAnalysis();
+    if (!state.nativeBackend?.available) {
+      const ready = await ensureWebEngineReady();
+      if (!ready) throw new Error('Web 压制核心不可用');
+    }
     $('analyze').disabled = true;
     log('开始分析 ASS 和字体…');
     const decodedAss = await decodeAssFile(state.ass);
@@ -1954,11 +1999,16 @@ async function analyzeAll() {
     if (state.nativeBackend?.available && state.savedFonts.length) {
       log('Native 正式压制只直接使用本次通过系统文件选择器选中的字体；浏览器常用字体库暂不传入 Native 服务。');
     }
-    state.fontFaces = [];
-    for (const file of state.effectiveFonts) {
-      try { state.fontFaces.push(...await inspectFontFile(file)); }
-      catch (e) { log(`字体 ${file.name} 解析失败：${e.message}`); }
-    }
+    const inspectedFontFaces = await Promise.all(
+      state.effectiveFonts.map(async file => {
+        try { return await inspectFontFile(file); }
+        catch (e) {
+          log(`字体 ${file.name} 解析失败：${e.message}`);
+          return [];
+        }
+      })
+    );
+    state.fontFaces = inspectedFontFaces.flat();
     state.fontMatches = matchRequestedFonts(state.assInfo.requestedFonts, state.fontFaces);
 
     if (!state.nativeBackend?.available && state.engine.ready) {
@@ -1981,42 +2031,18 @@ async function analyzeAll() {
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps · ${state.media.pixelFormat || '未知像素格式'} · ${state.media.bitDepth}-bit`);
 
-      const smokeTime = Math.max(0, Math.min(state.media.duration * 0.1, 1));
-
-      if (state.media.videoCodec === 'av1') {
-        log('AV1 输入：直接执行 dav1d 真实 1 帧解码测试…');
-        try {
-          await state.engine.testDav1dInput(smokeTime);
-          state.softwareDecoders.av1Dav1d = true;
-          renderCapabilities();
-          updateEnvironmentSummary(true);
-          log('dav1d 实际解码通过。');
-        } catch (dav1dError) {
-          state.softwareDecoders.av1Dav1d = false;
-          renderCapabilities();
-          updateEnvironmentSummary(true);
-          const nativeAv1 = !!state.capabilities?.codecs?.decode?.av1;
-          const nativeHint = nativeAv1
-            ? '浏览器的 WebCodecs AV1 解码可用，但当前正式压制流水线尚未接入该通道。'
-            : '浏览器也没有通过 WebCodecs 暴露 AV1 解码能力。';
-          throw new Error(`dav1d 实际解码测试失败：${dav1dError.message}。${nativeHint}`);
-        }
-      } else {
-        log('执行输入解码 smoke test（只解码 1 帧）…');
-        await state.engine.testInputDecode(smokeTime);
+      if (state.media.videoCodec === 'av1' && state.softwareDecoders.av1Dav1d === false) {
+        throw new Error('当前 Web 核心没有可用的 dav1d AV1 解码器');
       }
-
-      state.inputDecodeOk = true;
-      log('输入视频解码测试通过。');
+      state.inputDecodeOk = false;
+      log('媒体元数据已读取；首张真实字幕预览将同时完成输入解码验证。');
     } else if (state.nativeBackend?.available) {
       const p = state.nativeInputProbe;
       if (!p?.ok) throw new Error(p?.error || 'Android Native 输入探测尚未完成');
       state.media = mediaFromNativeProbe(p);
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
-      if (!p.inputDecodeSmoke) {
-        throw new Error('Native 输入视频 1 帧实际解码测试失败：' + (p.inputDecodeError || '未知错误'));
-      }
-      state.inputDecodeOk = true;
+      state.inputDecodeOk = false;
+      log('Native 媒体元数据已读取；首张真实字幕预览将同时完成输入解码验证。');
 
       const androidNative = state.nativeBackend?.backend === 'android-native';
       if (androidNative && state.nativeSelfTest?.bundledFallbackReady && !state.effectiveFonts.length) {
@@ -2455,6 +2481,10 @@ async function loadPreviewAt(index) {
       previewResult = await state.engine.renderPreview(times[safeIndex], safeIndex, previewAss);
     }
     state.previewUrls[safeIndex] = previewResult.url;
+    if (!state.inputDecodeOk) {
+      state.inputDecodeOk = true;
+      log('首张真实预览已成功解码输入视频；输入解码验证通过。');
+    }
     state.previewBaseUrls[safeIndex] = previewResult.baseUrl || null;
     state.previewFontEvents[safeIndex] = previewResult.fontEvents || [];
     state.previewFontDiagnostics[safeIndex] = parseLibassFontDiagnostics(state.previewFontEvents[safeIndex]);
