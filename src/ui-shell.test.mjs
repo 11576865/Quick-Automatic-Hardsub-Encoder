@@ -52,7 +52,9 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /data-mobile-stage-target="produce"/);
   assert.equal((main.match(/data-mobile-stage-target="/g) || []).length, 2);
   assert.match(main, /function devicePrefersMobileShell\(\)/);
-  assert.match(main, /document\.body\.classList\.toggle\('ui-mobile', mobile\)/);
+  assert.match(main, /document\.body\.classList\.add\('ui-mobile'\)/);
+  assert.match(main, /document\.body\.classList\.remove\('ui-desktop'\)/);
+  assert.doesNotMatch(main, /classList\.toggle\('ui-mobile'/);
   assert.match(main, /function setMobileStage\(stage/);
   assert.match(css, /body\.ui-desktop \.production-region/);
   assert.match(css, /body\.ui-mobile \.mobile-stage-nav/);
@@ -150,17 +152,11 @@ test('web shell keeps platform guidance but uses compact native workbench layout
 });
 
 
-test('desktop shell reuses mobile visual language without copying mobile staged behavior', async () => {
-  const css = await readFile(new URL('./style.css', import.meta.url), 'utf8');
+test('desktop and mobile use the exact same canonical task shell', async () => {
+  const main = await readFile(new URL('./main.js', import.meta.url), 'utf8');
 
-  assert.match(css, /Desktop visual parity with mobile v3/);
-  assert.match(css, /body\.ui-desktop \{[\s\S]*--desktop-sky: #55b9ff/);
-  assert.match(css, /body\.ui-desktop \.workflow-strip \{[\s\S]*grid-template-columns: repeat\(2,minmax\(0,1fr\)\)/);
-  assert.match(css, /body\.ui-desktop \.setup-region \{[\s\S]*clamp\(280px,22vw,340px\)/);
-  assert.match(css, /body\.ui-desktop \.input-video \.[\s\S]*file-picker-trigger/);
-  assert.match(css, /body\.ui-desktop \.production-region \{[\s\S]*minmax\(500px,\.96fr\)/);
-  assert.match(css, /body\.ui-desktop \.preview-card \{[\s\S]*rgba\(183,154,255/);
-  assert.match(css, /body\.ui-desktop #analyze \{[\s\S]*#67c5ff/);
-  assert.match(css, /body\.ui-desktop #encodeBtn \{[\s\S]*#83df77/);
-  assert.match(css, /@media \(max-width: 1180px\)/);
+  assert.match(main, /function devicePrefersMobileShell\(\) \{[\s\S]*return true;/);
+  assert.match(main, /document\.body\.classList\.add\('ui-mobile'\)/);
+  assert.match(main, /document\.body\.classList\.remove\('ui-desktop'\)/);
+  assert.match(main, /document\.documentElement\.dataset\.uiShell = 'mobile'/);
 });

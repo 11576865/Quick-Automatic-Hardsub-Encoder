@@ -388,19 +388,15 @@ function applyWindowSizeClass() {
 const MOBILE_STAGE_ORDER = ['prepare', 'produce'];
 
 function devicePrefersMobileShell() {
-  if (state.nativeBackend?.backend === 'android-native') return true;
-  if (state.nativeBackend?.backend === 'windows-native') return false;
-  if (navigator.userAgentData?.mobile === true) return true;
-  if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) return true;
-  return window.matchMedia?.('(pointer: coarse) and (hover: none)')?.matches === true &&
-    Math.min(screen.width || window.innerWidth, screen.height || window.innerHeight) <= 1024;
+  // The phone task shell is now the canonical UI on every platform.
+  // Keep the function name for compatibility with existing tests/helpers.
+  return true;
 }
 
 function applyPresentationShell() {
-  const mobile = devicePrefersMobileShell();
-  document.body.classList.toggle('ui-mobile', mobile);
-  document.body.classList.toggle('ui-desktop', !mobile);
-  document.documentElement.dataset.uiShell = mobile ? 'mobile' : 'desktop';
+  document.body.classList.add('ui-mobile');
+  document.body.classList.remove('ui-desktop');
+  document.documentElement.dataset.uiShell = 'mobile';
   if (!document.body.dataset.mobileStage) document.body.dataset.mobileStage = 'prepare';
   syncMobileStageNav();
 }
