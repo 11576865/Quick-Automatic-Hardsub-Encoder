@@ -66,6 +66,23 @@ export function parseAss(text) {
 
 function collectAssFontUsage(dialogue, styles) {
   const usage = new Map();
+
+  for (const event of dialogue) {
+    const eventUsage = collectEventFontUsage(event, styles);
+    for (const [fontName, codePoints] of eventUsage) {
+      let set = usage.get(fontName);
+      if (!set) usage.set(fontName, set = new Set());
+      for (const cp of codePoints) set.add(cp);
+    }
+  }
+
+  return [...usage.entries()]
+    .map(([fontName, set]) => ({ fontName, codePoints: [...set].sort((a, b) => a - b) }))
+    .sort((a, b) => a.fontName.localeCompare(b.fontName));
+}
+
+function collectEventFontUsage(event, styles) {
+  const usage = new Map();
   const styleEntries = [...styles.entries()];
   const defaultStyle = styles.get('Default') || styleEntries[0]?.[1] || null;
 
@@ -87,55 +104,142 @@ function collectAssFontUsage(dialogue, styles) {
     set.add(cp);
   };
 
-  for (const event of dialogue) {
-    const baseStyle = resolveStyle(event.style);
-    let activeStyle = baseStyle;
-    let activeFont = String(activeStyle?.fontname || '').trim();
-    let drawingMode = 0;
-    const text = String(event.text || '');
-    let cursor = 0;
+  const baseStyle = resolveStyle(event?.style);
+  let activeStyle = baseStyle;
+  let activeFont = String(activeStyle?.fontname || '').trim();
+  let drawingMode = 0;
+  const text = String(event?.text || '');
+  let cursor = 0;
 
-    while (cursor < text.length) {
-      const open = text.indexOf('{', cursor);
-      if (open < 0) {
-        if (drawingMode <= 0) addAssTextSegment(text.slice(cursor), activeFont, addCodePoint);
-        break;
+  while (cursor < text.length) {
+    const open = text.indexOf('{', cursor);
+    if (open < 0) {
+      if (drawingMode <= 0) addAssTextSegment(text.slice(cursor), activeFont, addCodePoint);
+      break;
+    }
+
+    if (open > cursor && drawingMode <= 0) {
+      addAssTextSegment(text.slice(cursor, open), activeFont, addCodePoint);
+    }
+
+    const close = text.indexOf('}', open + 1);
+    if (close < 0) {
+      if (drawingMode <= 0) addAssTextSegment(text.slice(open), activeFont, addCodePoint);
+      break;
+    }
+
+    const block = text.slice(open + 1, close);
+    const tagPattern = /\\(fn|r|p(?=[\s+-]?\d|\\|}|$))([^\\}]*)/gi;
+    let match;
+    while ((match = tagPattern.exec(block))) {
+      const tag = match[1].toLowerCase();
+      const arg = String(match[2] || '').trim();
+      if (tag === 'fn') {
+        activeFont = arg || String(activeStyle?.fontname || '').trim();
+      } else if (tag === 'r') {
+        activeStyle = arg ? resolveStyle(arg) : baseStyle;
+        activeFont = String(activeStyle?.fontname || '').trim();
+        drawingMode = 0;
+      } else if (tag === 'p') {
+        const value = Number.parseInt(arg, 10);
+        drawingMode = Number.isFinite(value) ? Math.max(0, value) : 0;
       }
+    }
+    cursor = close + 1;
+  }
 
-      if (open > cursor && drawingMode <= 0) {
-        addAssTextSegment(text.slice(cursor, open), activeFont, addCodePoint);
-      }
+  return usage;
+}
 
-      const close = text.indexOf('}', open + 1);
-      if (close < 0) {
-        if (drawingMode <= 0) addAssTextSegment(text.slice(open), activeFont, addCodePoint);
-        break;
-      }
+function normalizeRiskFontName(value = '') {
+  return String(value).normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
-      const block = text.slice(open + 1, close);
-      const tagPattern = /\\(fn|r|p(?=[\s+-]?\d|\\|}|$))([^\\}]*)/gi;
-      let match;
-      while ((match = tagPattern.exec(block))) {
-        const tag = match[1].toLowerCase();
-        const arg = String(match[2] || '').trim();
-        if (tag === 'fn') {
-          activeFont = arg || String(activeStyle?.fontname || '').trim();
-        } else if (tag === 'r') {
-          activeStyle = arg ? resolveStyle(arg) : baseStyle;
-          activeFont = String(activeStyle?.fontname || '').trim();
-          drawingMode = 0;
-        } else if (tag === 'p') {
-          const value = Number.parseInt(arg, 10);
-          drawingMode = Number.isFinite(value) ? Math.max(0, value) : 0;
+export function findGlyphRiskPreviewTimes(assInfo, glyphCoverage, limit = 6) {
+  const max = Math.max(0, Math.min(12, Number(limit) || 0));
+  if (!max || !assInfo?.styles || !Array.isArray(assInfo?.events)) return [];
+
+  const riskByFont = new Map();
+  for (const item of Array.isArray(glyphCoverage) ? glyphCoverage : []) {
+    if (!['partial', 'unknown', 'unresolved'].includes(item?.status)) continue;
+    const font = normalizeRiskFontName(item.requested || item.resolved || '');
+    if (!font) continue;
+    riskByFont.set(font, {
+      status: item.status,
+      missing: new Set((item.missingCodePoints || []).filter(Number.isInteger))
+    });
+  }
+  if (!riskByFont.size) return [];
+
+  const candidates = [];
+  for (const event of assInfo.events) {
+    if (event?.kind?.toLowerCase() !== 'dialogue' || !Number.isFinite(event.startSeconds)) continue;
+    const eventUsage = collectEventFontUsage(event, assInfo.styles);
+    const tokens = new Set();
+    let score = 0;
+
+    for (const [fontName, codePoints] of eventUsage) {
+      const normalized = normalizeRiskFontName(fontName);
+      const risk = riskByFont.get(normalized);
+      if (!risk) continue;
+
+      if (risk.status === 'partial') {
+        for (const cp of codePoints) {
+          if (!risk.missing.has(cp)) continue;
+          tokens.add(normalized + ':' + cp.toString(16));
+          score += 4;
         }
+      } else if (codePoints.size) {
+        tokens.add(normalized + ':*');
+        score += risk.status === 'unresolved' ? 3 : 2;
       }
-      cursor = close + 1;
+    }
+
+    if (tokens.size) {
+      candidates.push({
+        time: midpoint(event),
+        tokens,
+        score,
+        start: event.startSeconds
+      });
     }
   }
 
-  return [...usage.entries()]
-    .map(([fontName, set]) => ({ fontName, codePoints: [...set].sort((a, b) => a - b) }))
-    .sort((a, b) => a.fontName.localeCompare(b.fontName));
+  const chosen = [];
+  const covered = new Set();
+  const remaining = [...candidates];
+
+  while (chosen.length < max && remaining.length) {
+    let bestIndex = -1;
+    let bestGain = -1;
+    let bestScore = -1;
+    let bestStart = Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const candidate = remaining[i];
+      let gain = 0;
+      for (const token of candidate.tokens) if (!covered.has(token)) gain++;
+      if (
+        gain > bestGain ||
+        (gain === bestGain && candidate.score > bestScore) ||
+        (gain === bestGain && candidate.score === bestScore && candidate.start < bestStart)
+      ) {
+        bestIndex = i;
+        bestGain = gain;
+        bestScore = candidate.score;
+        bestStart = candidate.start;
+      }
+    }
+
+    if (bestIndex < 0 || bestGain <= 0) break;
+    const [best] = remaining.splice(bestIndex, 1);
+    chosen.push(best.time);
+    for (const token of best.tokens) covered.add(token);
+  }
+
+  return [...new Set(
+    chosen.map(v => Math.max(0, Math.round(v * 100) / 100))
+  )].sort((a, b) => a - b).slice(0, max);
 }
 
 function addAssTextSegment(segment, fontName, addCodePoint) {
