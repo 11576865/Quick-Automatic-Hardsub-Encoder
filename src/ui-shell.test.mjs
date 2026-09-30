@@ -46,6 +46,11 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.status-list\s*\{[\s\S]*?repeat\(auto-fit, minmax\(205px, 1fr\)\)/);
   assert.match(css, /\.preview-wrap\s*\{[\s\S]*?max-width:\s*760px/);
   assert.match(main, /<details class="card log-card">/);
+  assert.match(main, /id="previewLightbox" class="preview-lightbox"/);
+  assert.match(main, /id="previewZoom"/);
+  assert.match(main, /class="preview-image"/);
+  assert.match(css, /\.preview-lightbox\s*\{/);
+  assert.match(css, /\.preflight-card \.status-list\s*\{[\s\S]*?display:\s*flex/);
   assert.doesNotMatch(main, /data-range-step="quick"/);
   assert.doesNotMatch(main, /data-range-reset="quick"/);
 
