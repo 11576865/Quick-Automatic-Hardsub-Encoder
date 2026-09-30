@@ -190,7 +190,7 @@ app.innerHTML = `
           <div class="plan-slider-scale"><span>更快</span><span>均衡</span><span>更精细</span></div>
           <div class="plan-value-row">
             <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="-1" aria-label="降低预设倾向">−</button>
-            <div id="quickPresetDetail" class="plan-value-detail">AV1 使用独立参数尺度；测试结果按实际编码器报告。</div>
+            <div id="quickPresetDetail" class="plan-value-detail"></div>
             <button type="button" class="range-step plan-interaction" data-range-step="quick" data-delta="1" aria-label="提高预设倾向">＋</button>
             <button type="button" class="range-reset plan-interaction" data-range-reset="quick">默认</button>
           </div>
