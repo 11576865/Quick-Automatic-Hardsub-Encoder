@@ -81,7 +81,6 @@ app.innerHTML = `
       </div>
       <div class="hero-tools">
         <div class="theme-control" id="themeControl" aria-label="界面主题">
-          <button type="button" data-theme-choice="light" aria-pressed="false">白天</button>
           <button type="button" data-theme-choice="dark" aria-pressed="false">夜间</button>
           <button type="button" data-theme-choice="system" aria-pressed="false">系统</button>
         </div>
@@ -89,13 +88,14 @@ app.innerHTML = `
       </div>
     </div>
     <div class="workflow-strip" aria-label="工作流程">
-      <span>01 输入</span><span>02 预检</span><span>03 预览</span><span>04 方案</span><span>05 压制</span>
+      <span>01 输入</span><span>02 环境 / 预检</span><span>03 预览</span><span>04 方案</span><span>05 压制</span>
     </div>
     <div id="nativeStatusBar" class="native-status-bar hidden" aria-live="polite"></div>
   </header>
 
   <div class="workspace-layout">
     <main class="workflow-main">
+  <div class="adaptive-region setup-region">
   <section class="card input-card">
     <div class="card-heading"><span class="step-no">01</span><div><h2>选择文件</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
     <div class="grid two">
@@ -132,6 +132,7 @@ app.innerHTML = `
       </div>
     </details>
   </section>
+  </div>
 
   <section id="preflightCard" class="card preflight-card hidden">
     <details id="preflightDetails" class="preflight-details">
@@ -146,8 +147,9 @@ app.innerHTML = `
     </details>
   </section>
 
+  <div class="adaptive-region production-region">
   <section id="subtitleCard" class="card preview-card hidden">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>字幕预览</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
+    <div class="card-heading"><span class="step-no">03</span><div><h2>字幕预览</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
 
     <div class="button-row">
       <button id="previewBtn" disabled>生成真实字幕预览</button>
@@ -156,8 +158,9 @@ app.innerHTML = `
     <div id="warningAccept" class="hidden" style="margin-top:12px"><label><input type="checkbox" id="acceptWarnings"> 已查看预览，接受当前字体回退/缺失警告并继续。</label></div>
   </section>
 
+  <div class="production-controls">
   <section id="planCard" class="card plan-card hidden">
-    <div class="card-heading"><span class="step-no">05</span><div><h2>选择压制方案</h2><p>质量、速度、体积预算与实测校准统一在这里完成。</p></div></div>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>选择压制方案</h2><p>质量、速度、体积预算与实测校准统一在这里完成。</p></div></div>
     <p class="note section-note">体积约束模式按目标码率控制；质量模式使用 CRF/CQ。测试片段只用于看画质、字幕和当前设备速度。</p>
 
     <input id="encodeGoal" type="hidden" value="balanced">
@@ -245,7 +248,7 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden">
-    <div class="card-heading"><span class="step-no">06</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">05</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
@@ -253,6 +256,9 @@ app.innerHTML = `
     </div>
     <div class="progress"><div id="progressBar"></div></div>
   </section>
+
+  </div>
+  </div>
 
   <section class="card log-card">
     <div class="card-heading"><span class="step-no">LOG</span><div><h2>技术日志</h2><p>设备检测、字体匹配、FFmpeg 与任务状态。</p></div></div>
@@ -314,10 +320,11 @@ const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 let themePreference = localStorage.getItem(THEME_KEY)
   || document.documentElement.dataset.themePreference
   || 'system';
+if (themePreference === 'light') themePreference = 'system';
 
 function resolvedTheme(preference = themePreference) {
   if (preference === 'system') return systemThemeQuery.matches ? 'dark' : 'light';
-  return preference === 'light' ? 'light' : 'dark';
+  return 'dark';
 }
 
 function updateThemeMeta(theme) {
@@ -333,7 +340,7 @@ function updateThemeButtons() {
 }
 
 function applyTheme(preference, { persist = true } = {}) {
-  themePreference = ['light', 'dark', 'system'].includes(preference) ? preference : 'system';
+  themePreference = ['dark', 'system'].includes(preference) ? preference : 'system';
   if (persist) localStorage.setItem(THEME_KEY, themePreference);
   const theme = resolvedTheme(themePreference);
   document.documentElement.dataset.theme = theme;
@@ -351,6 +358,24 @@ const onSystemThemeChange = () => {
 if (systemThemeQuery.addEventListener) systemThemeQuery.addEventListener('change', onSystemThemeChange);
 else if (systemThemeQuery.addListener) systemThemeQuery.addListener(onSystemThemeChange);
 applyTheme(themePreference, { persist: false });
+
+const WINDOW_SIZE_CLASS = Object.freeze({
+  compactMax: 719,
+  mediumMax: 1099
+});
+
+function resolveWindowSizeClass(width = window.innerWidth) {
+  if (width <= WINDOW_SIZE_CLASS.compactMax) return 'compact';
+  if (width <= WINDOW_SIZE_CLASS.mediumMax) return 'medium';
+  return 'expanded';
+}
+
+function applyWindowSizeClass() {
+  document.documentElement.dataset.windowSize = resolveWindowSizeClass();
+}
+
+applyWindowSizeClass();
+window.addEventListener('resize', applyWindowSizeClass, { passive: true });
 
 const log = msg => { $('log').textContent += `${msg}\n`; $('log').scrollTop = $('log').scrollHeight; };
 state.engine = new EncoderEngine(log);
