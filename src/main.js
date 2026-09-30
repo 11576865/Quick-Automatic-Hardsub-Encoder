@@ -107,6 +107,35 @@ app.innerHTML = `
     </button>
   </nav>
 
+  <details class="mobile-runtime-help">
+    <summary>本机运行帮助 <span>可选</span></summary>
+    <div class="mobile-runtime-help-body">
+      <section>
+        <strong>Android App</strong>
+        <ol>
+          <li>下载最新版 APK；若系统拦截，按提示允许当前来源安装。</li>
+          <li>安装后打开 App，用系统文件选择器选择视频、ASS 与字体。</li>
+          <li>长任务由前台服务持有，可从通知栏查看进度或取消。</li>
+        </ol>
+        <div class="runtime-help-actions">
+          <a class="runtime-help-link" href="${APP_DOWNLOAD_FALLBACK}">下载 APK</a>
+        </div>
+      </section>
+      <section>
+        <strong>Windows 本地运行</strong>
+        <ol>
+          <li>下载源码 ZIP 并完整解压。</li>
+          <li>确认 FFmpeg 可用；缺少时可用 WinGet 安装 Gyan.FFmpeg。</li>
+          <li>双击 <code>windows/start_windows.bat</code>，浏览器会自动连接本机 Bridge。</li>
+        </ol>
+        <div class="runtime-help-actions">
+          <a class="runtime-help-link" href="${WINDOWS_SOURCE_ZIP}">下载源码</a>
+          <a class="runtime-help-link" href="${WINDOWS_DOC_URL}" target="_blank" rel="noreferrer">详细说明</a>
+        </div>
+      </section>
+    </div>
+  </details>
+
   <div class="workspace-layout">
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
@@ -277,6 +306,15 @@ app.innerHTML = `
           <a class="button-link platform-primary-link" href="${WINDOWS_SOURCE_ZIP}">下载 Windows 源码包</a>
           <a class="button-link" href="${WINDOWS_DOC_URL}" target="_blank" rel="noreferrer">运行说明</a>
         </div>
+        <details class="platform-guide">
+          <summary>第一次使用？3 步启动</summary>
+          <ol>
+            <li>下载 ZIP 后完整解压，不要直接在压缩包内运行。</li>
+            <li>确认 FFmpeg 可用；没有时在 PowerShell 运行 <code>winget install --id Gyan.FFmpeg -e --source winget</code>。</li>
+            <li>双击 <code>windows/start_windows.bat</code>。它会启动 localhost Bridge 并自动打开当前界面。</li>
+          </ol>
+          <p>若启动失败，再使用 <code>windows/start_windows_debug.bat</code> 查看控制台错误。</p>
+        </details>
       </section>
 
       <section id="androidAppCard" class="card app-card">
@@ -290,6 +328,15 @@ app.innerHTML = `
           <button id="checkAppUpdateBtn" class="hidden" type="button">检查更新</button>
         </div>
         <div id="appUpdateNotice" class="note app-update-notice">Android 浏览器可直接拉起已安装的 App；未安装时回退到 APK 下载。</div>
+        <details class="platform-guide">
+          <summary>第一次使用？3 步安装</summary>
+          <ol>
+            <li>下载最新版 APK；若 Android 阻止安装，按系统提示允许当前浏览器或文件管理器安装此来源的应用。</li>
+            <li>安装后打开“硬字幕压制”，通过系统文件选择器选择视频、ASS 和可选字体。</li>
+            <li>开始正式压制后可离开当前页面；前台服务会持有任务，并在通知栏显示进度与取消入口。</li>
+          </ol>
+          <p>更新使用同一包名 <code>io.github.quickhardsub</code>；正常更新不需要先卸载旧版。</p>
+        </details>
       </section>
     </aside>
   </div>
