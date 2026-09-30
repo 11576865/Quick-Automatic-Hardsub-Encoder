@@ -183,7 +183,7 @@ app.innerHTML = `
       </button>
     </div>
 
-    <div class="grid two plan-controls">
+    <div class="plan-controls">
       <div class="plan-mode-stack">
         <div id="quickPlanPanel" class="plan-mode-panel" data-plan-panel="quick">
           <div class="plan-slider-head"><div><strong>预设倾向</strong></div><output id="quickPresetValue" class="plan-slider-value">均衡</output></div>
@@ -218,8 +218,8 @@ app.innerHTML = `
           <div id="sizeBudgetDetail" class="plan-value-detail plan-slider-feedback">选择视频后显示对应的实际字节上限。</div>
         </div>
       </div>
-      <div id="sourceAnchor" class="plan-anchor note">分析后显示源片锚点。</div>
     </div>
+    <div id="sourceAnchor" class="plan-anchor note">分析后显示源片锚点。</div>
     <div id="codecPlanGrid" class="grid three codec-plan-grid" style="margin-top:14px"></div>
     <div id="chosenSummary" class="note plan-summary">请选择一个编码器。</div>
 
@@ -280,6 +280,15 @@ app.innerHTML = `
       </section>
     </aside>
   </div>
+  <dialog id="previewLightbox" class="preview-lightbox" aria-label="字幕预览放大">
+    <div class="preview-lightbox-bar">
+      <strong id="previewLightboxTitle">字幕预览</strong>
+      <button id="previewLightboxClose" type="button" aria-label="关闭放大预览">关闭</button>
+    </div>
+    <div class="preview-lightbox-stage">
+      <img id="previewLightboxImage" alt="放大的字幕预览">
+    </div>
+  </dialog>
 </div>`;
 
 const $ = id => document.getElementById(id);
@@ -1705,7 +1714,7 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
       const ready = !!(t?.ffprobeSmoke && t?.libassVisualSmoke && (t?.x264EncodeSmoke || t?.x265EncodeSmoke || t?.svtAv1EncodeSmoke));
       $('envSummary').textContent = ready ? 'Windows Native 环境正常' : 'Windows Native 环境需要检查 · 点此查看';
       $('envSummary').className = ready ? 'env-summary ok' : 'env-summary warn';
-      if (!ready) $('envDetails').open = true;
+      $('envDetails').open = !ready;
       return;
     }
     if (!t) {
@@ -1726,7 +1735,7 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
       ? '原生环境正常'
       : '原生环境需要检查 · 点此查看';
     $('envSummary').className = nativeOk ? 'env-summary ok' : 'env-summary warn';
-    if (!nativeOk) $('envDetails').open = true;
+    $('envDetails').open = !nativeOk;
     return;
   }
 
@@ -1758,7 +1767,8 @@ function updateEnvironmentSummary(engineReady = state.engine?.ready) {
       : '';
 
   $('envSummary').textContent = `核心已加载 · ${available || '编码器检测中'}${dav1d}`;
-  $('envSummary').className = 'env-summary';
+  $('envSummary').className = 'env-summary ok';
+  $('envDetails').open = false;
 }
 
 function fontFileKey(file) {
@@ -2317,6 +2327,30 @@ async function renderPreviews() {
   }
 }
 
+function openPreviewLightbox(url, index, time) {
+  const dialog = $('previewLightbox');
+  const image = $('previewLightboxImage');
+  if (!dialog || !image || !url) return;
+  image.src = url;
+  $('previewLightboxTitle').textContent =
+    '字幕预览 · ' + (Number(index) + 1) + '/' + state.previewTimes.length +
+    ' · ' + Number(time).toFixed(2) + 's';
+  if (typeof dialog.showModal === 'function') dialog.showModal();
+  else dialog.setAttribute('open', '');
+}
+
+function closePreviewLightbox() {
+  const dialog = $('previewLightbox');
+  if (!dialog) return;
+  if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+  else dialog.removeAttribute('open');
+}
+
+$('previewLightboxClose')?.addEventListener('click', closePreviewLightbox);
+$('previewLightbox')?.addEventListener('click', event => {
+  if (event.target === $('previewLightbox')) closePreviewLightbox();
+});
+
 async function loadPreviewAt(index) {
   const times = state.previewTimes;
   if (!times.length) return;
@@ -2380,7 +2414,7 @@ async function loadPreviewAt(index) {
          <details class="note" style="padding:0 12px 10px"><summary>查看无字幕底图</summary><img src="${state.previewBaseUrls[safeIndex] || ''}" alt="无字幕底图" style="width:100%;margin-top:8px;border-radius:8px"></details>`
       : '<div class="warning-box" style="margin:0 12px 10px">浏览器无法自动完成像素差校验，请人工确认预览中确实出现了字幕。</div>';
 
-  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s ${riskBadge}</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">已知字体风险采样点会自动生成并验证；其余常规采样点仍在翻页时按需生成。</div>${fontInfo}</div>`;
+  container.innerHTML = `<div style="width:100%"><img id="previewImage" class="preview-image" src="${state.previewUrls[safeIndex]}" alt="字幕预览" title="点击放大预览"><div class="button-row preview-nav"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note preview-position">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s ${riskBadge}</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button><button id="previewZoom" type="button">放大预览</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">已知字体风险采样点会自动生成并验证；其余常规采样点仍在翻页时按需生成。</div>${fontInfo}</div>`;
   const navigatePreview = targetIndex => {
     if (targetIndex < 0 || targetIndex >= times.length) return;
     loadPreviewAt(targetIndex).catch(error => {
@@ -2390,6 +2424,9 @@ async function loadPreviewAt(index) {
   };
   $('prevP').onclick = () => navigatePreview(safeIndex - 1);
   $('nextP').onclick = () => navigatePreview(safeIndex + 1);
+  const openZoom = () => openPreviewLightbox(state.previewUrls[safeIndex], safeIndex, times[safeIndex]);
+  $('previewZoom').onclick = openZoom;
+  $('previewImage').onclick = openZoom;
 }
 
 
