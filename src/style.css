@@ -4461,3 +4461,165 @@ body.ui-mobile .preview-lightbox-stage {
     max-height: 72vh;
   }
 }
+
+
+/* Native setup guides -------------------------------------------------------
+   Intentionally low prominence: discoverable help, never a primary CTA. */
+.mobile-runtime-help {
+  display: none;
+}
+
+.platform-guide {
+  margin-top: 9px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--muted);
+}
+
+.platform-guide > summary {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  list-style: none;
+  font-size: .67rem;
+  color: var(--muted);
+}
+
+.platform-guide > summary::-webkit-details-marker {
+  display: none;
+}
+
+.platform-guide > summary::after {
+  content: "展开";
+  margin-left: auto;
+  font-size: .6rem;
+  opacity: .7;
+}
+
+.platform-guide[open] > summary::after {
+  content: "收起";
+}
+
+.platform-guide ol {
+  margin: 2px 0 8px 18px;
+  padding: 0;
+  font-size: .65rem;
+  line-height: 1.55;
+}
+
+.platform-guide li + li {
+  margin-top: 4px;
+}
+
+.platform-guide p {
+  margin: 7px 0 3px;
+  font-size: .63rem;
+  line-height: 1.5;
+}
+
+.platform-guide code,
+.mobile-runtime-help code {
+  font-size: .92em;
+  overflow-wrap: anywhere;
+}
+
+body.ui-mobile .mobile-runtime-help {
+  display: block;
+  margin: 7px 2px 1px;
+  color: var(--muted);
+}
+
+body.ui-mobile .mobile-runtime-help > summary {
+  width: fit-content;
+  min-height: 32px;
+  padding: 5px 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: 8px;
+  font-size: .63rem;
+  color: color-mix(in srgb,var(--muted) 86%,transparent);
+}
+
+body.ui-mobile .mobile-runtime-help > summary::-webkit-details-marker {
+  display: none;
+}
+
+body.ui-mobile .mobile-runtime-help > summary::before {
+  content: "?";
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(255 255 255 / .1);
+  border-radius: 50%;
+  font: 700 .58rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+body.ui-mobile .mobile-runtime-help > summary span {
+  opacity: .56;
+  font-size: .56rem;
+}
+
+body.ui-mobile .mobile-runtime-help-body {
+  margin-top: 5px;
+  padding: 5px 11px 10px;
+  border-left: 1px solid rgb(255 255 255 / .075);
+}
+
+body.ui-mobile .mobile-runtime-help-body section {
+  padding: 9px 0;
+}
+
+body.ui-mobile .mobile-runtime-help-body section + section {
+  border-top: 1px solid rgb(255 255 255 / .055);
+}
+
+body.ui-mobile .mobile-runtime-help-body strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: .69rem;
+  color: var(--text);
+}
+
+body.ui-mobile .mobile-runtime-help-body ol {
+  margin: 0 0 7px 17px;
+  padding: 0;
+  font-size: .63rem;
+  line-height: 1.5;
+}
+
+body.ui-mobile .mobile-runtime-help-body li + li {
+  margin-top: 4px;
+}
+
+.runtime-help-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.runtime-help-link {
+  min-height: 30px;
+  padding: 5px 8px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgb(255 255 255 / .08);
+  border-radius: 8px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: .61rem;
+  background: rgb(255 255 255 / .025);
+}
+
+.runtime-help-link:hover {
+  color: var(--text);
+  border-color: rgb(128 176 231 / .2);
+}
+
+/* Platform cards stay secondary to the encoding task. */
+body.ui-desktop .platform-guide[open] {
+  padding-bottom: 4px;
+}
