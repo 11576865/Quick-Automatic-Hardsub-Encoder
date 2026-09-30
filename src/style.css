@@ -2744,6 +2744,257 @@ button.primary {
 }
 
 
+
+/* Workflow density pass ----------------------------------------------------- */
+/* File inputs expose one deliberate action instead of the browser's duplicated
+   native file button + filename chrome. */
+.file-input-control {
+  position: absolute !important;
+  inline-size: 1px !important;
+  block-size: 1px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
+.file-picker-trigger,
+.native-picker-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: .75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.file-picker-trigger:hover,
+.native-picker-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb,var(--engine) 58%,var(--border-strong));
+  background: color-mix(in srgb,var(--engine) 8%,var(--surface-2));
+}
+
+.file-row > small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.input-card .file-row {
+  min-height: 112px;
+}
+
+.input-engine {
+  min-height: 76px !important;
+}
+
+.env-card {
+  align-self: start;
+}
+
+.env-card .env-body {
+  max-height: min(58vh, 520px);
+  overflow: auto;
+}
+
+.preflight-body {
+  max-height: min(64vh, 620px);
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.status-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+  gap: 6px;
+}
+
+.status-item {
+  min-width: 0;
+  min-height: 54px;
+  display: grid;
+  gap: 5px;
+  align-content: center;
+  padding: 9px 11px;
+}
+
+.status-item > span:first-child {
+  color: var(--muted);
+  font-size: .66rem;
+}
+
+.status-item > span:last-child {
+  color: var(--text);
+  font-size: .76rem;
+  overflow-wrap: anywhere;
+}
+
+.preview-card {
+  align-self: start;
+}
+
+.preview-wrap {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.preview-wrap img {
+  max-height: 52vh;
+  object-fit: contain;
+  background: #05080d;
+}
+
+.plan-mode-panel {
+  min-height: 0;
+}
+
+.plan-slider-feedback {
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: color-mix(in srgb,var(--surface-2) 82%,transparent);
+}
+
+.codec-plan-grid,
+#codecGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.codec-card {
+  padding: 12px;
+}
+
+.codec-card .plan-param {
+  min-height: 42px;
+}
+
+.encode-card {
+  padding: 15px 16px;
+}
+
+.log-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.log-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.log-summary::-webkit-details-marker {
+  display: none;
+}
+
+.log-summary::after {
+  content: "展开";
+  margin-left: auto;
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+.log-card[open] .log-summary::after {
+  content: "收起";
+}
+
+.log-summary > span:last-of-type {
+  color: var(--muted);
+  font-size: .7rem;
+}
+
+.log-card .log {
+  margin: 0 12px 12px;
+  max-height: 260px;
+}
+
+.platform-rail {
+  margin-top: 14px;
+  gap: 10px;
+}
+
+.platform-rail .card {
+  margin-top: 0;
+  padding: 13px 14px;
+}
+
+.platform-card-head h2,
+.app-card-head h2 {
+  margin: 2px 0 0;
+  font-size: .86rem;
+}
+
+.platform-card-head .note,
+.app-card-head .note,
+.app-update-notice {
+  margin: 4px 0 0;
+  font-size: .68rem;
+}
+
+.platform-actions {
+  margin-top: 9px;
+}
+
+@media (min-width: 840px) {
+  .input-card > .grid.two {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .input-engine {
+    grid-column: 1 / -1;
+  }
+
+  .platform-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+:root[data-window-size="expanded"] .setup-region,
+:root[data-window-size="large"] .setup-region,
+:root[data-window-size="extra-large"] .setup-region {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+:root[data-window-size="expanded"] .production-region,
+:root[data-window-size="large"] .production-region,
+:root[data-window-size="extra-large"] .production-region {
+  grid-template-columns: minmax(320px, .72fr) minmax(0, 1.28fr);
+}
+
+:root[data-window-size="large"] .preview-wrap,
+:root[data-window-size="extra-large"] .preview-wrap {
+  max-width: 680px;
+}
+
+@media (max-width: 839px) {
+  .status-list {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-wrap {
+    max-width: none;
+  }
+
+  .codec-plan-grid,
+  #codecGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .platform-rail {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Current adaptive window layout ------------------------------------------- */
 /* Window classes control composition. No device-name assumptions. */
 .app-shell {
