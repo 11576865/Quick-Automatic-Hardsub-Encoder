@@ -5,6 +5,7 @@
 - Browser UI and ≤1 GiB guard
 - ASS style/dialogue parsing and inline `\\fn` discovery
 - TTF/OTF/TTC/OTC internal name parsing
+- TrueType/OpenType cmap glyph coverage parsing and ASS actual-character tracking
 - Static font-name matching and explicit warning/continue flow
 - Device/browser capability detection (WASM, SharedArrayBuffer, WebCodecs H.264/H.265/AV1)
 - FFmpegKitNext adapter
@@ -14,7 +15,7 @@
 - H.264/x264, H.265/x265 and AV1/SVT-AV1 sample benchmark interface
 - SSIM sample comparison
 - Estimated full encode size/time
-- 1.6x, 2.0x and efficiency-curve policies
+- Slider-driven quick preset, target-quality calibration/auto-codec selection, and continuous target-size planning
 - Final hard-subtitle encode with audio stream copy
 - MKV download
 - GitHub Pages workflow
@@ -28,5 +29,5 @@ The list below concerns the browser WebAssembly backend. The Windows local entry
 3. Verify the exact FFmpegKitNext build flags against the current upstream revision and fix any upstream build regressions.
 4. Test on the target Android tablet with 50 MB, 300 MB and near-1 GB inputs.
 5. Calibrate comparable quality targets/CRF search across x264/x265/SVT-AV1; current CRFs are bootstrap defaults, not the final automatic quality model.
-6. Parse libass fontselect logs and add glyph-level missing-character verification.
+6. Static glyph verification is implemented; continue improving runtime libass fontselect/fallback cross-checking on native backends.
 7. Replace the conservative bootstrap candidate selector with the final Pareto/knee-point search after real benchmark data is collected.
