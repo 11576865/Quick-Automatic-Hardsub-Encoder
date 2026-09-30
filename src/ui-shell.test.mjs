@@ -73,6 +73,10 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /body\.ui-mobile \.mobile-preflight-action/);
   assert.match(css, /body\.ui-mobile \.mobile-stage-nav \{/);
   assert.match(main, /class="mobile-runtime-help"/);
+  assert.match(main, /class="mobile-runtime-option android"/);
+  assert.match(main, /class="mobile-runtime-option windows"/);
+  assert.match(css, /--mobile-sky: #55b9ff/);
+  assert.match(css, /--mobile-grass: #72d66c/);
   assert.match(main, /class="platform-guide"/);
   assert.match(main, /windows\/start_windows\.bat/);
   assert.match(main, /下载最新版 APK/);
