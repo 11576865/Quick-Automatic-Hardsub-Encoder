@@ -1,7 +1,7 @@
 # Project status — v0.1.1
 
 ## Implemented
-- Desktop visual language now follows the mobile task shell: compact glass header, two-stage segmented workflow, sky/grass/violet task accents, colored source cards, quieter surfaces, larger preview emphasis and matching analyze/encode CTA hierarchy while keeping the desktop all-at-once workflow.
+- Desktop now uses the exact same canonical two-stage task shell as mobile, including the same prepare/produce navigation, component hierarchy, colors, spacing and interaction flow; the former separate desktop presentation shell is no longer selected.
 - Windows 11 local PowerShell entry point: FFmpeg detection / optional winget installation, local ASS encode with libass, codec choice, selected font files, progress and cancel (initial implementation; Windows end-to-end validation still needed)
 - Browser UI and ≤1 GiB guard
 - ASS style/dialogue parsing and inline `\\fn` discovery
