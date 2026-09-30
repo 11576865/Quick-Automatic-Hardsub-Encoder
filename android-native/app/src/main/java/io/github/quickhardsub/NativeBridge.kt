@@ -213,23 +213,15 @@ class NativeBridge(
                     stream.getBitrate()?.toLongOrNull() ?: 0L
                 }
 
-                val decodeSmoke = FFmpegKit.executeWithArguments(
-                    arrayOf(
-                        "-hide_banner",
-                        "-v", "error",
-                        "-i", safUrl,
-                        "-map", "0:v:0",
-                        "-frames:v", "1",
-                        "-f", "null",
-                        "-"
-                    )
-                )
-                val inputDecodeSmoke = ReturnCode.isSuccess(decodeSmoke.getReturnCode())
-
+                // Keep selection-time probing metadata-only. A real subtitle preview
+                // decodes the same input immediately before production and is the
+                // authoritative decode check; doing both made mobile selection feel
+                // needlessly slow.
                 result
                     .put("ok", true)
-                    .put("inputDecodeSmoke", inputDecodeSmoke)
-                    .put("inputDecodeError", if (inputDecodeSmoke) "" else decodeSmoke.getOutput().takeLast(1200))
+                    .put("inputDecodeSmoke", false)
+                    .put("inputDecodeDeferred", true)
+                    .put("inputDecodeError", "")
                     .put("seekable", seekable)
                     .put("statSize", statSize)
                     .put("needsInputStaging", !seekable)
