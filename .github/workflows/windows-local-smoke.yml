@@ -17,6 +17,7 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Parse Windows entry point
@@ -168,30 +169,88 @@ jobs:
           [IO.File]::WriteAllText($temporary, 'new')
           Publish-VerifiedOutput $temporary $target
           if ([IO.File]::ReadAllText($target) -ne 'new') { throw 'Replacement failed' }
-      - name: Encode synthetic video with relative ASS path
+      - name: Encode bounded CPU codec matrix with real ASS
         shell: powershell
         run: |
-          $work = Join-Path $env:RUNNER_TEMP 'hard sub smoke'
+          $work = Join-Path $env:RUNNER_TEMP 'hard sub codec matrix'
           New-Item -ItemType Directory -Path $work | Out-Null
           Set-Content -Path (Join-Path $work 'subtitle.ass') -Encoding UTF8 -Value @'
           [Script Info]
           ScriptType: v4.00+
           PlayResX: 320
-          PlayResY: 240
+          PlayResY: 180
           [V4+ Styles]
           Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-          Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+          Style: Default,Arial,22,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,12,1
+          Style: Top,Arial,18,&H0000FFFF,&H000000FF,&H00000000,&H00000000,0,1,0,0,100,100,0,0,1,1,0,8,10,10,10,1
           [Events]
           Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-          Dialogue: 0,0:00:00.00,0:00:01.50,Default,,0,0,0,,Sample subtitle
+          Dialogue: 0,0:00:00.05,0:00:01.35,Default,,0,0,0,,{\fad(80,80)}CPU codec smoke
+          Dialogue: 1,0:00:00.20,0:00:01.20,Top,,0,0,0,,{\pos(160,28)}libass
           '@
-          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'color=c=black:s=320x240:r=15:d=2' -c:v libx264 (Join-Path $work 'input video.mp4')
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
           Push-Location $work
           try {
-            & ffmpeg -hide_banner -loglevel error -y -progress progress.txt -i 'input video.mp4' -map 0:v:0 -map '0:a?' -sn -vf 'ass=subtitle.ass' -c:v libx264 -preset medium -crf 22 -c:a copy 'output video.mkv'
+            $sourceArgs = @(
+              '-hide_banner','-loglevel','error','-y',
+              '-f','lavfi','-i','testsrc2=size=320x180:rate=12:duration=1.5',
+              '-f','lavfi','-i','sine=frequency=880:sample_rate=48000:duration=1.5',
+              '-c:v','libx264','-preset','ultrafast','-crf','35','-threads','1',
+              '-c:a','aac','-b:a','64k','-shortest','input.mkv'
+            )
+            & ffmpeg @sourceArgs
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            if (-not (Test-Path 'output video.mkv') -or -not (Test-Path 'progress.txt')) { exit 1 }
-            & ffprobe -v error -show_entries 'stream=codec_name' -of csv=p=0 'output video.mkv'
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } finally { Pop-Location }
+
+            $encoderList = (& ffmpeg -hide_banner -encoders 2>&1) -join "`n"
+            $matrix = @(
+              @{ Encoder='libx264'; Expected='h264'; Args=@('-preset','ultrafast','-crf','28') },
+              @{ Encoder='libx265'; Expected='hevc'; Args=@('-preset','ultrafast','-crf','30') },
+              @{ Encoder='libsvtav1'; Expected='av1'; Args=@('-preset','13','-crf','40') }
+            )
+            $tested = 0
+
+            foreach ($case in $matrix) {
+              if ($encoderList -notmatch ('\b' + [regex]::Escape($case.Encoder) + '\b')) {
+                Write-Host "::notice::Skipping $($case.Encoder): not exposed by the hosted runner FFmpeg build."
+                continue
+              }
+
+              $out = "output-$($case.Encoder).mkv"
+              $progress = "progress-$($case.Encoder).txt"
+              $args = @(
+                '-hide_banner','-loglevel','error','-y',
+                '-progress',$progress,
+                '-i','input.mkv',
+                '-map','0:v:0','-map','0:a?',
+                '-sn',
+                '-vf','ass=subtitle.ass',
+                '-c:v',$case.Encoder
+              ) + $case.Args + @(
+                '-threads','1',
+                '-c:a','copy',
+                '-t','1.25',
+                $out
+              )
+
+              & ffmpeg @args
+              if ($LASTEXITCODE -ne 0) { throw "$($case.Encoder) hard-sub smoke failed with exit code $LASTEXITCODE" }
+              if (-not (Test-Path $out) -or (Get-Item $out).Length -le 0) { throw "$($case.Encoder) output missing or empty" }
+              if (-not (Test-Path $progress)) { throw "$($case.Encoder) progress file missing" }
+
+              $videoCodec = (& ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 $out).Trim()
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              if ($videoCodec -ne $case.Expected) { throw "$($case.Encoder) produced unexpected video codec: $videoCodec" }
+
+              $audioCodec = (& ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 $out).Trim()
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              if ($audioCodec -ne 'aac') { throw "$($case.Encoder) did not preserve copied AAC audio: $audioCodec" }
+
+              Write-Host "$($case.Encoder) smoke passed: $videoCodec + copied $audioCodec"
+              $tested++
+            }
+
+            if ($tested -lt 1) { throw 'Hosted runner exposed none of the supported CPU encoders.' }
+            Write-Host "Bounded hard-sub matrix completed: $tested encoder(s) tested."
+          } finally {
+            Pop-Location
+          }
