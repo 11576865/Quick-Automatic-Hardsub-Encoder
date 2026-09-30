@@ -72,6 +72,12 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /Mobile task shell v2/);
   assert.match(css, /body\.ui-mobile \.mobile-preflight-action/);
   assert.match(css, /body\.ui-mobile \.mobile-stage-nav \{/);
+  assert.match(main, /class="mobile-runtime-help"/);
+  assert.match(main, /class="platform-guide"/);
+  assert.match(main, /windows\/start_windows\.bat/);
+  assert.match(main, /下载最新版 APK/);
+  assert.match(css, /Native setup guides/);
+  assert.match(css, /body\.ui-mobile \.mobile-runtime-help/);
   assert.doesNotMatch(main, /执行输入解码 smoke test/);
   assert.match(main, /id="previewZoom"/);
   assert.match(main, /class="preview-image"/);
