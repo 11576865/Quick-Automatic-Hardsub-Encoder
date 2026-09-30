@@ -2564,3 +2564,213 @@ button.primary:hover:not(:disabled) {
   line-height: 1.2;
   vertical-align: middle;
 }
+
+
+/* Adaptive window-size workbench v5 --------------------------------------- */
+/*
+ * Mirrors the Android window-size-class idea for resizable desktop windows:
+ * compact <= 719, medium 720-1099, expanded >= 1100.
+ * The DOM keeps one workflow; only placement/density changes.
+ */
+.adaptive-region,
+.production-controls {
+  min-width: 0;
+}
+
+:root[data-window-size="compact"] .app-shell {
+  width: min(100% - 16px, 1520px);
+  padding-top: 16px;
+}
+
+:root[data-window-size="compact"] .hero-main {
+  display: grid;
+  gap: 12px;
+}
+
+:root[data-window-size="compact"] .hero-tools {
+  justify-items: start;
+}
+
+:root[data-window-size="compact"] .setup-region,
+:root[data-window-size="compact"] .production-region {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+:root[data-window-size="compact"] .input-card > .grid.two,
+:root[data-window-size="compact"] .windows-native-connected .input-card > .grid.two,
+:root[data-window-size="compact"] .grid.three,
+:root[data-window-size="compact"] .plan-mode-tabs,
+:root[data-window-size="compact"] .plan-controls {
+  grid-template-columns: 1fr;
+}
+
+:root[data-window-size="compact"] .input-engine,
+:root[data-window-size="compact"] .windows-native-connected .input-engine {
+  grid-column: auto;
+}
+
+:root[data-window-size="compact"] .card {
+  margin-top: 12px;
+  padding: 14px;
+}
+
+:root[data-window-size="compact"] .input-card .file-row,
+:root[data-window-size="compact"] .windows-native-connected .input-card .file-row {
+  min-height: auto;
+}
+
+:root[data-window-size="compact"] .workflow-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-window-size="compact"] .workflow-strip span:last-child {
+  grid-column: 1 / -1;
+}
+
+:root[data-window-size="compact"] .theme-control button {
+  min-width: 76px;
+  min-height: 36px;
+  font-size: .7rem;
+}
+
+:root[data-window-size="compact"] .plan-slider-head {
+  align-items: center;
+}
+
+:root[data-window-size="compact"] .plan-value-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+:root[data-window-size="compact"] .range-reset {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+:root[data-window-size="compact"] .size-snap-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-window-size="medium"] .app-shell {
+  width: min(100% - 28px, 1520px);
+  padding-top: 24px;
+}
+
+:root[data-window-size="medium"] .setup-region {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+:root[data-window-size="medium"] .production-region {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+:root[data-window-size="medium"] .input-card > .grid.two,
+:root[data-window-size="medium"] .windows-native-connected .input-card > .grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-window-size="medium"] .windows-native-connected .input-engine {
+  grid-column: 1 / -1;
+}
+
+:root[data-window-size="medium"] .plan-controls {
+  grid-template-columns: minmax(0, 1.35fr) minmax(220px, .65fr);
+}
+
+:root[data-window-size="medium"] .platform-rail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-window-size="expanded"] .app-shell {
+  width: min(1680px, calc(100% - 56px));
+  padding-top: 30px;
+}
+
+:root[data-window-size="expanded"] .setup-region {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, .65fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+:root[data-window-size="expanded"] .setup-region > .card {
+  margin-top: 22px;
+}
+
+:root[data-window-size="expanded"] .setup-region .env-card {
+  height: calc(100% - 22px);
+}
+
+:root[data-window-size="expanded"] .input-card > .grid.two,
+:root[data-window-size="expanded"] .windows-native-connected .input-card > .grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+:root[data-window-size="expanded"] .windows-native-connected .input-engine {
+  grid-column: 1 / -1;
+}
+
+:root[data-window-size="expanded"] .production-region {
+  display: grid;
+  grid-template-columns: minmax(360px, .86fr) minmax(560px, 1.14fr);
+  gap: 18px;
+  align-items: start;
+}
+
+:root[data-window-size="expanded"] .production-region > .preview-card,
+:root[data-window-size="expanded"] .production-controls > .card {
+  margin-top: 22px;
+}
+
+:root[data-window-size="expanded"] .preview-card {
+  position: sticky;
+  top: 14px;
+  align-self: start;
+}
+
+:root[data-window-size="expanded"] .production-controls {
+  display: grid;
+  gap: 0;
+}
+
+:root[data-window-size="expanded"] .plan-controls {
+  grid-template-columns: minmax(0, 1.35fr) minmax(210px, .65fr);
+}
+
+:root[data-window-size="expanded"] .codec-plan-grid,
+:root[data-window-size="expanded"] #codecGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+:root[data-window-size="expanded"] .encode-card {
+  position: sticky;
+  bottom: 10px;
+  z-index: 3;
+  border-color: color-mix(in srgb,var(--encode) 36%,var(--border));
+  background:
+    linear-gradient(135deg,var(--encode-soft),var(--surface) 42%),
+    var(--surface);
+}
+
+:root[data-window-size="expanded"] .platform-rail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* Explicit light is no longer a user-selectable mode. System may still resolve
+   to light when the OS requests it, so light theme variables remain available. */
+@media (max-width: 430px) {
+  .theme-control button {
+    width: auto;
+    padding: 4px 9px;
+    font-size: .68rem;
+  }
+
+  .theme-control button[data-theme-choice="dark"]::after,
+  .theme-control button[data-theme-choice="system"]::after {
+    content: none;
+  }
+}
