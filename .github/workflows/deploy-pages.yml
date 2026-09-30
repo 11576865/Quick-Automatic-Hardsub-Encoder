@@ -1,7 +1,5 @@
-name: Deploy Frontend
+name: Build Android and Deploy Frontend
 
-# Android APK publishing is coupled to this workflow so the page manifest and
-# downloadable APK always come from the same commit.
 on:
   workflow_dispatch:
   push:
@@ -10,138 +8,334 @@ on:
       - 'src/**'
       - 'index.html'
       - 'package.json'
+      - 'package-lock.json'
       - 'vite.config.js'
       - 'scripts/**'
       - 'public/**'
       - 'android-native/**'
-      - '.github/workflows/build-android-apk.yml'
+      - '.github/core-lock.json'
       - '.github/workflows/deploy-pages.yml'
 
 permissions:
-  contents: read
+  contents: write
   actions: read
   pages: write
   id-token: write
 
 concurrency:
-  group: pages-frontend
+  group: publish-main
   cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      APP_BASE_VERSION: 0.2.1-native
+      EXPECTED_SIGNER_SHA256: 36ebb5783f02afb3cba3ad5978202615567ebf93df0866e4f535e75c0f3fd659
+      DEV_RELEASE_TAG: dev-builds
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Reuse latest successful FFmpeg Web core
+      - name: Read locked core identity
+        id: core
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "tag=$(jq -er '.tag' .github/core-lock.json)" >> "$GITHUB_OUTPUT"
+          echo "web_asset=$(jq -er '.web.asset' .github/core-lock.json)" >> "$GITHUB_OUTPUT"
+          echo "web_sha=$(jq -er '.web.sha256Asset' .github/core-lock.json)" >> "$GITHUB_OUTPUT"
+          echo "android_asset=$(jq -er '.android.asset' .github/core-lock.json)" >> "$GITHUB_OUTPUT"
+          echo "android_sha=$(jq -er '.android.sha256Asset' .github/core-lock.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Download locked Web core
         env:
           GH_TOKEN: ${{ github.token }}
+          CORE_TAG: ${{ steps.core.outputs.tag }}
+          WEB_ASSET: ${{ steps.core.outputs.web_asset }}
+          WEB_SHA_ASSET: ${{ steps.core.outputs.web_sha }}
+        shell: bash
         run: |
-          RUN_ID="$(gh run list --workflow build-core.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
-          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
-            echo "No successful Build Core and Deploy run found."
-            exit 1
+          set -euo pipefail
+          rm -rf public/vendor/ffmpeg-kit-next-web /tmp/quick-web-core
+          mkdir -p public/vendor /tmp/quick-web-core
+
+          if gh release download "$CORE_TAG" \
+              --pattern "$WEB_ASSET" \
+              --pattern "$WEB_SHA_ASSET" \
+              --dir /tmp/quick-web-core; then
+            (
+              cd /tmp/quick-web-core
+              sha256sum -c "$WEB_SHA_ASSET"
+            )
+            tar -C public/vendor -xzf "/tmp/quick-web-core/$WEB_ASSET"
+          else
+            echo "::warning::Locked Web core release is not published yet; using the latest non-expired legacy Actions artifact for this migration run."
+            RUN_ID="$(gh run list --workflow build-core.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            test -n "$RUN_ID"
+            mkdir -p public/vendor/ffmpeg-kit-next-web
+            gh run download "$RUN_ID" -n ffmpeg-kit-next-web-hardsub-core -D public/vendor/ffmpeg-kit-next-web
           fi
-          rm -rf public/vendor/ffmpeg-kit-next-web
-          mkdir -p public/vendor/ffmpeg-kit-next-web
-          gh run download "$RUN_ID" -n ffmpeg-kit-next-web-hardsub-core -D public/vendor/ffmpeg-kit-next-web
           test -f public/vendor/ffmpeg-kit-next-web/dist/index.js
 
       - name: Add bundled fallback font
         run: |
           mkdir -p public/vendor/fallback-fonts
-          curl -L --fail --retry 3             -o public/vendor/fallback-fonts/NotoSansSC-Regular.otf             https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+          curl -L --fail --retry 3 \
+            -o public/vendor/fallback-fonts/NotoSansSC-Regular.otf \
+            https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
           test -s public/vendor/fallback-fonts/NotoSansSC-Regular.otf
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - run: npm install
-      - run: npm run build
+      - name: Build Web frontend
+        run: |
+          npm install
+          npm run build
 
-      - name: Wait for matching Android APK and publish it with Pages
+      - name: Download locked Android native core
         env:
           GH_TOKEN: ${{ github.token }}
+          CORE_TAG: ${{ steps.core.outputs.tag }}
+          ANDROID_ASSET: ${{ steps.core.outputs.android_asset }}
+          ANDROID_SHA_ASSET: ${{ steps.core.outputs.android_sha }}
+        shell: bash
         run: |
-          RUN_ID=""
-          for attempt in $(seq 1 90); do
-            RUN_JSON="$(gh run list \
-              --workflow build-android-apk.yml \
-              --commit "$GITHUB_SHA" \
-              --limit 5 \
-              --json databaseId,status,conclusion)"
+          set -euo pipefail
+          rm -rf android-native/libs-maven /tmp/quick-android-core
+          mkdir -p android-native/libs-maven /tmp/quick-android-core
 
-            RUN_ID="$(printf '%s' "$RUN_JSON" | jq -r '[.[] | select(.status == "completed" and .conclusion == "success")][0].databaseId // empty')"
-            if [ -n "$RUN_ID" ]; then
-              break
-            fi
-
-            FAILED="$(printf '%s' "$RUN_JSON" | jq -r '[.[] | select(.status == "completed" and .conclusion != "success")] | length')"
-            if [ "$FAILED" -gt 0 ]; then
-              echo "::error::Matching Android APK workflow completed without success."
-              exit 1
-            fi
-
-            echo "Waiting for Android APK from commit $GITHUB_SHA (attempt $attempt/90)…"
-            sleep 10
-          done
-
-          if [ -z "$RUN_ID" ]; then
-            echo "::error::Timed out waiting for matching Android APK artifact."
-            exit 1
+          if gh release download "$CORE_TAG" \
+              --pattern "$ANDROID_ASSET" \
+              --pattern "$ANDROID_SHA_ASSET" \
+              --dir /tmp/quick-android-core; then
+            (
+              cd /tmp/quick-android-core
+              sha256sum -c "$ANDROID_SHA_ASSET"
+            )
+            tar -C android-native/libs-maven -xzf "/tmp/quick-android-core/$ANDROID_ASSET"
+          else
+            echo "::warning::Locked Android core release is not published yet; using the latest non-expired legacy Actions artifact for this migration run."
+            RUN_ID=""
+            while IFS= read -r candidate; do
+              [ -n "$candidate" ] || continue
+              COUNT="$(gh api -H "Accept: application/vnd.github+json" \
+                "/repos/${GITHUB_REPOSITORY}/actions/runs/${candidate}/artifacts" \
+                --jq '[.artifacts[] | select(.name == "ffmpeg-kit-next-android-arm64-hardsub" and .expired == false)] | length')"
+              if [ "$COUNT" -gt 0 ]; then
+                RUN_ID="$candidate"
+                break
+              fi
+            done < <(gh api -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/workflows/build-android-core.yml/runs?per_page=30" \
+              --jq '.workflow_runs[].id')
+            test -n "$RUN_ID"
+            gh run download "$RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ffmpeg-kit-next-android-arm64-hardsub \
+              --dir android-native/libs-maven
           fi
+          test -d android-native/libs-maven/com
 
-          rm -rf /tmp/quick-hardsub-apk
-          mkdir -p /tmp/quick-hardsub-apk dist/downloads
-          gh run download "$RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --name quick-automatic-hardsub-encoder-android-debug \
-            --dir /tmp/quick-hardsub-apk
+      - name: Copy Web UI into Android assets
+        run: |
+          rm -rf android-native/app/src/main/assets/www
+          mkdir -p android-native/app/src/main/assets/www
+          cp -a dist/. android-native/app/src/main/assets/www/
 
-          APK_SRC="/tmp/quick-hardsub-apk/app-debug.apk"
-          META_SRC="/tmp/quick-hardsub-apk/app-build-metadata.json"
-          APK_DST="dist/downloads/quick-automatic-hardsub-encoder-debug.apk"
-          test -s "$APK_SRC"
-          test -s "$META_SRC"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-          VERSION_CODE="$(jq -er '.versionCode' "$META_SRC")"
-          VERSION_NAME="$(jq -er '.versionName' "$META_SRC")"
-          PACKAGE_NAME="$(jq -er '.packageName' "$META_SRC")"
-          CHANNEL="$(jq -er '.channel' "$META_SRC")"
-          SHA256="$(jq -er '.sha256' "$META_SRC")"
-          SIGNER_SHA256="$(jq -er '.signerSha256' "$META_SRC")"
-          SIZE_BYTES="$(jq -er '.sizeBytes' "$META_SRC")"
-          COMMIT_SHA="$(jq -er '.commitSha' "$META_SRC")"
-          BUILD_RUN_NUMBER="$(jq -er '.workflowRunNumber' "$META_SRC")"
+      - name: Install Android platform
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0"
 
-          test "$PACKAGE_NAME" = "io.github.quickhardsub"
-          test "$CHANNEL" = "debug"
-          test "$COMMIT_SHA" = "$GITHUB_SHA"
-          test "$(sha256sum "$APK_SRC" | awk '{print $1}')" = "$SHA256"
-          test "$(stat -c '%s' "$APK_SRC")" = "$SIZE_BYTES"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
 
-          VERSIONED_APK_NAME="quick-automatic-hardsub-encoder-debug-v${VERSION_CODE}.apk"
-          VERSIONED_APK_DST="dist/downloads/${VERSIONED_APK_NAME}"
-          cp "$APK_SRC" "$VERSIONED_APK_DST"
-          # Keep a convenience alias for manual downloads; update manifests always
-          # use the immutable versioned URL to avoid browser/CDN stale-APK caches.
-          cp "$APK_SRC" "$APK_DST"
-          PUBLISHED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          APK_URL="https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/downloads/${VERSIONED_APK_NAME}"
+      - name: Restore stable debug signing key
+        id: signing-cache
+        uses: actions/cache@v4
+        with:
+          path: .ci-signing/debug.keystore
+          key: quick-hardsub-debug-keystore-v2
+
+      - name: Require stable debug signing key
+        if: steps.signing-cache.outputs.cache-hit != 'true'
+        run: |
+          echo "::error::Stable debug signing key cache is missing. Refusing to rotate the signer automatically because that would break Android in-place updates."
+          exit 1
+
+      - name: Resolve Android app version
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_VERSION_CODE="$((100000 + GITHUB_RUN_NUMBER))"
+          APP_VERSION_NAME="${APP_BASE_VERSION}.${GITHUB_RUN_NUMBER}"
+          echo "APP_VERSION_CODE=$APP_VERSION_CODE" >> "$GITHUB_ENV"
+          echo "APP_VERSION_NAME=$APP_VERSION_NAME" >> "$GITHUB_ENV"
+          echo "Android version: $APP_VERSION_NAME (versionCode $APP_VERSION_CODE)"
+
+      - name: Build debug APK
+        run: gradle -p android-native :app:assembleDebug --stacktrace
+
+      - name: Verify APK identity, signature and 16 KiB zip alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-native/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -s "$APK"
+
+          SIGNER_OUTPUT="$("$APKSIGNER" verify --verbose --print-certs "$APK")"
+          ACTUAL_SIGNER_SHA256="$(printf '%s\n' "$SIGNER_OUTPUT" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print tolower($2); exit}')"
+          test "$ACTUAL_SIGNER_SHA256" = "$EXPECTED_SIGNER_SHA256" || { echo "::error::APK signer changed"; exit 1; }
+
+          BADGING="$("$AAPT" dump badging "$APK")"
+          printf '%s\n' "$BADGING" | grep -F "package: name='io.github.quickhardsub'"
+          printf '%s\n' "$BADGING" | grep -F "versionCode='$APP_VERSION_CODE'"
+          printf '%s\n' "$BADGING" | grep -F "versionName='$APP_VERSION_NAME'"
+
+          MANIFEST_TREE="$("$AAPT" dump xmltree "$APK" AndroidManifest.xml)"
+          printf '%s\n' "$MANIFEST_TREE" | grep -F 'android:scheme' | grep -F '"quickhardsub"'
+          printf '%s\n' "$MANIFEST_TREE" | grep -F 'android:host' | grep -F '"open"'
+
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c -P 16 -v 4 "$APK"
+
+      - name: Verify native ELF segment alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-native/app/build/outputs/apk/debug/app-debug.apk"
+          rm -rf /tmp/apk-libs
+          mkdir -p /tmp/apk-libs
+          unzip -q "$APK" 'lib/arm64-v8a/*.so' -d /tmp/apk-libs
+          failed=0
+          while IFS= read -r so; do
+            bad=0
+            while IFS= read -r align; do
+              if (( align < 0x4000 )); then bad=1; fi
+            done < <(readelf -lW "$so" | awk '/ LOAD / { print $NF }')
+            if (( bad )); then
+              echo "::error file=$so::ELF LOAD segment alignment is below 16 KiB"
+              failed=1
+            fi
+          done < <(find /tmp/apk-libs -name '*.so' -type f)
+          exit "$failed"
+
+      - name: Prepare versioned Android release assets
+        id: android
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android-native/app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          RELEASE_DIR="$RUNNER_TEMP/android-release"
+          SHORT_SHA="$(printf '%s' "$GITHUB_SHA" | cut -c1-12)"
+          VERSIONED_APK_NAME="quick-automatic-hardsub-encoder-debug-v${APP_VERSION_CODE}-${SHORT_SHA}-r${GITHUB_RUN_ATTEMPT}.apk"
+          VERSIONED_META_NAME="${VERSIONED_APK_NAME%.apk}.json"
+          STABLE_APK_NAME="quick-automatic-hardsub-encoder-debug.apk"
+          rm -rf "$RELEASE_DIR"
+          mkdir -p "$RELEASE_DIR"
+          cp "$APK" "$RELEASE_DIR/$VERSIONED_APK_NAME"
+          cp "$APK" "$RELEASE_DIR/$STABLE_APK_NAME"
+
+          APK_SHA256="$(sha256sum "$APK" | awk '{print $1}')"
+          APK_SIZE="$(stat -c '%s' "$APK")"
+          SIGNER_SHA256="$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print tolower($2); exit}')"
+          test "$SIGNER_SHA256" = "$EXPECTED_SIGNER_SHA256"
 
           jq -n \
-            --argjson versionCode "$VERSION_CODE" \
-            --arg versionName "$VERSION_NAME" \
-            --arg packageName "$PACKAGE_NAME" \
-            --arg channel "$CHANNEL" \
+            --argjson versionCode "$APP_VERSION_CODE" \
+            --arg versionName "$APP_VERSION_NAME" \
+            --arg packageName "io.github.quickhardsub" \
+            --arg channel "debug" \
+            --arg sha256 "$APK_SHA256" \
+            --arg signerSha256 "$SIGNER_SHA256" \
+            --arg commitSha "$GITHUB_SHA" \
+            --argjson sizeBytes "$APK_SIZE" \
+            --argjson workflowRunNumber "$GITHUB_RUN_NUMBER" \
+            '{versionCode:$versionCode,versionName:$versionName,packageName:$packageName,channel:$channel,sha256:$sha256,signerSha256:$signerSha256,sizeBytes:$sizeBytes,commitSha:$commitSha,workflowRunNumber:$workflowRunNumber}' \
+            > "$RELEASE_DIR/$VERSIONED_META_NAME"
+
+          echo "dir=$RELEASE_DIR" >> "$GITHUB_OUTPUT"
+          echo "apk=$VERSIONED_APK_NAME" >> "$GITHUB_OUTPUT"
+          echo "meta=$VERSIONED_META_NAME" >> "$GITHUB_OUTPUT"
+          echo "stable=$STABLE_APK_NAME" >> "$GITHUB_OUTPUT"
+          echo "sha256=$APK_SHA256" >> "$GITHUB_OUTPUT"
+          echo "size=$APK_SIZE" >> "$GITHUB_OUTPUT"
+          echo "signer=$SIGNER_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Publish rolling Android development release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_DIR: ${{ steps.android.outputs.dir }}
+          VERSIONED_APK: ${{ steps.android.outputs.apk }}
+          VERSIONED_META: ${{ steps.android.outputs.meta }}
+          STABLE_APK: ${{ steps.android.outputs.stable }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$DEV_RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$DEV_RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "Quick Automatic Hardsub Encoder development builds" \
+              --notes "Rolling development APKs produced from main. app-update.json points to an immutable versioned asset; the unversioned APK is only a convenience alias." \
+              --prerelease
+          fi
+
+          gh release upload "$DEV_RELEASE_TAG" \
+            "$RELEASE_DIR/$VERSIONED_APK" \
+            "$RELEASE_DIR/$VERSIONED_META" \
+            "$RELEASE_DIR/$STABLE_APK" \
+            --clobber
+
+          mapfile -t old_apks < <(
+            gh release view "$DEV_RELEASE_TAG" --json assets --jq '.assets[].name' |
+              grep -E '^quick-automatic-hardsub-encoder-debug-v[0-9]+-[0-9a-f]{12}-r[0-9]+\.apk$' |
+              sort -Vr |
+              tail -n +11 || true
+          )
+          for asset in "${old_apks[@]}"; do
+            [ -n "$asset" ] || continue
+            gh release delete-asset "$DEV_RELEASE_TAG" "$asset" -y
+            gh release delete-asset "$DEV_RELEASE_TAG" "${asset%.apk}.json" -y || true
+          done
+
+      - name: Generate Release-backed update manifest
+        env:
+          VERSIONED_APK: ${{ steps.android.outputs.apk }}
+          APK_SHA256: ${{ steps.android.outputs.sha256 }}
+          APK_SIZE: ${{ steps.android.outputs.size }}
+          SIGNER_SHA256: ${{ steps.android.outputs.signer }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PUBLISHED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          APK_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${DEV_RELEASE_TAG}/${VERSIONED_APK}"
+          jq -n \
+            --argjson versionCode "$APP_VERSION_CODE" \
+            --arg versionName "$APP_VERSION_NAME" \
+            --arg packageName "io.github.quickhardsub" \
+            --arg channel "debug" \
             --arg apkUrl "$APK_URL" \
-            --arg sha256 "$SHA256" \
+            --arg sha256 "$APK_SHA256" \
             --arg signerSha256 "$SIGNER_SHA256" \
             --arg publishedAt "$PUBLISHED_AT" \
-            --arg commitSha "$COMMIT_SHA" \
-            --argjson sizeBytes "$SIZE_BYTES" \
-            --argjson buildRunNumber "$BUILD_RUN_NUMBER" \
+            --arg commitSha "$GITHUB_SHA" \
+            --argjson sizeBytes "$APK_SIZE" \
+            --argjson buildRunNumber "$GITHUB_RUN_NUMBER" \
             '{
               versionCode: $versionCode,
               versionName: $versionName,
@@ -155,15 +349,14 @@ jobs:
               commitSha: $commitSha,
               buildRunNumber: $buildRunNumber,
               notes: [
-                "网页可直接拉起 Android App，未安装时回退到 APK 下载",
+                "APK 由 GitHub Release 分发；Pages 只保存网页与更新清单",
                 "App 启动时自动检查更新，也支持手动检查",
                 "更新清单绑定实际构建 APK 的版本、SHA-256 与签名摘要"
               ]
             }' > dist/app-update.json
 
-          echo "Published Android $VERSION_NAME (versionCode $VERSION_CODE), signer $SIGNER_SHA256"
-
       - uses: actions/configure-pages@v5
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
