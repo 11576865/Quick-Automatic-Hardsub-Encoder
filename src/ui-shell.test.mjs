@@ -25,9 +25,13 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /class="adaptive-region production-region"/);
   assert.match(main, /class="production-controls"/);
   assert.match(main, /function resolveWindowSizeClass\(width = window\.innerWidth\)/);
-  assert.match(main, /data-theme-choice="dark"/);
-  assert.match(main, /data-theme-choice="system"/);
-  assert.doesNotMatch(main, /data-theme-choice="light"/);
+  assert.doesNotMatch(main, /data-theme-choice=/);
+  assert.doesNotMatch(main, /THEME_KEY/);
+  assert.doesNotMatch(main, /prefers-color-scheme/);
+  assert.match(main, /HARDSUB WORKBENCH/);
+  assert.match(main, /class="app-header-main"/);
+  assert.match(main, /largeMax:\s*1599/);
+  assert.match(main, /return 'extra-large'/);
 
   assert.match(css, /\.workspace-layout\s*\{\s*display:\s*block/);
   assert.match(css, /\.windows-native-connected \.platform-rail\s*\{\s*display:\s*none/);
