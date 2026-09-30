@@ -2115,7 +2115,10 @@ function renderSubtitleSummary() {
     ['常用字体库', `${state.savedFonts.length} 个文件`],
     ['预览采样点', state.previewTimes.length
       ? `${state.previewTimes.length} 个 · 其中 ${state.previewRiskTimes.length} 个风险导向`
-      : `${a.previewTimes.length} 个候选`],
+      : (() => {
+          const riskCandidates = findGlyphRiskPreviewTimes(a, state.glyphCoverage, 6).length;
+          return `${a.previewTimes.length} 个常规候选${riskCandidates ? ' · ' + riskCandidates + ' 个字体风险候选' : ''}`;
+        })()],
     ...mediaRows
   ].map(([k,v]) => `<div class="status-item"><span>${k}</span><span>${v}</span></div>`).join('');
 
@@ -2337,7 +2340,7 @@ function buildPreviewPlan(limit = 6) {
     }
   }
 
-  const selected = combined.slice(0, max).sort((a, b) => a - b);
+  const selected = combined.slice(0, max);
   const selectedRisk = riskTimes.filter(time =>
     selected.some(chosen => Math.abs(chosen - time) < 0.005)
   );
@@ -2361,9 +2364,22 @@ async function renderPreviews() {
     state.previewFontDiagnostics = new Array(state.previewTimes.length).fill(null);
     state.previewVisualChange = new Array(state.previewTimes.length).fill(null);
     if (state.previewRiskTimes.length) {
-      log('风险导向预览：已将 ' + state.previewRiskTimes.length + ' 个静态缺字/字体风险采样点优先加入预览计划。');
+      log('风险导向预览：已将 ' + state.previewRiskTimes.length + ' 个静态缺字/字体风险采样点优先加入预览计划，并自动逐个执行运行时验证。');
     }
+
     await loadPreviewAt(0);
+
+    // Risk-directed samples are generated automatically so a user does not need
+    // to discover a known missing glyph by manually paging through previews.
+    // Ordinary context samples remain lazy.
+    for (let index = 1; index < state.previewTimes.length; index++) {
+      if (!isRiskPreviewTime(state.previewTimes[index])) continue;
+      await loadPreviewAt(index);
+    }
+
+    if (state.previewTimes.length > 1 && state.previewRiskTimes.length > 1) {
+      await loadPreviewAt(0);
+    }
     refreshBenchmarkEnabled(true);
   } catch (e) {
     log(`预览失败：${e.message}`);
@@ -2436,7 +2452,7 @@ async function loadPreviewAt(index) {
          <details class="note" style="padding:0 12px 10px"><summary>查看无字幕底图</summary><img src="${state.previewBaseUrls[safeIndex] || ''}" alt="无字幕底图" style="width:100%;margin-top:8px;border-radius:8px"></details>`
       : '<div class="warning-box" style="margin:0 12px 10px">浏览器无法自动完成像素差校验，请人工确认预览中确实出现了字幕。</div>';
 
-  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s ${riskBadge}</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">按字幕采样点逐条按需生成真实渲染预览，避免一次等待全部帧。</div>${fontInfo}</div>`;
+  container.innerHTML = `<div style="width:100%"><img src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row" style="justify-content:center;padding:8px"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note" style="padding:10px">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s ${riskBadge}</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">已知字体风险采样点会自动生成并验证；其余常规采样点仍在翻页时按需生成。</div>${fontInfo}</div>`;
   const navigatePreview = targetIndex => {
     if (targetIndex < 0 || targetIndex >= times.length) return;
     loadPreviewAt(targetIndex).catch(error => {
