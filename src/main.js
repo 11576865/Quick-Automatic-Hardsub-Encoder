@@ -6,6 +6,7 @@ import { detectCapabilities } from './capabilities.js';
 import { EncoderEngine } from './engine.js';
 import { decodeAssFile } from './ass-decoding.js';
 import { detectWindowsNativeBridge } from './windows-native-client.js';
+import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -49,6 +50,7 @@ const state = {
   previewUrls: [],
   previewBaseUrls: [],
   previewFontEvents: [],
+  previewFontDiagnostics: [],
   previewVisualChange: [],
   previewTimes: [],
   benchmarks: {},
@@ -379,6 +381,7 @@ function invalidateAnalysis() {
   state.previewUrls = [];
   state.previewBaseUrls = [];
   state.previewFontEvents = [];
+  state.previewFontDiagnostics = [];
   state.previewVisualChange = [];
   state.previewTimes = [];
   state.benchmarks = {};
@@ -2260,6 +2263,7 @@ function bindFontOverrideControls() {
       state.previewUrls = [];
       state.previewBaseUrls = [];
       state.previewFontEvents = [];
+      state.previewFontDiagnostics = [];
       state.previewVisualChange = [];
       state.previewTimes = [];
       clearSelectedTestCache();
@@ -2281,6 +2285,7 @@ async function renderPreviews() {
     state.previewUrls = new Array(state.previewTimes.length).fill(null);
     state.previewBaseUrls = new Array(state.previewTimes.length).fill(null);
     state.previewFontEvents = new Array(state.previewTimes.length).fill(null);
+    state.previewFontDiagnostics = new Array(state.previewTimes.length).fill(null);
     state.previewVisualChange = new Array(state.previewTimes.length).fill(null);
     await loadPreviewAt(0);
     refreshBenchmarkEnabled(true);
@@ -2319,19 +2324,24 @@ async function loadPreviewAt(index) {
     state.previewUrls[safeIndex] = previewResult.url;
     state.previewBaseUrls[safeIndex] = previewResult.baseUrl || null;
     state.previewFontEvents[safeIndex] = previewResult.fontEvents || [];
+    state.previewFontDiagnostics[safeIndex] = parseLibassFontDiagnostics(state.previewFontEvents[safeIndex]);
     state.previewVisualChange[safeIndex] = previewResult.visualChange;
     if (state.previewFontEvents[safeIndex].length) {
       log(`libass 字体选择 @ ${times[safeIndex].toFixed(2)}s:\n${state.previewFontEvents[safeIndex].join('\n')}`);
     }
+    if (state.previewFontDiagnostics[safeIndex]?.hasRisk) {
+      state.acceptedWarnings = false;
+      $('acceptWarnings').checked = false;
+      $('warningAccept').classList.remove('hidden');
+      refreshBenchmarkEnabled(false);
+    }
   }
 
   const fontEvents = state.previewFontEvents[safeIndex] || [];
-  const glyphFallbackEvents = fontEvents.filter(line => /Glyph .* not found|failed to find.*fallback/i.test(line));
-  const fontInfo = fontEvents.length
-    ? `<div>${glyphFallbackEvents.length
-        ? '<div class="warning-box" style="margin:0 12px 10px">libass 在此采样帧记录了 ' + glyphFallbackEvents.length + ' 条缺字/回退事件。它可能已经找到后备字体，请展开日志核对实际 fontselect 链。</div>'
-        : ''}<details class="note" style="padding:0 12px 12px"><summary>查看 libass 实际字体选择</summary><pre class="log" style="max-height:140px">${escapeHtml(fontEvents.join('\n'))}</pre></details></div>`
-    : '<div class="note" style="text-align:center;padding:0 10px 10px">此帧未捕获到 fontselect 警告/记录。</div>';
+  const fontDiagnostics =
+    state.previewFontDiagnostics[safeIndex] ||
+    parseLibassFontDiagnostics(fontEvents);
+  const fontInfo = renderRuntimeFontDiagnostics(fontDiagnostics, fontEvents);
 
   const activeEvents = getActiveDialogue(times[safeIndex]);
   const dialogueInfo = activeEvents.length
@@ -2356,6 +2366,71 @@ async function loadPreviewAt(index) {
   };
   $('prevP').onclick = () => navigatePreview(safeIndex - 1);
   $('nextP').onclick = () => navigatePreview(safeIndex + 1);
+}
+
+
+function renderRuntimeFontDiagnostics(diagnostics, rawEvents = []) {
+  if (!rawEvents.length) {
+    return '<div class="note" style="text-align:center;padding:0 10px 10px">此帧未捕获到 fontselect / missing-glyph 记录。</div>';
+  }
+
+  const rows = [];
+
+  for (const glyph of diagnostics.missingGlyphs || []) {
+    const cp = codePointDisplay(glyph.codePoint);
+    const char = escapeHtml(cp.char);
+    const requested = escapeHtml(glyph.requested || '未知请求字体');
+    if (glyph.status === 'fallback-selected') {
+      const fallback = escapeHtml(glyph.fallbackSelected || glyph.fallbackPath || '后备字体');
+      rows.push(
+        '<div class="runtime-font-row resolved"><strong>' + char + ' <span class="glyph-code">' + cp.hex + '</span></strong>' +
+        '<span>主字体 ' + requested + ' 缺字 → libass 已选择 ' + fallback + '</span><b>已回退</b></div>'
+      );
+    } else {
+      rows.push(
+        '<div class="runtime-font-row danger"><strong>' + char + ' <span class="glyph-code">' + cp.hex + '</span></strong>' +
+        '<span>主字体 ' + requested + ' 缺字，当前采样日志没有确认可用 fallback</span><b>高风险</b></div>'
+      );
+    }
+  }
+
+  for (const failure of diagnostics.failures || []) {
+    rows.push(
+      '<div class="runtime-font-row danger"><strong>fallback</strong><span>' +
+      escapeHtml(failure.raw) + '</span><b>失败</b></div>'
+    );
+  }
+
+  if (!rows.length && diagnostics.normalSelections?.length) {
+    const names = [...new Set(
+      diagnostics.normalSelections
+        .map(item => item.selected || item.path || item.requested)
+        .filter(Boolean)
+    )];
+    rows.push(
+      '<div class="runtime-font-row clean"><strong>✓</strong><span>本帧捕获到 ' +
+      diagnostics.normalSelections.length + ' 条字体选择记录' +
+      (names.length ? '：' + names.slice(0, 4).map(escapeHtml).join(' / ') : '') +
+      '</span><b>未见缺字</b></div>'
+    );
+  }
+
+  const summaryClass = diagnostics.hasUnresolvedRisk
+    ? 'error-box'
+    : diagnostics.hasFallback
+      ? 'warning-box'
+      : 'note';
+  const summaryText = diagnostics.hasUnresolvedRisk
+    ? '运行时检测到尚未确认解决的缺字 / fallback 风险。'
+    : diagnostics.hasFallback
+      ? '运行时检测到主字体缺字，但 libass 已在此采样帧选择后备字体。请确认后备字体外观可以接受。'
+      : '运行时 fontselect 日志未记录缺字。';
+
+  return '<div class="runtime-font-diagnostics">' +
+    '<div class="' + summaryClass + ' runtime-font-summary">' + summaryText + '</div>' +
+    (rows.length ? '<div class="runtime-font-list">' + rows.join('') + '</div>' : '') +
+    '<details class="note runtime-font-raw"><summary>查看 libass 原始字体日志</summary>' +
+    '<pre class="log">' + escapeHtml(rawEvents.join('\n')) + '</pre></details></div>';
 }
 
 function getActiveDialogue(timeSeconds) {
@@ -2402,9 +2477,13 @@ function workflowReadiness() {
     state.analyzedFontKey === currentFontKey() &&
     !!state.analyzedVideo && !!state.analyzedAss;
   const previewDone = state.previewUrls.some(Boolean);
+  const runtimeFontWarnings = state.previewFontDiagnostics.some(
+    item => item?.hasRisk === true
+  );
   const warnings =
     state.fontMatches.some(x => x.status !== 'matched') ||
-    state.glyphCoverage.some(x => x.status === 'partial' || x.status === 'unknown');
+    state.glyphCoverage.some(x => x.status === 'partial' || x.status === 'unknown') ||
+    runtimeFontWarnings;
   const unsafeColor = !!state.media?.unsafeColorPipeline;
   const rendered = state.previewVisualChange.some(v => v === true);
   const knownChecks = state.previewVisualChange.filter(v => v !== null);
