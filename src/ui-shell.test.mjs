@@ -29,6 +29,7 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.doesNotMatch(main, /THEME_KEY/);
   assert.doesNotMatch(main, /prefers-color-scheme/);
   assert.match(main, /HARDSUB WORKBENCH/);
+  assert.match(main, /<h1>硬字幕压制<\/h1>/);
   assert.match(main, /class="app-header-main"/);
   assert.match(main, /largeMax:\s*1599/);
   assert.match(main, /return 'extra-large'/);
@@ -67,6 +68,7 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /previewFontDiagnostics/);
   assert.match(main, /findGlyphRiskPreviewTimes/);
   assert.match(main, /buildPreviewPlan/);
+  assert.match(main, /mergePreviewTimes/);
   assert.match(main, /previewRiskTimes/);
   assert.match(main, /goal !== 'sizeBudget'/);
   assert.doesNotMatch(main, /<option value="quality">质量优先/);
@@ -77,4 +79,8 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /--slider-progress/);
   assert.match(css, /\.runtime-font-diagnostics\s*\{/);
   assert.match(css, /\.runtime-font-row\s*\{/);
+  assert.match(css, /Adaptive workbench v7/);
+  assert.match(css, /data-window-size="compact"\] \.setup-region/);
+  assert.match(css, /data-window-size="medium"\] \.production-region/);
+  assert.doesNotMatch(css, /System may still resolve\s+to light/);
 });
