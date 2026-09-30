@@ -47,6 +47,18 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.preview-wrap\s*\{[\s\S]*?max-width:\s*760px/);
   assert.match(main, /<details class="card log-card">/);
   assert.match(main, /id="previewLightbox" class="preview-lightbox"/);
+  assert.match(main, /id="mobileStageNav" class="mobile-stage-nav"/);
+  assert.match(main, /data-mobile-stage-target="setup"/);
+  assert.match(main, /data-mobile-stage-target="preflight"/);
+  assert.match(main, /data-mobile-stage-target="plan"/);
+  assert.match(main, /data-mobile-stage-target="encode"/);
+  assert.match(main, /function devicePrefersMobileShell\(\)/);
+  assert.match(main, /document\.body\.classList\.toggle\('ui-mobile', mobile\)/);
+  assert.match(main, /function setMobileStage\(stage/);
+  assert.match(css, /body\.ui-desktop \.production-region/);
+  assert.match(css, /body\.ui-mobile \.mobile-stage-nav/);
+  assert.match(css, /body\.ui-mobile \[data-mobile-stage-section\]/);
+  assert.match(css, /body\.ui-mobile\[data-mobile-stage="plan"\]/);
   assert.match(main, /id="previewZoom"/);
   assert.match(main, /class="preview-image"/);
   assert.match(css, /\.preview-lightbox\s*\{/);
