@@ -49,3 +49,18 @@ assert.deepEqual(usageMap.get('Arial'), ['A'.codePointAt(0), '中'.codePointAt(0
 assert.deepEqual(usageMap.get('Courier New'), ['B'.codePointAt(0)]);
 assert.deepEqual(usageMap.get('Noto Sans CJK SC'), ['C'.codePointAt(0), '文'.codePointAt(0)].sort((a,b) => a-b));
 assert.equal([...usageMap.values()].flat().includes('m'.codePointAt(0)), false);
+
+
+const positionTagSample = `[V4+ Styles]
+Format: Name, Fontname, Fontsize
+Style: Default,Arial,48
+[Events]
+Format: Layer, Start, End, Style, Text
+Dialogue: 0,0:00:01.00,0:00:03.00,Default,{\\pos(100,100)}Visible`;
+
+const positionParsed = parseAss(positionTagSample);
+const positionUsage = new Map(positionParsed.fontUsage.map(x => [x.fontName, x.codePoints]));
+assert.deepEqual(
+  positionUsage.get('Arial'),
+  [...'Visible'].map(ch => ch.codePointAt(0)).filter((v, i, a) => a.indexOf(v) === i).sort((a,b) => a-b)
+);
