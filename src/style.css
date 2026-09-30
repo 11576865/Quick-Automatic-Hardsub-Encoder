@@ -2547,3 +2547,20 @@ button.primary:hover:not(:disabled) {
     gap: 3px;
   }
 }
+
+
+/* Risk-directed subtitle preview */
+.preview-risk-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 5px;
+  border: 1px solid color-mix(in srgb,var(--warn) 52%,var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb,var(--warn) 10%,var(--surface));
+  color: var(--warn);
+  font-size: .62rem;
+  font-weight: 700;
+  line-height: 1.2;
+  vertical-align: middle;
+}
