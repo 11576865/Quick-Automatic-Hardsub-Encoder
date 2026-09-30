@@ -33,3 +33,19 @@ assert.deepEqual([...p2.previewTimes].sort((a, b) => a - b), p2.previewTimes);
 assert.ok(new Set(p2.previewTimes).size > 1);
 
 console.log('ASS parser test passed');
+
+
+const usageSample = `[V4+ Styles]
+Format: Name, Fontname, Fontsize
+Style: Default,Arial,48
+Style: Alt,Noto Sans CJK SC,44
+[Events]
+Format: Layer, Start, End, Style, Text
+Dialogue: 0,0:00:01.00,0:00:04.00,Default,A中{\\fnCourier New}B{\\rAlt}文{\\p1}m 0 0 l 10 10{\\p0}C`;
+
+const usageParsed = parseAss(usageSample);
+const usageMap = new Map(usageParsed.fontUsage.map(x => [x.fontName, x.codePoints]));
+assert.deepEqual(usageMap.get('Arial'), ['A'.codePointAt(0), '中'.codePointAt(0)].sort((a,b) => a-b));
+assert.deepEqual(usageMap.get('Courier New'), ['B'.codePointAt(0)]);
+assert.deepEqual(usageMap.get('Noto Sans CJK SC'), ['C'.codePointAt(0), '文'.codePointAt(0)].sort((a,b) => a-b));
+assert.equal([...usageMap.values()].flat().includes('m'.codePointAt(0)), false);
