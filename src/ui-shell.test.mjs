@@ -148,3 +148,19 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /data-window-size="medium"\] \.production-region/);
   assert.doesNotMatch(css, /System may still resolve\s+to light/);
 });
+
+
+test('desktop shell reuses mobile visual language without copying mobile staged behavior', async () => {
+  const css = await readFile(new URL('./style.css', import.meta.url), 'utf8');
+
+  assert.match(css, /Desktop visual parity with mobile v3/);
+  assert.match(css, /body\.ui-desktop \{[\s\S]*--desktop-sky: #55b9ff/);
+  assert.match(css, /body\.ui-desktop \.workflow-strip \{[\s\S]*grid-template-columns: repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /body\.ui-desktop \.setup-region \{[\s\S]*clamp\(280px,22vw,340px\)/);
+  assert.match(css, /body\.ui-desktop \.input-video \.[\s\S]*file-picker-trigger/);
+  assert.match(css, /body\.ui-desktop \.production-region \{[\s\S]*minmax\(500px,\.96fr\)/);
+  assert.match(css, /body\.ui-desktop \.preview-card \{[\s\S]*rgba\(183,154,255/);
+  assert.match(css, /body\.ui-desktop #analyze \{[\s\S]*#67c5ff/);
+  assert.match(css, /body\.ui-desktop #encodeBtn \{[\s\S]*#83df77/);
+  assert.match(css, /@media \(max-width: 1180px\)/);
+});
