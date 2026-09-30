@@ -230,7 +230,10 @@ WebAssembly 路径适合作为：
 - 内联 `\fn`；
 - 字体请求；
 - TTF / OTF / TTC / OTC 内部名称；
+- TrueType/OpenType `cmap` Unicode 覆盖范围；
+- 按 ASS 实际 Dialogue 跟踪 Style、`\fn`、`\r` 与绘图模式后的字体/字符使用；
 - 上传字体与 ASS family 的匹配；
+- 主字体缺字 / 需要 fallback 的静态预警；
 - 字体警告与 fallback 状态。
 
 Windows 端会把 UTF-16 ASS 安全规范化成 libass 可处理的 UTF-8 临时文件，避免 BOM / UTF-16 直接送入 FFmpeg 造成乱码或字体识别异常。
