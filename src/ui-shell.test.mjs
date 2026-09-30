@@ -54,6 +54,9 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /parseLibassFontDiagnostics/);
   assert.match(main, /renderRuntimeFontDiagnostics/);
   assert.match(main, /previewFontDiagnostics/);
+  assert.match(main, /findGlyphRiskPreviewTimes/);
+  assert.match(main, /buildPreviewPlan/);
+  assert.match(main, /previewRiskTimes/);
   assert.match(main, /goal !== 'sizeBudget'/);
   assert.doesNotMatch(main, /<option value="quality">质量优先/);
   assert.doesNotMatch(main, /体积预算：1\.6×/);
