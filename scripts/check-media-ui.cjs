@@ -1,14 +1,16 @@
 const {chromium}=require('playwright');
 const {spawn}=require('node:child_process');
 (async()=>{
- const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','5173'],{stdio:'pipe'});
+ const server=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','4179','--strictPort'],{stdio:'pipe'});
  let browser;
  try {
-  await new Promise((resolve,reject)=>{let text='';const timer=setTimeout(()=>reject(Error('Vite startup timeout')),20000);server.stdout.on('data',data=>{text+=data;if(text.includes('127.0.0.1:5173')){clearTimeout(timer);resolve();}});server.on('error',reject);});
+  let startupLog='';server.stdout.on('data',data=>{startupLog+=data;});server.stderr.on('data',data=>{startupLog+=data;});
+  let ready=false;for(let attempt=0;attempt<100;attempt++){try{if((await fetch('http://127.0.0.1:4179/')).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,200));}
+  if(!ready)throw Error('Vite startup timeout: '+startupLog);
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('http://127.0.0.1:5173/');
+  await page.goto('http://127.0.0.1:4179/');
   await page.locator('#mediaWorkspace').waitFor();
   await page.selectOption('[name=operation]','copy');
   if(!await page.locator('#taskEncoding').isDisabled())throw Error('Copy controls remain enabled');

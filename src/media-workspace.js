@@ -85,7 +85,7 @@ export function mountMediaWorkspace(hooks) {
       for(const control of form.elements)control.disabled=true;
       section.querySelector('#taskCancel').disabled=false;
       completed=await hooks.run(task,media,(p,message)=>{section.querySelector('#taskProgress').value=p;status(message);});
-      status('处理完成，成品已验证。点击“保存成品”选择保存位置。');
+      status('处理完成，成品已验证 · 实际起点 '+Number(completed.actualStart||0).toFixed(3)+' 秒。点击“保存成品”选择保存位置。');
       section.querySelector('#taskProgress').value=1;
     }catch(e){status('处理失败：'+e.message);hooks.log(e.stack||e.message);}
     finally{

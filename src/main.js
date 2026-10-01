@@ -4238,6 +4238,7 @@ mountMediaWorkspace({
   setBusy: value => {
     state.operationBusy=value;
     for (const id of ['video','ass','fonts','videoNativePickerBtn','assNativePickerBtn','fontsNativePickerBtn','analyze','encodeBtn','previewBtn','benchmarkBtn','calibrateQualityBtn']) if($(id)) $(id).disabled=value;
+    document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control=>{control.disabled=value;});
     if(!value){refreshAnalyze();refreshBenchmarkEnabled();}
   },
   log,
@@ -4284,7 +4285,7 @@ mountMediaWorkspace({
           if(!result.ok)throw new Error(result.error||'状态读取失败');
           const actual=result.actualStart != null ? ' · 实际起点 '+Number(result.actualStart).toFixed(3)+' 秒' : '';
           progress(Number(result.progress||0),(result.message||result.state)+actual);
-          if(result.state==='completed')return {jobId:started.jobId,name};
+          if(result.state==='completed')return {jobId:started.jobId,name,actualStart:result.actualStart??started.actualStart??task.start};
           if(['failed','cancelled'].includes(result.state))throw new Error(result.error||result.state);
           if(manualCancelRequested)bridge.cancelNativeEncode(started.jobId);
           await sleepMs(700);
@@ -4300,6 +4301,6 @@ mountMediaWorkspace({
     progress(.99,'正在验证成品…');
     const check=await state.engine.scanEncodedPackets(result.blob,task.expectedDuration,{expectedAudioTracks:task.expectedAudioTracks,tolerance:task.operation==='copy'?2:undefined});
     if(!check.ok)throw new Error('成品轨道或时长验证未通过：'+JSON.stringify(check));
-    return {blob:result.blob,name};
+    return {blob:result.blob,name,actualStart:task.start};
   }
 });
