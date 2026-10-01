@@ -83,7 +83,17 @@ export function compileTask(raw, media) {
   }
   if (nvenc) {
     if (!['disabled','qres','fullres'].includes(t.multipass)) throw Error('NVENC multipass 无效');
-    args.push('-multipass',t.multipass);
+    t.compatibilityWarnings = Array.isArray(t.compatibilityWarnings) ? t.compatibilityWarnings : [];
+    const multipassSupported = media.nvencMultipassSupported !== false;
+    const fullresSupported = media.nvencMultipassFullresSupported !== false;
+    if (!multipassSupported) {
+      if (t.multipass !== 'disabled') t.compatibilityWarnings.push('当前 FFmpeg/NVENC 不支持 -multipass；已自动关闭多阶段分析。');
+      t.multipass='disabled';
+    } else if (t.multipass === 'fullres' && !fullresSupported) {
+      t.compatibilityWarnings.push('当前 FFmpeg/NVENC 不支持 fullres multipass；已自动关闭多阶段分析。');
+      t.multipass='disabled';
+    }
+    if (multipassSupported) args.push('-multipass',t.multipass);
     if (t.lookahead !== '') args.push('-rc-lookahead',String(number('lookahead',0,0,32,true)));
     args.push('-spatial-aq',t.spatialAq ? '1':'0','-temporal-aq',t.temporalAq ? '1':'0');
     if (t.aqStrength !== '') args.push('-aq-strength',String(number('aqStrength',8,1,15,true)));
