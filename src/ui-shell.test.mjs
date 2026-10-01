@@ -168,7 +168,7 @@ test('phone tablet and desktop use coordinated responsive shells', async () => {
   assert.match(main, /document\.documentElement\.dataset\.uiShell = shell/);
   assert.match(main, /id="taskOverviewRail"/);
   assert.match(main, /function syncTaskOverview\(\)/);
-  assert.match(css, /Responsive workbench v2 authority/);
+  assert.match(css, /Runtime-first responsive workbench v4/);
   assert.match(css, /body\.ui-desktop \.workspace-layout\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /body\.ui-tablet \.workspace-layout/);
   assert.match(css, /body\.ui-phone \[data-mobile-stage-section\]:not\(\.hidden\)/);
@@ -186,8 +186,8 @@ test('design-faithful preview sample rail and visual hierarchy are present', asy
   assert.match(main, /data-preview-index=/);
   assert.match(main, /class="preview-generate-action action-solid action-cyan"/);
   assert.match(main, /class="primary action-solid action-green"/);
-  assert.match(css, /Design-faithful workbench v3/);
-  assert.match(css, /\.preview-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,1fr\) 184px/);
+  assert.match(css, /Runtime-first responsive workbench v4/);
+  assert.match(css, /\.preview-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,1fr\) 190px/);
   assert.match(css, /\.preview-sample-card\.is-current/);
   assert.match(css, /\.action-green\s*\{/);
 });
