@@ -20,10 +20,12 @@ const {spawn}=require('node:child_process');
   await page.fill('[name=width]','1280');await page.fill('[name=quality]','18');
   await page.click('#taskLoadPreset');
   if(await page.inputValue('[name=width]')!=='1280')throw Error('Preset overwrote resolution');
+  await page.evaluate(()=>scrollTo(0,0));
   await page.screenshot({path:'media-workspace-desktop.png',fullPage:true});
   await page.setViewportSize({width:390,height:844});
+  await page.evaluate(()=>scrollTo(0,0));
   await page.screenshot({path:'media-workspace-mobile.png',fullPage:true});
-  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile horizontal overflow');
+  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile horizontal overflow: '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})).filter(el=>el.right>innerWidth+1).slice(0,12))));
   if(errors.length)throw Error(errors.join('\n'));
   console.log('Desktop/mobile UI, mode gating, preset preservation: passed');
  }finally{await browser?.close();server.kill();}

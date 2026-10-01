@@ -6221,3 +6221,5 @@ body.ui-phone .runtime-help-link {
 .task-command { white-space:pre-wrap; overflow-wrap:anywhere; padding:14px; border:1px solid #607189; border-radius:8px; max-height:220px; overflow:auto; }
 .media-workspace progress { width:100%; accent-color:#66baff; }
 .media-workspace .button-row { flex-wrap:wrap; }
+/* Keep the sticky mobile header's negative margin equal to shell padding. */
+body.ui-phone { --mobile-gutter: 7px; }
