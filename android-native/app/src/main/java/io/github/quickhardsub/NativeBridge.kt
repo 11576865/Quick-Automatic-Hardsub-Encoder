@@ -320,11 +320,21 @@ class NativeBridge(
     }
 
     @JavascriptInterface
+    fun validateMediaTask(taskJson: String): String = try {
+        val args = MediaTaskArguments.validate(JSONObject(taskJson))
+        MediaTaskArguments.validateSupport(args)
+        JSONObject().put("ok", true).toString()
+    } catch (error: Throwable) {
+        JSONObject().put("ok", false).put("error", error.message ?: "Invalid media task").toString()
+    }
+
+    @JavascriptInterface
     fun getBackendInfo(): String {
         val power = activity.getSystemService(PowerManager::class.java)
         return JSONObject()
             .put("available", true)
-            .put("taskSchemaVersion", 1)
+            .put("taskSchemaVersion", 2)
+            .put("fpsModeSupported", MediaTaskArguments.supportsFpsMode())
             .put("backend", "android-native")
             .put("abi", Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown")
             .put("apiLevel", Build.VERSION.SDK_INT)

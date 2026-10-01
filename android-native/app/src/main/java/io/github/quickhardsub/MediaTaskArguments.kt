@@ -1,6 +1,7 @@
 package io.github.quickhardsub
 
 import org.json.JSONObject
+import com.arthenica.ffmpegkit.FFmpegKit
 
 /** Accept only supported output options: never input URLs, output paths or commands. */
 object MediaTaskArguments {
@@ -8,7 +9,10 @@ object MediaTaskArguments {
         "-ss" to "0".toRegex(),
         "-map" to "0:(?:v:0|a\\?|a:\\d{1,2}|s\\?|t\\?)".toRegex(),
         "-c:v" to "copy|libx264|libx265|libsvtav1|h264_nvenc|hevc_nvenc|av1_nvenc".toRegex(),
-        "-c:a" to "copy|aac".toRegex(),
+        "-c:a" to "copy|aac|libopus".toRegex(),
+        "-ac" to "\\d{1,2}".toRegex(),
+        "-ar" to "\\d{4,6}".toRegex(),
+        "-vsync" to "0|cfr|vfr".toRegex(),
         "-c:s" to "copy".toRegex(),
         "-c:t" to "copy".toRegex(),
         "-map_metadata" to "0|-1".toRegex(),
@@ -26,7 +30,7 @@ object MediaTaskArguments {
         "-threads" to "\\d{1,3}".toRegex(),
         "-r" to "\\d{1,6}(?:\\.\\d+)?(?:/\\d{1,6})?".toRegex(),
         "-fps_mode" to "passthrough|cfr|vfr".toRegex(),
-        "-pix_fmt" to "yuv420p|yuv420p10le|yuv444p|yuv444p10le".toRegex(),
+        "-pix_fmt" to "yuv420p|yuv420p10le|yuv444p|yuv444p10le|p010le".toRegex(),
         "-profile:v" to "[A-Za-z0-9_.-]{1,40}".toRegex(),
         "-level:v" to "[A-Za-z0-9_.-]{1,40}".toRegex(),
         "-tune" to "[A-Za-z0-9_.-]{1,40}".toRegex(),
@@ -52,7 +56,7 @@ object MediaTaskArguments {
         "pad=ceil\\(iw/2\\)\\*2:ceil\\(ih/2\\)\\*2:0:0".toRegex()
     )
     fun validate(task: JSONObject): List<String> {
-        require(task.optInt("version") == 1) { "Unsupported media task version" }
+        require(task.optInt("version") in 1..2) { "Unsupported media task version" }
         val operation = task.getString("operation")
         require(operation in setOf("copy", "transcode", "hardsub"))
         val start = task.getDouble("start")
@@ -82,6 +86,40 @@ object MediaTaskArguments {
             result.add(value)
         }
         require("-c:v" in seen)
+        if (task.optBoolean("twoPass")) require(result[result.indexOf("-c:v") + 1] == "libx264" && "-b:v" in result) { "Two-pass requires x264 bitrate mode" }
         return result
+    }
+
+    fun firstPassArgs(args: List<String>): List<String> {
+        val out = mutableListOf<String>()
+        var i = 0
+        while (i < args.size) {
+            val flag = args[i++]
+            if (flag == "-sn") continue
+            val value = args[i++]
+            if (flag in setOf("-c:a", "-b:a", "-ac", "-ar", "-c:s", "-c:t", "-map_metadata", "-map_chapters")) continue
+            if (flag == "-map" && !value.startsWith("0:v:")) continue
+            out.addAll(listOf(flag, value))
+        }
+        return out + listOf("-an", "-sn")
+    }
+    private val helpCache = mutableMapOf<String, String>()
+    @Synchronized private fun help(key: String): String = helpCache.getOrPut(key) {
+        FFmpegKit.executeWithArguments(if (key == "full") arrayOf("-hide_banner", "-h", "full") else arrayOf("-hide_banner", "-h", "encoder=$key")).getOutput().orEmpty()
+    }
+    fun supportsFpsMode(): Boolean = Regex("(?m)^\\s*-fps_mode(?:\\s|$)").containsMatchIn(help("full"))
+    fun validateSupport(args: List<String>) {
+        val encoder = args[args.indexOf("-c:v") + 1]
+        if (encoder == "copy") return
+        if ("-c:a" in args) {
+            val audio = args[args.indexOf("-c:a") + 1]
+            if (audio != "copy") require(help(audio).contains("Encoder $audio ")) { "Audio encoder is unavailable" }
+        }
+        val encoderHelp = help(encoder)
+        val options = Regex("(?m)^\\s*(-[A-Za-z0-9_:.-]+)(?:\\s|$)").findAll(help("full") + "\n" + encoderHelp).map { it.groupValues[1] }.toSet()
+        require(options.isNotEmpty()) { "Unable to inspect FFmpeg capabilities" }
+        for (flag in listOf("-fps_mode", "-vsync", "-crf", "-preset", "-tune")) require(flag !in args || flag in options) { "FFmpeg does not support $flag" }
+        val formats = Regex("Supported pixel formats:\\s*([^\\r\\n]+)").find(encoderHelp)?.groupValues?.get(1)?.trim()?.split(Regex("\\s+"))
+        if (!formats.isNullOrEmpty() && "-pix_fmt" in args) require(args[args.indexOf("-pix_fmt") + 1] in formats) { "Unsupported encoder pixel format" }
     }
 }

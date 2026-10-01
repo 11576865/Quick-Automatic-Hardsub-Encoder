@@ -267,3 +267,31 @@ jobs:
             try { Get-MediaTaskArgs $valid | Out-Null } catch { $rejected=$true }
             if(-not $rejected){throw 'Unsafe/incompatible task accepted.'}
           }
+
+      - name: Validate budget task and real x264 two-pass output
+        shell: powershell
+        run: |
+          . ./windows/media-task.ps1
+          . ./windows/native-backend.ps1
+          $options=@('-ss','0','-map','0:v:0','-map','0:a?','-sn','-c:v','libx264','-preset','medium','-b:v','500000','-r','60','-fps_mode','cfr','-pix_fmt','yuv420p','-vf','scale=128:72:flags=lanczos,pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0','-c:a','aac','-b:a','96000','-ac','2')
+          $task=[pscustomobject]@{version=2;operation='transcode';start=0;end=2;twoPass=$true;outputArgs=$options;expectedWidth=128;expectedHeight=72;expectedFps=60;expectedBitDepth=8}
+          $valid=Get-MediaTaskArgs $task
+          $first=Get-MediaFirstPassArgs $valid
+          if($first -contains '-c:a' -or $first -contains '0:a?' -or $first -notcontains '-an'){throw 'First pass maps audio.'}
+          $work=Join-Path $env:RUNNER_TEMP 'media-two-pass'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          Push-Location $work
+          try {
+            ffmpeg -v error -y -f lavfi -i 'testsrc2=size=160x90:rate=60' -f lavfi -i 'sine=sample_rate=48000' -t 2 -c:v libx264 -c:a aac source.mkv
+            if($LASTEXITCODE -ne 0){throw 'Source generation failed.'}
+            & ffmpeg -v error -y -i source.mkv -t 2 @first -pass 1 -passlogfile task-pass -f null NUL
+            if($LASTEXITCODE -ne 0){throw 'First pass failed.'}
+            & ffmpeg -v error -y -i source.mkv -t 2 @valid -pass 2 -passlogfile task-pass -f matroska output.mkv
+            if($LASTEXITCODE -ne 0){throw 'Second pass failed.'}
+            $info=(ffprobe -v error -show_streams -show_format -of json output.mkv) | ConvertFrom-Json
+            Test-MediaOutput $task @($info.streams | Where-Object codec_type -eq 'video')[0]
+            $rejected=$false
+            $task.expectedFps=30
+            try { Test-MediaOutput $task @($info.streams | Where-Object codec_type -eq 'video')[0] } catch {$rejected=$true}
+            if(-not $rejected){throw 'Wrong output frame rate accepted.'}
+          } finally { Pop-Location }

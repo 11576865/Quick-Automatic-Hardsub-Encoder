@@ -15,8 +15,8 @@ test('manual values survive compilation and are emitted once',()=>{
   assert.equal(task.outputArgs.filter(x=>x==='-crf').length,1);
 });
 test('copy task has no filters, encoding preset, pixel conversion or audio transcode',()=>{
-  const t=build({operation:'copy',width:320,fps:24,pixelFormat:'yuv420p10le',start:1.2,end:3.7});
-  assert.equal(t.expectedDuration,2.5);
+  const t=build({operation:'copy',rateMode:'size',twoPass:true,width:320,fps:24,pixelFormat:'yuv420p10le',start:1.2,end:3.7});
+  assert.equal(t.expectedDuration,2.5);assert.equal(t.twoPass,false);
   for(const flag of ['-vf','-r','-preset','-crf','-pix_fmt'])assert.ok(!t.outputArgs.includes(flag));
   assert.equal(t.outputArgs[t.outputArgs.indexOf('-c:v')+1],'copy');
   assert.throws(()=>build({operation:'copy',audio:'aac'}));
@@ -32,7 +32,7 @@ test('invalid ranges, malformed filters and incompatible options are rejected',(
   assert.doesNotThrow(()=>compileTask({...defaults,operation:'copy'},{...media,unsafeColorPipeline:true}));
 });
 test('compiled options stay within the native argument schema',()=>{
-  const tasks=[build(),build({operation:'copy'}),build({operation:'hardsub',crop:'640:360:0:0',deinterlace:'bwdif',rotation:'clock',denoise:true,deband:true,sharpen:true}),build({encoder:'h264_nvenc',preset:'p5',lookahead:16,spatialAq:true,temporalAq:true,aqStrength:8})];
+  const tasks=[build(),build({operation:'copy'}),build({operation:'hardsub',crop:'640:360:0:0',deinterlace:'bwdif',rotation:'clock',denoise:true,deband:true,sharpen:true}),build({encoder:'h264_nvenc',preset:'p5',lookahead:16,spatialAq:true,temporalAq:false,aqStrength:8})];
   for(const task of tasks){
     for(let i=0;i<task.outputArgs.length;i++){
       const flag=task.outputArgs[i];if(flag==='-sn')continue;

@@ -319,6 +319,8 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
         } catch {}
     }
 
+    $fullHelp=(Invoke-NativeTool $Ffmpeg '-hide_banner -h full').StdOut
+    $globalOptions=@([regex]::Matches($fullHelp,'(?m)^\s*(-[A-Za-z0-9_:.-]+)(?:\s|$)') | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique)
     $detected = @()
     foreach ($profile in Get-NativeEncoderCatalog) {
         $listed = $false
@@ -340,7 +342,13 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
                 $runtime = $true
             }
         }
+        $encoderHelp=if($listed){(Invoke-NativeTool $Ffmpeg ('-hide_banner -h encoder='+$profile.Encoder)).StdOut}else{''}
+        $options=@([regex]::Matches($encoderHelp,'(?m)^\s*(-[A-Za-z0-9_:.-]+)(?:\s|$)') | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique)
+        $pixelFormats=@()
+        if($encoderHelp -match 'Supported pixel formats:\s*([^\r\n]+)'){$pixelFormats=@($Matches[1].Trim() -split '\s+')}
         $detected += [pscustomobject]@{
+            Options=[object[]]$options
+            PixelFormats=[object[]]$pixelFormats
             Key = $profile.Key
             Label = $profile.Label
             Codec = $profile.Codec
@@ -370,6 +378,8 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
         Gpus = @($gpus)
         HasAss = $hasAss
         Encoders = @($detected)
+        GlobalOptions = [object[]]$globalOptions
+        FpsModeSupported = ($globalOptions -contains '-fps_mode')
     }
 }
 

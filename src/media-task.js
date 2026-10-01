@@ -1,5 +1,6 @@
+import { sizeBudget } from './media-planning.js';
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
-export const TASK_VERSION = 1;
+export const TASK_VERSION = 2;
 export const SOFTWARE = { h264: 'libx264', h265: 'libx265', av1: 'libsvtav1' };
 export function compileTask(raw, media) {
   const t = { ...raw, version: TASK_VERSION };
@@ -14,12 +15,20 @@ export function compileTask(raw, media) {
   if (t.end <= t.start) throw Error('结束时间必须晚于开始时间');
   t.videoStream = number('videoStream', 0, 0, 0, true);
   t.audio = t.audio || 'copy';
-  if (!['copy', 'aac', 'none'].includes(t.audio)) throw Error('未知音频策略');
-  if (t.operation === 'copy' && t.audio === 'aac') throw Error('无损剪切不允许音频转码');
+  if (!['copy', 'aac', 'libopus', 'none'].includes(t.audio)) throw Error('未知音频策略');
+  if (t.operation === 'copy' && ['aac','libopus'].includes(t.audio)) throw Error('无损剪切不允许音频转码');
   t.audioTrack = t.audioTrack || 'all';
   if (t.audioTrack !== 'all' && !/^\d+$/.test(t.audioTrack)) throw Error('音轨索引无效');
   if (t.audioTrack !== 'all' && Number(t.audioTrack) >= media.audioTracks) throw Error('音轨索引不存在');
   t.expectedAudioTracks = t.audio === 'none' ? 0 : t.audioTrack === 'all' ? media.audioTracks : 1;
+  if (t.operation !== 'copy' && t.frames && (t.fpsMode !== 'cfr' || !t.fps)) throw Error('限制总帧数时必须指定恒定帧率 CFR 和目标帧率');
+  const durationForBudget = Math.min(t.end-t.start, t.frames ? Number(t.frames) / parseRate(t.fps) : Infinity);
+  if(t.operation === 'copy'){t.rateMode='copy';t.twoPass=false;}
+  if (t.rateMode === 'size') {
+    t.sizePlan = sizeBudget(t,durationForBudget,t.expectedAudioTracks);
+    t.bitrate = t.sizePlan.videoRate;
+  }
+  t.estimatedAudioRate = t.audio === 'none' || t.expectedAudioTracks === 0 ? 0 : t.audio === 'copy' ? null : Number(t.audioBitrate || 128000)*t.expectedAudioTracks;
   const args = ['-ss','0','-map', `0:v:${t.videoStream}`];
   if (t.audio !== 'none') args.push('-map', t.audioTrack === 'all' ? '0:a?' : `0:a:${t.audioTrack}`);
   if (t.keepSubtitles) args.push('-map', '0:s?', '-c:s', 'copy');
@@ -40,11 +49,12 @@ export function compileTask(raw, media) {
   const nvenc = t.encoder.endsWith('_nvenc');
   const presets = ['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
   if (!(nvenc ? /^p[1-7]$/.test(t.preset) : t.codec === 'av1' ? /^(?:[0-9]|1[0-3])$/.test(t.preset) : presets.includes(t.preset))) throw Error('preset 与编码器不兼容');
-  const quality = number('quality', t.codec === 'av1' ? 32 : 23, 0, (nvenc || t.codec !== 'av1') ? 51 : 63);
+  const quality = t.rateMode === 'quality' ? number('quality', t.codec === 'av1' ? 32 : 23, 0, (nvenc || t.codec !== 'av1') ? 51 : 63) : 23;
+  t.quality = quality;
   args.push('-c:v', t.encoder, '-preset', t.preset);
-  if (!['quality','bitrate'].includes(t.rateMode)) throw Error('未知码率控制');
+  if (!['quality','bitrate','size'].includes(t.rateMode)) throw Error('未知码率控制');
   if (nvenc) args.push('-rc', 'vbr');
-  if (t.rateMode === 'bitrate') args.push('-b:v', String(number('bitrate', 4000000, 1, 2000000000, true)));
+  if (t.rateMode !== 'quality') {t.bitrate=number('bitrate',4000000,1,2000000000,true);args.push('-b:v',String(t.bitrate));}
   else { args.push(nvenc ? '-cq' : '-crf', String(quality)); if (nvenc) args.push('-b:v','0'); }
   for (const [key, flag, limit] of [['maxrate','-maxrate',2000000000],['bufsize','-bufsize',4000000000],['gop','-g',100000],['bf','-bf',16],['refs','-refs',16],['threads','-threads',256]]) {
     if (t[key] !== '' && t[key] != null) args.push(flag, String(number(key, 0, 0, limit, true)));
@@ -60,9 +70,14 @@ export function compileTask(raw, media) {
     if(!Number.isFinite(outputFps)||outputFps<0.001||outputFps>1000)throw Error('目标帧率无效');
     args.push('-r',text);
   }
-  if (t.fpsMode !== 'auto') args.push('-fps_mode',t.fpsMode);
-  if (!['yuv420p','yuv420p10le','yuv444p','yuv444p10le'].includes(t.pixelFormat)) throw Error('像素格式无效');
+  t.legacyFps = t.legacyFps || media.fpsModeSupported === false;
+  if (t.fpsMode !== 'auto') args.push(t.legacyFps ? '-vsync' : '-fps_mode',t.fpsMode === 'passthrough' && t.legacyFps ? '0' : t.fpsMode);
+  t.expectedFps = t.fps ? outputFps : null;
+  if (!['yuv420p','yuv420p10le','yuv444p','yuv444p10le','p010le'].includes(t.pixelFormat)) throw Error('像素格式无效');
+  if (nvenc && t.pixelFormat === 'yuv420p10le') t.pixelFormat='p010le';
   args.push('-pix_fmt',t.pixelFormat);
+  t.expectedBitDepth = /10|p010/.test(t.pixelFormat) ? 10 : 8;
+  if (t.spatialAq && t.temporalAq && nvenc) throw Error('NVENC 空间 AQ 与时间 AQ 请选择一种');
   for (const [key, flag] of [['profile','-profile:v'],['level','-level:v'],['tune','-tune']]) {
     if (t[key]) { if (!/^[A-Za-z0-9_.-]{1,40}$/.test(t[key])) throw Error(key + ' 格式无效'); args.push(flag,t[key]); }
   }
@@ -105,10 +120,22 @@ export function compileTask(raw, media) {
   }
   filters.push('pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0');
   args.push('-vf',filters.join(','));
-  if (t.audio !== 'none') { args.push('-c:a',t.audio); if (t.audio === 'aac') args.push('-b:a',String(number('audioBitrate',192000,8000,1024000,true))); }
+  if (t.audio !== 'none') { args.push('-c:a',t.audio); if (['aac','libopus'].includes(t.audio)) args.push('-b:a',String(number('audioBitrate',128000,8000,1024000,true))); }
+  if(t.audio==='libopus' && t.audioSampleRate && ![8000,12000,16000,24000,48000].includes(Number(t.audioSampleRate)))throw Error('Opus 采样率请选择 48000 Hz 或编码器默认');
+  if (t.audio !== 'none' && t.audio !== 'copy') {
+    if(t.audioChannels)args.push('-ac',String(number('audioChannels',2,1,8,true)));
+    if(t.audioSampleRate)args.push('-ar',String(number('audioSampleRate',48000,8000,192000,true)));
+  }
+  if(t.twoPass && (t.encoder !== 'libx264' || t.rateMode === 'quality')) throw Error('整片两遍编码目前支持 x264 的目标码率 / 目标体积模式');
+  if(Number(t.width)>0 && Number(t.height)>0){
+    const rotated=['clock','cclock'].includes(t.rotation);
+    const w=rotated?Number(t.height):Number(t.width),h=rotated?Number(t.width):Number(t.height);
+    t.expectedWidth=Math.ceil(w/2)*2;t.expectedHeight=Math.ceil(h/2)*2;
+  }
   t.expectedDuration = Math.min(t.end-t.start, t.frames ? number('frames',0,1,100000000,true)/outputFps : Infinity);
   if (t.frames) args.push('-frames:v',String(t.frames));
   if (t.frames && t.audio !== 'none') throw Error('限制输出帧数时请关闭音频，避免音视频长度歧义');
+  t.estimatedBytes = t.rateMode !== 'quality' && t.estimatedAudioRate != null ? (Number(t.bitrate)+t.estimatedAudioRate)*t.expectedDuration/8 : null;
   t.outputArgs = args;
   return t;
 }
@@ -116,6 +143,26 @@ export function taskInputArgs(t) {
   return t.start > 0 ? ['-ss',String(t.start)] : [];
 }
 export function taskDurationArgs(t) { return ['-t', String(t.end-t.start)]; }
+export function parseRate(text) { const [n,d='1']=String(text).split('/'); return Number(n)/Number(d); }
+export function firstPassArgs(args) {
+  const out=[];
+  for(let i=0;i<args.length;i++){
+    const flag=args[i];if(flag==='-sn'){out.push(flag);continue;}
+    const value=args[++i];
+    if(['-c:a','-b:a','-ac','-ar','-c:s','-c:t','-map_metadata','-map_chapters'].includes(flag))continue;
+    if(flag==='-map' && !value.startsWith('0:v:'))continue;
+    out.push(flag,value);
+  }
+  return [...out.filter(x=>x!=='-sn'),'-an','-sn'];
+}
+const quoteArg = value => value==='ffmpeg'?'ffmpeg':'"'+String(value).replaceAll('"','\\"')+'"';
 export function commandPreview(t) {
-  return ['ffmpeg','-i','<所选视频>',...taskDurationArgs(t),...t.outputArgs,'-f','matroska','<成品.mkv>'].join(' ') + (t.start ? `\n输入定位：-ss ${t.start}（无损剪切将向前定位关键帧）` : '');
+  const base=['ffmpeg',...taskInputArgs(t),'-i','<所选视频>',...taskDurationArgs(t)];
+  const output=[...t.outputArgs];
+  if(t.twoPass){
+    const first=[...base,...firstPassArgs(output),'-pass','1','-passlogfile','<任务统计文件>','-f','null','NUL'];
+    output.push('-pass','2','-passlogfile','<任务统计文件>');
+    return first.map(quoteArg).join(' ')+'\n'+[...base,...output,'-f','matroska','<成品.mkv>'].map(quoteArg).join(' ');
+  }
+  return [...base,...output,'-f','matroska','<成品.mkv>'].map(quoteArg).join(' ') + (t.start && t.operation==='copy' ? '\n无损剪切：执行时向前定位关键帧' : '');
 }

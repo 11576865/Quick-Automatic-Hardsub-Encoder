@@ -1,4 +1,5 @@
-import { taskInputArgs, taskDurationArgs } from './media-task.js';
+import { parseEncoderHelp, validateEncoderSupport } from './media-capabilities.js';
+import { taskInputArgs, taskDurationArgs, firstPassArgs } from './media-task.js';
 const VENDOR_ENTRY = './vendor/ffmpeg-kit-next-web/dist/index.js';
 const FALLBACK_FONT_URL = './vendor/fallback-fonts/NotoSansSC-Regular.otf';
 const FALLBACK_FONT_FAMILY = 'Noto Sans SC';
@@ -90,6 +91,25 @@ export class EncoderEngine {
       this.sourceFontFiles.length ? [this.fontDir] : [],
       this.activeFontMappings
     );
+  }
+
+  async taskCapabilities(encoder) {
+    this.taskHelpCache ||= new Map();
+    const read=async key=>{
+      if(!this.taskHelpCache.has(key)){
+        const session=await this.api.FFmpegKit.execute(key==='global'?'-hide_banner -h full':`-hide_banner -h encoder=${key}`);
+        const text=await session.getOutput?.() || await session.getAllLogsAsString?.() || '';
+        this.taskHelpCache.set(key,parseEncoderHelp(text));
+      }
+      return this.taskHelpCache.get(key);
+    };
+    const global=await read('global');
+    return {encoder:encoder==='copy'?{}:await read(encoder),globalOptions:global.options,fpsModeSupported:global.options.includes('-fps_mode')};
+  }
+  async validateTask(task) {
+    const caps=await this.taskCapabilities(task.encoder || 'copy');
+    validateEncoderSupport(task,caps.encoder,caps.globalOptions);
+    if(['aac','libopus'].includes(task.audio)){const audio=await this.taskCapabilities(task.audio);if(!audio.encoder.available)throw Error('当前核心不支持音频编码器 '+task.audio);}
   }
 
   async probe() {
@@ -258,7 +278,7 @@ export class EncoderEngine {
     const start = options.start ?? 0;
     const crf = options.crf ?? defaultCrf(codecKey);
     const preset = options.preset ?? defaultPreset(codecKey);
-    const targetVideoBitrate = Number(options.targetVideoBitrate || 0);
+    const targetVideoBitrate = Number(options.task?.bitrate || options.targetVideoBitrate || 0);
     const encoder = encoderName(codecKey);
     const out = `/sample_${codecKey}.mkv`;
     const filter = this.buildEncodeFilter(!!options.withSubtitles);
@@ -347,14 +367,14 @@ export class EncoderEngine {
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
     const gop = normalGop(this.mediaInfo?.fps || 30);
-    const targetVideoBitrate = Number(options.targetVideoBitrate || 0);
-    const twoPass = !!options.twoPass && targetVideoBitrate > 0;
+    const targetVideoBitrate = Number(options.task?.bitrate || options.targetVideoBitrate || 0);
+    const twoPass = options.task ? !!options.task.twoPass : !!options.twoPass && targetVideoBitrate > 0;
     const passlog = `/twopass_${codecKey}_${Date.now()}`;
 
     if (twoPass) {
       options.onPhase?.('pass1');
-      const firstPass = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
-      this.onLog(`严格目标体积：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
+      const firstPass = options.task ? ['-y',...taskInputArgs(options.task),'-i',this.inputPath,...taskDurationArgs(options.task),...firstPassArgs(options.task.outputArgs).map(value=>value.replace('__ASS__',escapeFilter(this.assPath)).replace('__FONTS__',escapeFilter(this.fontDir))),'-pass','1','-passlogfile',passlog,'-f','null','-'].map(q).join(' ') : `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
+      this.onLog(`整片两遍编码：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
       await this.executeWithStatistics(firstPass, options.onStatistics, 'pass1');
     }
 
@@ -368,6 +388,7 @@ export class EncoderEngine {
       : `-crf ${crf}`;
     const task = options.task;
     const taskArgs = task ? task.outputArgs.map(value => value.replace('__ASS__',escapeFilter(this.assPath)).replace('__FONTS__',escapeFilter(this.fontDir))) : [];
+    if(task && twoPass)taskArgs.push('-pass','2','-passlogfile',passlog);
     const cmd = task
       ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),'-f','matroska',q(target)].join(' ')
       : `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
@@ -455,7 +476,7 @@ export class EncoderEngine {
     });
 
     const layoutSession = await FFprobeKit.execute(
-      `-v error -show_streams -show_entries stream=index,codec_type -of compact=p=0:nk=0 ${q(path)}`
+      `-v error -show_streams -show_entries stream=index,codec_type,width,height,avg_frame_rate,pix_fmt -of compact=p=0:nk=0 ${q(path)}`
     );
     const layoutRc = layoutSession.getReturnCode?.();
     const layoutOutput = await layoutSession.getOutput?.() || '';
@@ -474,6 +495,12 @@ export class EncoderEngine {
       const index = Number(fields.index);
       if (Number.isInteger(index) && fields.codec_type) {
         streamTypes.set(index, fields.codec_type);
+        if(fields.codec_type==='video' && validation.task){
+          const t=validation.task,rate=String(fields.avg_frame_rate||'').split('/').map(Number),fps=rate.length===2?rate[0]/rate[1]:rate[0];
+          if(t.expectedWidth && (Number(fields.width)!==t.expectedWidth || Number(fields.height)!==t.expectedHeight))throw Error('成品分辨率与设置不符');
+          if(t.expectedFps && Math.abs(fps-t.expectedFps)>0.01)throw Error('成品帧率与设置不符');
+          if(t.operation!=='copy' && inferBitDepth({},fields.pix_fmt)!==t.expectedBitDepth)throw Error('成品位深与设置不符');
+        }
       }
     }
 
@@ -551,7 +578,7 @@ export class EncoderEngine {
         audioIndexes.length > 0 &&
         audioEnd != null &&
         audioEnd > 0 &&
-        (expected <= 0 || Math.abs(audioEnd - expected) <= audioTolerance)
+        (expected <= 0 || (validation.allowShortAudio ? audioEnd <= expected+audioTolerance : Math.abs(audioEnd - expected) <= audioTolerance))
       );
     const audioOk = audioTrackCountOk && audioDurationsOk;
 
