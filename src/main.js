@@ -88,7 +88,7 @@ app.innerHTML = `
         <div><strong>本地处理</strong><small>默认不上传</small></div>
       </div>
     </div>
-    <p id="heroSubtitle" class="hero-subtitle">将字幕烧录到视频画面中，完成预检、真实预览、方案选择与正式压制。</p>
+    <p id="heroSubtitle" class="hero-subtitle">预检 · 真实预览 · 选方案 · 开始压制</p>
     <nav class="workflow-strip" aria-label="工作流程">
       <span data-workflow-step="prepare"><b>01</b>准备</span>
       <span data-workflow-step="produce"><b>02</b>制作</span>
@@ -153,7 +153,7 @@ app.innerHTML = `
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
   <section id="inputCard" class="card input-card" data-mobile-stage-section="prepare">
-    <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>视频、ASS 与可选字体。分析前不会启动编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>选择视频、ASS 和可选字体。</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
@@ -174,7 +174,7 @@ app.innerHTML = `
         <div id="backendSummary" class="note">正在检测当前网页 / 原生运行环境…</div>
       </div>
     </div>
-    <div class="button-row"><button id="analyze" class="primary" disabled>分析字幕与设备</button></div>
+    <div class="button-row action-row"><button id="analyze" class="primary action-solid action-cyan" disabled>分析素材</button></div>
   </section>
 
   <section id="envCard" class="card env-card" data-mobile-stage-section="prepare">
@@ -209,18 +209,25 @@ app.innerHTML = `
 
   <div class="adaptive-region production-region">
   <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">02</span><div><h2>预览与制作</h2><p>用实际 FFmpeg + libass 检查字体、位置与描边。</p></div></div>
-
-    <div class="button-row">
-      <button id="previewBtn" disabled>生成真实字幕预览</button>
+    <div class="card-heading preview-card-heading">
+      <span class="step-no">02</span>
+      <div><h2>真实字幕预览</h2><p>查看实际 libass 渲染结果。</p></div>
+      <button id="previewBtn" class="preview-generate-action action-solid action-cyan" disabled>生成预览</button>
     </div>
-    <div id="preview" class="preview-wrap"><div class="preview-placeholder">分析完成后可生成真实预览帧。</div></div>
-    <div id="warningAccept" class="hidden" style="margin-top:12px"><label><input type="checkbox" id="acceptWarnings"> 已查看预览，接受当前字体回退/缺失警告并继续。</label></div>
+    <div class="preview-workspace">
+      <div class="preview-workspace-main">
+        <div id="preview" class="preview-wrap"><div class="preview-placeholder">分析完成后可生成真实预览帧。</div></div>
+        <div id="warningAccept" class="hidden preview-warning"><label><input type="checkbox" id="acceptWarnings"> 接受当前字体回退 / 缺失警告并继续</label></div>
+      </div>
+      <aside id="previewSampleRail" class="preview-sample-rail" aria-label="预览采样点">
+        <div class="preview-sample-empty">生成后显示采样点</div>
+      </aside>
+    </div>
   </section>
 
   <div class="production-controls">
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">03</span><div><h2>压制方案</h2><p>选择编码器、质量参数和输出选项。</p></div></div>
+    <div class="card-heading"><span class="step-no">03</span><div><h2>压制方案</h2><p>选编码器和质量目标。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -279,7 +286,7 @@ app.innerHTML = `
     <div id="chosenSummary" class="note plan-summary">请选择一个编码器。</div>
 
     <div class="button-row">
-      <button id="testSelectedBtn" disabled>生成所选方案测试片段</button>
+      <button id="testSelectedBtn" class="action-solid action-cyan-soft" disabled>生成测试片段</button>
     </div>
     <div id="selectedTestResult" class="hidden"></div>
 
@@ -292,10 +299,10 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>正式压制</h2><p>确认后开始整片编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
-      <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
+      <button id="encodeBtn" class="primary action-solid action-green" disabled>开始硬字幕压制</button>
       <button id="cancelEncodeBtn" class="hidden" type="button">取消压制</button>
     </div>
     <div class="progress"><div id="progressBar"></div></div>
@@ -2560,6 +2567,7 @@ async function renderPreviews() {
     const previewPlan = buildPreviewPlan(6);
     state.previewTimes = previewPlan.times;
     state.previewRiskTimes = previewPlan.riskTimes;
+    renderPreviewSampleRail(0);
     state.previewUrls.filter(Boolean).forEach(URL.revokeObjectURL);
     state.previewUrls = new Array(state.previewTimes.length).fill(null);
     state.previewBaseUrls = new Array(state.previewTimes.length).fill(null);
@@ -2592,6 +2600,40 @@ async function renderPreviews() {
   }
 }
 
+
+function renderPreviewSampleRail(activeIndex = 0) {
+  const rail = $('previewSampleRail');
+  if (!rail) return;
+  const times = state.previewTimes || [];
+  if (!times.length) {
+    rail.innerHTML = '<div class="preview-sample-empty">生成后显示采样点</div>';
+    return;
+  }
+
+  rail.innerHTML = times.map((time, index) => {
+    const current = index === activeIndex;
+    const ready = !!state.previewUrls[index];
+    const risk = isRiskPreviewTime(time);
+    const label = current ? '当前' : ready ? '已生成' : '待生成';
+    return '<button type="button" class="preview-sample-card ' +
+      (current ? 'is-current ' : '') +
+      (risk ? 'is-risk ' : '') +
+      (ready ? 'is-ready' : '') +
+      '" data-preview-index="' + index + '" aria-current="' + (current ? 'true' : 'false') + '">' +
+      '<span class="preview-sample-index">' + String(index + 1).padStart(2, '0') + '</span>' +
+      '<span class="preview-sample-copy"><strong>' + Number(time).toFixed(2) + 's</strong><small>' +
+      (risk ? '字体风险采样' : '字幕采样点') + '</small></span>' +
+      '<span class="preview-sample-state">' + label + '</span>' +
+      '</button>';
+  }).join('');
+
+  rail.querySelectorAll('[data-preview-index]').forEach(button => {
+    button.addEventListener('click', () => {
+      const index = Number(button.dataset.previewIndex);
+      loadPreviewAt(index).catch(error => log('预览切换失败：' + error.message));
+    });
+  });
+}
 
 async function loadPreviewAt(index) {
   const times = state.previewTimes;
@@ -2637,6 +2679,8 @@ async function loadPreviewAt(index) {
     renderSubtitleSummary();
     refreshBenchmarkEnabled(false);
   }
+
+  renderPreviewSampleRail(safeIndex);
 
   const fontEvents = state.previewFontEvents[safeIndex] || [];
   const fontDiagnostics =
