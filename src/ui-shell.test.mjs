@@ -173,3 +173,21 @@ test('phone tablet and desktop use coordinated responsive shells', async () => {
   assert.match(css, /body\.ui-tablet \.workspace-layout/);
   assert.match(css, /body\.ui-phone \[data-mobile-stage-section\]:not\(\.hidden\)/);
 });
+
+
+test('design-faithful preview sample rail and visual hierarchy are present', async () => {
+  const [main, css] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(main, /id="previewSampleRail" class="preview-sample-rail"/);
+  assert.match(main, /function renderPreviewSampleRail\(activeIndex = 0\)/);
+  assert.match(main, /data-preview-index=/);
+  assert.match(main, /class="preview-generate-action action-solid action-cyan"/);
+  assert.match(main, /class="primary action-solid action-green"/);
+  assert.match(css, /Design-faithful workbench v3/);
+  assert.match(css, /\.preview-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,1fr\) 184px/);
+  assert.match(css, /\.preview-sample-card\.is-current/);
+  assert.match(css, /\.action-green\s*\{/);
+});
