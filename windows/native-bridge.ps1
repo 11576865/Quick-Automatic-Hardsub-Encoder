@@ -191,6 +191,10 @@ function Get-BackendInfo {
         gpus=[object[]]$gpuList
         ffmpeg=$script:Ffmpeg
         ffprobe=$script:Ffprobe
+        ffmpegVersion=if($script:Capabilities){$script:Capabilities.FfmpegVersion}else{$null}
+        ffmpegSource=if($script:Capabilities){$script:Capabilities.FfmpegSource}else{$null}
+        ffmpegWarnings=if($script:Capabilities){[object[]]$script:Capabilities.FfmpegWarnings}else{[object[]]@()}
+        multipassFullresSupported=if($script:Capabilities){[bool]$script:Capabilities.MultipassFullresSupported}else{$false}
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
         bridgeVersion=4
@@ -219,7 +223,8 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
         if ($targetRate -gt 0) {
             return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -b:v $targetRate -maxrate $targetRate -bufsize $($targetRate * 2)"
         }
-        return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -cq $cq -b:v 0 -multipass fullres"
+        $multipass = if ($Profile.SupportsMultipassFullres) { ' -multipass fullres' } else { '' }
+        return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -cq $cq -b:v 0$multipass"
     }
 
     $preset = [string]$Options.preset
