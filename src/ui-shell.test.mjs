@@ -217,3 +217,16 @@ test('runtime-first three-endpoint layout keeps Android and Windows entry visibl
   assert.match(css, /body\.ui-phone \.workspace-layout\s*\{[\s\S]*?"runtime"[\s\S]*?"main"/);
   assert.match(css, /body\.ui-phone \.workflow-strip,[\s\S]*?body\.ui-phone \.mobile-stage-nav\s*\{[\s\S]*?display:\s*none !important/);
 });
+
+
+test('compact density v5 reduces dead space without shrinking primary actions', async () => {
+  const css = await readFile(new URL('./style.css', import.meta.url), 'utf8');
+
+  assert.match(css, /Compact density v5/);
+  assert.match(css, /body\.ui-desktop \.input-card \.file-row,[\s\S]*?min-height:\s*66px/);
+  assert.match(css, /body\.ui-tablet \.preflight-card \.status-item[\s\S]*?min-height:\s*34px/);
+  assert.match(css, /body\.ui-phone \.workspace-layout,[\s\S]*?gap:\s*6px !important/);
+  assert.match(css, /body\.ui-phone \.platform-card,[\s\S]*?padding:\s*9px/);
+  assert.match(css, /body\.ui-phone \.plan-mode-tab\s*\{[\s\S]*?min-height:\s*44px/);
+  assert.match(css, /body\.ui-phone \.file-picker-trigger,[\s\S]*?min-height:\s*42px/);
+});
