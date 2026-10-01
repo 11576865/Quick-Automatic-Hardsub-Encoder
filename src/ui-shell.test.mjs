@@ -230,3 +230,23 @@ test('compact density v5 reduces dead space without shrinking primary actions', 
   assert.match(css, /body\.ui-phone \.plan-mode-tab\s*\{[\s\S]*?min-height:\s*44px/);
   assert.match(css, /body\.ui-phone \.file-picker-trigger,[\s\S]*?min-height:\s*42px/);
 });
+
+
+test('phone browser exposes dedicated Android and Windows tutorials', async () => {
+  const [main, css] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(main, /<strong>运行方式与教程<\/strong>/);
+  assert.match(main, /<strong>Android 教程<\/strong>/);
+  assert.match(main, /<strong>Windows 教程<\/strong>/);
+  assert.match(main, /下载 Android APK/);
+  assert.match(main, /下载 Windows 包/);
+  assert.match(main, /详细说明/);
+
+  assert.match(css, /Phone tutorial visibility fix/);
+  assert.match(css, /body\.ui-phone \.mobile-runtime-help\s*\{[\s\S]*?display:\s*block !important/);
+  assert.match(css, /body\.ui-phone \.platform-rail\s*\{[\s\S]*?display:\s*none !important/);
+  assert.match(css, /body\.ui-phone \.mobile-runtime-help-grid\s*\{[\s\S]*?repeat\(2,minmax\(0,1fr\)\)/);
+});
