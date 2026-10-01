@@ -31,7 +31,7 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.doesNotMatch(main, /THEME_KEY/);
   assert.doesNotMatch(main, /prefers-color-scheme/);
   assert.match(main, /HARDSUB WORKBENCH/);
-  assert.match(main, /<h1>硬字幕压制<\/h1>/);
+  assert.match(main, /<h1>快速自动硬字幕压制器<\/h1>/);
   assert.match(main, /class="app-header-main"/);
   assert.match(main, /largeMax:\s*1599/);
   assert.match(main, /return 'extra-large'/);
@@ -52,9 +52,10 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /data-mobile-stage-target="produce"/);
   assert.equal((main.match(/data-mobile-stage-target="/g) || []).length, 2);
   assert.match(main, /function devicePrefersMobileShell\(\)/);
-  assert.match(main, /document\.body\.classList\.add\('ui-mobile'\)/);
-  assert.match(main, /document\.body\.classList\.remove\('ui-desktop'\)/);
-  assert.doesNotMatch(main, /classList\.toggle\('ui-mobile'/);
+  assert.match(main, /function resolvePresentationShell\(width = window\.innerWidth\)/);
+  assert.match(main, /classList\.remove\('ui-mobile', 'ui-phone', 'ui-tablet', 'ui-desktop'\)/);
+  assert.match(main, /document\.body\.classList\.add\('ui-tablet'\)/);
+  assert.match(main, /document\.body\.classList\.add\('ui-desktop'\)/);
   assert.match(main, /function setMobileStage\(stage/);
   assert.match(css, /body\.ui-desktop \.production-region/);
   assert.match(css, /body\.ui-mobile \.mobile-stage-nav/);
@@ -154,11 +155,21 @@ test('web shell keeps platform guidance but uses compact native workbench layout
 });
 
 
-test('desktop and mobile use the exact same canonical task shell', async () => {
-  const main = await readFile(new URL('./main.js', import.meta.url), 'utf8');
+test('phone tablet and desktop use coordinated responsive shells', async () => {
+  const [main, css] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+  ]);
 
-  assert.match(main, /function devicePrefersMobileShell\(\) \{[\s\S]*return true;/);
-  assert.match(main, /document\.body\.classList\.add\('ui-mobile'\)/);
-  assert.match(main, /document\.body\.classList\.remove\('ui-desktop'\)/);
-  assert.match(main, /document\.documentElement\.dataset\.uiShell = 'mobile'/);
+  assert.match(main, /function resolvePresentationShell\(width = window\.innerWidth\)/);
+  assert.match(main, /if \(width <= 640\) return 'phone'/);
+  assert.match(main, /if \(width <= 1180 \|\| window\.matchMedia\('\(pointer: coarse\)'\)\.matches\) return 'tablet'/);
+  assert.match(main, /return 'desktop'/);
+  assert.match(main, /document\.documentElement\.dataset\.uiShell = shell/);
+  assert.match(main, /id="taskOverviewRail"/);
+  assert.match(main, /function syncTaskOverview\(\)/);
+  assert.match(css, /Responsive workbench v2 authority/);
+  assert.match(css, /body\.ui-desktop \.workspace-layout\s*\{[\s\S]*grid-template-columns:/);
+  assert.match(css, /body\.ui-tablet \.workspace-layout/);
+  assert.match(css, /body\.ui-phone \[data-mobile-stage-section\]:not\(\.hidden\)/);
 });

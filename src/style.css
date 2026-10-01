@@ -4975,3 +4975,463 @@ body.ui-mobile .codec-card.selected .plan-choose {
   border-color: color-mix(in srgb,var(--accent-strong) 42%,var(--border));
   background: color-mix(in srgb,var(--accent-strong) 10%,var(--surface-2));
 }
+
+
+/* Responsive workbench v2 authority -----------------------------------------
+   One product, three coordinated layouts. Controls keep their existing visual
+   language; only information architecture, density and geometry change. */
+
+.task-overview-rail {
+  display: none;
+  min-width: 0;
+}
+
+.task-overview-card {
+  margin-top: 0;
+  padding: 14px;
+}
+
+.task-overview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.task-overview-head h2 {
+  margin: 0;
+  font-size: .9rem;
+}
+
+.task-overview-head p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: .62rem;
+}
+
+.task-overview-badge {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: .62rem;
+  font-weight: 700;
+}
+
+.task-overview-badge.is-ready {
+  border-color: color-mix(in srgb,var(--ok) 45%,var(--border));
+  color: var(--ok);
+  background: color-mix(in srgb,var(--ok) 10%,var(--surface-2));
+}
+
+.task-overview-group {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.task-overview-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.task-overview-group h3 {
+  margin: 0 0 7px;
+  font-size: .7rem;
+  color: var(--text-strong);
+}
+
+.task-overview-group dl {
+  margin: 0;
+  display: grid;
+  gap: 0;
+}
+
+.task-overview-group dl > div {
+  display: grid;
+  grid-template-columns: minmax(72px,.42fr) minmax(0,1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 5px 0;
+}
+
+.task-overview-group dt {
+  color: var(--muted);
+  font-size: .62rem;
+}
+
+.task-overview-group dd {
+  margin: 0;
+  min-width: 0;
+  text-align: right;
+  color: var(--text);
+  font-size: .64rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.task-overview-final p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .64rem;
+  line-height: 1.45;
+}
+
+/* Desktop: dense main workbench + sticky task overview. */
+body.ui-desktop .app-shell {
+  width: min(100% - 28px, 1580px);
+  max-width: 1580px;
+  margin-inline: auto;
+  padding-bottom: 34px;
+}
+
+body.ui-desktop .app-header {
+  margin-top: 10px;
+  padding: 13px 16px;
+}
+
+body.ui-desktop .workspace-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) minmax(280px,330px);
+  gap: 14px;
+  align-items: start;
+  margin-top: 10px;
+}
+
+body.ui-desktop .workflow-main {
+  min-width: 0;
+}
+
+body.ui-desktop .task-overview-rail {
+  display: block;
+  position: sticky;
+  top: 12px;
+  align-self: start;
+}
+
+body.ui-desktop .platform-rail {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px;
+  margin-top: 0;
+}
+
+body.ui-desktop .platform-rail > .card {
+  margin-top: 0;
+}
+
+body.ui-desktop .setup-region,
+body.ui-desktop .production-region,
+body.ui-desktop .production-controls {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr);
+  gap: 10px;
+}
+
+body.ui-desktop .input-card,
+body.ui-desktop .env-card,
+body.ui-desktop .preflight-card,
+body.ui-desktop .preview-card,
+body.ui-desktop .plan-card,
+body.ui-desktop .encode-card,
+body.ui-desktop .log-card {
+  margin-top: 0;
+}
+
+body.ui-desktop .input-card > .grid.two {
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  gap: 9px;
+}
+
+body.ui-desktop .input-card .file-row {
+  min-height: 86px;
+  padding: 10px 11px;
+}
+
+body.ui-desktop .preflight-card .status-list {
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  gap: 1px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+body.ui-desktop .preflight-card .status-item {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 0;
+}
+
+body.ui-desktop .preflight-card .status-item > span:last-child {
+  text-align: right;
+  max-width: none;
+}
+
+body.ui-desktop .preview-card {
+  position: static !important;
+  overflow: hidden;
+}
+
+body.ui-desktop .preview-wrap {
+  width: 100%;
+  max-width: none;
+}
+
+body.ui-desktop .preview-placeholder {
+  min-height: 300px;
+  aspect-ratio: 16 / 9;
+}
+
+body.ui-desktop .plan-card {
+  padding: 14px 16px;
+}
+
+body.ui-desktop .plan-mode-tabs {
+  grid-template-columns: repeat(3,minmax(0,1fr));
+}
+
+body.ui-desktop .codec-plan-grid {
+  grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+}
+
+body.ui-desktop .encode-card {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(300px,.72fr);
+  gap: 10px 18px;
+  align-items: center;
+}
+
+body.ui-desktop .encode-card .card-heading,
+body.ui-desktop .encode-card #liveEta {
+  grid-column: 1;
+}
+
+body.ui-desktop .encode-card .button-row {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  margin: 0;
+}
+
+body.ui-desktop .encode-card .progress {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+}
+
+body.ui-desktop #encodeBtn {
+  width: 100%;
+  min-height: 48px;
+}
+
+body.ui-desktop .log-card {
+  margin-top: 10px;
+}
+
+/* Tablet: desktop information hierarchy, safer single-column geometry.
+   Wide tablets keep the overview rail; narrower ones fold it below the task. */
+body.ui-tablet .app-shell {
+  width: min(100% - 20px,1180px);
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-bottom: 24px;
+}
+
+body.ui-tablet .app-header {
+  margin-top: 8px;
+  padding: 12px 14px;
+}
+
+body.ui-tablet .mobile-stage-nav {
+  display: none !important;
+}
+
+body.ui-tablet .mobile-runtime-help {
+  display: none;
+}
+
+body.ui-tablet .workspace-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr);
+  gap: 10px;
+  margin-top: 9px;
+}
+
+body.ui-tablet .workflow-main,
+body.ui-tablet .setup-region,
+body.ui-tablet .production-region,
+body.ui-tablet .production-controls {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+body.ui-tablet .card {
+  margin-top: 0;
+}
+
+body.ui-tablet .input-card > .grid.two {
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  gap: 8px;
+}
+
+body.ui-tablet .input-card .file-row {
+  min-height: 78px;
+  padding: 9px 10px;
+}
+
+body.ui-tablet .preflight-card .status-list {
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 1px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+body.ui-tablet .preflight-card .status-item {
+  min-height: 40px;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 0;
+}
+
+body.ui-tablet .preflight-card .status-item > span:last-child {
+  max-width: none;
+  text-align: right;
+}
+
+body.ui-tablet .preview-card {
+  position: static;
+  overflow: hidden;
+}
+
+body.ui-tablet .preview-wrap {
+  width: 100%;
+  max-width: none;
+}
+
+body.ui-tablet .preview-placeholder {
+  min-height: 260px;
+  aspect-ratio: 16 / 9;
+}
+
+body.ui-tablet .codec-plan-grid {
+  grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+}
+
+body.ui-tablet .encode-card .button-row {
+  margin-top: 10px;
+}
+
+body.ui-tablet .platform-rail {
+  display: none !important;
+}
+
+body.ui-tablet .task-overview-rail {
+  display: block;
+}
+
+@media (min-width: 900px) {
+  body.ui-tablet .workspace-layout {
+    grid-template-columns: minmax(0,1fr) minmax(240px,300px);
+    align-items: start;
+  }
+
+  body.ui-tablet .task-overview-rail {
+    position: sticky;
+    top: 10px;
+    align-self: start;
+  }
+}
+
+@media (max-width: 899px) {
+  body.ui-tablet .task-overview-card {
+    margin-top: 0;
+  }
+}
+
+/* Phone: one compact scrollable task, no duplicate navigation shell. */
+body.ui-phone {
+  --mobile-bottom-safe: max(12px, env(safe-area-inset-bottom));
+}
+
+body.ui-phone .app-shell {
+  width: 100%;
+  max-width: none;
+  padding: 0 10px calc(20px + var(--mobile-bottom-safe));
+}
+
+body.ui-phone .mobile-stage-nav {
+  display: none !important;
+}
+
+body.ui-phone [data-mobile-stage-section]:not(.hidden) {
+  display: block !important;
+}
+
+body.ui-phone .mobile-preflight-action {
+  display: none !important;
+}
+
+body.ui-phone .task-overview-rail,
+body.ui-phone .platform-rail {
+  display: none !important;
+}
+
+body.ui-phone .input-card .file-row {
+  min-height: 0;
+  padding: 9px 10px;
+}
+
+body.ui-phone .file-picker-trigger,
+body.ui-phone .native-picker-button {
+  min-height: 42px;
+}
+
+body.ui-phone .preflight-body {
+  max-height: min(54dvh,500px);
+  overflow-y: auto;
+}
+
+body.ui-phone .preview-placeholder {
+  min-height: 200px;
+  aspect-ratio: 16 / 9;
+}
+
+body.ui-phone .preview-card > .button-row {
+  padding-bottom: 8px;
+}
+
+body.ui-phone .plan-card,
+body.ui-phone .encode-card {
+  margin-top: 10px;
+}
+
+body.ui-phone .encode-card {
+  background: linear-gradient(180deg,rgb(19 27 36 / .96),rgb(13 18 25 / .96));
+}
+
+body.ui-phone .encode-card .button-row {
+  margin-top: 10px;
+}
+
+body.ui-phone #encodeBtn {
+  width: 100%;
+}
+
+body.ui-phone .log-card {
+  display: none;
+}
