@@ -353,15 +353,6 @@ app.innerHTML = `
       </section>
     </aside>
   </div>
-  <dialog id="previewLightbox" class="preview-lightbox" aria-label="字幕预览放大">
-    <div class="preview-lightbox-bar">
-      <strong id="previewLightboxTitle">字幕预览</strong>
-      <button id="previewLightboxClose" type="button" aria-label="关闭放大预览">关闭</button>
-    </div>
-    <div class="preview-lightbox-stage">
-      <img id="previewLightboxImage" alt="放大的字幕预览">
-    </div>
-  </dialog>
 </div>`;
 
 const $ = id => document.getElementById(id);
@@ -2507,29 +2498,6 @@ async function renderPreviews() {
   }
 }
 
-function openPreviewLightbox(url, index, time) {
-  const dialog = $('previewLightbox');
-  const image = $('previewLightboxImage');
-  if (!dialog || !image || !url) return;
-  image.src = url;
-  $('previewLightboxTitle').textContent =
-    '字幕预览 · ' + (Number(index) + 1) + '/' + state.previewTimes.length +
-    ' · ' + Number(time).toFixed(2) + 's';
-  if (typeof dialog.showModal === 'function') dialog.showModal();
-  else dialog.setAttribute('open', '');
-}
-
-function closePreviewLightbox() {
-  const dialog = $('previewLightbox');
-  if (!dialog) return;
-  if (typeof dialog.close === 'function' && dialog.open) dialog.close();
-  else dialog.removeAttribute('open');
-}
-
-$('previewLightboxClose')?.addEventListener('click', closePreviewLightbox);
-$('previewLightbox')?.addEventListener('click', event => {
-  if (event.target === $('previewLightbox')) closePreviewLightbox();
-});
 
 async function loadPreviewAt(index) {
   const times = state.previewTimes;
@@ -2538,7 +2506,7 @@ async function loadPreviewAt(index) {
   const container = $('preview');
 
   if (!state.previewUrls[safeIndex]) {
-    container.innerHTML = `<div class="preview-placeholder">正在生成第 ${safeIndex + 1}/${times.length} 张真实 libass 预览…<br><small>首张先生成，其余仅在翻页时按需生成。</small></div>`;
+    container.innerHTML = '<div class="preview-placeholder">正在生成…</div>';
     log(`生成预览 ${safeIndex + 1}/${times.length} @ ${times[safeIndex].toFixed(2)}s`);
     let previewResult;
     if (state.nativeBackend?.available) {
@@ -2598,7 +2566,7 @@ async function loadPreviewAt(index) {
          <details class="note" style="padding:0 12px 10px"><summary>查看无字幕底图</summary><img src="${state.previewBaseUrls[safeIndex] || ''}" alt="无字幕底图" style="width:100%;margin-top:8px;border-radius:8px"></details>`
       : '<div class="warning-box" style="margin:0 12px 10px">浏览器无法自动完成像素差校验，请人工确认预览中确实出现了字幕。</div>';
 
-  container.innerHTML = `<div style="width:100%"><img id="previewImage" class="preview-image" src="${state.previewUrls[safeIndex]}" alt="字幕预览" title="点击放大预览"><div class="button-row preview-nav"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note preview-position">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s ${riskBadge}</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button><button id="previewZoom" type="button">放大预览</button></div>${verifyInfo}${dialogueInfo}<div class="note" style="text-align:center;padding:0 10px 10px">已知字体风险采样点会自动生成并验证；其余常规采样点仍在翻页时按需生成。</div>${fontInfo}</div>`;
+  container.innerHTML = `<div style="width:100%"><img id="previewImage" class="preview-image" src="${state.previewUrls[safeIndex]}" alt="字幕预览"><div class="button-row preview-nav"><button id="prevP" type="button" ${safeIndex === 0 ? 'disabled' : ''}>上一条</button><span class="note preview-position">${safeIndex+1}/${times.length} · ${times[safeIndex].toFixed(2)}s ${riskBadge}</span><button id="nextP" type="button" ${safeIndex === times.length - 1 ? 'disabled' : ''}>下一条</button></div>${verifyInfo}${dialogueInfo}${fontInfo}</div>`;
   const navigatePreview = targetIndex => {
     if (targetIndex < 0 || targetIndex >= times.length) return;
     loadPreviewAt(targetIndex).catch(error => {
@@ -2608,9 +2576,6 @@ async function loadPreviewAt(index) {
   };
   $('prevP').onclick = () => navigatePreview(safeIndex - 1);
   $('nextP').onclick = () => navigatePreview(safeIndex + 1);
-  const openZoom = () => openPreviewLightbox(state.previewUrls[safeIndex], safeIndex, times[safeIndex]);
-  $('previewZoom').onclick = openZoom;
-  $('previewImage').onclick = openZoom;
 }
 
 
@@ -2940,14 +2905,25 @@ function renderPlanOptions() {
     ) {
       param = '待实测校准 · 目标 SSIM ' + target.toFixed(3);
     }
-    return '<div class="codec-card plan-codec codec-' + codec + ' ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '">' +
+    return '<div class="codec-card plan-codec codec-' + codec + ' ' + (selected ? 'selected' : '') + ' ' + (available ? '' : 'disabled-card') + '" data-codec="' + codec + '" role="button" tabindex="' + (available ? '0' : '-1') + '" aria-pressed="' + (selected ? 'true' : 'false') + '" aria-disabled="' + (!available ? 'true' : 'false') + '">' +
       '<h3>' + labels[codec] + '</h3>' +
       '<div class="note codec-description">' + codecDescription(codec) + '</div>' +
       '<div class="plan-param">' + param + '</div>' +
-      '<button class="plan-choose" data-codec="' + codec + '" ' + (available ? '' : 'disabled') + '>' + (selected ? '已选择' : '选择') + '</button>' +
+      '<button class="plan-choose" type="button" tabindex="-1" aria-hidden="true" ' + (available ? '' : 'disabled') + '>' + (selected ? '已选择' : '可选择') + '</button>' +
       '</div>';
   }).join('');
-  document.querySelectorAll('.plan-choose').forEach(btn => btn.onclick = () => selectCodec(btn.dataset.codec));
+  document.querySelectorAll('.codec-card[data-codec]').forEach(card => {
+    const activate = () => {
+      if (card.getAttribute('aria-disabled') === 'true') return;
+      selectCodec(card.dataset.codec);
+    };
+    card.onclick = activate;
+    card.onkeydown = event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      activate();
+    };
+  });
   updateChosenSummary();
   restoreSelectedTestForCurrentPlan();
   refreshBenchmarkEnabled();
