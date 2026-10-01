@@ -9,8 +9,8 @@
 - **Browser / WebAssembly**：安装即用的浏览器后端与兼容 fallback。
 
 **Web App:** https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/  
-**Web package:** 0.2.0
-**Android native line:** 0.3.0-native
+**Web package:** 0.3.0
+**Android native line:** 0.4.0-native
 
 > 这个项目的中心目标不是“把 FFmpeg 命令放到网页里”，而是尽量把硬字幕压制前后容易出错的判断、预览、测试、回退和输出验证自动化。
 

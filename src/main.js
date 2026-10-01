@@ -1,3 +1,4 @@
+import { validateEncoderSupport } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
@@ -4248,15 +4249,30 @@ mountMediaWorkspace({
       throw new Error('硬字幕模式请先在下方完成字幕分析与真实预览');
     }
     if(state.nativeBackend?.available){
-      if(state.nativeBackend.taskSchemaVersion!==1)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
+      if(state.nativeBackend.taskSchemaVersion<2)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
       if(!state.nativeInputProbe?.ok)throw new Error('视频尚未完成原生探测');
-      return mediaFromNativeProbe(state.nativeInputProbe);
+      return {...mediaFromNativeProbe(state.nativeInputProbe),fpsModeSupported:state.nativeBackend.fpsModeSupported};
     }
     if(state.video.size>MAX_BYTES)throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本');
     if(!await ensureWebEngineReady())throw new Error('浏览器 FFmpeg 核心不可用');
     if(operation !== 'hardsub')await state.engine.stageFiles(state.video,null,[]);
     else { await state.engine.stageFiles(state.video,state.ass,state.effectiveFonts); await state.engine.setAssText(state.activeAssText||state.assText); }
-    return state.engine.probe();
+    const media=await state.engine.probe();
+    const caps=await state.engine.taskCapabilities('copy');
+    return {...media,fpsModeSupported:caps.fpsModeSupported};
+  },
+  validate: async task => {
+    if(task.operation==='copy')return;
+    if(state.nativeBackend?.available){
+      if(globalThis.NativeHardsub?.__windowsNative){
+        const encoder=state.nativeBackend.encoders?.find(e=>(e.key||e.Key)===task.encoder);
+        if(!encoder || !(encoder.available || encoder.Available))throw Error('当前原生后端不支持此编码器');
+        validateEncoderSupport(task,encoder,state.nativeBackend.globalOptions||[]);
+      }else if(globalThis.NativeHardsub?.validateMediaTask){
+        const result=JSON.parse(globalThis.NativeHardsub.validateMediaTask(JSON.stringify(task)));
+        if(!result.ok)throw Error(result.error||'原生参数能力检查失败');
+      }
+    }else await state.engine.validateTask(task);
   },
   cancel: () => {
     manualCancelRequested=true;
@@ -4273,7 +4289,7 @@ mountMediaWorkspace({
     const name=base+'_'+task.operation+(task.operation==='copy'?'':'_'+task.codec)+'.mkv';
     log('手动任务：'+task.operation+' · '+task.outputArgs.join(' '));
     if(state.nativeBackend?.available){
-      const request={codec:task.codec||'h264',mode:task.rateMode==='bitrate'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:media.audioTracks,estimatedOutputBytes:Math.max(256*1024*1024,Number(state.video.size||media.size||0)*2),suggestedName:name};
+      const request={codec:task.codec||'h264',mode:task.rateMode!=='quality'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:media.audioTracks,estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),suggestedName:name};
       const bridge=globalThis.NativeHardsub;
       const started=JSON.parse(await Promise.resolve(bridge.startNativeEncode(JSON.stringify(request),task.operation==='hardsub'?(state.activeAssText||state.assText):'')));
       if(!started.ok||!started.jobId)throw new Error(started.error||'创建任务失败');
@@ -4285,7 +4301,7 @@ mountMediaWorkspace({
           if(!result.ok)throw new Error(result.error||'状态读取失败');
           const actual=result.actualStart != null ? ' · 实际起点 '+Number(result.actualStart).toFixed(3)+' 秒' : '';
           progress(Number(result.progress||0),(result.message||result.state)+actual);
-          if(result.state==='completed')return {jobId:started.jobId,name,actualStart:result.actualStart??started.actualStart??task.start};
+          if(result.state==='completed')return {jobId:started.jobId,name,outputBytes:result.outputBytes,outputDuration:result.outputDuration,verified:true,actualStart:result.actualStart??started.actualStart??task.start};
           if(['failed','cancelled'].includes(result.state))throw new Error(result.error||result.state);
           if(manualCancelRequested)bridge.cancelNativeEncode(started.jobId);
           await sleepMs(700);
@@ -4296,11 +4312,11 @@ mountMediaWorkspace({
     task=await state.engine.snapTaskStart(task);
     if(manualCancelRequested)throw new Error('已取消');
     progress(0,'正在处理 · 实际起点 '+task.start.toFixed(3)+' 秒');
-    const result=await state.engine.encodeFullStream(task.codec||'h264',{task,onStatistics:stat=>progress(Math.min(.98,stat.timeMs/1000/task.expectedDuration),'正在处理 · '+(stat.timeMs/1000).toFixed(1)+' 秒 · 起点 '+task.start.toFixed(3)+' 秒')});
+    const result=await state.engine.encodeFullStream(task.codec||'h264',{task,onPhase:()=>{if(manualCancelRequested)throw Error('已取消');},onStatistics:stat=>{const fraction=Math.min(.98,stat.timeMs/1000/task.expectedDuration);progress(task.twoPass?(stat.phase==='pass1'?fraction*.5:.5+fraction*.5):fraction,(stat.phase==='pass1'?'第一遍统计':'正在处理')+' · '+(stat.timeMs/1000).toFixed(1)+' 秒 · 起点 '+task.start.toFixed(3)+' 秒');}});
     if(manualCancelRequested)throw new Error('已取消');
     progress(.99,'正在验证成品…');
-    const check=await state.engine.scanEncodedPackets(result.blob,task.expectedDuration,{expectedAudioTracks:task.expectedAudioTracks,tolerance:task.operation==='copy'?2:undefined});
+    const check=await state.engine.scanEncodedPackets(result.blob,task.expectedDuration,{task,allowShortAudio:true,expectedAudioTracks:task.expectedAudioTracks,tolerance:task.operation==='copy'?2:undefined});
     if(!check.ok)throw new Error('成品轨道或时长验证未通过：'+JSON.stringify(check));
-    return {blob:result.blob,name,actualStart:task.start};
+    return {blob:result.blob,name,verified:true,actualStart:task.start};
   }
 });

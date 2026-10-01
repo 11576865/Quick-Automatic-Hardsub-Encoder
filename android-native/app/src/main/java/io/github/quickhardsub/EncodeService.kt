@@ -439,6 +439,7 @@ class EncodeService : Service() {
             )
 
             if (task != null && manualArgs != null) {
+                MediaTaskArguments.validateSupport(manualArgs)
                 args.clear()
                 args.addAll(listOf("-y", "-hide_banner", "-loglevel", "warning"))
                 if (actualStart > 0.0) args.addAll(listOf("-ss", actualStart.toString()))
@@ -448,7 +449,16 @@ class EncodeService : Service() {
                 NativeJobStore.writeStatus(this, jobId, JSONObject().put("state", "staging").put("actualStart", actualStart).put("message", "实际切入点 " + actualStart + " 秒"))
             }
 
-            updateStatus(jobId, "encoding", "Android 原生 FFmpeg 正在压制", 0.0)
+            val manualTwoPass = task?.optBoolean("twoPass") == true
+            if (manualTwoPass && manualArgs != null) {
+                val passLog = File(jobDir, "task-pass").absolutePath
+                val firstArgs = args.take(args.indexOf("-i") + 2) + listOf("-t", (requestedEnd - actualStart).toString()) +
+                    MediaTaskArguments.firstPassArgs(manualArgs).map { it.replace("__ASS__", NativeJobStore.escapeFilterPath(assFile.absolutePath)).replace("__FONTS__", NativeJobStore.escapeFilterPath(fontsDir.absolutePath)) } +
+                    listOf("-pass", "1", "-passlogfile", passLog, "-f", "null", "-")
+                runManualFirstPass(jobId, firstArgs, duration)
+                args.addAll(args.size - 3, listOf("-pass", "2", "-passlogfile", passLog))
+            }
+            updateStatus(jobId, "encoding", "Android 原生 FFmpeg 正在压制", if (manualTwoPass) 0.5 else 0.0)
             updateNotification("正在压制… 0%", 0)
 
             val latch = CountDownLatch(1)
@@ -476,7 +486,8 @@ class EncodeService : Service() {
                 { statistics ->
                     val now = System.currentTimeMillis()
                     val processedMs = statistics.time.coerceAtLeast(0.0)
-                    val progress = (processedMs / (duration * 1000.0)).coerceIn(0.0, 0.985)
+                    val rawProgress = (processedMs / (duration * 1000.0)).coerceIn(0.0, 0.985)
+                    val progress = if (manualTwoPass) 0.5 + rawProgress * 0.5 else rawProgress
 
                     if (now - lastStatusWrite >= 500L) {
                         lastStatusWrite = now
@@ -583,6 +594,15 @@ class EncodeService : Service() {
                 )
             }
 
+            if (task != null && !copyTask) {
+                val outVideo = outputVideoStreams.first()
+                if (task.optInt("expectedWidth", 0) > 0 && (outVideo.getWidth()?.toInt() != task.getInt("expectedWidth") || outVideo.getHeight()?.toInt() != task.getInt("expectedHeight"))) throw IllegalStateException("成品分辨率与设置不符")
+                val wantedFps = task.optDouble("expectedFps", 0.0)
+                val parts = outVideo.getAverageFrameRate().orEmpty().split('/')
+                val outputFps = if (parts.size == 2) (parts[0].toDoubleOrNull() ?: 0.0) / (parts[1].toDoubleOrNull() ?: 1.0) else parts[0].toDoubleOrNull() ?: 0.0
+                if (wantedFps > 0 && (!outputFps.isFinite() || abs(outputFps - wantedFps) > 0.01)) throw IllegalStateException("成品帧率与设置不符")
+                if (task.optInt("expectedBitDepth", 0) > 0 && inferBitDepth("", outVideo.getFormat().orEmpty()) != task.getInt("expectedBitDepth")) throw IllegalStateException("成品位深与设置不符")
+            }
             updateStatus(jobId, "validating", "正在完整扫描视频 packet", 0.990)
             val videoScan = fullDemuxScan(output.absolutePath, "0:v:0")
             checkCancelled()
@@ -619,7 +639,7 @@ class EncodeService : Service() {
                     audioEnd == null ||
                     !(audioEnd > 0.0) ||
                     audioDelta == null ||
-                    abs(audioDelta) > audioTolerance
+                    (if (task != null) audioDelta > audioTolerance else abs(audioDelta) > audioTolerance)
                 )
             ) {
                 throw IllegalStateException(
@@ -980,6 +1000,25 @@ class EncodeService : Service() {
         } else {
             -1
         }
+    }
+
+    private fun runManualFirstPass(jobId: String, args: List<String>, duration: Double) {
+        checkCancelled()
+        updateStatus(jobId, "encoding", "第一遍：整片视频统计", 0.0)
+        val latch = CountDownLatch(1)
+        var code: ReturnCode? = null
+        var error = ""
+        val session = FFmpegKit.executeWithArgumentsAsync(args.toTypedArray(), { completed ->
+            code = completed.getReturnCode(); error = completed.getOutput().orEmpty(); latch.countDown()
+        }, null, { statistics ->
+            val progress = (statistics.time / (duration * 1000.0)).coerceIn(0.0, 1.0) * 0.5
+            updateStatus(jobId, "encoding", "第一遍：整片视频统计", progress)
+        })
+        activeSessionId = session.getSessionId()
+        while (!latch.await(1, TimeUnit.SECONDS)) if (cancelRequested) activeSessionId?.let(FFmpegKit::cancel)
+        activeSessionId = null
+        checkCancelled()
+        if (!ReturnCode.isSuccess(code)) throw IllegalStateException(error.takeLast(1800).ifBlank { "第一遍编码失败" })
     }
 
     private fun inferBitDepth(explicit: String, pixelFormat: String): Int {

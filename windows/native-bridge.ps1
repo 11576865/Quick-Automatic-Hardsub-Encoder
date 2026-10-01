@@ -194,7 +194,9 @@ function Get-BackendInfo {
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
         bridgeVersion=4
-        taskSchemaVersion=1
+        taskSchemaVersion=2
+        fpsModeSupported=[bool]$script:Capabilities.FpsModeSupported
+        globalOptions=[object[]]$script:Capabilities.GlobalOptions
     }
 }
 
@@ -398,7 +400,10 @@ function Start-MediaTaskJob($Body) {
     if($encoder -ne 'copy'){
         $profile=@($script:Capabilities.Encoders | Where-Object { $_.Key -eq $encoder -and $_.Available }) | Select-Object -First 1
         if(-not $profile){throw 'Selected encoder is unavailable; no automatic substitution.'}
+        if($profile.PixelFormats.Count -and $outputArgs -contains '-pix_fmt' -and $profile.PixelFormats -notcontains $outputArgs[[Array]::IndexOf($outputArgs,'-pix_fmt')+1]){throw 'Selected pixel format is unsupported.'}
+        foreach($flag in @('-fps_mode','-vsync','-multipass','-rc-lookahead','-spatial-aq','-temporal-aq','-aq-strength','-cq','-crf','-preset','-tune')){if($outputArgs -contains $flag -and $profile.Options -notcontains $flag -and $script:Capabilities.GlobalOptions -notcontains $flag){throw "FFmpeg encoder does not support $flag"}}
     }
+    if($task.audio -in @('aac','libopus')){$audioHelp=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -h encoder='+$task.audio);if($audioHelp.StdOut -notmatch ('(?m)^Encoder '+[regex]::Escape([string]$task.audio)+'\s')){throw 'Selected audio encoder is unavailable.'}}
     $actualStart=[double]$task.start
     if($task.operation -eq 'copy' -and $actualStart -gt 0){
         $stop=($actualStart+1).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture)
@@ -419,14 +424,18 @@ function Start-MediaTaskJob($Body) {
     foreach($a in @('-hide_banner','-nostdin','-loglevel','error','-y','-progress','progress.txt')){$parts.Add($a)}
     if($actualStart -gt 0){$parts.Add('-ss');$parts.Add($actualStart.ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))}
     $parts.Add('-i');$parts.Add($video);$parts.Add('-t');$parts.Add(([double]$task.end-$actualStart).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))
+    $baseParts=@($parts.ToArray())
     foreach($a in $outputArgs){$parts.Add($a.Replace('__ASS__','subtitle.ass').Replace('__FONTS__','fonts'))}
+    if($task.twoPass){foreach($a in @('-pass','2','-passlogfile','task-pass')){$parts.Add($a)}}
     foreach($a in @('-f','matroska','output.mkv')){$parts.Add($a)}
     $args=($parts | ForEach-Object { Quote-NativeArg $_ }) -join ' '
+    $secondArgs=$args
+    if($task.twoPass){$first=@($baseParts)+@((Get-MediaFirstPassArgs $outputArgs) | ForEach-Object {$_.Replace('__ASS__','subtitle.ass').Replace('__FONTS__','fonts')})+@('-pass','1','-passlogfile','task-pass','-f','null','NUL');$args=($first | ForEach-Object { Quote-NativeArg $_ }) -join ' '}
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $duration=if($task.operation -eq 'copy'){[double]$task.end-$actualStart}else{[double]$task.expectedDuration}
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=(Join-Path $work 'output.mkv');Progress=(Join-Path $work 'progress.txt');Started=$started
-        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task
+        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
     }
     $script:Jobs[$jobId]=$job
@@ -470,9 +479,15 @@ function Get-JobStatus([string]$JobId) {
             if($line){$timeMs=([double]($line-replace'^out_time_ms=',''))/1000}
         }
         $progress=if($j.Duration -gt 0){[Math]::Min(0.99,[Math]::Max(0,$timeMs/1000/$j.Duration))}else{0}
+        if($j.Task -and $j.Task.twoPass){$progress=if($j.Phase -eq 1){$progress*.5}else{.5+$progress*.5}}
         $elapsed=((Get-Date)-$p.StartTime).TotalSeconds
         $speed=if($elapsed -gt 0){($timeMs/1000)/$elapsed}else{0}
         return [pscustomobject]@{ok=$true;state=if($j.Cancelled){'cancelling'}else{'encoding'};progress=$progress;timeMs=$timeMs;duration=$j.Duration;speed=$speed;encoder=$j.Encoder;hardware=$j.Hardware;actualStart=$j.ActualStart}
+    }
+    if($j.Task -and $j.Task.twoPass -and $j.Phase -eq 1 -and -not $j.Cancelled -and $p.ExitCode -eq 0){
+        $p.Dispose();Remove-Item -LiteralPath $j.Progress -Force -ErrorAction SilentlyContinue
+        $j.Started=Start-BridgeTool $script:Ffmpeg $j.SecondArgs $j.Work;$j.Phase=2
+        return Get-JobStatus $JobId
     }
     if(-not $j.Finalized){
         $j.Finalized=$true
@@ -495,6 +510,7 @@ function Get-JobStatus([string]$JobId) {
                         $audios=@($info.streams | Where-Object {$_.codec_type -eq 'audio'})
                         $duration=[double]::Parse([string]$info.format.duration,[Globalization.CultureInfo]::InvariantCulture)
                         if($videos.Count -ne 1 -or $audios.Count -ne [int]$j.Task.expectedAudioTracks -or $duration -le 0 -or [Math]::Abs($duration-$j.Duration) -gt 2){throw 'Output stream count/duration validation failed.'}
+                        Test-MediaOutput $j.Task $videos[0]
                         $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -i '+(Quote-NativeArg $j.Output)+' -map 0:v:0 -map 0:a? -c copy -f null -')
                         if($scan.ExitCode -ne 0){throw 'Output packet scan failed.'}
                     }catch{$j.State='failed';$j.Error=$_.Exception.Message}
