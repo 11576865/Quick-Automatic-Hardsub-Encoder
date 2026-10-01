@@ -500,9 +500,11 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
         $options=@([regex]::Matches($encoderHelp,'(?m)^\s*(-[A-Za-z0-9_:.-]+)(?:\s|$)') | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique)
         $pixelFormats=@()
         if($encoderHelp -match 'Supported pixel formats:\s*([^\r\n]+)'){$pixelFormats=@($Matches[1].Trim() -split '\s+')}
-        $supportsMultipassFullres = ($options -contains '-multipass') -and ($encoderHelp -match '(?i)\bfullres\b')
+        $supportsMultipass = ($options -contains '-multipass')
+        $supportsMultipassFullres = $supportsMultipass -and ($encoderHelp -match '(?i)\bfullres\b')
         $detected += [pscustomobject]@{
             Options=[object[]]$options
+            SupportsMultipass=[bool]$supportsMultipass
             SupportsMultipassFullres=[bool]$supportsMultipassFullres
             PixelFormats=[object[]]$pixelFormats
             Key = $profile.Key
@@ -535,7 +537,8 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
         FfmpegSource = $toolchain.Source
         FfmpegWarnings = [object[]]$toolchain.Warnings
         FfmpegCandidates = [object[]]$toolchain.Candidates
-        MultipassFullresSupported = [bool]$toolchain.MultipassFullresSupported
+        MultipassSupported = [bool](@($detected | Where-Object { $_.Hardware -and $_.SupportsMultipass }).Count)
+        MultipassFullresSupported = [bool](@($detected | Where-Object { $_.Hardware -and $_.SupportsMultipassFullres }).Count)
         Cpu = $cpu
         Gpus = @($gpus)
         HasAss = $hasAss
