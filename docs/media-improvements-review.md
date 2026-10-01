@@ -21,10 +21,11 @@
 - JSDOM 界面逻辑检查通过：配置恢复、预算显示、超预算输出保留、报告启用、三组试压、无损模式清除两遍设置。
 - Vite 生产构建通过。
 
-## 未完成的验证与限制
+## 远程 CI 验证与限制
 
-- 本机 Chromium 不存在，下载失败，故未运行真实浏览器布局/截图检查。已扩展 Playwright CI 检查桌面/手机、配置与试压交互，但 CI 尚未运行。
-- 本机没有 Windows PowerShell / Android SDK 编译环境。Windows 的真实两遍编码与输出规格检查、Android Kotlin 编译需在 CI 运行。
+- 前端 CI 已通过，包括实际 FFmpeg 集成、生产构建及 Playwright 桌面/手机布局、配置、超预算报告和三组试压交互检查：[运行 122](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/36849579442)。
+- Windows CI 已通过，包括 PowerShell 解析、运行时能力、真实 x264 两遍编码、60 fps 输出规格及预期帧率不匹配的拒绝检查：[运行 146](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/36849579371)。
+- Android Kotlin 编译 CI 已通过：[运行 6](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/36849579571)。编译通过不等于 Android 实机编码验证。
 - 本机无 NVIDIA GPU，不能声称已在 RTX 5070 上实测新增参数组合。
 - VMAF 依赖 libvmaf 构建及一致的参考处理链路，此次未接入默认评分。
 - 两遍仅支持 x264；AV1/HEVC 的独立两遍机制未统一开放；NVENC multipass 仍按逐帧内部机制执行。
@@ -39,4 +40,4 @@
 
 ## 提交与验证状态
 
-修改提交到功能分支并通过 PR 审查。远程 CI 结果需在完成后更新；本地验证不替代 Windows、Android 与真实浏览器检查。
+[PR #26](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/26) 已创建，尚未合并。上述三端 CI 均在代码提交 `b01dca1a289f1eea9c236455b14b17c414f79f1c` 上通过；后续验证记录提交仅更新本文档。
