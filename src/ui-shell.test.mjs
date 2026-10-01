@@ -46,7 +46,7 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.status-list\s*\{[\s\S]*?repeat\(auto-fit, minmax\(205px, 1fr\)\)/);
   assert.match(css, /\.preview-wrap\s*\{[\s\S]*?max-width:\s*760px/);
   assert.match(main, /<details class="card log-card">/);
-  assert.match(main, /id="previewLightbox" class="preview-lightbox"/);
+  assert.doesNotMatch(main, /id="previewLightbox" class="preview-lightbox"/);
   assert.match(main, /id="mobileStageNav" class="mobile-stage-nav"/);
   assert.match(main, /data-mobile-stage-target="prepare"/);
   assert.match(main, /data-mobile-stage-target="produce"/);
@@ -85,10 +85,12 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /Native setup guides/);
   assert.match(css, /body\.ui-mobile \.mobile-runtime-help/);
   assert.doesNotMatch(main, /执行输入解码 smoke test/);
-  assert.match(main, /id="previewZoom"/);
+  assert.doesNotMatch(main, /id="previewZoom"/);
   assert.match(main, /class="preview-image"/);
+  assert.match(main, /data-codec="' \+ codec \+ '" role="button"/);
+  assert.match(css, /\.codec-card\[data-codec\]\s*\{[\s\S]*?cursor:\s*pointer/);
   assert.match(css, /\.preview-lightbox\s*\{/);
-  assert.match(css, /\.preflight-card \.status-list\s*\{[\s\S]*?display:\s*flex/);
+  assert.match(css, /body\.ui-mobile \.preflight-card \.status-item\s*\{[\s\S]*?display:\s*grid[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(8\.5rem, auto\)/);
   assert.doesNotMatch(main, /data-range-step="quick"/);
   assert.doesNotMatch(main, /data-range-reset="quick"/);
 
