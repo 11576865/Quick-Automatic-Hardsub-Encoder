@@ -153,7 +153,7 @@ app.innerHTML = `
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
   <section id="inputCard" class="card input-card" data-mobile-stage-section="prepare">
-    <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>选择视频、ASS 和可选字体。</p></div></div>
+    <div class="card-heading"><span class="step-no">02</span><div><h2>准备素材</h2><p>选择视频、ASS 和可选字体。</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
@@ -210,7 +210,7 @@ app.innerHTML = `
   <div class="adaptive-region production-region">
   <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading preview-card-heading">
-      <span class="step-no">02</span>
+      <span class="step-no">03</span>
       <div><h2>真实字幕预览</h2><p>查看实际 libass 渲染结果。</p></div>
       <button id="previewBtn" class="preview-generate-action action-solid action-cyan" disabled>生成预览</button>
     </div>
@@ -227,7 +227,7 @@ app.innerHTML = `
 
   <div class="production-controls">
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">03</span><div><h2>压制方案</h2><p>选编码器和质量目标。</p></div></div>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>压制方案</h2><p>选编码器和质量目标。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -299,7 +299,7 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>正式压制</h2><p>确认后开始整片编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">05</span><div><h2>正式压制</h2><p>确认后开始整片编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary action-solid action-green" disabled>开始硬字幕压制</button>
@@ -346,6 +346,13 @@ app.innerHTML = `
       </section>
     </aside>
     <aside class="platform-rail" aria-label="运行方式">
+      <div class="platform-rail-heading">
+        <span class="step-no">01</span>
+        <div>
+          <h2>选择运行方式</h2>
+          <p>网页可直接使用；长任务可切到 Android App 或 Windows 本地。</p>
+        </div>
+      </div>
       <section id="windowsNativeCard" class="card platform-card windows-card">
         <div class="platform-card-head">
           <div><div class="platform-eyebrow">WINDOWS NATIVE</div><h2>Windows 本机运行</h2><p class="note">长视频、系统 FFmpeg 与 NVIDIA NVENC。</p></div>
