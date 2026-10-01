@@ -194,6 +194,7 @@ function Get-BackendInfo {
         ffmpegVersion=if($script:Capabilities){$script:Capabilities.FfmpegVersion}else{$null}
         ffmpegSource=if($script:Capabilities){$script:Capabilities.FfmpegSource}else{$null}
         ffmpegWarnings=if($script:Capabilities){[object[]]$script:Capabilities.FfmpegWarnings}else{[object[]]@()}
+        multipassSupported=if($script:Capabilities){[bool]$script:Capabilities.MultipassSupported}else{$false}
         multipassFullresSupported=if($script:Capabilities){[bool]$script:Capabilities.MultipassFullresSupported}else{$false}
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
