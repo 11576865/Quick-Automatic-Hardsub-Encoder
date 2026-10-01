@@ -53,13 +53,23 @@ Bridge 自动检测：
 
 同一编码格式优先使用实际运行探测通过的 NVENC；没有可用 NVENC 时回退 CPU 软件编码器。NVENC 探测失败时，现代 Web UI 会显示 FFmpeg 的错误摘要。
 
-FFmpeg 查找顺序：
+FFmpeg 解析不再直接采用 `PATH` 中第一个命中的可执行文件。Bridge 会把 `ffmpeg.exe` 与同目录 `ffprobe.exe` 视为一个工具链，并对候选进行版本和能力探测，以避免 Miniconda/Anaconda base 环境中的旧 FFmpeg 抢占系统新版。
 
-1. `tools/ffmpeg/bin/`
-2. `tools/ffmpeg/`
-3. `windows/`
-4. WinGet Links
-5. 系统 `PATH`
+优先来源：
+
+1. 环境变量 `QUICK_HARDSUB_FFMPEG` 显式指定；
+2. `tools/ffmpeg/bin/`、`tools/ffmpeg/`、`windows/` 内的项目版本；
+3. WinGet Links 与 Gyan.FFmpeg 的 WinGet 安装目录；
+4. 系统 `PATH` 中的其他候选。
+
+同一来源层级内优先选择版本更高、支持 `-fps_mode` 和 NVENC `-multipass fullres` 的工具链；Conda/Miniconda/Anaconda 路径会降权。界面会显示实际版本、来源、完整路径以及能力降级警告。
+
+如果需要强制指定某一份 FFmpeg：
+
+```powershell
+$env:QUICK_HARDSUB_FFMPEG = 'D:\Tools\ffmpeg\bin\ffmpeg.exe'
+windows\start_windows.bat
+```
 
 可安装：
 
