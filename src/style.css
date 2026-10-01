@@ -5645,3 +5645,450 @@ body.ui-phone .encode-card {
 }
 
 body.ui-phone .log-card { display: none; }
+
+
+/* Compact density v5 ---------------------------------------------------------
+   Reduce dead space without shrinking the primary actions or changing control
+   semantics. Applies across desktop, tablet and phone with device-specific
+   density targets. */
+
+body.ui-desktop .app-header,
+body.ui-tablet .app-header {
+  min-height: 0;
+}
+
+body.ui-desktop .hero-subtitle,
+body.ui-tablet .hero-subtitle {
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+body.ui-desktop .workspace-layout,
+body.ui-tablet .workspace-layout {
+  row-gap: 8px;
+}
+
+body.ui-desktop .workflow-main,
+body.ui-tablet .workflow-main,
+body.ui-desktop .setup-region,
+body.ui-tablet .setup-region,
+body.ui-desktop .production-region,
+body.ui-tablet .production-region,
+body.ui-desktop .production-controls,
+body.ui-tablet .production-controls {
+  gap: 7px !important;
+}
+
+body.ui-desktop .platform-rail,
+body.ui-tablet .platform-rail {
+  gap: 7px;
+}
+
+body.ui-desktop .platform-rail-heading,
+body.ui-tablet .platform-rail-heading {
+  min-height: 26px;
+  gap: 8px;
+}
+
+body.ui-desktop .platform-rail-heading p,
+body.ui-tablet .platform-rail-heading p {
+  display: none;
+}
+
+body.ui-desktop .platform-card,
+body.ui-desktop .app-card,
+body.ui-tablet .platform-card,
+body.ui-tablet .app-card {
+  padding: 10px 11px;
+}
+
+body.ui-desktop .platform-card-head,
+body.ui-desktop .app-card-head,
+body.ui-tablet .platform-card-head,
+body.ui-tablet .app-card-head {
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+body.ui-desktop .platform-card-head h2,
+body.ui-desktop .app-card-head h2,
+body.ui-tablet .platform-card-head h2,
+body.ui-tablet .app-card-head h2 {
+  margin: 0;
+  font-size: .84rem;
+}
+
+body.ui-desktop .platform-card-head .note,
+body.ui-desktop .app-card-head .note,
+body.ui-tablet .platform-card-head .note,
+body.ui-tablet .app-card-head .note {
+  margin: 2px 0 0;
+  font-size: .59rem;
+  line-height: 1.25;
+}
+
+body.ui-desktop .platform-guide,
+body.ui-tablet .platform-guide {
+  margin-top: 6px;
+}
+
+body.ui-desktop .platform-guide > summary,
+body.ui-tablet .platform-guide > summary {
+  min-height: 30px;
+}
+
+body.ui-desktop .card,
+body.ui-tablet .card {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+body.ui-desktop .card-heading,
+body.ui-tablet .card-heading {
+  margin-bottom: 7px;
+}
+
+body.ui-desktop .card-heading h2,
+body.ui-tablet .card-heading h2 {
+  font-size: .9rem;
+}
+
+body.ui-desktop .card-heading p,
+body.ui-tablet .card-heading p {
+  margin-top: 2px;
+  font-size: .6rem;
+  line-height: 1.25;
+}
+
+body.ui-desktop .input-card > .grid.two,
+body.ui-tablet .input-card > .grid.two {
+  gap: 6px !important;
+}
+
+body.ui-desktop .input-card .file-row,
+body.ui-tablet .input-card .file-row {
+  min-height: 66px;
+  padding: 7px 9px;
+}
+
+body.ui-desktop .input-card .file-row label,
+body.ui-tablet .input-card .file-row label {
+  margin-bottom: 3px;
+}
+
+body.ui-desktop .input-card .file-row small,
+body.ui-tablet .input-card .file-row small {
+  margin-top: 3px;
+  line-height: 1.2;
+}
+
+body.ui-desktop .input-card .file-picker-trigger,
+body.ui-desktop .input-card .native-picker-button,
+body.ui-tablet .input-card .file-picker-trigger,
+body.ui-tablet .input-card .native-picker-button {
+  min-height: 34px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+body.ui-desktop .action-row,
+body.ui-tablet .action-row {
+  margin-top: 7px;
+}
+
+body.ui-desktop .env-details > summary,
+body.ui-desktop .preflight-details > summary,
+body.ui-tablet .env-details > summary,
+body.ui-tablet .preflight-details > summary {
+  min-height: 38px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+body.ui-desktop .preflight-body,
+body.ui-tablet .preflight-body {
+  padding-top: 6px;
+}
+
+body.ui-desktop .preflight-card .status-item,
+body.ui-tablet .preflight-card .status-item {
+  min-height: 34px;
+  padding: 6px 8px;
+}
+
+body.ui-desktop .preview-card,
+body.ui-tablet .preview-card {
+  padding: 10px;
+}
+
+body.ui-desktop .preview-card-heading,
+body.ui-tablet .preview-card-heading {
+  margin-bottom: 6px;
+}
+
+body.ui-desktop .preview-workspace,
+body.ui-tablet .preview-workspace {
+  gap: 7px;
+  margin-top: 6px;
+}
+
+body.ui-desktop .preview-sample-rail,
+body.ui-tablet .preview-sample-rail {
+  gap: 4px;
+}
+
+body.ui-desktop .preview-sample-card,
+body.ui-tablet .preview-sample-card {
+  min-height: 52px;
+  padding: 6px 7px;
+  gap: 6px;
+}
+
+body.ui-desktop .plan-card,
+body.ui-tablet .plan-card {
+  padding: 10px 11px;
+}
+
+body.ui-desktop .plan-mode-tabs,
+body.ui-tablet .plan-mode-tabs {
+  gap: 6px;
+}
+
+body.ui-desktop .plan-mode-tab,
+body.ui-tablet .plan-mode-tab {
+  min-height: 44px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+body.ui-desktop .plan-controls,
+body.ui-tablet .plan-controls {
+  margin-top: 7px;
+}
+
+body.ui-desktop .codec-plan-grid,
+body.ui-tablet .codec-plan-grid {
+  gap: 6px !important;
+  margin-top: 8px !important;
+}
+
+body.ui-desktop .codec-card,
+body.ui-tablet .codec-card {
+  padding: 9px;
+}
+
+body.ui-desktop .plan-summary,
+body.ui-tablet .plan-summary {
+  margin-top: 6px;
+}
+
+body.ui-desktop .encode-card,
+body.ui-tablet .encode-card {
+  padding: 10px 11px;
+}
+
+body.ui-desktop .encode-card #liveEta,
+body.ui-tablet .encode-card #liveEta {
+  margin: 0;
+  font-size: .61rem;
+  line-height: 1.3;
+}
+
+body.ui-desktop .task-overview-card,
+body.ui-tablet .task-overview-card {
+  padding: 10px;
+}
+
+body.ui-desktop .task-overview-head,
+body.ui-tablet .task-overview-head {
+  padding-bottom: 7px;
+}
+
+body.ui-desktop .task-overview-head p,
+body.ui-tablet .task-overview-head p {
+  display: none;
+}
+
+body.ui-desktop .task-overview-group,
+body.ui-tablet .task-overview-group {
+  padding: 8px 0;
+}
+
+body.ui-desktop .task-overview-group h3,
+body.ui-tablet .task-overview-group h3 {
+  margin-bottom: 4px;
+}
+
+body.ui-desktop .task-overview-group dl > div,
+body.ui-tablet .task-overview-group dl > div {
+  padding: 3px 0;
+  gap: 7px;
+}
+
+/* Phone: compact the vertical flow while preserving 42px+ tap targets. */
+body.ui-phone .app-shell {
+  padding-left: 7px;
+  padding-right: 7px;
+}
+
+body.ui-phone .app-header {
+  margin-top: 5px;
+  padding: 9px 10px;
+}
+
+body.ui-phone .hero-subtitle {
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+body.ui-phone .workspace-layout,
+body.ui-phone .workflow-main,
+body.ui-phone .setup-region,
+body.ui-phone .production-region,
+body.ui-phone .production-controls {
+  gap: 6px !important;
+}
+
+body.ui-phone .workspace-layout {
+  margin-top: 6px;
+}
+
+body.ui-phone .platform-rail {
+  gap: 5px;
+}
+
+body.ui-phone .platform-rail-heading {
+  min-height: 24px;
+  gap: 7px;
+}
+
+body.ui-phone .platform-rail-heading p {
+  display: none;
+}
+
+body.ui-phone .platform-card,
+body.ui-phone .app-card {
+  padding: 9px;
+}
+
+body.ui-phone .platform-card-head,
+body.ui-phone .app-card-head {
+  margin-bottom: 6px;
+}
+
+body.ui-phone .platform-card-head .note,
+body.ui-phone .app-card-head .note {
+  display: none;
+}
+
+body.ui-phone .platform-card .platform-actions,
+body.ui-phone .app-card .platform-actions {
+  gap: 5px;
+}
+
+body.ui-phone .platform-guide {
+  margin-top: 5px;
+}
+
+body.ui-phone .platform-guide > summary {
+  min-height: 34px;
+}
+
+body.ui-phone .card {
+  padding: 9px;
+}
+
+body.ui-phone .card-heading {
+  margin-bottom: 6px;
+}
+
+body.ui-phone .card-heading h2 {
+  font-size: .86rem;
+}
+
+body.ui-phone .input-card .grid.two {
+  gap: 5px !important;
+}
+
+body.ui-phone .input-card .file-row {
+  padding: 7px 8px;
+}
+
+body.ui-phone .input-card .file-row small {
+  margin-top: 2px;
+  line-height: 1.18;
+}
+
+body.ui-phone .action-row {
+  margin-top: 6px;
+}
+
+body.ui-phone .env-details > summary,
+body.ui-phone .preflight-details > summary {
+  min-height: 36px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+body.ui-phone .preflight-body {
+  padding-top: 5px;
+}
+
+body.ui-phone .preflight-card .status-item {
+  min-height: 34px;
+  padding: 6px 7px;
+}
+
+body.ui-phone .preview-card {
+  padding: 9px;
+}
+
+body.ui-phone .preview-card-heading {
+  margin-bottom: 5px;
+}
+
+body.ui-phone .preview-workspace {
+  gap: 5px;
+  margin-top: 5px;
+}
+
+body.ui-phone .preview-sample-rail {
+  gap: 5px;
+}
+
+body.ui-phone .preview-sample-card {
+  flex-basis: 160px;
+  min-height: 52px;
+  padding: 6px 7px;
+}
+
+body.ui-phone .plan-card,
+body.ui-phone .encode-card {
+  padding: 9px;
+}
+
+body.ui-phone .plan-mode-tabs {
+  gap: 5px;
+}
+
+body.ui-phone .plan-mode-tab {
+  min-height: 44px;
+  padding: 7px 5px;
+}
+
+body.ui-phone .codec-plan-grid {
+  gap: 5px !important;
+  margin-top: 7px !important;
+}
+
+body.ui-phone .codec-card {
+  padding: 8px;
+}
+
+body.ui-phone .plan-summary {
+  margin-top: 5px;
+}
+
+body.ui-phone .encode-card .button-row {
+  margin-top: 7px;
+}
