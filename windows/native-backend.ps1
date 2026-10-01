@@ -1,14 +1,168 @@
 ﻿# Shared Windows Native FFmpeg/NVENC capability and encoder helpers.
 # PowerShell 5.1 compatible; safe to dot-source from the WinForms launcher and CI.
 
-function Find-NativeTool([string]$Name, [string]$ScriptRoot = $PSScriptRoot) {
+$script:NativeFfmpegToolchainCache = @{}
+
+function Get-FfmpegVersionInfo([string]$Path) {
+    if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
+    try {
+        $line = (& $Path -version 2>&1 | Select-Object -First 1)
+        $text = [string]$line
+        $m = [regex]::Match($text, '(?i)ffmpeg version\s+(?:n)?(?<major>\d+)(?:\.(?<minor>\d+))?(?:\.(?<patch>\d+))?')
+        if (-not $m.Success) {
+            return [pscustomobject]@{ Text=$text.Trim(); Major=0; Minor=0; Patch=0 }
+        }
+        return [pscustomobject]@{
+            Text = $text.Trim()
+            Major = [int]$m.Groups['major'].Value
+            Minor = if($m.Groups['minor'].Success){[int]$m.Groups['minor'].Value}else{0}
+            Patch = if($m.Groups['patch'].Success){[int]$m.Groups['patch'].Value}else{0}
+        }
+    } catch {
+        return $null
+    }
+}
+
+function Resolve-NativeFfmpegToolchain([string]$ScriptRoot = $PSScriptRoot) {
+    $cacheKey = [IO.Path]::GetFullPath($ScriptRoot)
+    if ($script:NativeFfmpegToolchainCache.ContainsKey($cacheKey)) {
+        return $script:NativeFfmpegToolchainCache[$cacheKey]
+    }
+
     $base = Split-Path $ScriptRoot -Parent
-    $candidates = @(
-        (Join-Path $base "tools\ffmpeg\bin\$Name.exe"),
-        (Join-Path $base "tools\ffmpeg\$Name.exe"),
-        (Join-Path $ScriptRoot "$Name.exe"),
-        (Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Links\$Name.exe")
-    )
+    $raw = @()
+    $explicit = [string]$env:QUICK_HARDSUB_FFMPEG
+    if ($explicit) {
+        $raw += [pscustomobject]@{ Path=$explicit; Source='explicit'; Priority=1000000 }
+    }
+    foreach ($candidate in @(
+        (Join-Path $base 'tools\ffmpeg\bin\ffmpeg.exe'),
+        (Join-Path $base 'tools\ffmpeg\ffmpeg.exe'),
+        (Join-Path $ScriptRoot 'ffmpeg.exe')
+    )) {
+        $raw += [pscustomobject]@{ Path=$candidate; Source='bundled'; Priority=900000 }
+    }
+
+    $wingetLink = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links\ffmpeg.exe'
+    $raw += [pscustomobject]@{ Path=$wingetLink; Source='winget-link'; Priority=700000 }
+
+    $wingetPackages = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Packages'
+    if (Test-Path -LiteralPath $wingetPackages -PathType Container) {
+        try {
+            foreach ($package in @(Get-ChildItem -LiteralPath $wingetPackages -Directory -Filter 'Gyan.FFmpeg*' -ErrorAction Stop)) {
+                foreach ($build in @(Get-ChildItem -LiteralPath $package.FullName -Directory -ErrorAction SilentlyContinue)) {
+                    $raw += [pscustomobject]@{
+                        Path=(Join-Path $build.FullName 'bin\ffmpeg.exe')
+                        Source='winget-package'
+                        Priority=700000
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    foreach ($dir in @([string]$env:PATH -split ';')) {
+        $trimmed = $dir.Trim().Trim('"')
+        if ($trimmed) {
+            $raw += [pscustomobject]@{ Path=(Join-Path $trimmed 'ffmpeg.exe'); Source='PATH'; Priority=0 }
+        }
+    }
+
+    $seen = @{}
+    $evaluated = @()
+    foreach ($item in $raw) {
+        $candidate = [Environment]::ExpandEnvironmentVariables([string]$item.Path)
+        if (-not $candidate) { continue }
+        try { $candidate = [IO.Path]::GetFullPath($candidate) } catch { continue }
+        $key = $candidate.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) { continue }
+        $seen[$key] = $true
+        if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) { continue }
+
+        $dir = Split-Path -Parent $candidate
+        $ffprobe = Join-Path $dir 'ffprobe.exe'
+        if (-not (Test-Path -LiteralPath $ffprobe -PathType Leaf)) { continue }
+
+        $version = Get-FfmpegVersionInfo $candidate
+        if (-not $version) { continue }
+
+        $score = [long]$item.Priority + ([long]$version.Major * 10000L) + ([long]$version.Minor * 100L) + $version.Patch
+        $isConda = $candidate -match '(?i)\\(?:mini)?conda\d*\\|\\anaconda\d*\\|\\envs\\'
+        if ($isConda) { $score -= 50000L }
+
+        $fpsMode = $false
+        $multipassFullres = $false
+        try {
+            $help = (& $candidate -hide_banner -h full 2>&1) -join [Environment]::NewLine
+            $fpsMode = $help -match '(?m)^\s*-fps_mode(?:\[:[^\]]+\])?\s'
+            if ($fpsMode) { $score += 20000L }
+        } catch {}
+        try {
+            $encHelp = (& $candidate -hide_banner -h encoder=hevc_nvenc 2>&1) -join [Environment]::NewLine
+            $multipassFullres = ($encHelp -match '(?m)^\s*-multipass\s') -and ($encHelp -match '(?i)\bfullres\b')
+            if ($multipassFullres) { $score += 20000L }
+        } catch {}
+
+        $evaluated += [pscustomobject]@{
+            Ffmpeg=$candidate
+            Ffprobe=$ffprobe
+            Source=[string]$item.Source
+            Version=$version.Text
+            Major=$version.Major
+            Minor=$version.Minor
+            Patch=$version.Patch
+            FpsModeSupported=$fpsMode
+            MultipassFullresSupported=$multipassFullres
+            IsConda=$isConda
+            Score=$score
+        }
+    }
+
+    $selected = @($evaluated | Sort-Object Score -Descending) | Select-Object -First 1
+    if (-not $selected) {
+        $result = [pscustomobject]@{
+            Ffmpeg=$null; Ffprobe=$null; Source='missing'; Version=$null
+            FpsModeSupported=$false; MultipassFullresSupported=$false
+            Warnings=@('未找到同时包含 ffmpeg.exe 与 ffprobe.exe 的可用工具链。')
+            Candidates=[object[]]@()
+        }
+        $script:NativeFfmpegToolchainCache[$cacheKey] = $result
+        return $result
+    }
+
+    $warnings = @()
+    if ($selected.IsConda) {
+        $warnings += '当前选中的 FFmpeg 来自 Conda/Miniconda；如果存在系统新版，请显式指定 QUICK_HARDSUB_FFMPEG 或安装 WinGet Gyan.FFmpeg。'
+    }
+    if (-not $selected.FpsModeSupported) {
+        $warnings += '当前 FFmpeg 不支持 -fps_mode；任务会回退到旧 -vsync。'
+    }
+    if (-not $selected.MultipassFullresSupported) {
+        $warnings += '当前 FFmpeg/NVENC 不支持 -multipass fullres；相关参数必须关闭或降级。'
+    }
+
+    $result = [pscustomobject]@{
+        Ffmpeg=$selected.Ffmpeg
+        Ffprobe=$selected.Ffprobe
+        Source=$selected.Source
+        Version=$selected.Version
+        FpsModeSupported=[bool]$selected.FpsModeSupported
+        MultipassFullresSupported=[bool]$selected.MultipassFullresSupported
+        Warnings=[object[]]$warnings
+        Candidates=[object[]]$evaluated
+    }
+    $script:NativeFfmpegToolchainCache[$cacheKey] = $result
+    return $result
+}
+
+function Find-NativeTool([string]$Name, [string]$ScriptRoot = $PSScriptRoot) {
+    if ($Name -eq 'ffmpeg' -or $Name -eq 'ffprobe') {
+        $toolchain = Resolve-NativeFfmpegToolchain $ScriptRoot
+        return if($Name -eq 'ffmpeg'){$toolchain.Ffmpeg}else{$toolchain.Ffprobe}
+    }
+
+    $base = Split-Path $ScriptRoot -Parent
+    $candidates = @((Join-Path $ScriptRoot "$Name.exe"))
     if ($Name -eq 'nvidia-smi') {
         $candidates += (Join-Path $env:WINDIR 'System32\nvidia-smi.exe')
     }
@@ -346,8 +500,10 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
         $options=@([regex]::Matches($encoderHelp,'(?m)^\s*(-[A-Za-z0-9_:.-]+)(?:\s|$)') | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique)
         $pixelFormats=@()
         if($encoderHelp -match 'Supported pixel formats:\s*([^\r\n]+)'){$pixelFormats=@($Matches[1].Trim() -split '\s+')}
+        $supportsMultipassFullres = ($options -contains '-multipass') -and ($encoderHelp -match '(?i)\bfullres\b')
         $detected += [pscustomobject]@{
             Options=[object[]]$options
+            SupportsMultipassFullres=[bool]$supportsMultipassFullres
             PixelFormats=[object[]]$pixelFormats
             Key = $profile.Key
             Label = $profile.Label
@@ -371,9 +527,15 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
         $gpus = @('NVIDIA GPU · NVENC runtime available')
     }
 
+    $toolchain = Resolve-NativeFfmpegToolchain $ScriptRoot
     return [pscustomobject]@{
         Ffmpeg = $Ffmpeg
         Ffprobe = $Ffprobe
+        FfmpegVersion = $toolchain.Version
+        FfmpegSource = $toolchain.Source
+        FfmpegWarnings = [object[]]$toolchain.Warnings
+        FfmpegCandidates = [object[]]$toolchain.Candidates
+        MultipassFullresSupported = [bool]$toolchain.MultipassFullresSupported
         Cpu = $cpu
         Gpus = @($gpus)
         HasAss = $hasAss
@@ -392,7 +554,8 @@ function Get-NativeEncoderArguments($Profile) {
     if (-not $Profile) { throw '编码器配置为空。' }
     if ($Profile.Hardware) {
         $tune = if ($Profile.Tune) { $Profile.Tune } else { 'hq' }
-        return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -cq $($Profile.Quality) -b:v 0 -multipass fullres"
+        $multipass = if ($Profile.SupportsMultipassFullres) { ' -multipass fullres' } else { '' }
+        return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -cq $($Profile.Quality) -b:v 0$multipass"
     }
     if ($Profile.Encoder -eq 'libsvtav1') {
         return "-c:v libsvtav1 -preset $($Profile.SoftwarePreset) -crf $($Profile.Quality)"
