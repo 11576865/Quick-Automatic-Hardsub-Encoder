@@ -109,14 +109,14 @@ app.innerHTML = `
 
   <section class="mobile-runtime-help" aria-label="本机运行教程">
     <div class="mobile-runtime-help-title">
-      <strong>本机运行</strong>
-      <span>可选 · 需要更快或更稳定时再用</span>
+      <span class="step-no">01</span>
+      <div><strong>运行方式与教程</strong><span>Android / Windows</span></div>
     </div>
     <div class="mobile-runtime-help-grid">
       <details class="mobile-runtime-option android">
         <summary>
           <span class="runtime-option-icon">A</span>
-          <span><strong>Android App</strong><small>安装 APK · 后台压制</small></span>
+          <span><strong>Android 教程</strong><small>安装 APK · 后台压制</small></span>
           <span class="runtime-option-arrow">›</span>
         </summary>
         <div class="runtime-option-body">
@@ -131,7 +131,7 @@ app.innerHTML = `
       <details class="mobile-runtime-option windows">
         <summary>
           <span class="runtime-option-icon">W</span>
-          <span><strong>Windows 本地</strong><small>FFmpeg · NVENC · 大文件</small></span>
+          <span><strong>Windows 教程</strong><small>FFmpeg · NVENC · 大文件</small></span>
           <span class="runtime-option-arrow">›</span>
         </summary>
         <div class="runtime-option-body">
