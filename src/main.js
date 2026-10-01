@@ -4266,7 +4266,12 @@ mountMediaWorkspace({
     if(state.nativeBackend?.available){
       if(state.nativeBackend.taskSchemaVersion<2)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
       if(!state.nativeInputProbe?.ok)throw new Error('视频尚未完成原生探测');
-      return {...mediaFromNativeProbe(state.nativeInputProbe),fpsModeSupported:state.nativeBackend.fpsModeSupported};
+      return {
+        ...mediaFromNativeProbe(state.nativeInputProbe),
+        fpsModeSupported:state.nativeBackend.fpsModeSupported,
+        nvencMultipassSupported:state.nativeBackend.multipassSupported,
+        nvencMultipassFullresSupported:state.nativeBackend.multipassFullresSupported
+      };
     }
     if(state.video.size>MAX_BYTES)throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本');
     if(!await ensureWebEngineReady())throw new Error('浏览器 FFmpeg 核心不可用');
