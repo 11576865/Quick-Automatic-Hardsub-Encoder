@@ -90,7 +90,10 @@ export function mountMediaWorkspace(hooks) {
     const raw=read(),media=await hooks.prepare(raw.operation);
     const task=compileTask(raw,media);
     await hooks.validate?.(task);
-    section.querySelector('#taskEstimate').textContent=(task.sizePlan ? '目标 '+formatSize(task.sizePlan.targetBytes)+' · 视频 '+task.bitrate+' bit/s · 预留 '+task.sizePlan.reservePercent+'% · ' : '')+'预计音视频数据：'+formatSize(task.estimatedBytes)+'。质量模式需试压估计；封装、字幕与码率偏差仍影响实际大小。';
+    const compat = Array.isArray(task.compatibilityWarnings) && task.compatibilityWarnings.length
+      ? ' 兼容性：'+task.compatibilityWarnings.join(' ')
+      : '';
+    section.querySelector('#taskEstimate').textContent=(task.sizePlan ? '目标 '+formatSize(task.sizePlan.targetBytes)+' · 视频 '+task.bitrate+' bit/s · 预留 '+task.sizePlan.reservePercent+'% · ' : '')+'预计音视频数据：'+formatSize(task.estimatedBytes)+'。质量模式需试压估计；封装、字幕与码率偏差仍影响实际大小。'+compat;
     section.querySelector('#taskCommand').textContent=commandPreview(task);
     return {task,media};
   };
