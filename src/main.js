@@ -1181,8 +1181,13 @@ function detectNativeBackend() {
       log(
         '检测到 Windows Native Bridge：CPU=' + (state.nativeBackend.cpu || 'unknown') +
         ' · GPU=' + gpu +
+        ' · FFmpeg=' + (state.nativeBackend.ffmpegVersion || 'unknown') +
+        ' · source=' + (state.nativeBackend.ffmpegSource || 'unknown') +
         ' · encoders=' + (available.join('/') || 'none')
       );
+      for (const warning of (Array.isArray(state.nativeBackend.ffmpegWarnings) ? state.nativeBackend.ffmpegWarnings : [])) {
+        log('FFmpeg 警告：' + warning);
+      }
     } else {
       log(
         `检测到 Android 原生壳：ABI=${state.nativeBackend.abi || 'unknown'} · FFmpegKitNext=${state.nativeBackend.ffmpegKitVersion || 'unknown'}` +
@@ -1875,9 +1880,19 @@ function renderCapabilities() {
         '<div class="native-runtime-grid">' +
         '<div class="env-chip"><span>CPU</span><span>' + escapeHtml(state.nativeBackend.cpu || 'unknown') + '</span></div>' +
         '<div class="env-chip"><span>GPU</span><span>' + escapeHtml(gpu) + '</span></div>' +
-        '<div class="env-chip"><span>FFmpeg</span><span>' + escapeHtml(state.nativeBackend.ffmpeg || 'missing') + '</span></div>' +
+        '<div class="env-chip"><span>FFmpeg</span><span>' + escapeHtml(state.nativeBackend.ffmpegVersion || 'unknown') + '</span></div>' +
+        '<div class="env-chip"><span>来源</span><span>' + escapeHtml(state.nativeBackend.ffmpegSource || 'unknown') + '</span></div>' +
+        '<div class="env-chip"><span>路径</span><span>' + escapeHtml(state.nativeBackend.ffmpeg || 'missing') + '</span></div>' +
+        '<div class="env-chip"><span>fps_mode</span><span class="' + (state.nativeBackend.fpsModeSupported ? 'ok' : 'warn') + '">' +
+        (state.nativeBackend.fpsModeSupported ? '支持' : '回退 -vsync') + '</span></div>' +
+        '<div class="env-chip"><span>NVENC fullres multipass</span><span class="' + (state.nativeBackend.multipassFullresSupported ? 'ok' : 'warn') + '">' +
+        (state.nativeBackend.multipassFullresSupported ? '支持' : '关闭 / 降级') + '</span></div>' +
         '<div class="env-chip"><span>libass</span><span class="' + (state.nativeBackend.hasAss ? 'ok' : 'warn') + '">' +
-        (state.nativeBackend.hasAss ? '可用' : '缺失') + '</span></div></div></div>' +
+        (state.nativeBackend.hasAss ? '可用' : '缺失') + '</span></div></div>' +
+        (Array.isArray(state.nativeBackend.ffmpegWarnings) && state.nativeBackend.ffmpegWarnings.length
+          ? '<div class="env-warning-list">' + state.nativeBackend.ffmpegWarnings.map(x => '<div class="warn">' + escapeHtml(String(x)) + '</div>').join('') + '</div>'
+          : '') +
+        '</div>' +
         '<div class="env-group"><div class="env-group-title">编码器</div><div class="env-wasm-grid">' + encoderRows + '</div></div>';
       return;
     }
