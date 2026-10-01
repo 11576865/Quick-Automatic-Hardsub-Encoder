@@ -191,3 +191,29 @@ test('design-faithful preview sample rail and visual hierarchy are present', asy
   assert.match(css, /\.preview-sample-card\.is-current/);
   assert.match(css, /\.action-green\s*\{/);
 });
+
+
+test('runtime-first three-endpoint layout keeps Android and Windows entry visible', async () => {
+  const [main, css] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(main, /class="platform-rail-heading"/);
+  assert.match(main, /<h2>选择运行方式<\/h2>/);
+  assert.match(main, /id="windowsNativeCard"/);
+  assert.match(main, /id="androidAppCard"/);
+  assert.match(main, /第一次使用？3 步启动/);
+  assert.match(main, /第一次使用？3 步安装/);
+  assert.match(main, /<span class="step-no">02<\/span><div><h2>准备素材/);
+  assert.match(main, /<span class="step-no">03<\/span>[\s\S]*?<h2>真实字幕预览/);
+  assert.match(main, /<span class="step-no">04<\/span><div><h2>压制方案/);
+  assert.match(main, /<span class="step-no">05<\/span><div><h2>正式压制/);
+
+  assert.match(css, /Runtime-first responsive workbench v4/);
+  assert.match(css, /body\.ui-desktop \.workspace-layout\s*\{[\s\S]*?"runtime runtime"[\s\S]*?"main overview"/);
+  assert.match(css, /body\.ui-tablet \.platform-rail\s*\{[\s\S]*?display:\s*grid !important/);
+  assert.match(css, /body\.ui-phone \.platform-rail\s*\{[\s\S]*?display:\s*grid !important/);
+  assert.match(css, /body\.ui-phone \.workspace-layout\s*\{[\s\S]*?"runtime"[\s\S]*?"main"/);
+  assert.match(css, /body\.ui-phone \.workflow-strip,[\s\S]*?body\.ui-phone \.mobile-stage-nav\s*\{[\s\S]*?display:\s*none !important/);
+});
