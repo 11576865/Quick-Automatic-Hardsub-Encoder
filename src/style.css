@@ -5435,3 +5435,478 @@ body.ui-phone #encodeBtn {
 body.ui-phone .log-card {
   display: none;
 }
+
+
+/* Design-faithful workbench v3 ----------------------------------------------
+   Visual language: dense dark surfaces, restrained gradients, strong solid
+   actions, short copy, large preview, explicit preview sample rail. */
+
+:root {
+  --v3-surface-0: #091019;
+  --v3-surface-1: #0d1621;
+  --v3-surface-2: #111d2a;
+  --v3-surface-3: #152434;
+  --v3-line: rgba(145, 183, 218, .14);
+  --v3-line-strong: rgba(145, 183, 218, .24);
+  --v3-text: #edf4fb;
+  --v3-muted: #91a1b3;
+  --v3-cyan: #58c8ff;
+  --v3-cyan-2: #2f9ee8;
+  --v3-green: #7fe06f;
+  --v3-green-2: #4cb853;
+  --v3-violet: #a895ff;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(70,130,180,.11), transparent 34rem),
+    linear-gradient(180deg, #081019 0%, #0a1119 40%, #090f16 100%);
+}
+
+.card {
+  border-color: var(--v3-line);
+  background:
+    linear-gradient(180deg, rgba(21,36,52,.94), rgba(13,22,33,.96));
+  box-shadow:
+    0 18px 48px rgba(0,0,0,.18),
+    inset 0 1px 0 rgba(255,255,255,.025);
+}
+
+.app-header {
+  border: 1px solid var(--v3-line);
+  background:
+    linear-gradient(120deg, rgba(28,48,68,.96), rgba(12,22,34,.96) 66%),
+    radial-gradient(circle at 18% -40%, rgba(88,200,255,.12), transparent 46%);
+}
+
+.hero-kicker,
+.step-no {
+  color: var(--v3-cyan);
+}
+
+.hero-subtitle,
+.card-heading p,
+.note {
+  color: var(--v3-muted);
+}
+
+.action-solid,
+.preview-generate-action {
+  border: 0 !important;
+  border-radius: 10px !important;
+  min-height: 44px;
+  padding: 10px 16px !important;
+  font-weight: 760 !important;
+  letter-spacing: .01em;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+
+.action-solid:disabled,
+.preview-generate-action:disabled {
+  filter: saturate(.35);
+  opacity: .46;
+  box-shadow: none;
+}
+
+.action-cyan {
+  color: #04131d !important;
+  background: linear-gradient(135deg, #75d8ff, #48b9f1 58%, #369edc) !important;
+}
+
+.action-cyan:hover:not(:disabled) {
+  background: linear-gradient(135deg, #8ee0ff, #5bc5f7 58%, #42a9e6) !important;
+}
+
+.action-cyan-soft {
+  color: #ddf5ff !important;
+  border: 1px solid rgba(88,200,255,.34) !important;
+  background: linear-gradient(135deg, rgba(88,200,255,.18), rgba(47,158,232,.10)) !important;
+}
+
+.action-green {
+  color: #071607 !important;
+  background: linear-gradient(135deg, #9be98f, #75d76c 58%, #58bd5c) !important;
+  box-shadow: 0 10px 26px rgba(82,190,87,.16);
+}
+
+.action-green:hover:not(:disabled) {
+  background: linear-gradient(135deg, #acefa2, #83df79 58%, #63c968) !important;
+}
+
+.card-heading {
+  gap: 10px;
+}
+
+.card-heading h2 {
+  margin: 0;
+  color: var(--v3-text);
+  font-size: .98rem;
+}
+
+.card-heading p {
+  margin: 3px 0 0;
+  font-size: .66rem;
+  line-height: 1.35;
+}
+
+.preview-card-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+}
+
+.preview-generate-action {
+  justify-self: end;
+  min-width: 118px;
+}
+
+.preview-workspace {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 184px;
+  gap: 10px;
+  align-items: start;
+  margin-top: 10px;
+}
+
+.preview-workspace-main {
+  min-width: 0;
+}
+
+.preview-wrap {
+  overflow: hidden;
+  border: 1px solid rgba(145,183,218,.13);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(6,10,15,.98), rgba(8,12,17,.98));
+}
+
+.preview-wrap > div:first-child,
+.preview-wrap > img,
+.preview-image {
+  width: 100%;
+}
+
+.preview-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 0 !important;
+  aspect-ratio: 16 / 9;
+  padding: 18px;
+  color: #7f8d9d;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(71,103,135,.12), transparent 42%),
+    linear-gradient(180deg, rgba(4,8,12,.98), rgba(8,12,17,.98));
+}
+
+.preview-warning {
+  margin-top: 8px !important;
+  padding: 9px 11px;
+  border: 1px solid rgba(255,183,77,.22);
+  border-radius: 9px;
+  background: rgba(255,183,77,.06);
+  color: #d9c49d;
+  font-size: .65rem;
+}
+
+.preview-sample-rail {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  max-height: 430px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.preview-sample-empty {
+  min-height: 78px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border: 1px dashed rgba(145,183,218,.14);
+  border-radius: 10px;
+  color: #718093;
+  font-size: .62rem;
+}
+
+.preview-sample-card {
+  width: 100%;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 34px minmax(0,1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 9px;
+  border: 1px solid rgba(145,183,218,.11);
+  border-radius: 10px;
+  text-align: left;
+  color: var(--v3-text);
+  background: linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
+  cursor: pointer;
+}
+
+.preview-sample-card:hover {
+  border-color: rgba(88,200,255,.28);
+  background: linear-gradient(145deg, rgba(88,200,255,.08), rgba(255,255,255,.018));
+}
+
+.preview-sample-card.is-current {
+  border-color: rgba(88,200,255,.46);
+  background: linear-gradient(145deg, rgba(88,200,255,.16), rgba(47,158,232,.07));
+  box-shadow: inset 3px 0 0 var(--v3-cyan);
+}
+
+.preview-sample-card.is-risk {
+  border-color: rgba(255,183,77,.22);
+}
+
+.preview-sample-index {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--v3-cyan);
+  background: rgba(88,200,255,.08);
+  font: 760 .62rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.preview-sample-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.preview-sample-copy strong {
+  font-size: .68rem;
+}
+
+.preview-sample-copy small {
+  color: var(--v3-muted);
+  font-size: .56rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.preview-sample-state {
+  min-width: 46px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  text-align: center;
+  color: #8fa0b2;
+  background: rgba(255,255,255,.04);
+  font-size: .54rem;
+  font-weight: 700;
+}
+
+.preview-sample-card.is-current .preview-sample-state {
+  color: #07131b;
+  background: var(--v3-cyan);
+}
+
+.preflight-details > summary,
+.env-details > summary {
+  min-height: 44px;
+}
+
+.preflight-card .status-list {
+  overflow: hidden;
+  border: 1px solid var(--v3-line);
+  border-radius: 10px;
+}
+
+.preflight-card .status-item {
+  border-radius: 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(145,183,218,.07) !important;
+  background: transparent !important;
+}
+
+.preflight-card .status-item:last-child {
+  border-bottom: 0 !important;
+}
+
+.plan-mode-tab {
+  min-height: 54px;
+  border-radius: 10px;
+}
+
+.plan-mode-tab.selected {
+  border-color: rgba(88,200,255,.36) !important;
+  background: linear-gradient(145deg, rgba(88,200,255,.16), rgba(47,158,232,.07)) !important;
+}
+
+.codec-card {
+  border-radius: 11px !important;
+  background: linear-gradient(160deg, rgba(255,255,255,.035), rgba(255,255,255,.012)) !important;
+}
+
+.codec-card.selected {
+  border-color: rgba(88,200,255,.42) !important;
+  background: linear-gradient(150deg, rgba(88,200,255,.14), rgba(47,158,232,.055)) !important;
+  box-shadow: inset 3px 0 0 var(--v3-cyan);
+}
+
+.encode-card {
+  border-color: rgba(127,224,111,.18);
+  background:
+    linear-gradient(120deg, rgba(39,72,48,.24), rgba(13,22,33,.96) 46%),
+    linear-gradient(180deg, rgba(21,36,52,.94), rgba(13,22,33,.96));
+}
+
+/* Desktop follows the mockup composition: broad preview, narrow sample rail,
+   separate overview rail, then plan + encode below. */
+body.ui-desktop .app-shell {
+  width: min(100% - 32px, 1640px);
+  max-width: 1640px;
+}
+
+body.ui-desktop .workspace-layout {
+  grid-template-columns: minmax(0,1fr) 300px !important;
+  gap: 12px !important;
+}
+
+body.ui-desktop .workflow-main {
+  display: grid;
+  gap: 10px;
+}
+
+body.ui-desktop .setup-region {
+  display: grid !important;
+  grid-template-columns: minmax(0,1.25fr) minmax(280px,.75fr) !important;
+  gap: 10px !important;
+}
+
+body.ui-desktop .setup-region .input-card {
+  grid-column: 1;
+}
+
+body.ui-desktop .setup-region .env-card {
+  grid-column: 2;
+}
+
+body.ui-desktop .preflight-card {
+  margin-top: 0 !important;
+}
+
+body.ui-desktop .production-region {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) !important;
+  gap: 10px !important;
+}
+
+body.ui-desktop .production-controls {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) !important;
+  gap: 10px !important;
+}
+
+body.ui-desktop .task-overview-card {
+  padding: 13px;
+  background:
+    linear-gradient(180deg, rgba(18,32,46,.96), rgba(11,20,30,.98));
+}
+
+body.ui-desktop .preview-workspace {
+  grid-template-columns: minmax(0,1fr) 196px;
+}
+
+body.ui-desktop .preview-sample-rail {
+  max-height: 520px;
+}
+
+body.ui-desktop .preview-wrap {
+  min-height: 0;
+}
+
+body.ui-desktop .preview-placeholder {
+  aspect-ratio: 16 / 9;
+}
+
+/* Tablet keeps the same component language but collapses the overview below
+   when the horizontal canvas is not large enough. */
+body.ui-tablet .preview-workspace {
+  grid-template-columns: minmax(0,1fr) 168px;
+}
+
+@media (max-width: 899px) {
+  body.ui-tablet .preview-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  body.ui-tablet .preview-sample-rail {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    max-height: none;
+  }
+}
+
+/* Phone: same visual language, linear layout, sample rail becomes horizontal. */
+body.ui-phone .app-shell {
+  padding-inline: 9px;
+}
+
+body.ui-phone .card {
+  border-radius: 13px;
+}
+
+body.ui-phone .card-heading {
+  align-items: center;
+}
+
+body.ui-phone .card-heading p {
+  display: none;
+}
+
+body.ui-phone .preview-card-heading {
+  grid-template-columns: auto minmax(0,1fr);
+}
+
+body.ui-phone .preview-generate-action {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin-top: 4px;
+}
+
+body.ui-phone .preview-workspace {
+  grid-template-columns: 1fr;
+}
+
+body.ui-phone .preview-sample-rail {
+  display: flex;
+  gap: 6px;
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+body.ui-phone .preview-sample-card {
+  flex: 0 0 176px;
+}
+
+body.ui-phone .action-solid {
+  min-height: 46px;
+}
+
+body.ui-phone #analyze,
+body.ui-phone #encodeBtn,
+body.ui-phone #testSelectedBtn {
+  width: 100%;
+}
+
+body.ui-phone .preflight-card .status-item {
+  grid-template-columns: minmax(0,1fr) minmax(7.5rem,auto) !important;
+}
+
+body.ui-phone .hero-subtitle {
+  font-size: .63rem;
+}
+
+/* Text economy: hide secondary explanatory copy where the control label is enough. */
+body.ui-desktop .platform-card .note,
+body.ui-tablet .platform-card .note,
+body.ui-phone .advanced-box > p.note {
+  opacity: .72;
+}
