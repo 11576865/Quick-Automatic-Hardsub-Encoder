@@ -6092,3 +6092,116 @@ body.ui-phone .plan-summary {
 body.ui-phone .encode-card .button-row {
   margin-top: 7px;
 }
+
+
+/* Phone tutorial visibility fix ----------------------------------------------
+   ui-phone also carries ui-mobile. Earlier legacy rules hide platform-rail and
+   v4 hid mobile-runtime-help, leaving the browser with no visible tutorial.
+   Phones now use the dedicated compact tutorial block; tablet/desktop continue
+   to use the full platform cards. */
+body.ui-phone .mobile-runtime-help {
+  display: block !important;
+  margin: 6px 0 0;
+  padding: 8px;
+  border: 1px solid rgba(145,183,218,.14);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg,rgba(88,200,255,.055),rgba(255,255,255,.018));
+}
+
+body.ui-phone .platform-rail {
+  display: none !important;
+}
+
+body.ui-phone .mobile-runtime-help-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 1px 6px;
+  padding: 0;
+}
+
+body.ui-phone .mobile-runtime-help-title > div {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+body.ui-phone .mobile-runtime-help-title strong {
+  font-size: .78rem;
+  color: var(--text);
+}
+
+body.ui-phone .mobile-runtime-help-title div > span {
+  color: var(--muted);
+  font-size: .56rem;
+}
+
+body.ui-phone .mobile-runtime-help-grid {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 5px;
+}
+
+body.ui-phone .mobile-runtime-option {
+  border-radius: 9px;
+}
+
+body.ui-phone .mobile-runtime-option > summary {
+  min-height: 48px;
+  padding: 6px 7px;
+  grid-template-columns: 28px minmax(0,1fr) auto;
+  gap: 6px;
+}
+
+body.ui-phone .runtime-option-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: .64rem;
+}
+
+body.ui-phone .mobile-runtime-option > summary strong {
+  font-size: .66rem;
+}
+
+body.ui-phone .mobile-runtime-option > summary small {
+  margin-top: 1px;
+  font-size: .54rem;
+  line-height: 1.2;
+}
+
+body.ui-phone .runtime-option-arrow {
+  font-size: 1rem;
+}
+
+body.ui-phone .runtime-option-body {
+  padding: 0 7px 8px;
+}
+
+body.ui-phone .runtime-option-body ol {
+  margin: 0 0 7px 16px;
+  font-size: .58rem;
+  line-height: 1.38;
+}
+
+body.ui-phone .runtime-help-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+body.ui-phone .runtime-help-link {
+  width: 100%;
+  min-height: 34px;
+  justify-content: center;
+  padding: 5px 7px;
+  font-size: .58rem;
+}
+
+@media (max-width: 390px) {
+  body.ui-phone .mobile-runtime-help-grid {
+    grid-template-columns: 1fr;
+  }
+}
