@@ -80,7 +80,7 @@ app.innerHTML = `
         <div class="app-mark" aria-hidden="true"><span>Q</span></div>
         <div class="app-brand-copy">
           <div class="hero-kicker">HARDSUB WORKBENCH</div>
-          <h1>硬字幕压制</h1>
+          <h1>快速自动硬字幕压制器</h1>
         </div>
       </div>
       <div class="hero-state" aria-label="处理状态">
@@ -88,7 +88,7 @@ app.innerHTML = `
         <div><strong>本地处理</strong><small>默认不上传</small></div>
       </div>
     </div>
-    <p id="heroSubtitle" class="hero-subtitle">ASS 预检、真实预览、参数测试与硬字幕压制。</p>
+    <p id="heroSubtitle" class="hero-subtitle">将字幕烧录到视频画面中，完成预检、真实预览、方案选择与正式压制。</p>
     <nav class="workflow-strip" aria-label="工作流程">
       <span data-workflow-step="prepare"><b>01</b>准备</span>
       <span data-workflow-step="produce"><b>02</b>制作</span>
@@ -220,7 +220,7 @@ app.innerHTML = `
 
   <div class="production-controls">
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">•</span><div><h2>压制方案</h2><p>选择目标，再决定编码器。</p></div></div>
+    <div class="card-heading"><span class="step-no">03</span><div><h2>压制方案</h2><p>选择编码器、质量参数和输出选项。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -292,7 +292,7 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">•</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>正式压制</h2><p>按当前方案执行整片硬字幕编码。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary" disabled>开始硬字幕压制</button>
@@ -309,6 +309,35 @@ app.innerHTML = `
     <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.1.1\n</div>
   </details>
     </main>
+    <aside id="taskOverviewRail" class="task-overview-rail" aria-label="任务概览">
+      <section class="card task-overview-card">
+        <div class="task-overview-head">
+          <div><h2>任务概览</h2><p>当前文件、预检、预览与压制方案。</p></div>
+          <span id="overviewReadyBadge" class="task-overview-badge">待准备</span>
+        </div>
+        <div class="task-overview-group">
+          <h3>媒体与字幕</h3>
+          <dl>
+            <div><dt>视频</dt><dd id="overviewVideo">未选择</dd></div>
+            <div><dt>媒体</dt><dd id="overviewMedia">等待分析</dd></div>
+            <div><dt>字幕</dt><dd id="overviewAss">未选择</dd></div>
+            <div><dt>字体</dt><dd id="overviewFonts">未选择</dd></div>
+          </dl>
+        </div>
+        <div class="task-overview-group">
+          <h3>制作状态</h3>
+          <dl>
+            <div><dt>预检</dt><dd id="overviewPreflight">等待分析</dd></div>
+            <div><dt>预览</dt><dd id="overviewPreview">未生成</dd></div>
+            <div><dt>方案</dt><dd id="overviewPlan">未选择</dd></div>
+          </dl>
+        </div>
+        <div class="task-overview-group task-overview-final">
+          <h3>任务状态</h3>
+          <p id="overviewTaskState">选择视频、ASS 并完成分析后即可继续。</p>
+        </div>
+      </section>
+    </aside>
     <aside class="platform-rail" aria-label="运行方式">
       <section id="windowsNativeCard" class="card platform-card windows-card">
         <div class="platform-card-head">
@@ -378,17 +407,28 @@ function applyWindowSizeClass() {
 
 const MOBILE_STAGE_ORDER = ['prepare', 'produce'];
 
+function resolvePresentationShell(width = window.innerWidth) {
+  if (width <= 640) return 'phone';
+  if (width <= 1180 || window.matchMedia('(pointer: coarse)').matches) return 'tablet';
+  return 'desktop';
+}
+
 function devicePrefersMobileShell() {
-  // The phone task shell is now the canonical UI on every platform.
-  // Keep the function name for compatibility with existing tests/helpers.
-  return true;
+  return resolvePresentationShell() === 'phone';
 }
 
 function applyPresentationShell() {
-  document.body.classList.add('ui-mobile');
-  document.body.classList.remove('ui-desktop');
-  document.documentElement.dataset.uiShell = 'mobile';
-  if (!document.body.dataset.mobileStage) document.body.dataset.mobileStage = 'prepare';
+  const shell = resolvePresentationShell();
+  document.body.classList.remove('ui-mobile', 'ui-phone', 'ui-tablet', 'ui-desktop');
+  if (shell === 'phone') {
+    document.body.classList.add('ui-mobile', 'ui-phone');
+    if (!document.body.dataset.mobileStage) document.body.dataset.mobileStage = 'prepare';
+  } else if (shell === 'tablet') {
+    document.body.classList.add('ui-tablet');
+  } else {
+    document.body.classList.add('ui-desktop');
+  }
+  document.documentElement.dataset.uiShell = shell;
   syncMobileStageNav();
 }
 
@@ -407,10 +447,10 @@ function syncMobileStageNav() {
   if (!nav) return;
   const current = document.body.dataset.mobileStage || 'prepare';
   const mobileTitle = document.querySelector('.app-brand-copy h1');
-  if (mobileTitle && document.body.classList.contains('ui-mobile')) {
+  if (mobileTitle && document.body.classList.contains('ui-phone')) {
     mobileTitle.textContent = current === 'produce' ? '预览与压制' : '硬字幕压制';
   } else if (mobileTitle) {
-    mobileTitle.textContent = '硬字幕压制';
+    mobileTitle.textContent = '快速自动硬字幕压制器';
   }
   for (const button of nav.querySelectorAll('[data-mobile-stage-target]')) {
     const stage = button.dataset.mobileStageTarget;
@@ -443,7 +483,61 @@ $('continueToProduceBtn')?.addEventListener('click', () => {
 
 applyWindowSizeClass();
 applyPresentationShell();
-window.addEventListener('resize', applyWindowSizeClass, { passive: true });
+window.addEventListener('resize', () => {
+  applyWindowSizeClass();
+  applyPresentationShell();
+}, { passive: true });
+
+function overviewText(value, fallback = '—') {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return text || fallback;
+}
+
+function syncTaskOverview() {
+  const rail = $('taskOverviewRail');
+  if (!rail) return;
+
+  $('overviewVideo').textContent = state.video?.name || '未选择';
+  $('overviewAss').textContent = state.ass?.name || '未选择';
+  $('overviewFonts').textContent = state.fonts?.length
+    ? state.fonts.length + ' 个文件'
+    : (state.savedFonts?.length ? '常用库 ' + state.savedFonts.length + ' 个文件' : '未选择');
+
+  $('overviewMedia').textContent = state.media
+    ? overviewText(
+        (state.media.videoCodec || 'unknown').toUpperCase() + ' · ' +
+        state.media.width + '×' + state.media.height + ' · ' +
+        Number(state.media.fps || 0).toFixed(2) + ' fps'
+      )
+    : '等待分析';
+
+  $('overviewPreflight').textContent = overviewText($('preflightStatus')?.textContent, '等待分析');
+  $('overviewPreview').textContent = state.previewUrls?.filter(Boolean).length
+    ? state.previewUrls.filter(Boolean).length + ' 张真实预览'
+    : '未生成';
+
+  const chosen = overviewText($('chosenSummary')?.textContent, '未选择');
+  $('overviewPlan').textContent = chosen.length > 58 ? chosen.slice(0, 58) + '…' : chosen;
+
+  const ready = !!$('encodeBtn') && !$('encodeBtn').disabled && !$('encodeCard')?.classList.contains('hidden');
+  $('overviewReadyBadge').textContent = ready ? '已就绪' : (state.media ? '处理中' : '待准备');
+  $('overviewReadyBadge').classList.toggle('is-ready', ready);
+  $('overviewTaskState').textContent = ready
+    ? '当前素材与方案已满足正式压制条件。'
+    : state.media
+      ? '继续生成真实字幕预览并确认当前方案。'
+      : '选择视频、ASS 并完成分析后即可继续。';
+}
+
+const overviewObserver = new MutationObserver(syncTaskOverview);
+for (const id of ['videoMeta','assMeta','preflightStatus','chosenSummary','preview','encodeCard','encodeBtn']) {
+  const node = $(id);
+  if (node) overviewObserver.observe(node, { childList: true, subtree: true, characterData: true, attributes: true });
+}
+for (const id of ['video','ass','fonts','encodeGoal','qualityTarget','sizeBudgetMultiplier']) {
+  $(id)?.addEventListener('change', () => queueMicrotask(syncTaskOverview));
+}
+syncTaskOverview();
 
 const log = msg => { $('log').textContent += `${msg}\n`; $('log').scrollTop = $('log').scrollHeight; };
 state.engine = new EncoderEngine(log);
