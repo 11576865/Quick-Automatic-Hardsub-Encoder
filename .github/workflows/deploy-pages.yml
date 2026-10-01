@@ -30,7 +30,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      APP_BASE_VERSION: 0.2.1-native
+      APP_BASE_VERSION: 0.3.0-native
       EXPECTED_SIGNER_SHA256: 36ebb5783f02afb3cba3ad5978202615567ebf93df0866e4f535e75c0f3fd659
       DEV_RELEASE_TAG: dev-builds
 

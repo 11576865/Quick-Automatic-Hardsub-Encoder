@@ -6205,3 +6205,19 @@ body.ui-phone .runtime-help-link {
     grid-template-columns: 1fr;
   }
 }
+
+/* Unified manual media processing workspace */
+.media-workspace { min-width:0; grid-column:1 / -1; }
+.media-workspace h2 { margin-top:0; }
+.task-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:14px; padding:12px 0; }
+.task-grid label { display:flex; flex-direction:column; gap:6px; font-size:.9rem; min-width:0; }
+.task-grid input,.task-grid select { width:100%; min-width:0; min-height:44px; padding:10px; color:inherit; background:var(--input-bg,#182332); border:1px solid #607189; border-radius:8px; box-sizing:border-box; }
+.task-grid option { color:#e9eef5; background:#182332; }
+.task-grid .task-check { flex-direction:row; align-items:center; }
+.task-check input { width:20px; min-height:20px; }
+.media-workspace fieldset { min-width:0; margin:16px 0; border:1px solid #607189; border-radius:10px; padding:12px; }
+.media-workspace fieldset:disabled { opacity:.5; }
+.media-workspace [hidden] { display:none !important; }
+.task-command { white-space:pre-wrap; overflow-wrap:anywhere; padding:14px; border:1px solid #607189; border-radius:8px; max-height:220px; overflow:auto; }
+.media-workspace progress { width:100%; accent-color:#66baff; }
+.media-workspace .button-row { flex-wrap:wrap; }

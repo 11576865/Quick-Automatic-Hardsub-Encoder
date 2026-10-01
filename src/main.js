@@ -1,3 +1,4 @@
+import { mountMediaWorkspace } from './media-workspace.js';
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
@@ -153,7 +154,7 @@ app.innerHTML = `
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
   <section id="inputCard" class="card input-card" data-mobile-stage-section="prepare">
-    <div class="card-heading"><span class="step-no">02</span><div><h2>准备素材</h2><p>选择视频、ASS 和可选字体。</p></div></div>
+    <div class="card-heading"><span class="step-no">02</span><div><h2>准备素材</h2><p>选择视频；硬字幕模式另需 ASS 和可选字体。</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
@@ -313,7 +314,7 @@ app.innerHTML = `
 
   <details class="card log-card">
     <summary class="log-summary"><span class="step-no">LOG</span><strong>技术日志</strong><span>仅在排错时展开</span></summary>
-    <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.1.1\n</div>
+    <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.2.0\n</div>
   </details>
     </main>
     <aside id="taskOverviewRail" class="task-overview-rail" aria-label="任务概览">
@@ -388,7 +389,7 @@ app.innerHTML = `
           <summary>第一次使用？3 步安装</summary>
           <ol>
             <li>下载最新版 APK；若 Android 阻止安装，按系统提示允许当前浏览器或文件管理器安装此来源的应用。</li>
-            <li>安装后打开“硬字幕压制”，通过系统文件选择器选择视频、ASS 和可选字体。</li>
+            <li>安装后打开“硬字幕压制”，通过系统文件选择器选择视频；硬字幕模式另需 ASS 和可选字体。</li>
             <li>开始正式压制后可离开当前页面；前台服务会持有任务，并在通知栏显示进度与取消入口。</li>
           </ol>
           <p>更新使用同一包名 <code>io.github.quickhardsub</code>；正常更新不需要先卸载旧版。</p>
@@ -4222,3 +4223,83 @@ function formatDurationPrecise(sec) {
     : `${m}:${s.toFixed(3).padStart(6,'0')}`;
 }
 function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+
+// Manual tasks use the same selected files and owned native job lifecycle.
+let manualCancelRequested = false;
+mountMediaWorkspace({
+  busy: () => state.operationBusy || !!state.nativeJobId,
+  isWindows: () => !!globalThis.NativeHardsub?.__windowsNative,
+  hasNvenc: codec => {
+    const key = {h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc'}[codec];
+    return !!state.nativeBackend?.encoders?.some(e => (e.key || e.Key) === key && (e.available || e.Available));
+  },
+  platformKey: () => state.nativeBackend || {},
+  setBusy: value => {
+    state.operationBusy=value;
+    for (const id of ['video','ass','fonts','videoNativePickerBtn','assNativePickerBtn','fontsNativePickerBtn','analyze','encodeBtn','previewBtn','benchmarkBtn','calibrateQualityBtn']) if($(id)) $(id).disabled=value;
+    if(!value){refreshAnalyze();refreshBenchmarkEnabled();}
+  },
+  log,
+  prepare: async operation => {
+    if (!state.video) throw new Error('请先选择视频');
+    if (operation === 'hardsub' && !workflowReadiness().ready) {
+      throw new Error('硬字幕模式请先在下方完成字幕分析与真实预览');
+    }
+    if(state.nativeBackend?.available){
+      if(state.nativeBackend.taskSchemaVersion!==1)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
+      if(!state.nativeInputProbe?.ok)throw new Error('视频尚未完成原生探测');
+      return mediaFromNativeProbe(state.nativeInputProbe);
+    }
+    if(state.video.size>MAX_BYTES)throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本');
+    if(!await ensureWebEngineReady())throw new Error('浏览器 FFmpeg 核心不可用');
+    if(operation !== 'hardsub')await state.engine.stageFiles(state.video,null,[]);
+    else { await state.engine.stageFiles(state.video,state.ass,state.effectiveFonts); await state.engine.setAssText(state.activeAssText||state.assText); }
+    return state.engine.probe();
+  },
+  cancel: () => {
+    manualCancelRequested=true;
+    if(state.nativeJobId)globalThis.NativeHardsub?.cancelNativeEncode(state.nativeJobId);
+    else void state.engine.api?.FFmpegKit?.cancel();
+  },
+  save: completed => {
+    if(completed.jobId)globalThis.NativeHardsub?.requestNativeExport(completed.jobId,completed.name);
+    else downloadBlob(completed.blob,completed.name);
+  },
+  run: async (task,media,progress) => {
+    manualCancelRequested=false;
+    const base=state.video.name.replace(/\.[^.]+$/,'');
+    const name=base+'_'+task.operation+(task.operation==='copy'?'':'_'+task.codec)+'.mkv';
+    log('手动任务：'+task.operation+' · '+task.outputArgs.join(' '));
+    if(state.nativeBackend?.available){
+      const request={codec:task.codec||'h264',mode:task.rateMode==='bitrate'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:media.audioTracks,estimatedOutputBytes:Math.max(256*1024*1024,Number(state.video.size||media.size||0)*2),suggestedName:name};
+      const bridge=globalThis.NativeHardsub;
+      const started=JSON.parse(await Promise.resolve(bridge.startNativeEncode(JSON.stringify(request),task.operation==='hardsub'?(state.activeAssText||state.assText):'')));
+      if(!started.ok||!started.jobId)throw new Error(started.error||'创建任务失败');
+      state.nativeJobId=started.jobId;
+      localStorage.setItem('nativeEncodeJobId',started.jobId);
+      try {
+        while(true){
+          const result=JSON.parse(await Promise.resolve(bridge.getNativeJobStatus(started.jobId)));
+          if(!result.ok)throw new Error(result.error||'状态读取失败');
+          const actual=result.actualStart != null ? ' · 实际起点 '+Number(result.actualStart).toFixed(3)+' 秒' : '';
+          progress(Number(result.progress||0),(result.message||result.state)+actual);
+          if(result.state==='completed')return {jobId:started.jobId,name};
+          if(['failed','cancelled'].includes(result.state))throw new Error(result.error||result.state);
+          if(manualCancelRequested)bridge.cancelNativeEncode(started.jobId);
+          await sleepMs(700);
+        }
+      } finally {state.nativeJobId=null;localStorage.removeItem('nativeEncodeJobId');}
+    }
+    if(task.operation!=='copy'&&!state.softwareEncoders[task.codec])throw new Error('当前浏览器核心未提供此编码器');
+    task=await state.engine.snapTaskStart(task);
+    if(manualCancelRequested)throw new Error('已取消');
+    progress(0,'正在处理 · 实际起点 '+task.start.toFixed(3)+' 秒');
+    const result=await state.engine.encodeFullStream(task.codec||'h264',{task,onStatistics:stat=>progress(Math.min(.98,stat.timeMs/1000/task.expectedDuration),'正在处理 · '+(stat.timeMs/1000).toFixed(1)+' 秒 · 起点 '+task.start.toFixed(3)+' 秒')});
+    if(manualCancelRequested)throw new Error('已取消');
+    progress(.99,'正在验证成品…');
+    const check=await state.engine.scanEncodedPackets(result.blob,task.expectedDuration,{expectedAudioTracks:task.expectedAudioTracks,tolerance:task.operation==='copy'?2:undefined});
+    if(!check.ok)throw new Error('成品轨道或时长验证未通过：'+JSON.stringify(check));
+    return {blob:result.blob,name};
+  }
+});
