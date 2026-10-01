@@ -9,6 +9,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/test-frontend.yml'
+      - 'scripts/check-media-ui.cjs'
   push:
     branches: [main]
     paths:
@@ -19,6 +20,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/test-frontend.yml'
+      - 'scripts/check-media-ui.cjs'
 
 jobs:
   frontend:
@@ -33,5 +35,17 @@ jobs:
       - run: node src/font-diagnostics.test.mjs
       - run: node src/input-safety.test.mjs
       - run: node src/ui-shell.test.mjs
+      - run: node --test src/media-task.test.mjs
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs
       - run: npm ci
       - run: npm run build
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/check-media-ui.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: media-workspace-screenshots
+          path: media-workspace-*.png
+          if-no-files-found: ignore

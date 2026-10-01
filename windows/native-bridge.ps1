@@ -8,6 +8,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
+. (Join-Path $PSScriptRoot 'media-task.ps1')
 
 $ErrorActionPreference = 'Stop'
 $script:AllowedOrigin = 'https://11576865.github.io'
@@ -192,7 +193,8 @@ function Get-BackendInfo {
         ffprobe=$script:Ffprobe
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
-        bridgeVersion=3
+        bridgeVersion=4
+        taskSchemaVersion=1
     }
 }
 
@@ -382,10 +384,61 @@ function Invoke-Sample($Body) {
     }finally{Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue}
 }
 
+function Start-MediaTaskJob($Body) {
+    foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
+    $request=$Body.request; $task=$request.task
+    $outputArgs=Get-MediaTaskArgs $task
+    $video=Get-SelectedPath 'video'
+    if(-not $video){throw 'No video selected.'}
+    $probe=Get-ProbeMedia
+    if($task.operation -ne 'copy' -and $probe.unsafeColorPipeline){throw 'HDR/high-bit-depth transcode is not validated.'}
+    if([double]$task.end -gt [double]$probe.duration + 0.1){throw 'Range exceeds source duration.'}
+    $codecIndex=[Array]::IndexOf($outputArgs,'-c:v')
+    $encoder=$outputArgs[$codecIndex+1]
+    if($encoder -ne 'copy'){
+        $profile=@($script:Capabilities.Encoders | Where-Object { $_.Key -eq $encoder -and $_.Available }) | Select-Object -First 1
+        if(-not $profile){throw 'Selected encoder is unavailable; no automatic substitution.'}
+    }
+    $actualStart=[double]$task.start
+    if($task.operation -eq 'copy' -and $actualStart -gt 0){
+        $stop=($actualStart+1).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture)
+        $scan=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -skip_frame nokey -read_intervals 0%'+$stop+' -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 '+(Quote-NativeArg $video))
+        if($scan.ExitCode -ne 0){throw 'Keyframe scan failed.'}
+        $found=$false; $last=0.0
+        foreach($line in ($scan.StdOut -split "\r?\n")){
+            $time=0.0
+            if([double]::TryParse(($line.Split(',')[0]),[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$time) -and $time -ge 0 -and $time -le $actualStart){$last=[Math]::Max($last,$time);$found=$true}
+        }
+        if(-not $found){throw 'No suitable keyframe found.'}
+        $actualStart=$last
+    }
+    $jobId=[guid]::NewGuid().ToString('N')
+    $work=New-BridgeWorkDir ("quick-media-job-$jobId-")
+    if($task.operation -eq 'hardsub'){Stage-BridgeAssets $work ([string]$Body.assText)}
+    $parts=New-Object 'System.Collections.Generic.List[string]'
+    foreach($a in @('-hide_banner','-nostdin','-loglevel','error','-y','-progress','progress.txt')){$parts.Add($a)}
+    if($actualStart -gt 0){$parts.Add('-ss');$parts.Add($actualStart.ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))}
+    $parts.Add('-i');$parts.Add($video);$parts.Add('-t');$parts.Add(([double]$task.end-$actualStart).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))
+    foreach($a in $outputArgs){$parts.Add($a.Replace('__ASS__','subtitle.ass').Replace('__FONTS__','fonts'))}
+    foreach($a in @('-f','matroska','output.mkv')){$parts.Add($a)}
+    $args=($parts | ForEach-Object { Quote-NativeArg $_ }) -join ' '
+    $started=Start-BridgeTool $script:Ffmpeg $args $work
+    $duration=if($task.operation -eq 'copy'){[double]$task.end-$actualStart}else{[double]$task.expectedDuration}
+    $job=[pscustomobject]@{
+        Id=$jobId;Work=$work;Output=(Join-Path $work 'output.mkv');Progress=(Join-Path $work 'progress.txt');Started=$started
+        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task
+        SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
+    }
+    $script:Jobs[$jobId]=$job
+    return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
+}
+
 function Start-EncodeJob($Body) {
+    foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $request=$Body.request
+    if($request.task){return Start-MediaTaskJob $Body}
     $profile=Get-PreferredEncoder ([string]$request.codec)
     if(-not $profile){throw 'No available Windows Native encoder for this codec.'}
     $jobId=[guid]::NewGuid().ToString('N')
@@ -398,7 +451,7 @@ function Start-EncodeJob($Body) {
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
-        Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware
+        Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware;ActualStart=0;Task=$null
         SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
     }
     $script:Jobs[$jobId]=$job
@@ -419,7 +472,7 @@ function Get-JobStatus([string]$JobId) {
         $progress=if($j.Duration -gt 0){[Math]::Min(0.99,[Math]::Max(0,$timeMs/1000/$j.Duration))}else{0}
         $elapsed=((Get-Date)-$p.StartTime).TotalSeconds
         $speed=if($elapsed -gt 0){($timeMs/1000)/$elapsed}else{0}
-        return [pscustomobject]@{ok=$true;state=if($j.Cancelled){'cancelling'}else{'encoding'};progress=$progress;timeMs=$timeMs;duration=$j.Duration;speed=$speed;encoder=$j.Encoder;hardware=$j.Hardware}
+        return [pscustomobject]@{ok=$true;state=if($j.Cancelled){'cancelling'}else{'encoding'};progress=$progress;timeMs=$timeMs;duration=$j.Duration;speed=$speed;encoder=$j.Encoder;hardware=$j.Hardware;actualStart=$j.ActualStart}
     }
     if(-not $j.Finalized){
         $j.Finalized=$true
@@ -431,14 +484,29 @@ function Get-JobStatus([string]$JobId) {
             $j.State='failed';$j.Error=$stderr.Trim()
         }else{
             $check=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
-            if($check.ExitCode -ne 0 -or -not $check.StdOut.Trim()){$j.State='failed';$j.Error='FFprobe could not validate the encoded video stream.'}else{$j.State='completed'}
+            if($check.ExitCode -ne 0 -or -not $check.StdOut.Trim()){$j.State='failed';$j.Error='FFprobe could not validate the encoded video stream.'}else{
+                $j.State='completed'
+                if($j.Task){
+                    try {
+                        $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_streams -show_format -of json '+(Quote-NativeArg $j.Output))
+                        if($probe.ExitCode -ne 0){throw 'Output probe failed.'}
+                        $info=$probe.StdOut | ConvertFrom-Json
+                        $videos=@($info.streams | Where-Object {$_.codec_type -eq 'video'})
+                        $audios=@($info.streams | Where-Object {$_.codec_type -eq 'audio'})
+                        $duration=[double]::Parse([string]$info.format.duration,[Globalization.CultureInfo]::InvariantCulture)
+                        if($videos.Count -ne 1 -or $audios.Count -ne [int]$j.Task.expectedAudioTracks -or $duration -le 0 -or [Math]::Abs($duration-$j.Duration) -gt 2){throw 'Output stream count/duration validation failed.'}
+                        $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -i '+(Quote-NativeArg $j.Output)+' -map 0:v:0 -map 0:a? -c copy -f null -')
+                        if($scan.ExitCode -ne 0){throw 'Output packet scan failed.'}
+                    }catch{$j.State='failed';$j.Error=$_.Exception.Message}
+                }
+            }
         }
         $p.Dispose()
     }
     if($j.State -eq 'completed'){
         $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
         $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
-        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}

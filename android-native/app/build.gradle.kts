@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.quickhardsub"
         minSdk = 24
         targetSdk = 35
-        versionCode = ciVersionCode ?: 3
-        versionName = ciVersionName ?: "0.2.1-native"
+        versionCode = ciVersionCode ?: 4
+        versionName = ciVersionName ?: "0.3.0-native"
     }
 
     buildFeatures {

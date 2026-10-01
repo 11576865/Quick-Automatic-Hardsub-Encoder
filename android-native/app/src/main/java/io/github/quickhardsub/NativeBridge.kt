@@ -324,6 +324,7 @@ class NativeBridge(
         val power = activity.getSystemService(PowerManager::class.java)
         return JSONObject()
             .put("available", true)
+            .put("taskSchemaVersion", 1)
             .put("backend", "android-native")
             .put("abi", Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown")
             .put("apiLevel", Build.VERSION.SDK_INT)
@@ -922,7 +923,11 @@ class NativeBridge(
             }
             val inputUri = getPickedUris("video").firstOrNull()
                 ?: throw IllegalStateException("没有可供 Native 压制使用的视频 URI")
-            if (assText.isBlank()) throw IllegalStateException("处理后的 ASS 字幕为空")
+            val incoming = JSONObject(requestJson)
+            val task = incoming.optJSONObject("task")
+            if (task != null) MediaTaskArguments.validate(task)
+            val needsAss = task == null || task.optString("operation") == "hardsub"
+            if (needsAss && assText.isBlank()) throw IllegalStateException("处理后的 ASS 字幕为空")
             if (assText.toByteArray(Charsets.UTF_8).size > 8 * 1024 * 1024) {
                 throw IllegalStateException("ASS 字幕超过 8 MB 安全上限")
             }
@@ -935,7 +940,6 @@ class NativeBridge(
                 }
             }
 
-            val incoming = JSONObject(requestJson)
             val codec = incoming.optString("codec", "")
             val mode = incoming.optString("mode", "")
             val preset = incoming.optString("preset", "")
@@ -962,7 +966,7 @@ class NativeBridge(
                 "ultrafast", "superfast", "veryfast", "faster", "fast",
                 "medium", "slow", "slower", "veryslow"
             )
-            when (codec) {
+            if (task == null) when (codec) {
                 "h264", "h265" -> if (preset !in x26xPresets) {
                     throw IllegalStateException("x264/x265 preset 不在允许范围")
                 }
@@ -973,7 +977,7 @@ class NativeBridge(
                 }
                 else -> throw IllegalStateException("未知编码器")
             }
-            when (mode) {
+            if (task == null) when (mode) {
                 "crf" -> {
                     val maxCrf = if (codec == "av1") 63 else 51
                     if (crf !in 0..maxCrf) throw IllegalStateException("CRF 超出允许范围")
@@ -1008,6 +1012,7 @@ class NativeBridge(
             selectedFontUris.forEach { fontUris.put(it.toString()) }
 
             val request = JSONObject()
+                .put("task", task)
                 .put("inputUri", inputUri.toString())
                 .put("fontUris", fontUris)
                 .put("codec", codec)

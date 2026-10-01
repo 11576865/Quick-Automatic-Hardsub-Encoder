@@ -1,6 +1,6 @@
 # Quick Automatic Hardsub Encoder
 
-一个围绕 **ASS 硬字幕压制**构建的跨端自动化工作台。
+一个支持 **ASS 硬字幕压制、纯视频转码和无损快速剪切** 的跨端视频处理工作台。
 
 它把“选择视频、字幕和字体 → 预检 → 真实 libass 预览 → 编码测试 → 自动方案选择 → 正式压制 → 校验与导出”整理成同一套界面，并根据运行平台使用不同后端：
 
@@ -9,10 +9,16 @@
 - **Browser / WebAssembly**：安装即用的浏览器后端与兼容 fallback。
 
 **Web App:** https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/  
-**Web package:** 0.1.1  
-**Android native line:** 0.2.1-native
+**Web package:** 0.2.0
+**Android native line:** 0.3.0-native
 
 > 这个项目的中心目标不是“把 FFmpeg 命令放到网页里”，而是尽量把硬字幕压制前后容易出错的判断、预览、测试、回退和输出验证自动化。
+
+## 手动视频处理工作区
+
+新增硬字幕压制、纯视频转码、无损快速剪切三种模式。帧率、尺寸、码率、编码器及画面处理参数可独立修改；预设只填入初始值。手动任务无需质量校准。
+
+浏览器、Android、Windows 使用同一任务格式，由各平台后端执行和校验。详细参数、使用流程及当前限制见 [手动工作区说明](docs/manual-media-workspace.md)。原有自动方案继续作为可选辅助。
 
 ## About
 

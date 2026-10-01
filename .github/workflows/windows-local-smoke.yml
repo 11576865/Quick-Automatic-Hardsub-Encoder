@@ -23,7 +23,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -253,4 +253,17 @@ jobs:
             Write-Host "Bounded hard-sub matrix completed: $tested encoder(s) tested."
           } finally {
             Pop-Location
+          }
+      - name: Validate structured media task arguments
+        shell: powershell
+        run: |
+          . ./windows/media-task.ps1
+          $valid = [pscustomobject]@{version=1;operation='copy';start=0;end=1;outputArgs=@('-ss','0','-map','0:v:0','-c:v','copy','-sn')}
+          $args = Get-MediaTaskArgs $valid
+          if($args.Count -ne 7){throw 'Task args did not round-trip.'}
+          foreach($bad in @(@('-i','C:\private.txt'),@('-vf','movie=C:\private.txt','-c:v','libx264'),@('-c:v','libx264'))){
+            $valid.outputArgs=$bad
+            $rejected=$false
+            try { Get-MediaTaskArgs $valid | Out-Null } catch { $rejected=$true }
+            if(-not $rejected){throw 'Unsafe/incompatible task accepted.'}
           }

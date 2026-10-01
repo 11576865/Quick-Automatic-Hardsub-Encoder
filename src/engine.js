@@ -1,3 +1,4 @@
+import { taskInputArgs, taskDurationArgs } from './media-task.js';
 const VENDOR_ENTRY = './vendor/ffmpeg-kit-next-web/dist/index.js';
 const FALLBACK_FONT_URL = './vendor/fallback-fonts/NotoSansSC-Regular.otf';
 const FALLBACK_FONT_FAMILY = 'Noto Sans SC';
@@ -51,7 +52,7 @@ export class EncoderEngine {
 
     await mount(inputMount, { files: [videoFile] });
     this.inputPath = `${inputMount}/${videoFile.name}`;
-    await writeFile(this.assPath, new Uint8Array(await assFile.arrayBuffer()));
+    if (assFile) await writeFile(this.assPath, new Uint8Array(await assFile.arrayBuffer()));
 
     const fallback = await this.getBundledFallbackFont();
     const mountedFonts = fallback ? [...fontFiles, fallback] : [...fontFiles];
@@ -158,6 +159,17 @@ export class EncoderEngine {
       throw new Error('没有扫描到有效视频 packet');
     }
     return { packetCount, videoEnd };
+  }
+
+  async snapTaskStart(task) {
+    if (task.operation !== 'copy' || task.start <= 0) return task;
+    const session = await this.api.FFprobeKit.execute(`-v error -select_streams v:0 -skip_frame nokey -read_intervals 0%${task.start + 1} -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 ${q(this.inputPath)}`);
+    if (!this.api.ReturnCode.isSuccess(session.getReturnCode())) throw new Error('关键帧定位失败');
+    const text = await session.getOutput();
+    const candidates = String(text).split(/\r?\n/).filter(line=>/^\d/.test(line)).map(line=>Number(line.split(',')[0])).filter(n=>Number.isFinite(n)&&n>=0&&n<=task.start);
+    if (!candidates.length) throw new Error('未找到可用关键帧');
+    const actualStart=Math.max(...candidates);
+    return {...task,requestedStart:task.start,start:actualStart,expectedDuration:task.end-actualStart};
   }
 
   async detectSoftwareEncoders() {
@@ -331,7 +343,7 @@ export class EncoderEngine {
     const crf = options.crf ?? defaultCrf(codecKey);
     const preset = options.preset ?? defaultPreset(codecKey);
     const encoder = encoderName(codecKey);
-    const filter = this.buildEncodeFilter(true);
+    const filter = this.buildEncodeFilter(!options.task || options.task.operation === 'hardsub');
     const extra = codecExtra(codecKey);
     const decoder = this.inputDecoderArgs();
     const gop = normalGop(this.mediaInfo?.fps || 30);
@@ -354,7 +366,11 @@ export class EncoderEngine {
         ? `-b:v ${Math.round(targetVideoBitrate)} -pass 2 -passlogfile ${q(passlog)}`
         : `-b:v ${Math.round(targetVideoBitrate)}`
       : `-crf ${crf}`;
-    const cmd = `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
+    const task = options.task;
+    const taskArgs = task ? task.outputArgs.map(value => value.replace('__ASS__',escapeFilter(this.assPath)).replace('__FONTS__',escapeFilter(this.fontDir))) : [];
+    const cmd = task
+      ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),'-f','matroska',q(target)].join(' ')
+      : `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
     this.onLog(`$ ffmpeg ${cmd}`);
 
     let resolveDone;
@@ -420,7 +436,7 @@ export class EncoderEngine {
     }
   }
 
-  async scanEncodedPackets(blob, expectedDuration = 0) {
+  async scanEncodedPackets(blob, expectedDuration = 0, validation = {}) {
     this.assertReady();
     const { mount, FFprobeKit, FFmpegKit, ReturnCode } = this.api;
     if (!blob || !(blob.size > 0)) throw new Error('成品为空，无法执行完整性扫描');
@@ -522,12 +538,12 @@ export class EncoderEngine {
     const expected = Number(expectedDuration || 0);
     const durationDelta = expected > 0 ? videoScan.end - expected : null;
     const fps = Number(this.mediaInfo?.fps || 0);
-    const tolerance = Math.max(0.5, fps > 0 ? 2 / fps : 0);
+    const tolerance = validation.tolerance ?? Math.max(0.5, fps > 0 ? 2 / fps : 0);
     const durationOk = durationDelta == null || Math.abs(durationDelta) <= tolerance;
 
-    const expectedAudioTracks = Number(this.mediaInfo?.audioTracks || 0);
+    const expectedAudioTracks = validation.expectedAudioTracks ?? Number(this.mediaInfo?.audioTracks || 0);
     const audioTrackCountOk = audioIndexes.length === expectedAudioTracks;
-    const audioTolerance = 1.0;
+    const audioTolerance = validation.tolerance ?? 1.0;
     const audioEnd = audioScan?.end ?? null;
     const audioDurationsOk =
       expectedAudioTracks === 0 ||
