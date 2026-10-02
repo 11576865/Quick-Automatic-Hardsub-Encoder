@@ -15,6 +15,7 @@ if (!captureId || !output) process.exit(2);
 const contract = JSON.parse(await fs.readFile(new URL("./ui-visual-capture.json", import.meta.url), "utf8"));
 const capture = contract.captures.find((x) => x.id === captureId);
 if (!capture) throw new Error("Unknown capture id: " + captureId);
+const selector = capture.selector === "#workflowMain" ? ".workflow-main" : capture.selector;
 
 const viewport = {
   width: capture.viewport?.width ?? 1365,
@@ -68,12 +69,13 @@ try {
   }
 
   const ready = capture.ready ?? {};
-  if (ready.selector) await page.locator(ready.selector).first().waitFor({ state: ready.state ?? "visible", timeout: 30000 });
+  const readySelector = ready.selector === "#workflowMain" ? ".workflow-main" : ready.selector;
+  if (readySelector) await page.locator(readySelector).first().waitFor({ state: ready.state ?? "visible", timeout: 30000 });
   if (ready.settle_ms) await page.waitForTimeout(ready.settle_ms);
   await fs.mkdir(path.dirname(output), { recursive: true });
 
   if (capture.capture_region === "element") {
-    await page.locator(capture.selector).first().screenshot({ path: output, animations: "disabled" });
+    await page.locator(selector).first().screenshot({ path: output, animations: "disabled" });
   } else if (capture.capture_region === "full-page") {
     await page.screenshot({ path: output, fullPage: true, animations: "disabled" });
   } else {
@@ -93,7 +95,7 @@ try {
       viewport,
       color_scheme: capture.color_scheme ?? "dark",
       locale: capture.locale ?? "zh-CN",
-      selector: capture.selector ?? null,
+      selector: selector ?? null,
       fixture: capture.fixture ?? null,
       page_errors: errors,
     }, null, 2) + "\n");
