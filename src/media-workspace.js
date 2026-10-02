@@ -259,6 +259,7 @@ export function mountMediaWorkspace(hooks) {
   }
   const previousKeyframe = value => {
     const time=clampWaveformTime(value);
+    if(timelineKeyframesTruncated&&timelineKeyframes.length&&time>timelineKeyframes.at(-1)+.000001)return null;
     let previous=null;
     for(const key of timelineKeyframes){if(key>time+.000001)break;previous=key;}
     return previous;
@@ -286,8 +287,10 @@ export function mountMediaWorkspace(hooks) {
   function syncCopyBoundaryPreview(start){
     const copy=get('operation').value==='copy';
     copyBoundaryInfo.hidden=!copy||!(waveformDuration>0);
-    for(const el of [keyframePrev,keyframeNext,keyframeSnapStart])el.hidden=!copy;
+    for(const el of [keyframePrev,keyframeNext,keyframeSnapStart])el.hidden=!copy||!(waveformDuration>0);
     if(!copy)return;
+    keyframePrev.disabled=previousKeyframe(waveformCursor-.000001)==null;
+    keyframeNext.disabled=nextKeyframe(waveformCursor)==null;
     requestedStartTime.textContent=formatMediaTimeInput(start,3);
     const actual=start<=0?0:previousKeyframe(start);
     if(actual==null){
@@ -686,9 +689,13 @@ export function mountMediaWorkspace(hooks) {
         ? '硬字幕分支：字幕、字体与真实 libass 预览属于这一分支；编码完成后与其他任务共享封装、验证和保存出口。'
         : '纯视频转码分支：只处理媒体编码参数；不会要求 ASS，也不会静默替换你选择的编码器。';
     renderContainerDecision(null);
-    document.querySelectorAll('.media-timeline-keyframe-only').forEach(el=>el.hidden=!copy);
     renderKeyframeLane();
-    syncWaveformMarkers();
+    if(copy&&waveformDuration>0)syncWaveformMarkers();
+    else{
+      copyBoundaryInfo.hidden=true;
+      actualStartEl.hidden=true;
+      for(const el of [keyframePrev,keyframeNext,keyframeSnapStart])el.hidden=true;
+    }
   }
   function setRateControl(key, active) {
     const control=get(key);
