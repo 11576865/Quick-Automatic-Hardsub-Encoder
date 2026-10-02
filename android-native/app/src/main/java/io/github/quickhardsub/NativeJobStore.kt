@@ -30,8 +30,27 @@ object NativeJobStore {
     fun assFile(context: Context, jobId: String): File =
         File(jobDir(context, jobId), "subtitles.ass")
 
+    fun outputExtension(context: Context, jobId: String): String {
+        val task = try {
+            val request = requestFile(context, jobId)
+            if (request.isFile) JSONObject(request.readText(Charsets.UTF_8)).optJSONObject("task") else null
+        } catch (_: Throwable) {
+            null
+        }
+        return when (task?.optString("outputExtension", "mkv")?.lowercase()) {
+            "mp4" -> "mp4"
+            else -> "mkv"
+        }
+    }
+
+    fun outputFormat(context: Context, jobId: String): String =
+        if (outputExtension(context, jobId) == "mp4") "mp4" else "matroska"
+
+    fun outputMime(context: Context, jobId: String): String =
+        if (outputExtension(context, jobId) == "mp4") "video/mp4" else "video/x-matroska"
+
     fun outputFile(context: Context, jobId: String): File =
-        File(jobDir(context, jobId), "output.mkv")
+        File(jobDir(context, jobId), "output." + outputExtension(context, jobId))
 
     fun writeJsonAtomic(file: File, json: JSONObject) {
         file.parentFile?.mkdirs()
