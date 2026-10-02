@@ -3515,7 +3515,7 @@ body.ui-mobile .plan-anchor {
 
 body.ui-mobile .encode-card {
   min-height: calc(100dvh - 150px);
-  display: flex !important;
+  display: flex;
   flex-direction: column;
 }
 
