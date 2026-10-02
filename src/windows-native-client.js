@@ -108,9 +108,17 @@ function installWindowsBridge(config, backendInfo) {
       void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/cancel').catch(() => {});
     },
     requestNativeExport(jobId, suggestedName) {
-      void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/export', { suggestedName })
-        .then(payload => postCallback('__onNativeExportResult', payload))
-        .catch(error => postCallback('__onNativeExportResult', { ok: false, error: error.message }));
+      return makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/export', { suggestedName })
+        .then(payload => {
+          const result = { jobId, ...payload };
+          postCallback('__onNativeExportResult', result);
+          return result;
+        })
+        .catch(error => {
+          const result = { ok: false, jobId, error: error.message };
+          postCallback('__onNativeExportResult', result);
+          return result;
+        });
     }
   };
 
