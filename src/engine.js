@@ -380,7 +380,9 @@ export class EncoderEngine {
 
     options.onPhase?.(twoPass ? 'pass2' : 'encode');
     const task = options.task;
-    const streamExtension = task?.outputExtension || 'mkv';
+    const streamExtension = task?.outputExtension || options.outputExtension || 'mkv';
+    const outputFormat = task?.outputFormat || options.outputFormat || 'matroska';
+    const outputMime = task?.outputMime || options.outputMime || 'video/x-matroska';
     const stream = await FFmpegKitStreamOutput.create(streamExtension, 8 * 1024 * 1024);
     const target = stream.getUrl();
     const rateControl = targetVideoBitrate > 0
@@ -390,12 +392,12 @@ export class EncoderEngine {
       : `-crf ${crf}`;
     const taskArgs = task ? task.outputArgs.map(value => value.replace('__ASS__',escapeFilter(this.assPath)).replace('__FONTS__',escapeFilter(this.fontDir))) : [];
     if(task && twoPass)taskArgs.push('-pass','2','-passlogfile',passlog);
-    const streamContainerArgs = task?.outputFormat === 'mp4'
+    const streamContainerArgs = outputFormat === 'mp4'
       ? ['-movflags','frag_keyframe+empty_moov+default_base_moof']
       : [];
     const cmd = task
-      ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),...streamContainerArgs.map(q),'-f',q(task.outputFormat || 'matroska'),q(target)].join(' ')
-      : `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
+      ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),...streamContainerArgs.map(q),'-f',q(outputFormat),q(target)].join(' ')
+      : ['-y',decoder.trim(),'-i',q(this.inputPath),'-map','0:v:0','-map','0:a?','-sn','-vf',q(filter),'-c:v',encoder,'-preset',preset,'-g',String(gop),...rateControl.trim().split(/\s+/),...(extra.trim()?extra.trim().split(/\s+/):[]),'-c:a','copy',...streamContainerArgs,'-f',outputFormat,q(target)].filter(Boolean).join(' ');
     this.onLog(`$ ffmpeg ${cmd}`);
 
     let resolveDone;
@@ -453,7 +455,7 @@ export class EncoderEngine {
       }
 
       return {
-        blob: new Blob(chunks, { type: task?.outputMime || 'video/x-matroska' }),
+        blob: new Blob(chunks, { type: outputMime }),
         byteLength: totalBytes
       };
     } finally {
