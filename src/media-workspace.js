@@ -487,9 +487,10 @@ export function mountMediaWorkspace(hooks) {
     el.dataset.state='resolved';
   };
   const syncAudioPlaybackWarning = task => {
-    const el=section.querySelector('#taskAudioPlaybackWarning');
+    const el=outputPolicy?.querySelector('#taskAudioPlaybackWarning');
     if(!el)return;
-    const copy=get('audio').value==='copy';
+    const audioControl=outputPolicy?.querySelector('[name="audio"]');
+    const copy=audioControl?.value==='copy';
     if(!copy){
       el.hidden=true;
       el.textContent='';
@@ -739,7 +740,8 @@ export function mountMediaWorkspace(hooks) {
     for(const key of ['audioBitrate','audioChannels','audioSampleRate'])get(key).disabled=!encoded;
   }
   const handleSharedAudioChange = event => {
-    if (event.target !== get('audio')) return;
+    const audioControl=outputPolicy?.querySelector('[name="audio"]');
+    if (event.target !== audioControl) return;
     updateRate();
     syncAudioPlaybackWarning();
   };
