@@ -35,7 +35,7 @@ jobs:
           $source = Get-Content -Raw './windows/native-bridge.ps1'
           $statusStart = $source.IndexOf('function Get-JobStatus')
           $terminal = $source.IndexOf("if(`$j.State -eq 'completed')", $statusStart)
-          $process = $source.IndexOf('`$p=`$j.Started.Process', $statusStart)
+          $process = $source.IndexOf('$p=$j.Started.Process', $statusStart)
           if ($statusStart -lt 0 -or $terminal -lt 0 -or $process -lt 0 -or $terminal -gt $process) {
             throw 'Get-JobStatus touches the Process handle before resolving completed terminal state'
           }
