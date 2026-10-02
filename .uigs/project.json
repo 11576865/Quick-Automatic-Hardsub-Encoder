@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "project": "Quick-Automatic-Hardsub-Encoder",
+  "repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "foundry": "11576865/UIGS-Foundry",
+  "execution_authority": "this repository",
+  "outbox": {
+    "branch": "uigs-outbox",
+    "packet_path": "packets/"
+  },
+  "auto_capture": {
+    "ci_failures": true,
+    "manual_dispatch": true,
+    "canonical_promotion": false
+  },
+  "tracked_workflows": [
+    "Build Android Native Core Release",
+    "Build Web Core Release",
+    "Build Android and Deploy Frontend",
+    "Compile Android media tasks",
+    "Test frontend",
+    "Windows local smoke"
+  ],
+  "routing_hints": [
+    "architecture",
+    "reliability",
+    "operations",
+    "interface-grammar"
+  ]
+}
