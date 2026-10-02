@@ -49,6 +49,14 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /id="taskWaveformTrack"/);
   assert.match(workspace, /id="taskWaveformSetStart"/);
   assert.match(workspace, /id="taskWaveformSetEnd"/);
+  assert.match(workspace, /id="taskWaveformRuler"/);
+  assert.match(workspace, /id="taskKeyframeLane"/);
+  assert.match(workspace, /id="taskWaveformActualStart"/);
+  assert.match(workspace, /id="taskCopyBoundaryInfo"/);
+  assert.match(workspace, /id="taskKeyframeSnapStart"/);
+  assert.match(workspace, /includeKeyframes:copy/);
+  assert.match(workspace, /previousKeyframe/);
+  assert.match(workspace, /实际无损起点/);
   assert.match(workspace, /MM:SS\.mmm/);
   assert.match(workspace, /parseMediaTime/);
   assert.match(workspace, /formatMediaTimeInput/);
@@ -88,6 +96,11 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /\.media-waveform-panel\s*\{/);
   assert.match(css, /\.media-waveform-track\s*\{/);
   assert.match(css, /\.media-waveform-boundary/);
+  assert.match(css, /\.media-waveform-ruler/);
+  assert.match(css, /\.media-keyframe-lane/);
+  assert.match(css, /\.media-keyframe-mark/);
+  assert.match(css, /\.media-waveform-actual-start/);
+  assert.match(css, /\.media-copy-boundary-info/);
   assert.match(css, /#taskSave\.task-primary-action/);
   assert.match(css, /#taskRun\.task-secondary-action/);
   assert.match(css, /\.task-progress-grid/);
