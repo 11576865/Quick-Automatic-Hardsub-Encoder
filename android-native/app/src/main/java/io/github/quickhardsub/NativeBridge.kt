@@ -333,7 +333,7 @@ class NativeBridge(
         val power = activity.getSystemService(PowerManager::class.java)
         return JSONObject()
             .put("available", true)
-            .put("taskSchemaVersion", 2)
+            .put("taskSchemaVersion", 3)
             .put("fpsModeSupported", MediaTaskArguments.supportsFpsMode())
             .put("backend", "android-native")
             .put("abi", Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown")
