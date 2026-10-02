@@ -1,5 +1,6 @@
 import { sizeBudget } from './media-planning.js';
 import { resolveOutputContainer } from './media-container.js';
+import { parseMediaTime } from './media-time.js';
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
 export const TASK_VERSION = 3;
 export const SOFTWARE = { h264: 'libx264', h265: 'libx265', av1: 'libsvtav1' };
@@ -11,8 +12,8 @@ export function compileTask(raw, media) {
     if (!Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) throw Error(key + ' 超出有效范围');
     return value;
   };
-  t.start = number('start', 0, 0, media.duration);
-  t.end = number('end', media.duration, 0, media.duration);
+  t.start = parseMediaTime(t.start, { empty: 0, max: media.duration, label: '开始时间' });
+  t.end = parseMediaTime(t.end, { empty: media.duration, max: media.duration, label: '结束时间' });
   if (t.end <= t.start) throw Error('结束时间必须晚于开始时间');
   t.videoStream = number('videoStream', 0, 0, 0, true);
   t.audio = t.audio || 'copy';
