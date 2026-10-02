@@ -29,6 +29,15 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
           }
+      - name: Guard native file picker visibility contract
+        shell: powershell
+        run: |
+          $source = Get-Content -Raw './windows/native-bridge.ps1'
+          if ($source -match 'Point\(-32000\s*,\s*-32000\)') { throw 'Native file picker owner is still anchored off-screen' }
+          if ($source -notmatch '\[System\.Windows\.Forms\.Cursor\]::Position') { throw 'Native file picker no longer follows the active cursor monitor' }
+          if ($source -notmatch '\[System\.Windows\.Forms\.Screen\]::FromPoint') { throw 'Native file picker has no monitor-aware owner placement' }
+          if ($source -notmatch 'cancelled=\$true') { throw 'Native picker cancellation is not explicit' }
+
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
