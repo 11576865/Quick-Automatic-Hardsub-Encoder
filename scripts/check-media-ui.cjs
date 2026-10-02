@@ -64,7 +64,11 @@ const {spawn}=require('node:child_process');
   if(await page.evaluate(()=>document.body.dataset.mobileStage)!=='prepare')throw Error('Leaving hardsub did not reset the mobile stage');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace remained hidden after leaving hardsub on mobile');
   await page.evaluate(async()=>{
-    document.querySelector('#mediaWorkspace').remove();
+    // Isolate the task-planning smoke from the production mount. The production
+    // workspace owns MutationObservers that may legally re-host its section;
+    // removing only the DOM node leaves those owners alive and can resurrect
+    // the old workspace during a second mount.
+    document.body.innerHTML='<section id="inputCard"></section>';
     const {mountMediaWorkspace}=await import('/src/media-workspace.js');
     window.taskRuns=[];
     mountMediaWorkspace({isWindows:()=>false,hasNvenc:()=>false,platformKey:()=>({}),busy:()=>false,setBusy:()=>{},log:()=>{},cancel:()=>{},save:()=>{},prepare:async()=>({duration:2181.384,fps:60,audioTracks:1}),run:async(task)=>{window.taskRuns.push(task);return {outputBytes:530000000,outputDuration:task.expectedDuration,verified:true};}});
