@@ -14,6 +14,7 @@ const {spawn}=require('node:child_process');
   await page.locator('#mediaWorkspace').waitFor({state:'attached'});
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub still exposes the precise parameter workspace');
   if(await page.locator('#workflowStrip span').count()!==5)throw Error('Hardsub workflow strip does not expose five semantic stages');
+  await page.evaluate(()=>document.querySelector('#subtitleCard').classList.remove('hidden'));
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Precise hardsub strategy did not reveal the parameter workspace');
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
