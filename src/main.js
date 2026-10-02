@@ -1,6 +1,6 @@
 import { validateEncoderSupport } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
-import { outputFileName } from './media-container.js';
+import { outputFileName, resolveOutputContainer } from './media-container.js';
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
@@ -253,6 +253,7 @@ app.innerHTML = `
       </button>
     </div>
   </section>
+  <div id="sharedMediaOutputMount"></div>
   <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>先定义目标，再选择实际可用的编码器与测试路径。</p></div></div>
