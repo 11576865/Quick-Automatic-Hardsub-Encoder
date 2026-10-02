@@ -30,6 +30,8 @@ const {spawn}=require('node:child_process');
   if(await page.locator('#workflowStrip span').count()!==3)throw Error('Transcode workflow strip did not collapse to three stages');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace is not visible');
   if((await page.locator('#taskLoadPreset').textContent()).trim()!=='恢复推荐方案')throw Error('Recommended-plan recovery is not explained in user language');
+  if(!(await page.locator('.media-decision-hint').textContent()).includes('不确定时直接保留推荐方案'))throw Error('Core parameter area lacks uncertainty guidance');
+  if(!(await page.locator('[name=preset] option:checked').textContent()).includes('均衡'))throw Error('Preset selector does not expose human-readable intent');
   if(!await page.evaluate(()=>document.querySelector('#taskPlanSummary').compareDocumentPosition(document.querySelector('#taskEncoding')) & Node.DOCUMENT_POSITION_FOLLOWING))throw Error('Plan summary does not precede detailed parameter controls');
   if(await page.locator('.media-video-details').getAttribute('open')!==null)throw Error('Detailed video parameters are expanded by default');
   if(await page.locator('.media-track-panel').getAttribute('open')!==null)throw Error('Audio/track details are expanded by default');
