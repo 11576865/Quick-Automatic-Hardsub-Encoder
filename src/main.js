@@ -243,12 +243,12 @@ app.innerHTML = `
     <div id="hardsubStrategySwitcher" class="hardsub-strategy-switcher" role="group" aria-label="硬字幕压制控制方式">
       <button type="button" data-hardsub-strategy="guided" aria-pressed="true">
         <span class="hardsub-strategy-kicker">GOAL DRIVEN</span>
-        <strong>引导方案</strong>
+        <strong>目标控制</strong>
         <small>快速预设 / 目标质量 / 目标体积。先表达目标，再由系统映射编码参数。</small>
       </button>
       <button type="button" data-hardsub-strategy="manual" aria-pressed="false">
         <span class="hardsub-strategy-kicker">PARAMETER DRIVEN</span>
-        <strong>精确参数</strong>
+        <strong>参数控制</strong>
         <small>直接控制 codec、preset、CRF/CQ、帧率、尺寸、滤镜、音轨与封装。</small>
       </button>
     </div>
@@ -562,7 +562,7 @@ function syncTaskOverview() {
     document.body.dataset.hardsubStrategy === 'manual';
   const chosen = overviewText($('chosenSummary')?.textContent, '未选择');
   $('overviewPlan').textContent = manualHardsub
-    ? '精确参数 · 显式控制编码、画面、音轨与封装'
+    ? '参数控制 · 显式控制编码、画面、音轨与封装'
     : (chosen.length > 58 ? chosen.slice(0, 58) + '…' : chosen);
 
   const guidedReady = !!$('encodeBtn') && !$('encodeBtn').disabled && !$('encodeCard')?.classList.contains('hidden') &&
@@ -572,7 +572,7 @@ function syncTaskOverview() {
   $('overviewReadyBadge').textContent = manualGateReady ? '可检查参数' : guidedReady ? '已就绪' : (state.media ? '处理中' : '待准备');
   $('overviewReadyBadge').classList.toggle('is-ready', ready);
   $('overviewTaskState').textContent = manualGateReady
-    ? '字幕分析与真实预览门槛已满足；检查精确参数后即可执行。'
+    ? '字幕分析与真实预览门槛已满足；检查当前参数后即可执行。'
     : guidedReady
       ? '当前素材与方案已满足正式压制条件。'
       : state.media
