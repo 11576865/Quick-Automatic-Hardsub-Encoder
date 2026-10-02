@@ -41,6 +41,7 @@ export function checkContainerCompatibility(key, task={}, media={}) {
   if(task.audio==='libopus')return {ok:false,reason:'当前策略不把 Opus 作为 MP4 安全默认；请改用 AAC、关闭音频或选择 MKV'};
   if(task.audio==='copy'){
     const codecs=copiedAudioCodecs(media);
+    if(Number(media.audioTracks||0)>0 && !codecs.length)return {ok:false,reason:'无法确认复制音轨是否适合 MP4；请选择 MKV 或显式转为 AAC'};
     const bad=codecs.find(codec=>!MP4_AUDIO.has(codec));
     if(bad)return {ok:false,reason:`复制的音频编码 ${bad} 未列入 MP4 安全组合；请选择 MKV 或显式转为 AAC`};
   }
