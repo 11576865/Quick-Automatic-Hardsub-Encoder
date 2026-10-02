@@ -40,9 +40,9 @@ export function mountMediaWorkspace(hooks) {
       <div id="taskWaveformTrack" class="media-waveform-track" tabindex="0" aria-label="可点击定位的音频波形">
         <div id="taskWaveformPlaceholder" class="media-waveform-placeholder">选择视频后生成波形，可直接定位剪切边界。</div>
         <img id="taskWaveformImage" alt="音频波形" draggable="false" hidden>
-        <span id="taskWaveformStart" class="media-waveform-boundary media-waveform-boundary-start" data-boundary="start" title="拖动开始时间"></span>
-        <span id="taskWaveformEnd" class="media-waveform-boundary media-waveform-boundary-end" data-boundary="end" title="拖动结束时间"></span>
-        <span id="taskWaveformCursor" class="media-waveform-cursor" aria-hidden="true"></span>
+        <span id="taskWaveformStart" class="media-waveform-boundary media-waveform-boundary-start" data-boundary="start" title="拖动开始时间" hidden></span>
+        <span id="taskWaveformEnd" class="media-waveform-boundary media-waveform-boundary-end" data-boundary="end" title="拖动结束时间" hidden></span>
+        <span id="taskWaveformCursor" class="media-waveform-cursor" aria-hidden="true" hidden></span>
       </div>
     </div>
     <div class="media-waveform-controls">
@@ -275,6 +275,9 @@ export function mountMediaWorkspace(hooks) {
       waveformImage.src=waveformUrl;
       waveformImage.hidden=false;
       waveformPlaceholder.hidden=true;
+      waveformStartEl.hidden=false;
+      waveformEndEl.hidden=false;
+      waveformCursorEl.hidden=false;
       waveformCursor=readBoundary('start',0);
       waveformStatus.textContent='第 '+(Number(result.audioTrack??audioTrack)+1)+' 条音轨 · '+formatMediaTimeInput(waveformDuration,3);
       syncWaveformMarkers();
