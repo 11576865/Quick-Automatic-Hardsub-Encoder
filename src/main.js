@@ -558,17 +558,26 @@ function syncTaskOverview() {
     ? state.previewUrls.filter(Boolean).length + ' 张真实预览'
     : '未生成';
 
+  const manualHardsub = document.body.dataset.mediaOperation === 'hardsub' &&
+    document.body.dataset.hardsubStrategy === 'manual';
   const chosen = overviewText($('chosenSummary')?.textContent, '未选择');
-  $('overviewPlan').textContent = chosen.length > 58 ? chosen.slice(0, 58) + '…' : chosen;
+  $('overviewPlan').textContent = manualHardsub
+    ? '精确参数 · 显式控制编码、画面、音轨与封装'
+    : (chosen.length > 58 ? chosen.slice(0, 58) + '…' : chosen);
 
-  const ready = !!$('encodeBtn') && !$('encodeBtn').disabled && !$('encodeCard')?.classList.contains('hidden');
-  $('overviewReadyBadge').textContent = ready ? '已就绪' : (state.media ? '处理中' : '待准备');
+  const guidedReady = !!$('encodeBtn') && !$('encodeBtn').disabled && !$('encodeCard')?.classList.contains('hidden') &&
+    !$('encodeCard')?.classList.contains('hardsub-strategy-suppressed');
+  const manualGateReady = manualHardsub && workflowReadiness().ready;
+  const ready = guidedReady || manualGateReady;
+  $('overviewReadyBadge').textContent = manualGateReady ? '可检查参数' : guidedReady ? '已就绪' : (state.media ? '处理中' : '待准备');
   $('overviewReadyBadge').classList.toggle('is-ready', ready);
-  $('overviewTaskState').textContent = ready
-    ? '当前素材与方案已满足正式压制条件。'
-    : state.media
-      ? '继续生成真实字幕预览并确认当前方案。'
-      : '选择视频、ASS 并完成分析后即可继续。';
+  $('overviewTaskState').textContent = manualGateReady
+    ? '字幕分析与真实预览门槛已满足；检查精确参数后即可执行。'
+    : guidedReady
+      ? '当前素材与方案已满足正式压制条件。'
+      : state.media
+        ? '继续生成真实字幕预览并确认当前方案。'
+        : '选择视频、ASS 并完成分析后即可继续。';
 }
 
 const overviewObserver = new MutationObserver(syncTaskOverview);
