@@ -490,7 +490,30 @@ function Start-EncodeJob($Body) {
     $progress=Join-Path $work 'progress.txt'
     $encArgs=Get-BridgeEncoderArgs $profile $request
     $containerArgs=if($outputFormat -eq 'mp4'){' -movflags +faststart'}else{''}
-    $args='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -map 0:a? -sn -vf "ass=subtitle.ass:fontsdir=fonts" '+$encArgs+' -c:a copy'+$containerArgs+' -f '+$outputFormat+' '+(Quote-NativeArg $outputFile)
+    $audioMode=if([string]$request.audio){[string]$request.audio}else{'copy'}
+    if($audioMode -notin @('copy','aac','libopus','none')){throw 'Unsupported audio strategy.'}
+    if($audioMode -eq 'none'){
+        $audioArgs=' -an'
+    }else{
+        $audioArgs=' -map 0:a? -c:a '+$audioMode
+        if($audioMode -in @('aac','libopus')){
+            $audioBitrate=if($request.audioBitrate){[int]$request.audioBitrate}else{128000}
+            if($audioBitrate -lt 8000 -or $audioBitrate -gt 1024000){throw 'Audio bitrate out of range.'}
+            $audioArgs+=' -b:a '+$audioBitrate
+            if($request.audioChannels){
+                $audioChannels=[int]$request.audioChannels
+                if($audioChannels -lt 1 -or $audioChannels -gt 8){throw 'Audio channel count out of range.'}
+                $audioArgs+=' -ac '+$audioChannels
+            }
+            if($request.audioSampleRate){
+                $audioSampleRate=[int]$request.audioSampleRate
+                if($audioSampleRate -lt 8000 -or $audioSampleRate -gt 192000){throw 'Audio sample rate out of range.'}
+                if($audioMode -eq 'libopus' -and $audioSampleRate -notin @(8000,12000,16000,24000,48000)){throw 'Unsupported Opus sample rate.'}
+                $audioArgs+=' -ar '+$audioSampleRate
+            }
+        }
+    }
+    $args='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -sn -vf "ass=subtitle.ass:fontsdir=fonts" '+$encArgs+$audioArgs+$containerArgs+' -f '+$outputFormat+' '+(Quote-NativeArg $outputFile)
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
