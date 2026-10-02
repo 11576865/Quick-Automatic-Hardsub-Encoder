@@ -1,0 +1,170 @@
+{
+  "schema_version": 1,
+  "project": "Quick-Automatic-Hardsub-Encoder",
+  "repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "platform": "web-plus-native-hosts",
+  "captures": [
+    {
+      "id": "QHE.PREPARE_SHELL.DESKTOP_DARK",
+      "surface_ids": [
+        "QHE.SHELL.WORKFLOW_HEADER",
+        "QHE.HELP.RUNTIME",
+        "QHE.INPUT.MATERIALS",
+        "QHE.DIAGNOSTICS.ENVIRONMENT",
+        "QHE.PREFLIGHT.MEDIA_SUBTITLE",
+        "QHE.STATUS.TASK_OVERVIEW",
+        "QHE.LOG.TECHNICAL"
+      ],
+      "adapter": "playwright-web",
+      "evidence_level": "production-rendered",
+      "route": "/",
+      "selector": "body",
+      "capture_region": "viewport",
+      "viewport": {
+        "width": 1365,
+        "height": 900,
+        "device_scale_factor": 1
+      },
+      "color_scheme": "dark",
+      "locale": "zh-CN",
+      "ready": {
+        "selector": "body",
+        "state": "visible",
+        "settle_ms": 800
+      },
+      "fixture": {
+        "state": "prepare-shell",
+        "open_details": true
+      },
+      "source_dependencies": [
+        "src/main.js",
+        "src/style.css",
+        "src/media-workspace.js",
+        "src/media-workspace-ui.css"
+      ],
+      "output_name": "QHE.PREPARE_SHELL.DESKTOP_DARK.png",
+      "limitations": [
+        "Backend/native capability values reflect the deterministic browser capture environment, not a runtime-backed native host."
+      ]
+    },
+    {
+      "id": "QHE.GUIDED_PRODUCE.DESKTOP_DARK",
+      "surface_ids": [
+        "QHE.PREVIEW.REAL_LIBASS",
+        "QHE.PREVIEW.SAMPLE_RAIL",
+        "QHE.PLAN.ENCODE",
+        "QHE.ENCODE.ACTION_CARD",
+        "QHE.STATUS.TASK_OVERVIEW"
+      ],
+      "adapter": "playwright-web",
+      "evidence_level": "production-rendered",
+      "route": "/",
+      "selector": "#workflowMain",
+      "capture_region": "full-page",
+      "viewport": {
+        "width": 1365,
+        "height": 900,
+        "device_scale_factor": 1
+      },
+      "color_scheme": "dark",
+      "locale": "zh-CN",
+      "ready": {
+        "selector": "#workflowMain",
+        "state": "visible",
+        "settle_ms": 800
+      },
+      "fixture": {
+        "state": "guided-produce"
+      },
+      "source_dependencies": [
+        "src/main.js",
+        "src/style.css",
+        "src/media-workspace.js",
+        "src/media-workspace-ui.css"
+      ],
+      "output_name": "QHE.GUIDED_PRODUCE.DESKTOP_DARK.png",
+      "limitations": [
+        "Cards are revealed through the same deterministic UI state technique used by the repository's browser UI smoke test; no actual encoding job is run."
+      ]
+    },
+    {
+      "id": "QHE.MEDIA_WORKSPACE.DESKTOP_DARK",
+      "surface_ids": [
+        "QHE.MEDIA.MODE_SWITCHER",
+        "QHE.MEDIA.WORKSPACE",
+        "QHE.MEDIA.ADVANCED_DISCLOSURE",
+        "QHE.MEDIA.ACTION_DOCK"
+      ],
+      "adapter": "playwright-web",
+      "evidence_level": "production-rendered",
+      "route": "/",
+      "selector": "#mediaWorkspace",
+      "capture_region": "element",
+      "viewport": {
+        "width": 1365,
+        "height": 900,
+        "device_scale_factor": 1
+      },
+      "color_scheme": "dark",
+      "locale": "zh-CN",
+      "ready": {
+        "selector": "#mediaWorkspace",
+        "state": "visible",
+        "settle_ms": 800
+      },
+      "fixture": {
+        "state": "manual-media",
+        "open_details": true
+      },
+      "source_dependencies": [
+        "src/main.js",
+        "src/style.css",
+        "src/media-workspace.js",
+        "src/media-workspace-ui.css"
+      ],
+      "output_name": "QHE.MEDIA_WORKSPACE.DESKTOP_DARK.png",
+      "limitations": [
+        "Production UI rendered in browser-only mode; native backend execution is not active."
+      ]
+    },
+    {
+      "id": "QHE.MOBILE_STAGE.PRODUCE_DARK",
+      "surface_ids": [
+        "QHE.NAV.MOBILE_STAGE",
+        "QHE.PREVIEW.REAL_LIBASS",
+        "QHE.PLAN.ENCODE",
+        "QHE.ENCODE.ACTION_CARD"
+      ],
+      "adapter": "playwright-web",
+      "evidence_level": "production-rendered",
+      "route": "/",
+      "selector": "body",
+      "capture_region": "viewport",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "device_scale_factor": 1
+      },
+      "color_scheme": "dark",
+      "locale": "zh-CN",
+      "ready": {
+        "selector": "body",
+        "state": "visible",
+        "settle_ms": 800
+      },
+      "fixture": {
+        "state": "mobile-produce"
+      },
+      "source_dependencies": [
+        "src/main.js",
+        "src/style.css",
+        "src/media-workspace.js",
+        "src/media-workspace-ui.css"
+      ],
+      "output_name": "QHE.MOBILE_STAGE.PRODUCE_DARK.png",
+      "limitations": [
+        "Mobile production surface only; no encoder job is executed."
+      ]
+    }
+  ]
+}
