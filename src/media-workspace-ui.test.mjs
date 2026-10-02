@@ -27,7 +27,10 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /通常越低越保真/);
   assert.match(workspace, /presetIntent\(get\('encoder'\)\.value,v\)/);
   assert.match(workspace, /media-video-details/);
-  assert.match(workspace, /音频与轨道/);
+  assert.match(workspace, /轨道保留/);
+  assert.match(workspace, /<strong>音频与封装<\/strong>/);
+  assert.match(workspace, /select\('audio','音频策略'/);
+  assert.match(workspace, /outputPolicy\?\.querySelectorAll\('\[name\]'\)\.forEach\(control => control\.setAttribute\('form','mediaTaskForm'\)\)/);
   assert.match(workspace, /id="taskOutputPolicy"/);
   assert.match(workspace, /select\('outputContainer','成品容器'/);
   assert.match(workspace, /Auto · 自动选择安全容器/);
