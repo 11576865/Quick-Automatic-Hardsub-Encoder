@@ -1,5 +1,6 @@
 import { validateEncoderSupport } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
+import { outputFileName } from './media-container.js';
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
@@ -81,8 +82,8 @@ app.innerHTML = `
       <div class="app-brand">
         <div class="app-mark" aria-hidden="true"><span>Q</span></div>
         <div class="app-brand-copy">
-          <div class="hero-kicker">HARDSUB WORKBENCH</div>
-          <h1>快速自动硬字幕压制器</h1>
+          <div class="hero-kicker">MEDIA PROCESSING WORKBENCH</div>
+          <h1>本地媒体处理工作台</h1>
         </div>
       </div>
       <div class="hero-state" aria-label="处理状态">
@@ -3851,6 +3852,8 @@ function mediaFromNativeProbe(p) {
   return {
     duration: Number(p.duration || 0),
     durationSource: 'native-ffprobe',
+    formatName: p.format || '',
+    sourceName: state.video?.name || '',
     size: Number(p.statSize > 0 ? p.statSize : state.video?.size || 0),
     bitRate: Number(p.bitRate || 0),
     videoCodec: p.videoCodec || 'unknown',
@@ -3867,6 +3870,7 @@ function mediaFromNativeProbe(p) {
     highBitDepth: bitDepth > 8,
     unsafeColorPipeline: !!p.unsafeColorPipeline,
     audioCodec: p.audioCodec || '',
+    audioCodecs: Array.isArray(p.audioCodecs) ? p.audioCodecs : (p.audioCodec ? [p.audioCodec] : []),
     audioTracks: Number(p.audioTracks || 0),
     audioBitRate: Number(p.audioBitRate || 0)
   };
@@ -4306,10 +4310,11 @@ mountMediaWorkspace({
       throw new Error('硬字幕模式请先在下方完成字幕分析与真实预览');
     }
     if(state.nativeBackend?.available){
-      if(state.nativeBackend.taskSchemaVersion<2)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
+      if(state.nativeBackend.taskSchemaVersion<3)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
       if(!state.nativeInputProbe?.ok)throw new Error('视频尚未完成原生探测');
       return {
         ...mediaFromNativeProbe(state.nativeInputProbe),
+        sourceName:state.video.name,
         fpsModeSupported:state.nativeBackend.fpsModeSupported,
         nvencMultipassSupported:state.nativeBackend.multipassSupported,
         nvencMultipassFullresSupported:state.nativeBackend.multipassFullresSupported
@@ -4321,7 +4326,7 @@ mountMediaWorkspace({
     else { await state.engine.stageFiles(state.video,state.ass,state.effectiveFonts); await state.engine.setAssText(state.activeAssText||state.assText); }
     const media=await state.engine.probe();
     const caps=await state.engine.taskCapabilities('copy');
-    return {...media,fpsModeSupported:caps.fpsModeSupported};
+    return {...media,sourceName:state.video.name,fpsModeSupported:caps.fpsModeSupported};
   },
   validate: async task => {
     if(task.operation==='copy')return;
@@ -4354,8 +4359,8 @@ mountMediaWorkspace({
   run: async (task,media,progress) => {
     manualCancelRequested=false;
     const base=state.video.name.replace(/\.[^.]+$/,'');
-    const name=base+'_'+task.operation+(task.operation==='copy'?'':'_'+task.codec)+'.mkv';
-    log('手动任务：'+task.operation+' · '+task.outputArgs.join(' '));
+    const name=outputFileName(base,task);
+    log('媒体任务：'+task.operation+' · '+task.outputContainer.toUpperCase()+' · '+task.outputArgs.join(' '));
     if(state.nativeBackend?.available){
       const request={codec:task.codec||'h264',mode:task.rateMode!=='quality'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:media.audioTracks,estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),suggestedName:name};
       const bridge=globalThis.NativeHardsub;
