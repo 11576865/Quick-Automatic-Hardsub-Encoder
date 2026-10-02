@@ -54,6 +54,11 @@ try {
     });
   } else if (state === "manual-media") {
     await page.evaluate(() => {
+      // Manual parameter mode is only production-visible after the subtitle
+      // production surface exists. Reveal the real card first, then use the
+      // product's own strategy switch so syncHardsubStrategyChrome() owns the
+      // final state instead of forcing the workspace visible out-of-band.
+      document.querySelector("#subtitleCard")?.classList.remove("hidden");
       document.querySelector('[data-hardsub-strategy="manual"]')?.click();
       document.querySelectorAll("#mediaWorkspace details").forEach((node) => node.setAttribute("open", ""));
       scrollTo(0, 0);
