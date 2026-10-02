@@ -24,6 +24,8 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /核心视频方案/);
   assert.match(workspace, /恢复推荐方案/);
   assert.match(workspace, /验证当前方案/);
+  assert.match(workspace, /通常越低越保真/);
+  assert.match(workspace, /presetIntent\(get\('encoder'\)\.value,v\)/);
   assert.match(workspace, /media-video-details/);
   assert.match(workspace, /音频、轨道与封装/);
   assert.match(workspace, /id="taskNvencDetails"/);
