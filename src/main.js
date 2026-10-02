@@ -3940,8 +3940,9 @@ async function runNativeEncode() {
     return;
   }
 
+  const container = resolveGuidedHardsubContainer(state.selectedCodec);
   const base = (state.video?.name || 'video').replace(/\.[^.]+$/, '');
-  const suggestedName = base + '_hardsub_' + state.selectedCodec + '.mkv';
+  const suggestedName = base + '_hardsub_' + state.selectedCodec + '.' + container.extension;
   const duration = Number(state.media?.duration || 0);
   const audioBitrate = Number(state.media?.audioBitRate || 0) ||
     Math.max(1, Number(state.media?.audioTracks || 0)) * 192000;
@@ -3981,6 +3982,10 @@ async function runNativeEncode() {
       0
     ),
     calibrationSampleBitrate: Number(plan.calibration?.sampleBitrate || 0),
+    outputContainer: container.key,
+    outputFormat: container.format,
+    outputExtension: container.extension,
+    outputMime: container.mime,
     suggestedName
   };
 
@@ -4166,6 +4171,31 @@ async function recoverNativeJob() {
 
 function sleepMs(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function resolveGuidedHardsubContainer(codec = state.selectedCodec) {
+  if (!codec || !state.media) throw new Error('尚未形成可执行的硬字幕编码方案');
+  const requested = document.querySelector('[name="outputContainer"]')?.value || 'auto';
+  return resolveOutputContainer(
+    requested,
+    { operation:'hardsub', codec, audio:'copy', keepAttachments:false, keepSubtitles:false },
+    { ...state.media, sourceName:state.video?.name || state.media.sourceName || '' }
+  );
+}
+
+function refreshGuidedContainerDecision() {
+  if (document.body.dataset.mediaOperation !== 'hardsub' || document.body.dataset.hardsubStrategy !== 'guided') return;
+  const target = document.querySelector('#taskContainerDecision');
+  if (!target) return;
+  try {
+    const container = resolveGuidedHardsubContainer();
+    target.textContent = '实际输出：' + container.key.toUpperCase() + ' · ' + container.reason +
+      (container.source ? ' · 源容器 ' + container.source.toUpperCase() : '');
+    target.dataset.state = 'resolved';
+  } catch (error) {
+    target.textContent = state.selectedCodec ? ('当前组合需要调整：' + error.message) : '选择编码方案后显示实际容器选择。';
+    target.dataset.state = state.selectedCodec ? 'error' : 'idle';
+  }
 }
 
 function buildEncodePlan(codec) {
