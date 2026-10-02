@@ -434,7 +434,7 @@ class EncodeService : Service() {
                     "-c:a", "copy",
                     "-map_metadata", "0",
                     "-map_chapters", "0",
-                    "-f", "matroska",
+                    "-f", outputFormat,
                     output.absolutePath
                 )
             )
