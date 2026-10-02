@@ -476,20 +476,26 @@ function Start-EncodeJob($Body) {
     if(-not $video){throw 'No video selected.'}
     $request=$Body.request
     if($request.task){return Start-MediaTaskJob $Body}
+    $outputFormat=if([string]$request.outputFormat){[string]$request.outputFormat}else{'matroska'}
+    $outputExtension=if([string]$request.outputExtension){[string]$request.outputExtension}else{'mkv'}
+    if($outputFormat -notin @('matroska','mp4')){throw 'Unsupported output container format.'}
+    if(($outputFormat -eq 'matroska' -and $outputExtension -ne 'mkv') -or ($outputFormat -eq 'mp4' -and $outputExtension -ne 'mp4')){throw 'Output container format/extension mismatch.'}
     $profile=Get-PreferredEncoder ([string]$request.codec)
     if(-not $profile){throw 'No available Windows Native encoder for this codec.'}
     $jobId=[guid]::NewGuid().ToString('N')
     $work=New-BridgeWorkDir ("quick-hardsub-job-$jobId-")
     Stage-BridgeAssets $work ([string]$Body.assText)
-    $output=Join-Path $work 'output.mkv'
+    $outputFile='output.'+$outputExtension
+    $output=Join-Path $work $outputFile
     $progress=Join-Path $work 'progress.txt'
     $encArgs=Get-BridgeEncoderArgs $profile $request
-    $args='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -map 0:a? -sn -vf "ass=subtitle.ass:fontsdir=fonts" '+$encArgs+' -c:a copy output.mkv'
+    $containerArgs=if($outputFormat -eq 'mp4'){' -movflags +faststart'}else{''}
+    $args='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -map 0:a? -sn -vf "ass=subtitle.ass:fontsdir=fonts" '+$encArgs+' -c:a copy'+$containerArgs+' -f '+$outputFormat+' '+(Quote-NativeArg $outputFile)
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
         Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware;ActualStart=0;Task=$null
-        SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
+        OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;encoder=$job.Encoder;hardware=$job.Hardware}
