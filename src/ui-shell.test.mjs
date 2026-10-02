@@ -213,11 +213,12 @@ test('runtime-first three-endpoint layout keeps Android and Windows entry visibl
   assert.match(main, /id="androidAppCard"/);
   assert.match(main, /第一次使用？3 步启动/);
   assert.match(main, /第一次使用？3 步安装/);
-  assert.match(main, /<span class="step-no">02<\/span><div><h2>准备素材/);
+  assert.match(main, /<span class="step-no">01<\/span><div><h2>准备素材/);
+  assert.match(main, /<span class="step-no">02<\/span>[\s\S]*?<span class="preflight-heading">媒体与字幕预检/);
   assert.match(main, /<span class="step-no">03<\/span>[\s\S]*?<h2>真实字幕预览/);
-  assert.match(main, /<span class="step-no">04<\/span>[\s\S]*?<h2>选择控制方式/);
-  assert.match(main, /<span class="step-no">05<\/span><div><h2>输出策略/);
-  assert.match(main, /<span class="step-no">06<\/span><div><h2>执行与验证/);
+  assert.match(main, /<h2>选择控制方式<\/h2>/);
+  assert.match(main, /<span class="step-no">04<\/span><div><h2>输出策略/);
+  assert.match(main, /<span class="step-no">05<\/span><div><h2>执行与验证/);
 
   assert.match(css, /Runtime-first responsive workbench v4/);
   assert.match(css, /body\.ui-desktop \.workspace-layout\s*\{[\s\S]*?"runtime runtime"[\s\S]*?"main overview"/);
