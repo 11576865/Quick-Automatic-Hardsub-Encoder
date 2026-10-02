@@ -107,8 +107,13 @@ export function mountMediaWorkspace(hooks) {
   const modeButtons = [...modeNav.querySelectorAll('[data-media-mode]')];
   const strategyButtons = [...document.querySelectorAll('[data-hardsub-strategy]')];
   const manualMount = document.querySelector('#hardsubManualMount');
+  const sharedOutputMount = document.querySelector('#sharedMediaOutputMount');
   const inputCard = document.querySelector('#inputCard');
   const productionDeck = document.querySelector('#hardsubControlDeck');
+  const outputPolicy = section.querySelector('#taskOutputPolicy');
+  const outputPolicyAnchor = document.createComment('task-output-policy-home');
+  outputPolicy?.before(outputPolicyAnchor);
+  get('outputContainer')?.setAttribute('form','mediaTaskForm');
   let hardsubStrategy = localStorage.getItem('hardsub-control-strategy-v1') === 'manual' ? 'manual' : 'guided';
   const qualityField = get('quality').closest('label');
   const qualityRange = document.createElement('input');
@@ -350,8 +355,14 @@ export function mountMediaWorkspace(hooks) {
 
     if (hardsub) {
       if (manualMount && section.parentElement !== manualMount) manualMount.append(section);
-    } else if (inputCard && section.previousElementSibling !== inputCard) {
-      inputCard.after(section);
+      if (guided && sharedOutputMount && outputPolicy && outputPolicy.parentElement !== sharedOutputMount) {
+        sharedOutputMount.append(outputPolicy);
+      } else if (!guided && outputPolicy && outputPolicy.parentElement !== form) {
+        outputPolicyAnchor.after(outputPolicy);
+      }
+    } else {
+      if (inputCard && section.previousElementSibling !== inputCard) inputCard.after(section);
+      if (outputPolicy && outputPolicy.parentElement !== form) outputPolicyAnchor.after(outputPolicy);
     }
 
     section.classList.toggle('hardsub-strategy-suppressed', hardsub && (guided || !productionAvailable));
@@ -518,5 +529,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();renderPlanSummary();setTaskState('idle');
-  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
