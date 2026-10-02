@@ -3314,8 +3314,8 @@ body.ui-mobile [data-mobile-stage-section] {
   display: none !important;
 }
 
-body.ui-mobile[data-mobile-stage="prepare"] [data-mobile-stage-section="prepare"]:not(.hidden),
-body.ui-mobile[data-mobile-stage="produce"] [data-mobile-stage-section="produce"]:not(.hidden) {
+body.ui-mobile[data-mobile-stage="prepare"] [data-mobile-stage-section="prepare"]:not(.hidden):not(.media-mode-suppressed):not(.hardsub-strategy-suppressed),
+body.ui-mobile[data-mobile-stage="produce"] [data-mobile-stage-section="produce"]:not(.hidden):not(.media-mode-suppressed):not(.hardsub-strategy-suppressed) {
   display: block !important;
 }
 
