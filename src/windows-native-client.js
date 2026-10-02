@@ -48,6 +48,7 @@ function postCallback(name, payload) {
 
 function installWindowsBridge(config, backendInfo) {
   let lastAssSelection = null;
+  let inputProbeGeneration = 0;
   const bridge = {
     __windowsNative: true,
     getBackendInfo() {
@@ -70,9 +71,16 @@ function installWindowsBridge(config, backendInfo) {
       return JSON.stringify({ ok: true, ...lastAssSelection });
     },
     probeSelectedVideo() {
+      const generation = ++inputProbeGeneration;
       void makeRequest(config, 'POST', '/api/probe')
-        .then(payload => postCallback('__onNativeInputProbe', payload))
-        .catch(error => postCallback('__onNativeInputProbe', { ok: false, error: error.message }));
+        .then(payload => {
+          if (generation !== inputProbeGeneration) return;
+          postCallback('__onNativeInputProbe', { ...payload, probeGeneration: generation });
+        })
+        .catch(error => {
+          if (generation !== inputProbeGeneration) return;
+          postCallback('__onNativeInputProbe', { ok: false, probeGeneration: generation, error: error.message });
+        });
     },
     runSelfTest() {
       void makeRequest(config, 'GET', '/api/self-test')
