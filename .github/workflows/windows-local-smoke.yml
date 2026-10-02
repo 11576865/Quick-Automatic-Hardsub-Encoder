@@ -36,6 +36,9 @@ jobs:
         shell: powershell
         run: |
           . ./windows/native-backend.ps1
+          $resolvedFfmpeg = Find-NativeTool 'ffmpeg' (Resolve-Path ./windows)
+          $resolvedFfprobe = Find-NativeTool 'ffprobe' (Resolve-Path ./windows)
+          if (-not $resolvedFfmpeg -or -not $resolvedFfprobe) { throw 'Find-NativeTool failed to return the resolved FFmpeg toolchain' }
           $catalog = @(Get-NativeEncoderCatalog)
           foreach ($name in @('h264_nvenc','hevc_nvenc','av1_nvenc','libx264','libx265','libsvtav1')) {
             if (-not ($catalog | Where-Object Key -eq $name)) { throw "Missing encoder profile: $name" }
