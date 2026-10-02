@@ -121,7 +121,7 @@ class MainActivity : ComponentActivity() {
         pendingExportJobId = jobId
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "video/x-matroska"
+            type = NativeJobStore.outputMime(this@MainActivity, jobId)
             putExtra(Intent.EXTRA_TITLE, suggestedName)
             addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         }
