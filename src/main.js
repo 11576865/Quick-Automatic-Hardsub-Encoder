@@ -44,6 +44,7 @@ const state = {
   nativeSelfTestStarted: false,
   nativeInputProbe: null,
   nativePreviewWaiters: new Map(),
+  nativeWaveformWaiters: new Map(),
   nativeSampleWaiters: new Map(),
   nativeJobId: null,
   nativeCompletedJob: null,
@@ -1418,6 +1419,21 @@ function detectNativeBackend() {
       clearTimeout(waiter.timer);
       if (data.ok) waiter.resolve(data);
       else waiter.reject(new Error(data.error || 'Native 预览失败'));
+    };
+
+    globalThis.__onNativeWaveform = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 波形结果解析失败' };
+      }
+      const waiter = state.nativeWaveformWaiters.get(data.requestId);
+      if (!waiter) return;
+      state.nativeWaveformWaiters.delete(data.requestId);
+      clearTimeout(waiter.timer);
+      if (data.ok) waiter.resolve(data);
+      else waiter.reject(new Error(data.error || 'Native 音频波形生成失败'));
     };
 
     globalThis.__onNativeSample = payload => {
@@ -4021,6 +4037,22 @@ function requestNativePreview(timeSeconds, assText) {
   });
 }
 
+function requestNativeWaveform(options = {}) {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.renderNativeWaveform) {
+    return Promise.reject(new Error('Native 音频波形桥不可用'));
+  }
+  const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      state.nativeWaveformWaiters.delete(requestId);
+      reject(new Error('Native 音频波形生成超时'));
+    }, 90000);
+    state.nativeWaveformWaiters.set(requestId, { resolve, reject, timer });
+    bridge.renderNativeWaveform(requestId, JSON.stringify(options));
+  });
+}
+
 function requestNativeSample(options, assText) {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.runNativeSample) {
@@ -4503,6 +4535,28 @@ mountMediaWorkspace({
     const media=await state.engine.probe();
     const caps=await state.engine.taskCapabilities('copy');
     return {...media,sourceName:state.video.name,fpsModeSupported:caps.fpsModeSupported};
+  },
+  waveform: async options => {
+    if (!state.video) throw new Error('请先选择视频');
+    const audioTrack = Math.max(0, Math.floor(Number(options?.audioTrack) || 0));
+    const width = Math.max(512, Math.min(4096, Math.floor(Number(options?.width) || 2048)));
+    const height = Math.max(96, Math.min(320, Math.floor(Number(options?.height) || 160)));
+    if (state.nativeBackend?.available) {
+      if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
+      if (Number(state.nativeInputProbe.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
+      return requestNativeWaveform({
+        audioTrack,
+        width,
+        height,
+        duration: Number(state.nativeInputProbe.duration || 0)
+      });
+    }
+    if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本生成波形');
+    if (!await ensureWebEngineReady()) throw new Error('浏览器 FFmpeg 核心不可用');
+    if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
+    const media = state.engine.mediaInfo || await state.engine.probe();
+    if (Number(media.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
+    return state.engine.renderWaveform({ audioTrack, width, height, duration: Number(media.duration || 0) });
   },
   validate: async task => {
     if(task.operation==='copy')return;
