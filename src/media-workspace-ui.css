@@ -252,6 +252,14 @@ body[data-media-operation="copy"] #mediaTaskForm {
   color: var(--text);
 }
 
+.media-workspace .task-grid input:disabled,
+.media-workspace .task-grid select:disabled {
+  opacity: .46;
+  background: color-mix(in srgb, var(--surface-3) 52%, transparent);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .media-workspace .task-check {
   align-self: end;
   min-height: 40px;
