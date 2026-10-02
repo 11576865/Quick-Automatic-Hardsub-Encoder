@@ -13,11 +13,11 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /data-media-mode="copy"/);
   assert.equal((workspace.match(/data-media-mode="/g) || []).length, 3);
 
-  assert.match(workspace, /硬字幕压制工作区/);
+  assert.match(workspace, /精确编码参数/);
   assert.match(workspace, /纯视频转码工作区/);
   assert.match(workspace, /无损快速剪切工作区/);
   assert.match(workspace, /document\.body\.dataset\.mediaOperation = mode/);
-  assert.match(workspace, /taskRun'\)\.textContent = hardsub \? '开始硬字幕压制' : transcode \? '开始视频转码' : '开始无损剪切'/);
+  assert.match(workspace, /taskRun'\)\.textContent = hardsub \? '使用精确参数开始硬压' : transcode \? '开始视频转码' : '开始无损剪切'/);
 
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-hardsub"/);
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-transcode"/);
