@@ -3728,11 +3728,19 @@ async function runEncode() {
   if (state.media?.unsafeColorPipeline) { alert('检测到 HDR/高位深输入。当前版本不会静默转换，正式压制已锁定。'); return; }
   const plan = buildEncodePlan(state.selectedCodec);
   if (!plan) { alert('无法生成安全的压制方案。'); return; }
+  let container;
+  try {
+    container = resolveGuidedHardsubContainer(state.selectedCodec);
+    refreshGuidedContainerDecision();
+  } catch (error) {
+    alert('输出容器不可用：' + error.message);
+    return;
+  }
   try {
     $('encodeBtn').disabled = true;
     $('progressBar').style.width = '1%';
     $('liveEta').textContent = '正在启动编码器；前几秒不计算 ETA。';
-    log('正式压制：' + state.selectedCodec.toUpperCase() + ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF质量') + '模式');
+    log('正式压制：' + state.selectedCodec.toUpperCase() + ' · ' + container.key.toUpperCase() + ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF质量') + '模式');
     if (plan.mode === 'budget-rate') log('体积预算边界 ' + formatBytes(plan.sizeCeiling) + '；源码率锚点 ' + formatBitrate(plan.sourceVideoBitrate) + '；单遍目标视频码率 ' + formatBitrate(plan.targetVideoBitrate) + '。');
     else log('CRF ' + plan.crf + ' · preset ' + plan.preset + '；不提前猜整片大小。');
     const durationMs = state.media.duration * 1000;
@@ -3742,6 +3750,10 @@ async function runEncode() {
     const result = await state.engine.encodeFullStream(state.selectedCodec, {
       crf: plan.crf, preset: plan.preset,
       targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+      outputContainer: container.key,
+      outputFormat: container.format,
+      outputExtension: container.extension,
+      outputMime: container.mime,
       onPhase: phase => { phaseName = phase; samples = []; $('liveEta').textContent = phase === 'pass1' ? '第一遍：正在稳定编码速度…' : phase === 'pass2' ? '第二遍：正在稳定编码速度…' : '正在稳定编码速度…'; },
       onStatistics: stat => {
         const currentPhase = stat.phase || phaseName || 'encode';
@@ -3829,7 +3841,7 @@ async function runEncode() {
     }
 
     const base = state.video.name.replace(/\.[^.]+$/, '');
-    downloadBlob(result.blob, base + '_hardsub_' + state.selectedCodec + '.mkv');
+    downloadBlob(result.blob, base + '_hardsub_' + state.selectedCodec + '.' + container.extension);
     if (plan.sizeCeiling && result.byteLength > plan.sizeCeiling) {
       const over = (result.byteLength / plan.sizeCeiling - 1) * 100;
       log('成品 ' + formatBytes(result.byteLength) + '，比规划预算边界高 ' + over.toFixed(2) + '%；这是单遍码率控制的正常可能误差，成品已保留并下载。');
@@ -4021,6 +4033,7 @@ async function runNativeEncode() {
     : 'Android Native 任务已创建，正在准备输入与字体…';
   log(
     'Native 正式压制：' + state.selectedCodec.toUpperCase() +
+    ' · ' + container.key.toUpperCase() +
     ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
     ' · job=' + started.jobId
   );
