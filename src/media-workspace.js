@@ -30,6 +30,18 @@ export function mountMediaWorkspace(hooks) {
   <form id="mediaTaskForm">
   <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','无损快速剪切']])}${input('start','开始时间（秒）','0','0')}${input('end','结束时间（秒）','留空表示片尾')}</div>
   <p id="taskModeHint" class="note media-mode-hint"></p>
+  <div class="media-branch-map" aria-label="当前媒体任务结构">
+    <span>共享入口 · 源媒体 / 探测</span><b>→</b><strong>当前任务分支</strong><b>→</b><span>共享出口 · 封装 / 执行 / 验证 / 保存</span>
+  </div>
+  <section class="media-operation-branch media-operation-branch-hardsub" data-operation-branch="hardsub">
+    <strong>硬字幕压制分支</strong><span>ASS / 字体 → 字幕预检 → libass 真实预览 → 视频编码。字幕语义只属于这一分支。</span>
+  </section>
+  <section class="media-operation-branch media-operation-branch-transcode" data-operation-branch="transcode">
+    <strong>纯视频转码分支</strong><span>编码器 / 质量或码率 → 帧率 / 尺寸 / 像素格式 / 画面处理 → 音频策略。不会要求 ASS。</span>
+  </section>
+  <section class="media-operation-branch media-operation-branch-copy" data-operation-branch="copy">
+    <strong>无损快速剪切分支</strong><span>请求时间范围 → 关键帧边界 → 流复制。禁止视频重编码与音频转码。</span>
+  </section>
   <div class="media-mode-explainer media-mode-explainer-hardsub">
     <strong>硬字幕链路</strong><span>视频 + ASS + 字体 → 预检 → libass 真实预览 → 视频重编码 → 输出验证</span>
   </div>
@@ -67,7 +79,12 @@ export function mountMediaWorkspace(hooks) {
   ${check('squarePixels','设为方形像素')}${check('denoise','降噪 hqdn3d')}${check('deband','去色带 deband')}${check('sharpen','锐化 unsharp')}
   </div><p>处理顺序：裁切 → 去隔行 → 缩放 → 旋转 → 画面滤镜 → 字幕 → 补齐偶数尺寸。编码器不支持的组合会明确报错。</p></details>
   <details id="taskNvencDetails" class="media-advanced-panel" hidden><summary>NVENC 详细设置</summary><fieldset id="taskNvenc"><div class="task-grid">${select('multipass','多阶段分析',[['fullres','全分辨率'],['qres','低分辨率'],['disabled','关闭']])}${input('lookahead','前瞻帧数 0–32','编码器默认')}${input('aqStrength','空间 AQ 强度 1–15','编码器默认')}${check('spatialAq','空间自适应量化')}${check('temporalAq','时间自适应量化')}</div></fieldset><p class="note">NVENC 多阶段分析属于逐帧码率控制，与整片两遍编码不同；空间 AQ 与时间 AQ 选择一种。目标体积不会通过截断视频来满足。</p></details></fieldset>
-  <details class="media-advanced-panel media-track-panel"><summary>音频、轨道与封装</summary><div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioTrack','保留音轨','all 或音频轨序号，从 0 开始','all')}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${check('keepSubtitles','保留内封软字幕')}${check('keepAttachments','保留附件 / 字体')}${check('keepMetadata','保留元数据',true)}${check('keepChapters','保留章节')}</div><p>剪切默认移除旧章节，避免章节时间与成品不一致。软字幕复制后的边界与显示效果需自行核对。</p></details>
+  <details class="media-advanced-panel media-track-panel"><summary>音频与轨道</summary><div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioTrack','保留音轨','all 或音频轨序号，从 0 开始','all')}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${check('keepSubtitles','保留内封软字幕')}${check('keepAttachments','保留附件 / 字体')}${check('keepMetadata','保留元数据',true)}${check('keepChapters','保留章节')}</div><p>剪切默认移除旧章节，避免章节时间与成品不一致。软字幕复制后的边界与显示效果需自行核对。</p></details>
+  <section id="taskOutputPolicy" class="media-output-policy">
+    <div class="media-output-policy-heading"><span>共享出口</span><strong>输出与封装</strong><p>三条任务在这里重新汇合。容器不会通过改扩展名伪装；不兼容组合会明确要求调整，而不会静默转码音频。</p></div>
+    <div class="task-grid">${select('outputContainer','成品容器',[['auto','Auto · 自动选择安全容器'],['keep','保持源容器（可用时）'],['mkv','MKV · Matroska'],['mp4','MP4 · MPEG-4']])}</div>
+    <p id="taskContainerDecision" class="note">执行检查后显示实际容器选择及原因。</p>
+  </section>
   <details class="media-sample-panel"><summary>配置保存与短片试压比较</summary><div class="task-grid">${input('configName','配置名称','我的配置')}${select('savedConfig','已保存配置',[])}${input('sampleStart','试压起点（秒）','','0')}${input('sampleLength','试压长度（秒）','2–60','15')}</div><div class="button-row"><button type="button" id="taskStore" class="secondary">保存当前配置</button><button type="button" id="taskRestore" class="secondary">加载配置</button><button type="button" id="taskDelete" class="secondary">删除配置</button><button type="button" id="taskExportConfig" class="secondary">导出配置 JSON</button><label>导入配置 JSON<input type="file" id="taskImportConfig" accept="application/json,.json"></label><button type="button" id="taskSamples" class="secondary">比较三组短片</button></div><p class="note">质量模式比较质量值 ±2；码率模式比较码率 ±20%。片段体积外推不保证整片大小，建议选择运动或细节复杂的片段。原生短片可保存到设备后比较。</p><div id="taskSampleResults" aria-live="polite"></div></details>
     <p id="taskEstimate" class="note" aria-live="polite"></p>
   <section id="taskRunState" class="task-run-state" aria-live="polite">
@@ -160,12 +177,24 @@ export function mountMediaWorkspace(hooks) {
     }
     const size=copy?'保持源画面':raw.width&&raw.height?raw.width+'×'+raw.height:raw.width?raw.width+' 宽 · 高度按比例':raw.height?'宽度按比例 · '+raw.height+' 高':'保持源分辨率';
     const audio=raw.audio==='copy'?'原音频复制':raw.audio==='none'?'无音频':String(raw.audio||'').toUpperCase();
+    const container=task?.outputContainer ? task.outputContainer.toUpperCase() : ({auto:'AUTO',keep:'保持源容器',mkv:'MKV',mp4:'MP4'}[raw.outputContainer]||'AUTO');
     section.querySelector('#taskPlanTitle').textContent=operationLabel+(copy?'':' · '+codecLabel+' · '+speed);
     section.querySelector('#taskPlanEncoder').textContent=copy?'直接复制':codecLabel+' · '+encoderLabel;
     section.querySelector('#taskPlanSpeed').textContent=speed+(copy?'':' · preset '+raw.preset);
     section.querySelector('#taskPlanRate').textContent=rate;
-    section.querySelector('#taskPlanOutput').textContent=size+' · '+audio+' · MKV';
+    section.querySelector('#taskPlanOutput').textContent=size+' · '+audio+' · '+container;
     section.querySelector('#taskPlanNote').textContent=note+(task?.estimatedBytes>0?' 当前任务估计数据量 '+formatSize(task.estimatedBytes)+'。':'');
+  };
+  const renderContainerDecision = task => {
+    const el=section.querySelector('#taskContainerDecision');
+    if(!el)return;
+    if(!task){
+      el.textContent='执行检查后显示实际容器选择及原因。';
+      el.dataset.state='idle';
+      return;
+    }
+    el.textContent='实际输出：'+task.outputContainer.toUpperCase()+' · '+task.containerReason+(task.sourceContainer?' · 源容器 '+task.sourceContainer.toUpperCase():'');
+    el.dataset.state='resolved';
   };
   const syncTaskActions = () => {
     const stateName=section.dataset.taskState||'idle',run=section.querySelector('#taskRun'),save=section.querySelector('#taskSave');
@@ -251,7 +280,7 @@ export function mountMediaWorkspace(hooks) {
     const copy = mode === 'copy';
     const transcode = mode === 'transcode';
     const hardsub = mode === 'hardsub';
-    const title = hardsub ? '编码参数' : transcode ? '纯视频转码工作区' : '无损快速剪切工作区';
+    const title = hardsub ? '硬字幕压制工作区' : transcode ? '纯视频转码工作区' : '无损快速剪切工作区';
     const eyebrow = hardsub ? 'HARDSUB · PARAMETERS' : transcode ? 'TRANSCODE' : 'LOSSLESS CUT';
     const description = hardsub
       ? '直接控制编码器、质量、帧率、尺寸、滤镜、音轨与封装。执行前仍沿用同一字幕预检与真实 libass 预览门槛。'
@@ -362,8 +391,9 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#taskModeHint').textContent=copy
       ? '无损快速剪切：起点向前定位到关键帧，不重新编码。实际起点会显示在任务状态中；终点仍受压缩数据包边界约束。'
       : mode==='hardsub'
-        ? '参数控制：直接控制底层编码参数，但不会绕过字幕分析、字体诊断、真实 libass 预览和成品验证。'
-        : '纯视频转码直接使用当前参数；不会要求 ASS，也不会静默替换你选择的编码器。';
+        ? '硬字幕分支：字幕、字体与真实 libass 预览属于这一分支；编码完成后与其他任务共享封装、验证和保存出口。'
+        : '纯视频转码分支：只处理媒体编码参数；不会要求 ASS，也不会静默替换你选择的编码器。';
+    renderContainerDecision(null);
   }
   function updateRate(){const mode=get('rateMode').value;for(const key of ['targetSize','sizeUnit','sizeReserve'])get(key).disabled=mode!=='size'||get('operation').value==='copy';get('quality').disabled=mode!=='quality';get('bitrate').disabled=mode!=='bitrate';get('twoPass').disabled=get('operation').value==='copy'||get('encoder').value!=='libx264'||mode==='quality';if(get('twoPass').disabled)get('twoPass').checked=false;const encoded=['aac','libopus'].includes(get('audio').value);for(const key of ['audioBitrate','audioChannels','audioSampleRate'])get(key).disabled=!encoded;}
   get('audio').onchange=updateRate;
@@ -384,6 +414,7 @@ export function mountMediaWorkspace(hooks) {
     const raw=read(),media=await hooks.prepare(raw.operation);
     const task=compileTask(raw,media);
     await hooks.validate?.(task);
+    renderContainerDecision(task);
     const compat = Array.isArray(task.compatibilityWarnings) && task.compatibilityWarnings.length
       ? ' 兼容性：'+task.compatibilityWarnings.join(' ')
       : '';
