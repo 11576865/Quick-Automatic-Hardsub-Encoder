@@ -18,6 +18,7 @@ const {spawn}=require('node:child_process');
   await page.screenshot({path:'media-workspace-hardsub-goal-desktop.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace');
+  if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
   await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Returning to goal-controlled hardsub left the parameter workspace visible');
