@@ -281,7 +281,7 @@ function Get-ProbeMedia {
         width=[int]$v.width; height=[int]$v.height; fps=[string]$v.avg_frame_rate
         pixelFormat=$pix; bitDepth=$bitDepth; colorTransfer=$transfer; colorPrimaries=$primaries
         colorSpace=[string]$v.color_space; hdr=$hdr; unsafeColorPipeline=($hdr -or $bitDepth -gt 8)
-        audioTracks=$audios.Count; audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}; audioBitRate=$audioRate
+        audioTracks=$audios.Count; audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}; audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$audioRate
     }
 }
 
@@ -440,6 +440,11 @@ function Start-MediaTaskJob($Body) {
         if(-not $found){throw 'No suitable keyframe found.'}
         $actualStart=$last
     }
+    $outputFormat=[string]$task.outputFormat
+    $outputExtension=[string]$task.outputExtension
+    if($outputFormat -notin @('matroska','mp4')){throw 'Unsupported output container format.'}
+    if(($outputFormat -eq 'matroska' -and $outputExtension -ne 'mkv') -or ($outputFormat -eq 'mp4' -and $outputExtension -ne 'mp4')){throw 'Output container format/extension mismatch.'}
+    $outputFile='output.'+$outputExtension
     $jobId=[guid]::NewGuid().ToString('N')
     $work=New-BridgeWorkDir ("quick-media-job-$jobId-")
     if($task.operation -eq 'hardsub'){Stage-BridgeAssets $work ([string]$Body.assText)}
@@ -450,16 +455,16 @@ function Start-MediaTaskJob($Body) {
     $baseParts=@($parts.ToArray())
     foreach($a in $outputArgs){$parts.Add($a.Replace('__ASS__','subtitle.ass').Replace('__FONTS__','fonts'))}
     if($task.twoPass){foreach($a in @('-pass','2','-passlogfile','task-pass')){$parts.Add($a)}}
-    foreach($a in @('-f','matroska','output.mkv')){$parts.Add($a)}
+    foreach($a in @('-f',$outputFormat,$outputFile)){$parts.Add($a)}
     $args=($parts | ForEach-Object { Quote-NativeArg $_ }) -join ' '
     $secondArgs=$args
     if($task.twoPass){$first=@($baseParts)+@((Get-MediaFirstPassArgs $outputArgs) | ForEach-Object {$_.Replace('__ASS__','subtitle.ass').Replace('__FONTS__','fonts')})+@('-pass','1','-passlogfile','task-pass','-f','null','NUL');$args=($first | ForEach-Object { Quote-NativeArg $_ }) -join ' '}
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $duration=if($task.operation -eq 'copy'){[double]$task.end-$actualStart}else{[double]$task.expectedDuration}
     $job=[pscustomobject]@{
-        Id=$jobId;Work=$work;Output=(Join-Path $work 'output.mkv');Progress=(Join-Path $work 'progress.txt');Started=$started
+        Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
         Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
-        SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
+        OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
@@ -573,7 +578,9 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     $status=Get-JobStatus $JobId
     if($status.state -ne 'completed'){throw 'Job is not completed.'}
     $d=New-Object System.Windows.Forms.SaveFileDialog
-    $d.Filter='Matroska video|*.mkv';$d.DefaultExt='mkv';$d.FileName=if($SuggestedName){$SuggestedName}else{$j.SuggestedName}
+    $ext=if($j.OutputExtension){[string]$j.OutputExtension}else{'mkv'}
+    $d.Filter=if($ext -eq 'mp4'){'MP4 video|*.mp4'}else{'Matroska video|*.mkv'}
+    $d.DefaultExt=$ext;$d.FileName=if($SuggestedName){$SuggestedName}else{$j.SuggestedName}
     if($d.ShowDialog() -ne 'OK'){$d.Dispose();return [pscustomobject]@{ok=$false;jobId=$JobId;error='Save cancelled.'}}
     $dest=$d.FileName;$d.Dispose()
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
