@@ -1443,6 +1443,9 @@ function detectNativeBackend() {
       try {
         window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result', { detail: data }));
       } catch {}
+      const guidedExport = !!state.nativeCompletedJob &&
+        (!data.jobId || data.jobId === state.nativeCompletedJob.jobId);
+      if (!guidedExport) return;
       if (data.ok) {
         $('liveEta').textContent = '成品已保存 · ' + formatBytes(Number(data.bytes || 0)) +
           (data.sha256 ? ' · SHA-256 ' + data.sha256.slice(0, 12) + '…' : '');
