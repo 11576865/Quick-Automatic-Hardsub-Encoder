@@ -40,6 +40,20 @@ export class EncoderEngine {
 
   async stageFiles(videoFile, assFile, fontFiles = []) {
     this.assertReady();
+    const previousVideo = this.sourceVideoFile;
+    const sameVideo = !!(
+      previousVideo &&
+      videoFile &&
+      (
+        previousVideo === videoFile ||
+        (
+          previousVideo.name === videoFile.name &&
+          Number(previousVideo.size || 0) === Number(videoFile.size || 0) &&
+          Number(previousVideo.lastModified || 0) === Number(videoFile.lastModified || 0)
+        )
+      )
+    );
+
     this.sourceVideoFile = videoFile;
     this.sourceAssFile = assFile;
     this.sourceFontFiles = [...fontFiles];
@@ -48,19 +62,24 @@ export class EncoderEngine {
     const { mount, writeFile, FFmpegKitConfig } = this.api;
 
     const stamp = Date.now();
-    const inputMount = `/input_${stamp}`;
-    this.fontDir = `/fonts_${stamp}`;
+    if (!sameVideo) {
+      const inputMount = `/input_${stamp}`;
+      await mount(inputMount, { files: [videoFile] });
+      this.inputPath = `${inputMount}/${videoFile.name}`;
+    }
 
-    await mount(inputMount, { files: [videoFile] });
-    this.inputPath = `${inputMount}/${videoFile.name}`;
-    if (assFile) await writeFile(this.assPath, new Uint8Array(await assFile.arrayBuffer()));
-
-    const fallback = await this.getBundledFallbackFont();
-    const mountedFonts = fallback ? [...fontFiles, fallback] : [...fontFiles];
-    this.hasBundledFallbackFont = !!fallback;
-
-    if (mountedFonts.length) await mount(this.fontDir, { files: mountedFonts });
-    await FFmpegKitConfig.setFontDirectoryList?.(mountedFonts.length ? [this.fontDir] : [], {});
+    if (assFile) {
+      this.fontDir = `/fonts_${stamp}`;
+      await writeFile(this.assPath, new Uint8Array(await assFile.arrayBuffer()));
+      const fallback = await this.getBundledFallbackFont();
+      const mountedFonts = fallback ? [...fontFiles, fallback] : [...fontFiles];
+      this.hasBundledFallbackFont = !!fallback;
+      if (mountedFonts.length) await mount(this.fontDir, { files: mountedFonts });
+      await FFmpegKitConfig.setFontDirectoryList?.(mountedFonts.length ? [this.fontDir] : [], {});
+    } else {
+      this.hasBundledFallbackFont = false;
+      await FFmpegKitConfig.setFontDirectoryList?.([], {});
+    }
   }
 
   async getBundledFallbackFont() {
@@ -395,9 +414,33 @@ export class EncoderEngine {
     const streamContainerArgs = outputFormat === 'mp4'
       ? ['-movflags','frag_keyframe+empty_moov+default_base_moof']
       : [];
+    const guidedAudio = options.audio || 'copy';
+    if (!['copy','aac','libopus','none'].includes(guidedAudio)) throw new Error('未知音频策略');
+    const guidedAudioArgs = [];
+    if (guidedAudio === 'none') {
+      guidedAudioArgs.push('-an');
+    } else {
+      guidedAudioArgs.push('-map','0:a?','-c:a',guidedAudio);
+      if (guidedAudio === 'aac' || guidedAudio === 'libopus') {
+        const audioBitrate = Number(options.audioBitrate || 128000);
+        if (!Number.isInteger(audioBitrate) || audioBitrate < 8000 || audioBitrate > 1024000) throw new Error('音频码率超出有效范围');
+        guidedAudioArgs.push('-b:a',String(audioBitrate));
+        if (options.audioChannels !== '' && options.audioChannels != null) {
+          const channels = Number(options.audioChannels);
+          if (!Number.isInteger(channels) || channels < 1 || channels > 8) throw new Error('音频声道数超出有效范围');
+          guidedAudioArgs.push('-ac',String(channels));
+        }
+        if (options.audioSampleRate !== '' && options.audioSampleRate != null) {
+          const sampleRate = Number(options.audioSampleRate);
+          if (!Number.isInteger(sampleRate) || sampleRate < 8000 || sampleRate > 192000) throw new Error('音频采样率超出有效范围');
+          if (guidedAudio === 'libopus' && ![8000,12000,16000,24000,48000].includes(sampleRate)) throw new Error('Opus 采样率请选择 48000 Hz 或编码器默认');
+          guidedAudioArgs.push('-ar',String(sampleRate));
+        }
+      }
+    }
     const cmd = task
       ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),...streamContainerArgs.map(q),'-f',q(outputFormat),q(target)].join(' ')
-      : ['-y',decoder.trim(),'-i',q(this.inputPath),'-map','0:v:0','-map','0:a?','-sn','-vf',q(filter),'-c:v',encoder,'-preset',preset,'-g',String(gop),...rateControl.trim().split(/\s+/),...(extra.trim()?extra.trim().split(/\s+/):[]),'-c:a','copy',...streamContainerArgs,'-f',outputFormat,q(target)].filter(Boolean).join(' ');
+      : ['-y',decoder.trim(),'-i',q(this.inputPath),'-map','0:v:0','-sn','-vf',q(filter),'-c:v',encoder,'-preset',preset,'-g',String(gop),...rateControl.trim().split(/\s+/),...(extra.trim()?extra.trim().split(/\s+/):[]),...guidedAudioArgs,...streamContainerArgs,'-f',outputFormat,q(target)].filter(Boolean).join(' ');
     this.onLog(`$ ffmpeg ${cmd}`);
 
     let resolveDone;
