@@ -22,6 +22,12 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-hardsub"/);
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-transcode"/);
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-copy"/);
+  assert.match(workspace, /data-hardsub-strategy/);
+  assert.match(workspace, /hardsub-control-strategy-v1/);
+  assert.match(workspace, /syncHardsubStrategyChrome/);
+  assert.match(workspace, /hardsub-strategy-suppressed/);
+  assert.match(workspace, /HARDSUB · PRECISE/);
+  assert.match(workspace, /使用精确参数开始硬压/);
 
   assert.match(workspace, /qualityRange\.type = 'range'/);
   assert.match(workspace, /className = 'media-inline-range'/);
