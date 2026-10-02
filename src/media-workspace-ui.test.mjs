@@ -19,6 +19,16 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /document\.body\.dataset\.mediaOperation = mode/);
   assert.match(workspace, /const runButtonLabel = \(\) => get\('operation'\)\.value==='hardsub'\?'使用当前参数开始硬压':get\('operation'\)\.value==='transcode'\?'开始视频转码':'开始无损剪切'/);
   assert.match(workspace, /id="taskPlanSummary"/);
+  assert.equal((workspace.match(/id="taskPlanSummary"/g) || []).length, 1);
+  assert.ok(workspace.indexOf('id="taskPlanSummary"') < workspace.indexOf('id="taskEncoding"'), 'plan summary must precede detailed encoding controls');
+  assert.match(workspace, /核心视频方案/);
+  assert.match(workspace, /恢复推荐方案/);
+  assert.match(workspace, /验证当前方案/);
+  assert.match(workspace, /通常越低越保真/);
+  assert.match(workspace, /presetIntent\(get\('encoder'\)\.value,v\)/);
+  assert.match(workspace, /media-video-details/);
+  assert.match(workspace, /音频、轨道与封装/);
+  assert.match(workspace, /id="taskNvencDetails"/);
   assert.match(workspace, /id="taskRunState"/);
   assert.match(workspace, /id="taskPercent"/);
   assert.match(workspace, /id="taskSave"/);
@@ -51,5 +61,7 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /#taskSave\.task-primary-action/);
   assert.match(css, /#taskRun\.task-secondary-action/);
   assert.match(css, /\.task-progress-grid/);
+  assert.match(css, /\.task-plan-actions/);
+  assert.match(css, /\.media-advanced-panel\[hidden\]/);
   assert.equal((css.match(/\{/g) || []).length, (css.match(/\}/g) || []).length);
 });
