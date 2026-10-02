@@ -350,6 +350,20 @@
           "kind": "pattern",
           "path": ".github/workflows/test-frontend.yml",
           "pattern": "node scripts/check-media-ui\\.cjs"
+        },
+        {
+          "id": "real-ffmpeg-keyframe-boundary",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.integration.test.mjs",
+          "pattern": "'-skip_frame','nokey'"
+        },
+        {
+          "id": "real-ffmpeg-keyframe-workflow",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "FFMPEG_INTEGRATION=1 node --test src/media-task\\.integration\\.test\\.mjs"
         }
       ]
     }
