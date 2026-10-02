@@ -89,7 +89,7 @@ const {spawn}=require('node:child_process');
       log:()=>{},
       cancel:()=>{},
       save:()=>({pending:true}),
-      prepare:async()=>({duration:2181.384,fps:60,audioTracks:1}),
+      prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
       run:async(task,media,progress)=>{
         window.taskRuns.push(task);
         progress?.(.42,'正在处理 · 90.0 秒',{state:'encoding',timeSec:90,duration:task.expectedDuration,speed:2.5});
@@ -97,7 +97,7 @@ const {spawn}=require('node:child_process');
           outputBytes:530000000,
           outputDuration:task.expectedDuration,
           verified:true,
-          ...(task.expectedDuration>100?{jobId:'ui-smoke-job',name:'ui-smoke.mkv'}:{})
+          ...(task.expectedDuration>100?{jobId:'ui-smoke-job',name:'ui-smoke.'+task.outputExtension}:{})
         };
       }
     });
@@ -116,6 +116,8 @@ const {spawn}=require('node:child_process');
   }));
   if(!inspectState.estimate.includes('500.00 MB'))throw Error('Size inspection failed: '+JSON.stringify(inspectState));
   if(!(await page.locator('#taskPlanTitle').textContent()).includes('纯视频转码'))throw Error('Task plan summary does not explain the selected operation');
+  if(!(await page.locator('#taskContainerDecision').textContent()).includes('MP4'))throw Error('Auto container did not resolve to MP4 for H.264/AAC: '+await page.locator('#taskContainerDecision').textContent());
+  if(!(await page.locator('#taskPlanOutput').textContent()).includes('MP4'))throw Error('Plan summary did not expose the resolved container');
   if(await page.locator('.task-technical-details').getAttribute('open')!==null)throw Error('Raw FFmpeg command is expanded by default');
   await page.click('#taskRun');await page.waitForFunction(()=>document.querySelector('#taskStatus').textContent.includes('超出体积预算'));
   if(await page.locator('#mediaWorkspace').getAttribute('data-task-state')!=='verified')throw Error('Completed output did not enter verified-not-saved state');
