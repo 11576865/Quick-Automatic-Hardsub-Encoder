@@ -13,7 +13,7 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /data-media-mode="copy"/);
   assert.equal((workspace.match(/data-media-mode="/g) || []).length, 3);
 
-  assert.match(workspace, /编码参数/);
+  assert.match(workspace, /硬字幕压制工作区/);
   assert.match(workspace, /纯视频转码工作区/);
   assert.match(workspace, /无损快速剪切工作区/);
   assert.match(workspace, /document\.body\.dataset\.mediaOperation = mode/);
@@ -27,7 +27,15 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /通常越低越保真/);
   assert.match(workspace, /presetIntent\(get\('encoder'\)\.value,v\)/);
   assert.match(workspace, /media-video-details/);
-  assert.match(workspace, /音频、轨道与封装/);
+  assert.match(workspace, /音频与轨道/);
+  assert.match(workspace, /id="taskOutputPolicy"/);
+  assert.match(workspace, /name="outputContainer"/);
+  assert.match(workspace, /Auto · 自动选择安全容器/);
+  assert.match(workspace, /保持源容器/);
+  assert.match(workspace, /共享出口/);
+  assert.match(workspace, /data-operation-branch="hardsub"/);
+  assert.match(workspace, /data-operation-branch="transcode"/);
+  assert.match(workspace, /data-operation-branch="copy"/);
   assert.match(workspace, /id="taskNvencDetails"/);
   assert.match(workspace, /id="taskRunState"/);
   assert.match(workspace, /id="taskPercent"/);
@@ -52,6 +60,9 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /qualityRange\.addEventListener\('input'/);
 
   assert.match(css, /\.media-mode-switcher\s*\{/);
+  assert.match(css, /\.media-branch-map\s*\{/);
+  assert.match(css, /\.media-operation-branch\s*\{/);
+  assert.match(css, /\.media-output-policy\s*\{/);
   assert.match(css, /button\[aria-pressed="true"\]/);
   assert.match(css, /body\[data-media-operation="transcode"\] \.production-region/);
   assert.match(css, /body\[data-media-operation="copy"\] \.media-encoding-panel/);
