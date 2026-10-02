@@ -969,7 +969,19 @@ class NativeBridge(
             if (estimatedOutputBytes <= 0L || estimatedOutputBytes > 1_000_000_000_000L) {
                 throw IllegalStateException("缺少合理的成品空间预算")
             }
-            val outputExtension = if (task?.optString("outputExtension", "mkv") == "mp4") "mp4" else "mkv"
+            val requestedOutputExtension = task?.optString("outputExtension", "")
+                ?.takeIf { it.isNotBlank() }
+                ?: incoming.optString("outputExtension", "mkv")
+            val outputExtension = if (requestedOutputExtension == "mp4") "mp4" else "mkv"
+            val requestedOutputFormat = task?.optString("outputFormat", "")
+                ?.takeIf { it.isNotBlank() }
+                ?: incoming.optString("outputFormat", if (outputExtension == "mp4") "mp4" else "matroska")
+            if (
+                (outputExtension == "mp4" && requestedOutputFormat != "mp4") ||
+                (outputExtension == "mkv" && requestedOutputFormat != "matroska")
+            ) {
+                throw IllegalStateException("成品容器格式与扩展名不一致")
+            }
             val suggestedName = NativeJobStore.sanitizeFileName(
                 incoming.optString("suggestedName", "hardsub_" + codec + "." + outputExtension)
             ).let { if (it.lowercase().endsWith("." + outputExtension)) it else it + "." + outputExtension }
