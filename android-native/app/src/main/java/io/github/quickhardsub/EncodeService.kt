@@ -316,12 +316,16 @@ class EncodeService : Service() {
                 ?: throw IllegalStateException("输入没有可识别的视频流")
             val audioStreams = sourceStreams.filter { it.getType() == "audio" }
             val sourceAudioTracks = audioStreams.size
-            val audioTracks = if (task == null) sourceAudioTracks else if (task.optString("audio") == "none") 0 else if (task.optString("audioTrack", "all") == "all") sourceAudioTracks else 1
+            val audioMode = if (task == null) request.optString("audio", "copy") else task.optString("audio", "copy")
+            if (audioMode !in setOf("copy", "aac", "libopus", "none")) {
+                throw IllegalStateException("未知音频策略")
+            }
+            val audioTracks = if (audioMode == "none") 0 else if (task == null || task.optString("audioTrack", "all") == "all") sourceAudioTracks else 1
             val requestedAudioTracks = request.optInt("expectedAudioTracks", -1)
-            if (requestedAudioTracks >= 0 && requestedAudioTracks != sourceAudioTracks) {
+            if (requestedAudioTracks >= 0 && requestedAudioTracks != audioTracks) {
                 throw IllegalStateException(
-                    "输入音频轨数量与预检结果不一致：" + audioTracks +
-                        "，预检为 " + requestedAudioTracks
+                    "输入音频轨数量与任务预期不一致：" + audioTracks +
+                        "，任务预期为 " + requestedAudioTracks
                 )
             }
             val props = video.getAllProperties()
@@ -407,14 +411,18 @@ class EncodeService : Service() {
                 "-y",
                 "-hide_banner",
                 "-i", inputPath,
-                "-map", "0:v:0",
-                "-map", "0:a?",
-                "-sn",
-                "-dn",
-                "-vf", filterParts.joinToString(","),
-                "-c:v", encoder,
-                "-preset", preset,
-                "-g", gop.toString()
+                "-map", "0:v:0"
+            )
+            if (audioMode != "none") args.addAll(listOf("-map", "0:a?"))
+            args.addAll(
+                listOf(
+                    "-sn",
+                    "-dn",
+                    "-vf", filterParts.joinToString(","),
+                    "-c:v", encoder,
+                    "-preset", preset,
+                    "-g", gop.toString()
+                )
             )
 
             if (mode == "budget-rate") {
@@ -428,10 +436,32 @@ class EncodeService : Service() {
                 args.addAll(listOf("-svtav1-params", "lp=" + lp))
             }
 
+            args.addAll(listOf("-pix_fmt", "yuv420p"))
+            if (audioMode == "none") {
+                args.add("-an")
+            } else {
+                args.addAll(listOf("-c:a", audioMode))
+                if (task == null && audioMode in setOf("aac", "libopus")) {
+                    val audioBitrate = request.optInt("audioBitrate", 128000)
+                    if (audioBitrate !in 8000..1024000) throw IllegalStateException("音频码率超出有效范围")
+                    args.addAll(listOf("-b:a", audioBitrate.toString()))
+                    val audioChannels = request.optInt("audioChannels", 0)
+                    if (audioChannels != 0) {
+                        if (audioChannels !in 1..8) throw IllegalStateException("音频声道数超出有效范围")
+                        args.addAll(listOf("-ac", audioChannels.toString()))
+                    }
+                    val audioSampleRate = request.optInt("audioSampleRate", 0)
+                    if (audioSampleRate != 0) {
+                        if (audioSampleRate !in 8000..192000) throw IllegalStateException("音频采样率超出有效范围")
+                        if (audioMode == "libopus" && audioSampleRate !in setOf(8000, 12000, 16000, 24000, 48000)) {
+                            throw IllegalStateException("Opus 采样率请选择 48000 Hz 或编码器默认")
+                        }
+                        args.addAll(listOf("-ar", audioSampleRate.toString()))
+                    }
+                }
+            }
             args.addAll(
                 listOf(
-                    "-pix_fmt", "yuv420p",
-                    "-c:a", "copy",
                     "-map_metadata", "0",
                     "-map_chapters", "0",
                     "-f", outputFormat,
