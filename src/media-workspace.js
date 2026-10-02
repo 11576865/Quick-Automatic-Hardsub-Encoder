@@ -356,7 +356,6 @@ export function mountMediaWorkspace(hooks) {
   };
   const setTaskState = next => {
     section.dataset.taskState=next;
-    if(['verified','save_failed','saved'].includes(next))completedStale=false;
     const labels={
       idle:'等待开始',preparing:'正在检查设置',encoding:'正在处理',validating:'正在验证成品',
       verified:'成品已验证，等待保存',saving:'正在保存成品',saved:'成品已保存',
