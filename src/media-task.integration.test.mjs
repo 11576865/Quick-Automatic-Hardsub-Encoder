@@ -13,16 +13,18 @@ test('real FFmpeg transcode, hardsub and packet-identical fast cut',{skip:!enabl
  try {
   const source=join(dir,'source.mkv');
   run('ffmpeg',['-v','error','-y','-f','lavfi','-i','testsrc2=size=160x90:rate=30','-f','lavfi','-i','sine=frequency=440:sample_rate=48000','-f','lavfi','-i','sine=frequency=880:sample_rate=48000','-t','4','-map','0:v','-map','1:a','-map','2:a','-c:v','libx264','-preset','ultrafast','-g','30','-keyint_min','30','-sc_threshold','0','-bf','0','-c:a','aac',source]);
-  const media={duration:4,fps:30,audioTracks:2};
+  const media={duration:4,fps:30,audioTracks:2,formatName:'matroska,webm',sourceName:'source.mkv',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac','aac']};
   const base={operation:'transcode',codec:'h264',encoder:'libx264',preset:'ultrafast',rateMode:'quality',quality:23,start:0,end:'',audio:'copy',audioTrack:'all',fpsMode:'auto',pixelFormat:'yuv420p',scaleAlgorithm:'lanczos',rotation:'none',deinterlace:'none',multipass:'fullres',lookahead:'',aqStrength:''};
   const execute=(task,name,ass='')=>{
-   const output=join(dir,name+'.mkv');
+   const output=join(dir,name+'.'+task.outputExtension);
    const args=task.outputArgs.map(a=>a.replace('__ASS__',ass).replace('__FONTS__',dir));
    if(task.twoPass){run('ffmpeg',['-v','error','-y',...taskInputArgs(task),'-i',source,...taskDurationArgs(task),...firstPassArgs(args),'-pass','1','-passlogfile',join(dir,'stats'),'-f','null','-']);args.push('-pass','2','-passlogfile',join(dir,'stats'));}
-   run('ffmpeg',['-v','error','-y',...taskInputArgs(task),'-i',source,...taskDurationArgs(task),...args,'-f','matroska',output]);
+   run('ffmpeg',['-v','error','-y',...taskInputArgs(task),'-i',source,...taskDurationArgs(task),...args,'-f',task.outputFormat,output]);
    return {output,info:JSON.parse(run('ffprobe',['-v','error','-show_streams','-show_format','-of','json',output]))};
   };
-  const transcode=execute(compileTask({...base,width:128,height:72,fpsMode:'cfr',fps:24,start:1,end:3,audioTrack:'1'},media),'transcode');
+  const transcodeTask=compileTask({...base,width:128,height:72,fpsMode:'cfr',fps:24,start:1,end:3,audioTrack:'1'},media);
+  assert.equal(transcodeTask.outputContainer,'mp4');
+  const transcode=execute(transcodeTask,'transcode');
   const video=transcode.info.streams.find(s=>s.codec_type==='video');
   assert.equal(video.width,128);assert.equal(video.height,72);assert.equal(video.avg_frame_rate,'24/1');
   assert.equal(transcode.info.streams.filter(s=>s.codec_type==='audio').length,1);
@@ -40,7 +42,9 @@ test('real FFmpeg transcode, hardsub and packet-identical fast cut',{skip:!enabl
   const keyframes=run('ffprobe',['-v','error','-skip_frame','nokey','-select_streams','v:0','-show_frames','-show_entries','frame=best_effort_timestamp_time','-of','csv=p=0',source]).split('\n').map(l=>parseFloat(l)).filter(n=>Number.isFinite(n)&&n<=1.4);
   const actual=Math.max(...keyframes);
   assert.ok(actual<=1.4&&actual>.9);
-  const copy=execute(compileTask({...base,operation:'copy',start:actual,end:3},media),'copy');
+  const copyTask=compileTask({...base,operation:'copy',start:actual,end:3,outputContainer:'keep'},media);
+  assert.equal(copyTask.outputContainer,'mkv');
+  const copy=execute(copyTask,'copy');
   const hashes=file=>JSON.parse(run('ffprobe',['-v','error','-select_streams','v:0','-show_packets','-show_data_hash','sha256','-show_entries','packet=data_hash','-of','json',file])).packets.map(p=>p.data_hash);
   const original=hashes(source),copied=hashes(copy.output);
   assert.ok(copied.length>0);assert.ok(original.includes(copied[0]));

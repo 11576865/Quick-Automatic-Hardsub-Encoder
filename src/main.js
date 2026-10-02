@@ -1,5 +1,6 @@
 import { validateEncoderSupport } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
+import { outputFileName, resolveOutputContainer } from './media-container.js';
 import './style.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
@@ -82,8 +83,8 @@ app.innerHTML = `
       <div class="app-brand">
         <div class="app-mark" aria-hidden="true"><span>Q</span></div>
         <div class="app-brand-copy">
-          <div class="hero-kicker">HARDSUB WORKBENCH</div>
-          <h1>快速自动硬字幕压制器</h1>
+          <div class="hero-kicker">MEDIA PROCESSING WORKBENCH</div>
+          <h1>本地媒体处理工作台</h1>
         </div>
       </div>
       <div class="hero-state" aria-label="处理状态">
@@ -254,6 +255,7 @@ app.innerHTML = `
       </button>
     </div>
   </section>
+  <div id="sharedMediaOutputMount"></div>
   <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>先定义目标，再选择实际可用的编码器与测试路径。</p></div></div>
@@ -1034,6 +1036,9 @@ document.querySelectorAll('[data-size-multiplier]').forEach(button => {
     $('sizeBudgetRange').value = Number(button.dataset.sizeMultiplier).toFixed(2);
     commitSizeBudget();
   });
+});
+document.addEventListener('change', event => {
+  if (event.target?.name === 'outputContainer') queueMicrotask(refreshGuidedContainerDecision);
 });
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
@@ -3042,6 +3047,7 @@ function refreshBenchmarkEnabled() {
       ? '参数已选择；请先生成并验证 Native libass 字幕预览，随后才能正式全片压制。'
       : '参数已选择；字幕预览尚未验证。可以先生成所选方案测试片段，正式全片压制暂时锁定。';
   }
+  refreshGuidedContainerDecision();
 }
 
 function getSourceVideoBitrate() {
@@ -3347,6 +3353,7 @@ function selectCodec(codec) {
   if (state.operationBusy) return;
   state.selectedCodec = codec;
   renderPlanOptions();
+  refreshGuidedContainerDecision();
 }
 
 function qualityCrfRange(codec) {
@@ -3817,11 +3824,19 @@ async function runEncode() {
   if (state.media?.unsafeColorPipeline) { alert('检测到 HDR/高位深输入。当前版本不会静默转换，正式压制已锁定。'); return; }
   const plan = buildEncodePlan(state.selectedCodec);
   if (!plan) { alert('无法生成安全的压制方案。'); return; }
+  let container;
+  try {
+    container = resolveGuidedHardsubContainer(state.selectedCodec);
+    refreshGuidedContainerDecision();
+  } catch (error) {
+    alert('输出容器不可用：' + error.message);
+    return;
+  }
   try {
     $('encodeBtn').disabled = true;
     $('progressBar').style.width = '1%';
     $('liveEta').textContent = '正在启动编码器；前几秒不计算 ETA。';
-    log('正式压制：' + state.selectedCodec.toUpperCase() + ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF质量') + '模式');
+    log('正式压制：' + state.selectedCodec.toUpperCase() + ' · ' + container.key.toUpperCase() + ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF质量') + '模式');
     if (plan.mode === 'budget-rate') log('体积预算边界 ' + formatBytes(plan.sizeCeiling) + '；源码率锚点 ' + formatBitrate(plan.sourceVideoBitrate) + '；单遍目标视频码率 ' + formatBitrate(plan.targetVideoBitrate) + '。');
     else log('CRF ' + plan.crf + ' · preset ' + plan.preset + '；不提前猜整片大小。');
     const durationMs = state.media.duration * 1000;
@@ -3831,6 +3846,10 @@ async function runEncode() {
     const result = await state.engine.encodeFullStream(state.selectedCodec, {
       crf: plan.crf, preset: plan.preset,
       targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+      outputContainer: container.key,
+      outputFormat: container.format,
+      outputExtension: container.extension,
+      outputMime: container.mime,
       onPhase: phase => { phaseName = phase; samples = []; $('liveEta').textContent = phase === 'pass1' ? '第一遍：正在稳定编码速度…' : phase === 'pass2' ? '第二遍：正在稳定编码速度…' : '正在稳定编码速度…'; },
       onStatistics: stat => {
         const currentPhase = stat.phase || phaseName || 'encode';
@@ -3918,7 +3937,7 @@ async function runEncode() {
     }
 
     const base = state.video.name.replace(/\.[^.]+$/, '');
-    downloadBlob(result.blob, base + '_hardsub_' + state.selectedCodec + '.mkv');
+    downloadBlob(result.blob, base + '_hardsub_' + state.selectedCodec + '.' + container.extension);
     if (plan.sizeCeiling && result.byteLength > plan.sizeCeiling) {
       const over = (result.byteLength / plan.sizeCeiling - 1) * 100;
       log('成品 ' + formatBytes(result.byteLength) + '，比规划预算边界高 ' + over.toFixed(2) + '%；这是单遍码率控制的正常可能误差，成品已保留并下载。');
@@ -3942,6 +3961,8 @@ function mediaFromNativeProbe(p) {
   return {
     duration: Number(p.duration || 0),
     durationSource: 'native-ffprobe',
+    formatName: p.format || '',
+    sourceName: state.video?.name || '',
     size: Number(p.statSize > 0 ? p.statSize : state.video?.size || 0),
     bitRate: Number(p.bitRate || 0),
     videoCodec: p.videoCodec || 'unknown',
@@ -3958,6 +3979,7 @@ function mediaFromNativeProbe(p) {
     highBitDepth: bitDepth > 8,
     unsafeColorPipeline: !!p.unsafeColorPipeline,
     audioCodec: p.audioCodec || '',
+    audioCodecs: Array.isArray(p.audioCodecs) ? p.audioCodecs : (p.audioCodec ? [p.audioCodec] : []),
     audioTracks: Number(p.audioTracks || 0),
     audioBitRate: Number(p.audioBitRate || 0)
   };
@@ -4026,8 +4048,9 @@ async function runNativeEncode() {
     return;
   }
 
+  const container = resolveGuidedHardsubContainer(state.selectedCodec);
   const base = (state.video?.name || 'video').replace(/\.[^.]+$/, '');
-  const suggestedName = base + '_hardsub_' + state.selectedCodec + '.mkv';
+  const suggestedName = base + '_hardsub_' + state.selectedCodec + '.' + container.extension;
   const duration = Number(state.media?.duration || 0);
   const audioBitrate = Number(state.media?.audioBitRate || 0) ||
     Math.max(1, Number(state.media?.audioTracks || 0)) * 192000;
@@ -4067,6 +4090,10 @@ async function runNativeEncode() {
       0
     ),
     calibrationSampleBitrate: Number(plan.calibration?.sampleBitrate || 0),
+    outputContainer: container.key,
+    outputFormat: container.format,
+    outputExtension: container.extension,
+    outputMime: container.mime,
     suggestedName
   };
 
@@ -4102,6 +4129,7 @@ async function runNativeEncode() {
     : 'Android Native 任务已创建，正在准备输入与字体…';
   log(
     'Native 正式压制：' + state.selectedCodec.toUpperCase() +
+    ' · ' + container.key.toUpperCase() +
     ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
     ' · job=' + started.jobId
   );
@@ -4254,6 +4282,31 @@ function sleepMs(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function resolveGuidedHardsubContainer(codec = state.selectedCodec) {
+  if (!codec || !state.media) throw new Error('尚未形成可执行的硬字幕编码方案');
+  const requested = document.querySelector('[name="outputContainer"]')?.value || 'auto';
+  return resolveOutputContainer(
+    requested,
+    { operation:'hardsub', codec, audio:'copy', keepAttachments:false, keepSubtitles:false },
+    { ...state.media, sourceName:state.video?.name || state.media.sourceName || '' }
+  );
+}
+
+function refreshGuidedContainerDecision() {
+  if (document.body.dataset.mediaOperation !== 'hardsub' || document.body.dataset.hardsubStrategy !== 'guided') return;
+  const target = document.querySelector('#taskContainerDecision');
+  if (!target) return;
+  try {
+    const container = resolveGuidedHardsubContainer();
+    target.textContent = '实际输出：' + container.key.toUpperCase() + ' · ' + container.reason +
+      (container.source ? ' · 源容器 ' + container.source.toUpperCase() : '');
+    target.dataset.state = 'resolved';
+  } catch (error) {
+    target.textContent = state.selectedCodec ? ('当前组合需要调整：' + error.message) : '选择编码方案后显示实际容器选择。';
+    target.dataset.state = state.selectedCodec ? 'error' : 'idle';
+  }
+}
+
 function buildEncodePlan(codec) {
   const media = state.media;
   if (!media?.duration || !state.video || state.softwareEncoders[codec] === false) return null;
@@ -4398,10 +4451,11 @@ mountMediaWorkspace({
       throw new Error('硬字幕模式请先在下方完成字幕分析与真实预览');
     }
     if(state.nativeBackend?.available){
-      if(state.nativeBackend.taskSchemaVersion<2)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
+      if(state.nativeBackend.taskSchemaVersion<3)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
       if(!state.nativeInputProbe?.ok)throw new Error('视频尚未完成原生探测');
       return {
         ...mediaFromNativeProbe(state.nativeInputProbe),
+        sourceName:state.video.name,
         fpsModeSupported:state.nativeBackend.fpsModeSupported,
         nvencMultipassSupported:state.nativeBackend.multipassSupported,
         nvencMultipassFullresSupported:state.nativeBackend.multipassFullresSupported
@@ -4413,7 +4467,7 @@ mountMediaWorkspace({
     else { await state.engine.stageFiles(state.video,state.ass,state.effectiveFonts); await state.engine.setAssText(state.activeAssText||state.assText); }
     const media=await state.engine.probe();
     const caps=await state.engine.taskCapabilities('copy');
-    return {...media,fpsModeSupported:caps.fpsModeSupported};
+    return {...media,sourceName:state.video.name,fpsModeSupported:caps.fpsModeSupported};
   },
   validate: async task => {
     if(task.operation==='copy')return;
@@ -4446,8 +4500,8 @@ mountMediaWorkspace({
   run: async (task,media,progress) => {
     manualCancelRequested=false;
     const base=state.video.name.replace(/\.[^.]+$/,'');
-    const name=base+'_'+task.operation+(task.operation==='copy'?'':'_'+task.codec)+'.mkv';
-    log('手动任务：'+task.operation+' · '+task.outputArgs.join(' '));
+    const name=outputFileName(base,task);
+    log('媒体任务：'+task.operation+' · '+task.outputContainer.toUpperCase()+' · '+task.outputArgs.join(' '));
     if(state.nativeBackend?.available){
       const request={codec:task.codec||'h264',mode:task.rateMode!=='quality'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:media.audioTracks,estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),suggestedName:name};
       const bridge=globalThis.NativeHardsub;

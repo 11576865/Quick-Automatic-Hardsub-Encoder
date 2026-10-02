@@ -379,19 +379,25 @@ export class EncoderEngine {
     }
 
     options.onPhase?.(twoPass ? 'pass2' : 'encode');
-    const stream = await FFmpegKitStreamOutput.create('mkv', 8 * 1024 * 1024);
+    const task = options.task;
+    const streamExtension = task?.outputExtension || options.outputExtension || 'mkv';
+    const outputFormat = task?.outputFormat || options.outputFormat || 'matroska';
+    const outputMime = task?.outputMime || options.outputMime || 'video/x-matroska';
+    const stream = await FFmpegKitStreamOutput.create(streamExtension, 8 * 1024 * 1024);
     const target = stream.getUrl();
     const rateControl = targetVideoBitrate > 0
       ? twoPass
         ? `-b:v ${Math.round(targetVideoBitrate)} -pass 2 -passlogfile ${q(passlog)}`
         : `-b:v ${Math.round(targetVideoBitrate)}`
       : `-crf ${crf}`;
-    const task = options.task;
     const taskArgs = task ? task.outputArgs.map(value => value.replace('__ASS__',escapeFilter(this.assPath)).replace('__FONTS__',escapeFilter(this.fontDir))) : [];
     if(task && twoPass)taskArgs.push('-pass','2','-passlogfile',passlog);
+    const streamContainerArgs = outputFormat === 'mp4'
+      ? ['-movflags','frag_keyframe+empty_moov+default_base_moof']
+      : [];
     const cmd = task
-      ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),'-f','matroska',q(target)].join(' ')
-      : `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -map 0:a? -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} ${rateControl}${extra} -c:a copy -f matroska ${q(target)}`;
+      ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),...streamContainerArgs.map(q),'-f',q(outputFormat),q(target)].join(' ')
+      : ['-y',decoder.trim(),'-i',q(this.inputPath),'-map','0:v:0','-map','0:a?','-sn','-vf',q(filter),'-c:v',encoder,'-preset',preset,'-g',String(gop),...rateControl.trim().split(/\s+/),...(extra.trim()?extra.trim().split(/\s+/):[]),'-c:a','copy',...streamContainerArgs,'-f',outputFormat,q(target)].filter(Boolean).join(' ');
     this.onLog(`$ ffmpeg ${cmd}`);
 
     let resolveDone;
@@ -449,7 +455,7 @@ export class EncoderEngine {
       }
 
       return {
-        blob: new Blob(chunks, { type: 'video/x-matroska' }),
+        blob: new Blob(chunks, { type: outputMime }),
         byteLength: totalBytes
       };
     } finally {
@@ -464,7 +470,8 @@ export class EncoderEngine {
 
     const stamp = Date.now();
     const mountPoint = `/verify_${stamp}`;
-    const fileName = 'encoded_output.mkv';
+    const extension = validation.task?.outputExtension || (blob.type === 'video/mp4' ? 'mp4' : 'mkv');
+    const fileName = 'encoded_output.' + extension;
     const path = `${mountPoint}/${fileName}`;
 
     // Mount the final Blob read-only through WORKERFS. Do not print every
@@ -763,6 +770,7 @@ function normalizeMediaInfo(info) {
   return {
     duration: Number(format.duration || raw.duration || 0),
     durationSource: Number(format.duration || raw.duration || 0) > 0 ? 'container' : 'unknown',
+    formatName: String(format.format_name || raw.format_name || ''),
     size: Number(format.size || raw.size || 0),
     bitRate: Number(format.bit_rate || raw.bitrate || 0),
     videoCodec: video.codec_name || video.codec || 'unknown',
@@ -779,6 +787,7 @@ function normalizeMediaInfo(info) {
     highBitDepth,
     unsafeColorPipeline: hdr || highBitDepth,
     audioCodec: audio.codec_name || audio.codec || '',
+    audioCodecs: audioStreams.map(s => s.codec_name || s.codec || '').filter(Boolean),
     audioTracks: audioStreams.length,
     audioBitRate: audioStreams.reduce((sum, s) => sum + Number(s.bit_rate || s.bitrate || 0), 0)
   };

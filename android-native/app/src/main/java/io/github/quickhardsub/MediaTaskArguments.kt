@@ -56,9 +56,16 @@ object MediaTaskArguments {
         "pad=ceil\\(iw/2\\)\\*2:ceil\\(ih/2\\)\\*2:0:0".toRegex()
     )
     fun validate(task: JSONObject): List<String> {
-        require(task.optInt("version") in 1..2) { "Unsupported media task version" }
+        require(task.optInt("version") in 1..3) { "Unsupported media task version" }
         val operation = task.getString("operation")
         require(operation in setOf("copy", "transcode", "hardsub"))
+        val outputFormat = task.optString("outputFormat", "")
+        val outputExtension = task.optString("outputExtension", "")
+        require(outputFormat in setOf("matroska", "mp4")) { "Unsupported output container format" }
+        require(
+            (outputFormat == "matroska" && outputExtension == "mkv") ||
+                (outputFormat == "mp4" && outputExtension == "mp4")
+        ) { "Output container format/extension mismatch" }
         val start = task.getDouble("start")
         val end = task.getDouble("end")
         require(start.isFinite() && end.isFinite() && start >= 0 && end > start)

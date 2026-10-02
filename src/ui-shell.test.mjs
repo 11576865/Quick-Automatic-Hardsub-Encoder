@@ -30,8 +30,8 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.doesNotMatch(main, /data-theme-choice=/);
   assert.doesNotMatch(main, /THEME_KEY/);
   assert.doesNotMatch(main, /prefers-color-scheme/);
-  assert.match(main, /HARDSUB WORKBENCH/);
-  assert.match(main, /<h1>快速自动硬字幕压制器<\/h1>/);
+  assert.match(main, /MEDIA PROCESSING WORKBENCH/);
+  assert.match(main, /<h1>本地媒体处理工作台<\/h1>/);
   assert.match(main, /class="app-header-main"/);
   assert.match(main, /largeMax:\s*1599/);
   assert.match(main, /return 'extra-large'/);

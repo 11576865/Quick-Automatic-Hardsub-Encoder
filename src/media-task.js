@@ -1,6 +1,7 @@
 import { sizeBudget } from './media-planning.js';
+import { resolveOutputContainer } from './media-container.js';
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
-export const TASK_VERSION = 2;
+export const TASK_VERSION = 3;
 export const SOFTWARE = { h264: 'libx264', h265: 'libx265', av1: 'libsvtav1' };
 export function compileTask(raw, media) {
   const t = { ...raw, version: TASK_VERSION };
@@ -35,11 +36,22 @@ export function compileTask(raw, media) {
   else args.push('-sn');
   if (t.keepAttachments) args.push('-map', '0:t?', '-c:t', 'copy');
   args.push('-map_metadata', t.keepMetadata ? '0' : '-1', '-map_chapters', t.keepChapters ? '0' : '-1');
+  const finalizeContainer = () => {
+    const resolved = resolveOutputContainer(t.outputContainer || 'auto', t, media);
+    t.outputContainerRequest = resolved.requested;
+    t.outputContainer = resolved.key;
+    t.outputFormat = resolved.format;
+    t.outputExtension = resolved.extension;
+    t.outputMime = resolved.mime;
+    t.sourceContainer = resolved.source;
+    t.containerReason = resolved.reason;
+  };
   if (t.operation === 'copy') {
     args.push('-c:v', 'copy');
     if (t.audio !== 'none') args.push('-c:a', 'copy');
     t.outputArgs = args;
     t.expectedDuration = t.end - t.start;
+    finalizeContainer();
     return t;
   }
   if (media.unsafeColorPipeline) throw Error('HDR/高位深输入的色彩保持链路尚未验证；当前可使用无损剪切');
@@ -147,6 +159,7 @@ export function compileTask(raw, media) {
   if (t.frames && t.audio !== 'none') throw Error('限制输出帧数时请关闭音频，避免音视频长度歧义');
   t.estimatedBytes = t.rateMode !== 'quality' && t.estimatedAudioRate != null ? (Number(t.bitrate)+t.estimatedAudioRate)*t.expectedDuration/8 : null;
   t.outputArgs = args;
+  finalizeContainer();
   return t;
 }
 export function taskInputArgs(t) {
@@ -172,7 +185,7 @@ export function commandPreview(t) {
   if(t.twoPass){
     const first=[...base,...firstPassArgs(output),'-pass','1','-passlogfile','<任务统计文件>','-f','null','NUL'];
     output.push('-pass','2','-passlogfile','<任务统计文件>');
-    return first.map(quoteArg).join(' ')+'\n'+[...base,...output,'-f','matroska','<成品.mkv>'].map(quoteArg).join(' ');
+    return first.map(quoteArg).join(' ')+'\n'+[...base,...output,'-f',t.outputFormat,`<成品.${t.outputExtension}>`].map(quoteArg).join(' ');
   }
-  return [...base,...output,'-f','matroska','<成品.mkv>'].map(quoteArg).join(' ') + (t.start && t.operation==='copy' ? '\n无损剪切：执行时向前定位关键帧' : '');
+  return [...base,...output,'-f',t.outputFormat,`<成品.${t.outputExtension}>`].map(quoteArg).join(' ') + (t.start && t.operation==='copy' ? '\n无损剪切：执行时向前定位关键帧' : '');
 }
