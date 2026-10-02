@@ -248,24 +248,82 @@ export class EncoderEngine {
     return true;
   }
 
+  async listKeyframes(options = {}) {
+    this.assertReady();
+    const duration = Number(options.duration || this.mediaInfo?.duration || 0);
+    const maxKeyframes = Math.max(256, Math.min(50000, Math.floor(Number(options.maxKeyframes) || 12000)));
+    const session = await this.api.FFprobeKit.execute(
+      `-v error -select_streams v:0 -skip_frame nokey -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 ${q(this.inputPath)}`
+    );
+    if (!this.api.ReturnCode.isSuccess(session.getReturnCode())) {
+      throw new Error((await session.getOutput?.()) || '关键帧分析失败');
+    }
+    const raw = String(await session.getOutput?.() || '');
+    const parsed = raw
+      .split(/\r?\n/)
+      .map(line => Number(line.split(',')[0]))
+      .filter(Number.isFinite)
+      .filter(value => value >= 0 && (!(duration > 0) || value <= duration + .001))
+      .sort((a,b) => a - b);
+    const deduped = parsed.filter((value,index) => index === 0 || Math.abs(value - parsed[index - 1]) > .000001);
+    return {
+      keyframes: deduped.slice(0, maxKeyframes),
+      keyframesTruncated: deduped.length > maxKeyframes,
+      duration
+    };
+  }
+
   async renderWaveform(options = {}) {
     this.assertReady();
     const audioTrack = Math.max(0, Math.floor(Number(options.audioTrack) || 0));
     const width = Math.max(512, Math.min(4096, Math.floor(Number(options.width) || 2048)));
     const height = Math.max(96, Math.min(320, Math.floor(Number(options.height) || 160)));
+    const duration = Number(options.duration || this.mediaInfo?.duration || 0);
+    const includeKeyframes = !!options.includeKeyframes;
+    const keyframeResult = includeKeyframes
+      ? await this.listKeyframes({ duration, maxKeyframes: options.maxKeyframes })
+      : { keyframes: [], keyframesTruncated: false, duration };
+
+    if (Number(this.mediaInfo?.audioTracks || 0) < 1) {
+      if (!includeKeyframes) throw new Error('当前视频没有可用于波形显示的音轨');
+      return {
+        url: null,
+        waveformError: '当前视频没有音频轨',
+        duration,
+        width,
+        height,
+        audioTrack,
+        ...keyframeResult
+      };
+    }
+
     const output = `/waveform_${Date.now()}_${audioTrack}.png`;
     const filter = `aformat=channel_layouts=mono,showwavespic=s=${width}x${height}:split_channels=0`;
     const cmd = `-y -i ${q(this.inputPath)} -map 0:a:${audioTrack} -vn -sn -filter_complex ${q(filter)} -frames:v 1 ${q(output)}`;
-    await this.execute(cmd, false, 90000);
-    const bytes = await this.api.readFile(output);
-    if (!bytes || !bytes.length) throw new Error('音频波形没有生成');
-    return {
-      url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
-      duration: Number(options.duration || this.mediaInfo?.duration || 0),
-      width,
-      height,
-      audioTrack
-    };
+    try {
+      await this.execute(cmd, false, 90000);
+      const bytes = await this.api.readFile(output);
+      if (!bytes || !bytes.length) throw new Error('音频波形没有生成');
+      return {
+        url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+        duration,
+        width,
+        height,
+        audioTrack,
+        ...keyframeResult
+      };
+    } catch (error) {
+      if (!includeKeyframes) throw error;
+      return {
+        url: null,
+        waveformError: error.message || '音频波形生成失败',
+        duration,
+        width,
+        height,
+        audioTrack,
+        ...keyframeResult
+      };
+    }
   }
 
   async setAssText(text) {
