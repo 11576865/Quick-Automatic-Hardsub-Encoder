@@ -1027,6 +1027,9 @@ document.querySelectorAll('[data-size-multiplier]').forEach(button => {
     commitSizeBudget();
   });
 });
+document.addEventListener('change', event => {
+  if (event.target?.name === 'outputContainer') queueMicrotask(refreshGuidedContainerDecision);
+});
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
 $('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
@@ -2953,6 +2956,7 @@ function refreshBenchmarkEnabled() {
       ? '参数已选择；请先生成并验证 Native libass 字幕预览，随后才能正式全片压制。'
       : '参数已选择；字幕预览尚未验证。可以先生成所选方案测试片段，正式全片压制暂时锁定。';
   }
+  refreshGuidedContainerDecision();
 }
 
 function getSourceVideoBitrate() {
@@ -3258,6 +3262,7 @@ function selectCodec(codec) {
   if (state.operationBusy) return;
   state.selectedCodec = codec;
   renderPlanOptions();
+  refreshGuidedContainerDecision();
 }
 
 function qualityCrfRange(codec) {
