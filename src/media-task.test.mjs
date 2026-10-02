@@ -109,3 +109,22 @@ test('web staging reuses an already mounted source for media-only work',async()=
   assert.equal(mounts,1);
   assert.equal(fallbackLoads,0);
 });
+
+
+test('timeline keyframe scan returns ordered bounded keyframes and reports truncation',async()=>{
+  const engine=new EncoderEngine();
+  engine.ready=true;
+  engine.inputPath='/input/source.mkv';
+  engine.mediaInfo={duration:10,audioTracks:1};
+  engine.api={
+    ReturnCode:{isSuccess:()=>true},
+    FFprobeKit:{execute:async()=>({
+      getReturnCode:()=>0,
+      getOutput:async()=> '0.000\n2.000\n2.000\n4.000\n6.000\n8.000\n12.000\n'
+    })}
+  };
+  const result=await engine.listKeyframes({duration:10,maxKeyframes:4});
+  assert.deepEqual(result.keyframes,[0,2,4,6]);
+  assert.equal(result.keyframesTruncated,true);
+  assert.equal(result.duration,10);
+});
