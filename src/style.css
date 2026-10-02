@@ -6365,6 +6365,10 @@ body[data-media-operation="hardsub"] #hardsubManualMount .media-action-dock #tas
   color: #07140d;
 }
 
+.media-mode-switcher {
+  grid-column: 1 / -1;
+}
+
 .media-mode-switcher .media-mode-index {
   width: 46px;
   min-width: 46px;
