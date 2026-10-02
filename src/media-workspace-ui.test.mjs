@@ -45,6 +45,14 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /id="taskSave"/);
   assert.match(workspace, /save_failed/);
   assert.match(workspace, /task-technical-details/);
+  assert.match(workspace, /id="taskWaveformPanel"/);
+  assert.match(workspace, /id="taskWaveformTrack"/);
+  assert.match(workspace, /id="taskWaveformSetStart"/);
+  assert.match(workspace, /id="taskWaveformSetEnd"/);
+  assert.match(workspace, /MM:SS\.mmm/);
+  assert.match(workspace, /parseMediaTime/);
+  assert.match(workspace, /formatMediaTimeInput/);
+  assert.match(workspace, /hooks\.waveform/);
 
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-hardsub"/);
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-transcode"/);
@@ -77,6 +85,9 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /body\[data-media-operation="copy"\] \.media-sample-panel/);
   assert.match(css, /\.media-inline-range::-webkit-slider-runnable-track/);
   assert.match(css, /\.media-action-dock\s*\{/);
+  assert.match(css, /\.media-waveform-panel\s*\{/);
+  assert.match(css, /\.media-waveform-track\s*\{/);
+  assert.match(css, /\.media-waveform-boundary/);
   assert.match(css, /#taskSave\.task-primary-action/);
   assert.match(css, /#taskRun\.task-secondary-action/);
   assert.match(css, /\.task-progress-grid/);
