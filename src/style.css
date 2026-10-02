@@ -6238,6 +6238,16 @@ body.ui-phone { --mobile-gutter: 7px; }
   display: none !important;
 }
 
+/* Semantic execution-surface gate.
+   Mobile legacy layout rules intentionally use !important for stage hosting;
+   these state selectors must outrank those presentation rules so a hidden
+   execution surface cannot be resurrected by responsive CSS. */
+body[data-media-operation="hardsub"][data-hardsub-strategy="manual"] #planCard,
+body[data-media-operation="hardsub"][data-hardsub-strategy="manual"] #encodeCard,
+body[data-media-operation="hardsub"][data-hardsub-strategy="guided"] #mediaWorkspace {
+  display: none !important;
+}
+
 .hardsub-control-deck {
   display: grid;
   gap: 14px;
