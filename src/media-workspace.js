@@ -365,7 +365,29 @@ export function mountMediaWorkspace(hooks) {
         ? '参数控制：直接控制底层编码参数，但不会绕过字幕分析、字体诊断、真实 libass 预览和成品验证。'
         : '纯视频转码直接使用当前参数；不会要求 ASS，也不会静默替换你选择的编码器。';
   }
-  function updateRate(){const mode=get('rateMode').value;for(const key of ['targetSize','sizeUnit','sizeReserve'])get(key).disabled=mode!=='size'||get('operation').value==='copy';get('quality').disabled=mode!=='quality';get('bitrate').disabled=mode!=='bitrate';get('twoPass').disabled=get('operation').value==='copy'||get('encoder').value!=='libx264'||mode==='quality';if(get('twoPass').disabled)get('twoPass').checked=false;const encoded=['aac','libopus'].includes(get('audio').value);for(const key of ['audioBitrate','audioChannels','audioSampleRate'])get(key).disabled=!encoded;}
+  function setRateControl(key, active) {
+    const control=get(key);
+    if(!control)return;
+    control.disabled=!active;
+    const owner=control.closest('label');
+    if(owner){
+      owner.hidden=!active;
+      owner.setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
+  }
+  function updateRate(){
+    const mode=get('rateMode').value;
+    const copy=get('operation').value==='copy';
+    setRateControl('quality', !copy && mode==='quality');
+    setRateControl('bitrate', !copy && mode==='bitrate');
+    for(const key of ['targetSize','sizeUnit','sizeReserve'])setRateControl(key, !copy && mode==='size');
+
+    get('twoPass').disabled=copy||get('encoder').value!=='libx264'||mode==='quality';
+    if(get('twoPass').disabled)get('twoPass').checked=false;
+
+    const encoded=['aac','libopus'].includes(get('audio').value);
+    for(const key of ['audioBitrate','audioChannels','audioSampleRate'])get(key).disabled=!encoded;
+  }
   get('audio').onchange=updateRate;
   get('rateMode').onchange=updateRate;
   section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();status('配置已保存');}catch(e){status(e.message);}};
