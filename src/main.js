@@ -3824,6 +3824,14 @@ async function runEncode() {
   if (state.media?.unsafeColorPipeline) { alert('检测到 HDR/高位深输入。当前版本不会静默转换，正式压制已锁定。'); return; }
   const plan = buildEncodePlan(state.selectedCodec);
   if (!plan) { alert('无法生成安全的压制方案。'); return; }
+  const audioSettings = guidedHardsubAudioSettings();
+  if (['aac','libopus'].includes(audioSettings.audio)) {
+    const audioCaps = await state.engine.taskCapabilities(audioSettings.audio);
+    if (!audioCaps.encoder.available) {
+      alert('当前 Web 核心不支持音频编码器 ' + audioSettings.audio);
+      return;
+    }
+  }
   let container;
   try {
     container = resolveGuidedHardsubContainer(state.selectedCodec);
@@ -3850,6 +3858,7 @@ async function runEncode() {
       outputFormat: container.format,
       outputExtension: container.extension,
       outputMime: container.mime,
+      ...audioSettings,
       onPhase: phase => { phaseName = phase; samples = []; $('liveEta').textContent = phase === 'pass1' ? '第一遍：正在稳定编码速度…' : phase === 'pass2' ? '第二遍：正在稳定编码速度…' : '正在稳定编码速度…'; },
       onStatistics: stat => {
         const currentPhase = stat.phase || phaseName || 'encode';
@@ -3885,7 +3894,11 @@ async function runEncode() {
 
     let packetScan = null;
     try {
-      packetScan = await state.engine.scanEncodedPackets(result.blob, state.media.duration);
+      packetScan = await state.engine.scanEncodedPackets(
+        result.blob,
+        state.media.duration,
+        { expectedAudioTracks: audioSettings.audio === 'none' ? 0 : Number(state.media.audioTracks || 0) }
+      );
       const deltaText = packetScan.durationDelta == null
         ? ''
         : ' · 与源视频差 ' + (packetScan.durationDelta >= 0 ? '+' : '') + packetScan.durationDelta.toFixed(3) + ' s';
@@ -4048,12 +4061,17 @@ async function runNativeEncode() {
     return;
   }
 
+  const audioSettings = guidedHardsubAudioSettings();
   const container = resolveGuidedHardsubContainer(state.selectedCodec);
   const base = (state.video?.name || 'video').replace(/\.[^.]+$/, '');
   const suggestedName = base + '_hardsub_' + state.selectedCodec + '.' + container.extension;
   const duration = Number(state.media?.duration || 0);
-  const audioBitrate = Number(state.media?.audioBitRate || 0) ||
-    Math.max(1, Number(state.media?.audioTracks || 0)) * 192000;
+  const sourceAudioTracks = Number(state.media?.audioTracks || 0);
+  const audioBitrate = audioSettings.audio === 'none'
+    ? 0
+    : ['aac','libopus'].includes(audioSettings.audio)
+      ? Math.max(0, Number(audioSettings.audioBitrate || 128000)) * sourceAudioTracks
+      : Number(state.media?.audioBitRate || 0) || Math.max(1, sourceAudioTracks) * 192000;
   const calibratedVideoBitrate = Number(plan.calibration?.sampleBitrate || 0);
 
   const estimatedOutputBytes = plan.mode === 'budget-rate'
@@ -4079,7 +4097,11 @@ async function runNativeEncode() {
     preset: plan.preset,
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
     expectedDuration: Number(state.media.duration || 0),
-    expectedAudioTracks: Number(state.media.audioTracks || 0),
+    expectedAudioTracks: audioSettings.audio === 'none' ? 0 : sourceAudioTracks,
+    audio: audioSettings.audio,
+    audioBitrate: audioSettings.audioBitrate,
+    audioChannels: audioSettings.audioChannels,
+    audioSampleRate: audioSettings.audioSampleRate,
     estimatedOutputBytes,
     goal: plan.goal || '',
     subtitleEventCount: Number(state.assInfo?.events?.filter?.(x => x.kind?.toLowerCase() === 'dialogue')?.length || 0),
@@ -4130,6 +4152,7 @@ async function runNativeEncode() {
   log(
     'Native 正式压制：' + state.selectedCodec.toUpperCase() +
     ' · ' + container.key.toUpperCase() +
+    ' · 音频 ' + audioSettings.audio.toUpperCase() +
     ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
     ' · job=' + started.jobId
   );
@@ -4282,12 +4305,24 @@ function sleepMs(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function guidedHardsubAudioSettings() {
+  const audio = document.querySelector('[name="audio"]')?.value || 'copy';
+  if (!['copy','aac','libopus','none'].includes(audio)) throw new Error('未知音频策略');
+  return {
+    audio,
+    audioBitrate: Number(document.querySelector('[name="audioBitrate"]')?.value || 128000),
+    audioChannels: document.querySelector('[name="audioChannels"]')?.value || '',
+    audioSampleRate: document.querySelector('[name="audioSampleRate"]')?.value || ''
+  };
+}
+
 function resolveGuidedHardsubContainer(codec = state.selectedCodec) {
   if (!codec || !state.media) throw new Error('尚未形成可执行的硬字幕编码方案');
   const requested = document.querySelector('[name="outputContainer"]')?.value || 'auto';
+  const audioSettings = guidedHardsubAudioSettings();
   return resolveOutputContainer(
     requested,
-    { operation:'hardsub', codec, audio:'copy', keepAttachments:false, keepSubtitles:false },
+    { operation:'hardsub', codec, audio:audioSettings.audio, keepAttachments:false, keepSubtitles:false },
     { ...state.media, sourceName:state.video?.name || state.media.sourceName || '' }
   );
 }
@@ -4503,7 +4538,7 @@ mountMediaWorkspace({
     const name=outputFileName(base,task);
     log('媒体任务：'+task.operation+' · '+task.outputContainer.toUpperCase()+' · '+task.outputArgs.join(' '));
     if(state.nativeBackend?.available){
-      const request={codec:task.codec||'h264',mode:task.rateMode!=='quality'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:media.audioTracks,estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),suggestedName:name};
+      const request={codec:task.codec||'h264',mode:task.rateMode!=='quality'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:task.expectedAudioTracks,estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),suggestedName:name};
       const bridge=globalThis.NativeHardsub;
       const started=JSON.parse(await Promise.resolve(bridge.startNativeEncode(JSON.stringify(request),task.operation==='hardsub'?(state.activeAssText||state.assText):'')));
       if(!started.ok||!started.jobId)throw new Error(started.error||'创建任务失败');
