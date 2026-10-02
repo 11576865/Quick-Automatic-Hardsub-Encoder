@@ -603,7 +603,7 @@ class NativeBridge(
                     .put("requestId", requestId)
                     .put("ok", false)
                     .put("busy", true)
-                    .put("error", "Android Native 正在执行其他 FFmpeg 任务，请稍后再生成波形")
+                    .put("error", "Android Native 正在执行其他 FFmpeg 任务，请稍后再分析时间轴")
             )
             return
         }
@@ -614,19 +614,54 @@ class NativeBridge(
             val waveformRoot = File(activity.cacheDir, "native-waveform")
             try {
                 val inputUri = getPickedUris("video").firstOrNull()
-                    ?: throw IllegalStateException("没有可供 Native 波形分析使用的视频 URI")
+                    ?: throw IllegalStateException("没有可供 Native 时间轴分析使用的视频 URI")
                 val options = try { JSONObject(optionsJson.ifBlank { "{}" }) } catch (_: Throwable) { JSONObject() }
                 val audioTrack = options.optInt("audioTrack", 0).coerceIn(0, 63)
                 val width = options.optInt("width", 2048).coerceIn(512, 4096)
                 val height = options.optInt("height", 160).coerceIn(96, 320)
                 val duration = options.optDouble("duration", 0.0)
                     .takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+                val includeKeyframes = options.optBoolean("includeKeyframes", false)
+                val maxKeyframes = options.optInt("maxKeyframes", 12000).coerceIn(256, 50000)
 
                 if (waveformRoot.exists()) waveformRoot.deleteRecursively()
                 waveformRoot.mkdirs()
                 val output = File(waveformRoot, "waveform.png")
                 safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
-                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 Native 波形 SAF URL")
+                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 Native 时间轴 SAF URL")
+
+                val keyframes = JSONArray()
+                var keyframesTruncated = false
+                if (includeKeyframes) {
+                    val scan = FFprobeKit.executeWithArguments(
+                        arrayOf(
+                            "-v", "error",
+                            "-select_streams", "v:0",
+                            "-skip_frame", "nokey",
+                            "-show_frames",
+                            "-show_entries", "frame=best_effort_timestamp_time",
+                            "-of", "csv=p=0",
+                            safUrl
+                        )
+                    )
+                    if (!ReturnCode.isSuccess(scan.getReturnCode())) {
+                        throw IllegalStateException(
+                            scan.getOutput().takeLast(1200).ifBlank { "Native 关键帧分析失败" }
+                        )
+                    }
+                    var count = 0
+                    scan.getOutput().lineSequence().forEach { line ->
+                        val time = line.substringBefore(',').toDoubleOrNull()
+                        if (time != null && time >= 0.0 && (duration <= 0.0 || time <= duration + 0.001)) {
+                            if (count < maxKeyframes) {
+                                keyframes.put(time)
+                                count++
+                            } else {
+                                keyframesTruncated = true
+                            }
+                        }
+                    }
+                }
 
                 val filter = "aformat=channel_layouts=mono,showwavespic=s=${width}x${height}:split_channels=0"
                 val command = arrayOf(
@@ -643,20 +678,23 @@ class NativeBridge(
                     output.absolutePath
                 )
                 val session = FFmpegKit.executeWithArguments(command)
-                if (!ReturnCode.isSuccess(session.getReturnCode()) || output.length() <= 0L) {
+                val waveformOk = ReturnCode.isSuccess(session.getReturnCode()) && output.length() > 0L
+                if (!waveformOk && !includeKeyframes) {
                     throw IllegalStateException(
                         session.getOutput().takeLast(1200).ifBlank { "Native 音频波形生成失败" }
                     )
                 }
 
-                val bytes = output.readBytes()
                 result
                     .put("ok", true)
-                    .put("url", "data:image/png;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP))
+                    .put("url", if (waveformOk) "data:image/png;base64," + Base64.encodeToString(output.readBytes(), Base64.NO_WRAP) else "")
+                    .put("waveformError", if (waveformOk) "" else session.getOutput().takeLast(1200).ifBlank { "当前素材没有可显示的音频波形" })
                     .put("duration", duration)
                     .put("width", width)
                     .put("height", height)
                     .put("audioTrack", audioTrack)
+                    .put("keyframes", keyframes)
+                    .put("keyframesTruncated", keyframesTruncated)
             } catch (e: Throwable) {
                 result
                     .put("ok", false)
