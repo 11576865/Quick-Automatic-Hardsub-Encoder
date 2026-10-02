@@ -493,6 +493,22 @@ function Start-EncodeJob($Body) {
 function Get-JobStatus([string]$JobId) {
     if(-not $script:Jobs.ContainsKey($JobId)){return [pscustomobject]@{ok=$false;error='Unknown Windows Native job id.'}}
     $j=$script:Jobs[$JobId]
+
+    # Terminal job state must be queryable repeatedly without touching the
+    # disposed Process handle. Export-Job intentionally re-reads status after
+    # encoding has finished, so terminal snapshots are resolved first.
+    if($j.State -eq 'completed'){
+        if(-not(Test-Path -LiteralPath $j.Output -PathType Leaf) -or (Get-Item -LiteralPath $j.Output).Length -le 0){
+            $j.State='failed';$j.Error='Verified output staging file is missing.'
+            return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
+        }
+        $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
+        $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+    }
+    if($j.State -eq 'cancelled'){return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
+    if($j.State -eq 'failed'){return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}}
+
     $p=$j.Started.Process
     if(-not $p.HasExited){
         $timeMs=0.0
@@ -558,13 +574,13 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     if($status.state -ne 'completed'){throw 'Job is not completed.'}
     $d=New-Object System.Windows.Forms.SaveFileDialog
     $d.Filter='Matroska video|*.mkv';$d.DefaultExt='mkv';$d.FileName=if($SuggestedName){$SuggestedName}else{$j.SuggestedName}
-    if($d.ShowDialog() -ne 'OK'){$d.Dispose();return [pscustomobject]@{ok=$false;error='Save cancelled.'}}
+    if($d.ShowDialog() -ne 'OK'){$d.Dispose();return [pscustomobject]@{ok=$false;jobId=$JobId;error='Save cancelled.'}}
     $dest=$d.FileName;$d.Dispose()
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
     $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
     Copy-Item -LiteralPath $j.Output -Destination $temp -Force
     Publish-VerifiedOutput $temp $dest
-    return [pscustomobject]@{ok=$true;bytes=(Get-Item -LiteralPath $dest).Length;path=$dest}
+    return [pscustomobject]@{ok=$true;jobId=$JobId;bytes=(Get-Item -LiteralPath $dest).Length;path=$dest}
 }
 
 function Export-Sample([string]$SampleId,[string]$SuggestedName) {
