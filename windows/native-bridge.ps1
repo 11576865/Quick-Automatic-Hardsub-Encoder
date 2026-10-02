@@ -134,6 +134,51 @@ function Show-NativeOpenFileDialog([string]$Filter, [bool]$Multiselect = $false)
     }
 }
 
+
+function Show-NativeSaveFileDialog([string]$Filter, [string]$DefaultExt, [string]$FileName) {
+    # The Bridge runs hidden. An unowned SaveFileDialog can be placed behind the
+    # browser or off-screen after the first modal dialog, leaving the HTTP
+    # request blocked and making a later export look frozen. Give every save
+    # dialog a short-lived, on-screen owner on the active cursor monitor.
+    $cursor = [System.Windows.Forms.Cursor]::Position
+    $screen = [System.Windows.Forms.Screen]::FromPoint($cursor)
+    $work = $screen.WorkingArea
+    $x = [Math]::Max($work.Left, [Math]::Min($cursor.X, $work.Right - 1))
+    $y = [Math]::Max($work.Top, [Math]::Min($cursor.Y, $work.Bottom - 1))
+
+    $owner = New-Object System.Windows.Forms.Form
+    $owner.ShowInTaskbar = $false
+    $owner.StartPosition = 'Manual'
+    $owner.Location = New-Object System.Drawing.Point($x, $y)
+    $owner.Size = New-Object System.Drawing.Size(1, 1)
+    $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
+    $owner.TopMost = $true
+    $owner.Opacity = 0.01
+
+    $dialog = New-Object System.Windows.Forms.SaveFileDialog
+    $dialog.Filter = $Filter
+    $dialog.DefaultExt = $DefaultExt
+    $dialog.FileName = $FileName
+    $dialog.RestoreDirectory = $true
+    $dialog.AddExtension = $true
+    $dialog.OverwritePrompt = $true
+    $dialog.CheckPathExists = $true
+    try {
+        $owner.Show()
+        $owner.Activate()
+        $owner.BringToFront()
+        $result = $dialog.ShowDialog($owner)
+        if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
+            return [string]$dialog.FileName
+        }
+        return ''
+    } finally {
+        $dialog.Dispose()
+        $owner.Close()
+        $owner.Dispose()
+    }
+}
+
 function Show-BridgePicker([string]$Role) {
     $picked = @()
     if ($Role -eq 'video') {
@@ -667,12 +712,11 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     $j=$script:Jobs[$JobId]
     $status=Get-JobStatus $JobId
     if($status.state -ne 'completed'){throw 'Job is not completed.'}
-    $d=New-Object System.Windows.Forms.SaveFileDialog
     $ext=if($j.OutputExtension){[string]$j.OutputExtension}else{'mkv'}
-    $d.Filter=if($ext -eq 'mp4'){'MP4 video|*.mp4'}else{'Matroska video|*.mkv'}
-    $d.DefaultExt=$ext;$d.FileName=if($SuggestedName){$SuggestedName}else{$j.SuggestedName}
-    if($d.ShowDialog() -ne 'OK'){$d.Dispose();return [pscustomobject]@{ok=$false;jobId=$JobId;error='Save cancelled.'}}
-    $dest=$d.FileName;$d.Dispose()
+    $filter=if($ext -eq 'mp4'){'MP4 video|*.mp4'}else{'Matroska video|*.mkv'}
+    $name=if($SuggestedName){$SuggestedName}else{$j.SuggestedName}
+    $dest=Show-NativeSaveFileDialog $filter $ext $name
+    if(-not $dest){return [pscustomobject]@{ok=$false;jobId=$JobId;error='Save cancelled.'}}
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
     $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
     Copy-Item -LiteralPath $j.Output -Destination $temp -Force
@@ -684,11 +728,11 @@ function Export-Sample([string]$SampleId,[string]$SuggestedName) {
     if(-not $script:Samples.ContainsKey($SampleId)){throw 'Unknown sample.'}
     $src=$script:Samples[$SampleId]
     if(-not(Test-Path -LiteralPath $src)){throw 'Sample file is missing.'}
-    $d=New-Object System.Windows.Forms.SaveFileDialog
-    $d.Filter='Matroska video|*.mkv';$d.DefaultExt='mkv';$d.FileName=if($SuggestedName){$SuggestedName}else{'hardsub_test.mkv'}
-    if($d.ShowDialog() -ne 'OK'){$d.Dispose();return [pscustomobject]@{ok=$false;error='Save cancelled.'}}
-    Copy-Item -LiteralPath $src -Destination $d.FileName -Force
-    $bytes=(Get-Item -LiteralPath $d.FileName).Length;$d.Dispose()
+    $name=if($SuggestedName){$SuggestedName}else{'hardsub_test.mkv'}
+    $dest=Show-NativeSaveFileDialog 'Matroska video|*.mkv' 'mkv' $name
+    if(-not $dest){return [pscustomobject]@{ok=$false;error='Save cancelled.'}}
+    Copy-Item -LiteralPath $src -Destination $dest -Force
+    $bytes=(Get-Item -LiteralPath $dest).Length
     return [pscustomobject]@{ok=$true;bytes=$bytes}
 }
 
