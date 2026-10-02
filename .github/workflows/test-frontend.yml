@@ -10,6 +10,7 @@ on:
       - 'package-lock.json'
       - '.github/workflows/test-frontend.yml'
       - 'scripts/check-media-ui.cjs'
+      - '.uigs/**'
   push:
     branches: [main]
     paths:
@@ -35,6 +36,7 @@ jobs:
       - run: node src/font-diagnostics.test.mjs
       - run: node src/input-safety.test.mjs
       - run: node src/ui-shell.test.mjs
+      - run: node src/uigs-visual-capture.test.mjs
       - run: node --test src/media-workspace-ui.test.mjs
       - run: node --test src/media-task.test.mjs src/media-planning.test.mjs
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
