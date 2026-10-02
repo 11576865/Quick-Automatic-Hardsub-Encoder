@@ -1,0 +1,41 @@
+name: UIGS Evidence Coverage
+
+on:
+  pull_request:
+    paths:
+      - '.uigs/**'
+      - 'src/**'
+      - 'windows/**'
+      - 'android-native/**'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - '.uigs/**'
+      - 'src/**'
+      - 'windows/**'
+      - 'android-native/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uigs-evidence-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  invariant-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout UIGS invariant validator
+        uses: actions/checkout@v4
+        with:
+          repository: 11576865/UIGS-Foundry
+          ref: 92e5660cf595cfd8a24e9a4c063bff15e50192bd
+          path: .uigs-foundry
+      - name: Validate declared invariants and evidence topology
+        run: python .uigs-foundry/tools/validate_invariant_evidence.py --root "$GITHUB_WORKSPACE" --manifest .uigs/invariants.json

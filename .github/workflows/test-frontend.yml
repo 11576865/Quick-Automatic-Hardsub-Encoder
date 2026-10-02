@@ -38,6 +38,7 @@ jobs:
       - run: node src/ui-shell.test.mjs
       - run: node src/uigs-visual-capture.test.mjs
       - run: node --test src/media-workspace-ui.test.mjs
+      - run: node --test src/guided-audio-wiring.test.mjs
       - run: node --test src/media-task.test.mjs src/media-planning.test.mjs
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs

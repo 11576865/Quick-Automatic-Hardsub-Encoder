@@ -1,0 +1,280 @@
+{
+  "schema_version": 1,
+  "project": "Quick-Automatic-Hardsub-Encoder",
+  "repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "invariants": [
+    {
+      "id": "MEDIA.TASK_SCHEMA.CURRENT_VERSION_ALIGNMENT",
+      "title": "当前媒体任务版本必须贯通所有声明支持的原生后端",
+      "status": "active",
+      "criticality": "required",
+      "claim": "Frontend producer、Windows/Android capability advertisement、backend parser 与 CI fixture 必须对当前 task schema version 一致。",
+      "boundaries": [
+        "task-compiler",
+        "windows-capability",
+        "windows-parser",
+        "android-capability",
+        "android-parser",
+        "ci-fixture"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "current-version-equal-across-producer-and-advertisers",
+          "level": "source",
+          "kind": "capture_equal",
+          "sources": [
+            {
+              "path": "src/media-task.js",
+              "pattern": "TASK_VERSION\\s*=\\s*(\\d+)"
+            },
+            {
+              "path": "windows/native-bridge.ps1",
+              "pattern": "taskSchemaVersion=(\\d+)"
+            },
+            {
+              "path": "android-native/app/src/main/java/io/github/quickhardsub/NativeBridge.kt",
+              "pattern": "taskSchemaVersion\",\\s*(\\d+)"
+            },
+            {
+              "path": "android-native/app/src/main/java/io/github/quickhardsub/MediaTaskArguments.kt",
+              "pattern": "in\\s+1\\.\\.(\\d+)"
+            }
+          ]
+        },
+        {
+          "id": "windows-parser-accepts-current-version",
+          "level": "source",
+          "kind": "capture_in_integer_set",
+          "needle": {
+            "path": "src/media-task.js",
+            "pattern": "TASK_VERSION\\s*=\\s*(\\d+)"
+          },
+          "haystack": {
+            "path": "windows/media-task.ps1",
+            "pattern": "\\$Task\\.version\\s+-notin\\s+@\\(([^)]*)\\)"
+          }
+        },
+        {
+          "id": "windows-smoke-uses-current-version",
+          "level": "test",
+          "kind": "capture_equal",
+          "sources": [
+            {
+              "path": "src/media-task.js",
+              "pattern": "TASK_VERSION\\s*=\\s*(\\d+)"
+            },
+            {
+              "path": ".github/workflows/windows-local-smoke.yml",
+              "pattern": "version=(\\d+);operation='copy'"
+            }
+          ]
+        },
+        {
+          "id": "windows-contract-smoke-is-runnable",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/windows-local-smoke.yml",
+          "pattern": "Validate structured media task arguments"
+        }
+      ]
+    },
+    {
+      "id": "MEDIA.AUDIO.POLICY.CROSS_PRESENTATION_WIRING",
+      "title": "硬字幕的显式音频策略必须贯通 Guided、Manual 与三端执行路径",
+      "status": "active",
+      "criticality": "required",
+      "claim": "用户显式选择 AAC/Opus/Copy/None 时，Guided hard-sub 不得退回硬编码 copy；Web、Windows Native、Android Native 都必须消费该选择。",
+      "boundaries": [
+        "shared-output-ui",
+        "guided-hardsub",
+        "manual-task",
+        "web-engine",
+        "windows-native",
+        "android-native"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "shared-audio-control",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-workspace.js",
+          "pattern": "select\\('audio','音频策略'"
+        },
+        {
+          "id": "guided-audio-read",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/main.js",
+          "pattern": "function\\s+guidedHardsubAudioSettings\\("
+        },
+        {
+          "id": "web-guided-audio-args",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/engine.js",
+          "pattern": "guidedAudioArgs\\.push\\('-map','0:a\\?','-c:a',guidedAudio\\)"
+        },
+        {
+          "id": "windows-guided-audio-args",
+          "level": "source",
+          "kind": "pattern",
+          "path": "windows/native-bridge.ps1",
+          "pattern": "\\$audioMode=if\\(\\[string\\]\\$request\\.audio\\)"
+        },
+        {
+          "id": "android-guided-audio-args",
+          "level": "source",
+          "kind": "pattern",
+          "path": "android-native/app/src/main/java/io/github/quickhardsub/EncodeService.kt",
+          "pattern": "val audioMode = if \\(task == null\\) request\\.optString\\(\"audio\", \"copy\"\\)"
+        },
+        {
+          "id": "cross-backend-audio-wiring-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/guided-audio-wiring.test.mjs",
+          "pattern": "guided hard-sub audio policy is wired through every execution backend"
+        },
+        {
+          "id": "frontend-runs-audio-wiring-test",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "guided-audio-wiring\\.test\\.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEDIA.COPY.STREAM_COPY_ONLY",
+      "title": "无损快速剪切不得重新编码视频或音频",
+      "status": "active",
+      "criticality": "required",
+      "claim": "Copy mode 只能 stream-copy/drop 轨道；真实 FFmpeg 集成必须证明输出视频 packet 数据来自源视频而非重新编码。",
+      "boundaries": [
+        "task-compiler",
+        "ffmpeg-executor",
+        "output-verification"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "copy-compiler-branch",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-task.js",
+          "pattern": "if \\(t\\.operation === 'copy'\\)"
+        },
+        {
+          "id": "packet-identical-real-ffmpeg-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.integration.test.mjs",
+          "pattern": "packet-identical fast cut"
+        },
+        {
+          "id": "real-ffmpeg-integration-runs",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "FFMPEG_INTEGRATION=1 node --test src/media-task\\.integration\\.test\\.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEDIA.BROWSER.SOURCE_STAGING_REUSE",
+      "title": "浏览器 Probe 后执行同一源媒体时必须复用已 staging 的输入",
+      "status": "active",
+      "criticality": "required",
+      "claim": "同一不可变 File 已为 probe 挂载后，转码/无损剪切不得按文件体积重复 staging，也不得为无字幕任务加载字幕回退字体。",
+      "boundaries": [
+        "browser-file",
+        "probe",
+        "wasm-filesystem",
+        "execution"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "source-identity-reuse",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/engine.js",
+          "pattern": "const sameVideo = !!\\("
+        },
+        {
+          "id": "staging-reuse-regression-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.test.mjs",
+          "pattern": "web staging reuses an already mounted source for media-only work"
+        },
+        {
+          "id": "frontend-runs-media-task-tests",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "media-task\\.test\\.mjs"
+        }
+      ]
+    },
+    {
+      "id": "MEDIA.CONTAINER.RESOLUTION.EXPLICIT",
+      "title": "输出容器必须由兼容性策略解析并进入任务语义",
+      "status": "active",
+      "criticality": "required",
+      "claim": "MKV/MP4/Auto/Keep 不能退化为扩展名替换；task compiler 必须携带解析后的 format/extension/MIME，并由测试覆盖安全与拒绝路径。",
+      "boundaries": [
+        "output-policy-ui",
+        "container-resolver",
+        "task-compiler",
+        "executor"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "container-resolver",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-container.js",
+          "pattern": "export function resolveOutputContainer\\("
+        },
+        {
+          "id": "container-is-compiled",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.test.mjs",
+          "pattern": "container resolution is part of the compiled task"
+        },
+        {
+          "id": "frontend-runs-container-task-tests",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "media-task\\.test\\.mjs"
+        }
+      ]
+    }
+  ]
+}

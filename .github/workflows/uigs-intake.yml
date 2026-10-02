@@ -2,7 +2,7 @@ name: UIGS Intake Adapter
 
 on:
   workflow_run:
-    workflows: ["Build Android Native Core Release","Build Web Core Release","Build Android and Deploy Frontend","Compile Android media tasks","Test frontend","Windows local smoke"]
+    workflows: ["Build Android Native Core Release","Build Web Core Release","Build Android and Deploy Frontend","Compile Android media tasks","Test frontend","Windows local smoke","UIGS Evidence Coverage"]
     types: [completed]
   workflow_dispatch:
     inputs:

@@ -21,7 +21,8 @@
     "Build Android and Deploy Frontend",
     "Compile Android media tasks",
     "Test frontend",
-    "Windows local smoke"
+    "Windows local smoke",
+    "UIGS Evidence Coverage"
   ],
   "routing_hints": [
     "architecture",
@@ -38,5 +39,13 @@
     "schema_version": 1,
     "path": ".uigs/ui-visual-capture.json",
     "authority": "this repository"
+  },
+  "invariant_evidence": {
+    "schema_version": 1,
+    "path": ".uigs/invariants.json",
+    "authority": "this repository",
+    "workflow": "UIGS Evidence Coverage",
+    "validator_repository": "11576865/UIGS-Foundry",
+    "validator_ref": "92e5660cf595cfd8a24e9a4c063bff15e50192bd"
   }
 }
