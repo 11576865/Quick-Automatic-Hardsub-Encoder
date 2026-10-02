@@ -248,6 +248,26 @@ export class EncoderEngine {
     return true;
   }
 
+  async renderWaveform(options = {}) {
+    this.assertReady();
+    const audioTrack = Math.max(0, Math.floor(Number(options.audioTrack) || 0));
+    const width = Math.max(512, Math.min(4096, Math.floor(Number(options.width) || 2048)));
+    const height = Math.max(96, Math.min(320, Math.floor(Number(options.height) || 160)));
+    const output = `/waveform_${Date.now()}_${audioTrack}.png`;
+    const filter = `aformat=channel_layouts=mono,showwavespic=s=${width}x${height}:split_channels=0`;
+    const cmd = `-y -i ${q(this.inputPath)} -map 0:a:${audioTrack} -vn -sn -filter_complex ${q(filter)} -frames:v 1 ${q(output)}`;
+    await this.execute(cmd, false, 90000);
+    const bytes = await this.api.readFile(output);
+    if (!bytes || !bytes.length) throw new Error('音频波形没有生成');
+    return {
+      url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+      duration: Number(options.duration || this.mediaInfo?.duration || 0),
+      width,
+      height,
+      audioTrack
+    };
+  }
+
   async setAssText(text) {
     this.assertReady();
     this.activeAssText = text;
