@@ -50,6 +50,17 @@ const {spawn}=require('node:child_process');
   await page.fill('[name=width]','1280');await page.fill('[name=quality]','18');
   await page.click('#taskLoadPreset');
   if(await page.inputValue('[name=width]')!=='1280')throw Error('Preset overwrote resolution');
+
+  await page.fill('[name=quality]','19');
+  await page.locator('.media-sample-panel > summary').click();
+  await page.fill('[name=configName]','quality-restore');
+  await page.click('#taskStore');
+  await page.fill('[name=quality]','31');
+  await page.click('#taskRestore');
+  if(await page.inputValue('[name=quality]')!=='19')throw Error('Saved configuration did not restore quality value');
+  if(await page.inputValue('.media-inline-range')!=='19')throw Error('Saved configuration restored quality text but left the quality slider stale');
+  await page.locator('.media-sample-panel > summary').click();
+
   await page.selectOption('[name=rateMode]','size');
   if(await page.locator('[name=targetSize]').isDisabled())throw Error('Size controls are unavailable');
   if(!await page.locator('[name=targetSize]').isVisible())throw Error('Size controls are hidden in size mode');
