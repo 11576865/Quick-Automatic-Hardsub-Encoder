@@ -260,3 +260,16 @@ test('phone browser exposes dedicated Android and Windows tutorials', async () =
   assert.match(css, /body\.ui-phone \.platform-rail\s*\{[\s\S]*?display:\s*none !important/);
   assert.match(css, /body\.ui-phone \.mobile-runtime-help-grid\s*\{[\s\S]*?repeat\(2,minmax\(0,1fr\)\)/);
 });
+
+
+test('phone stage visibility respects active stage and hardsub strategy suppression', async () => {
+  const css = await readFile(new URL('./style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(
+    css,
+    /body\.ui-phone \[data-mobile-stage-section\]:not\(\.hidden\)\s*\{/
+  );
+  assert.match(
+    css,
+    /body\.ui-phone\[data-mobile-stage="prepare"\] \[data-mobile-stage-section="prepare"\][\s\S]*?:not\(\.hardsub-strategy-suppressed\)[\s\S]*?body\.ui-phone\[data-mobile-stage="produce"\] \[data-mobile-stage-section="produce"\]/
+  );
+});
