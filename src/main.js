@@ -91,9 +91,12 @@ app.innerHTML = `
       </div>
     </div>
     <p id="heroSubtitle" class="hero-subtitle">预检 · 真实预览 · 选方案 · 开始压制</p>
-    <nav class="workflow-strip" aria-label="工作流程">
-      <span data-workflow-step="prepare"><b>01</b>准备</span>
-      <span data-workflow-step="produce"><b>02</b>制作</span>
+    <nav id="workflowStrip" class="workflow-strip" aria-label="硬字幕压制流程">
+      <span data-workflow-step="assets"><b>01</b>素材</span>
+      <span data-workflow-step="preflight"><b>02</b>预检</span>
+      <span data-workflow-step="preview"><b>03</b>预览</span>
+      <span data-workflow-step="plan"><b>04</b>方案</span>
+      <span data-workflow-step="encode"><b>05</b>压制</span>
     </nav>
     <div id="nativeStatusBar" class="native-status-bar hidden" aria-live="polite"></div>
   </header>
@@ -228,8 +231,31 @@ app.innerHTML = `
   </section>
 
   <div class="production-controls">
+  <section id="hardsubControlDeck" class="card hardsub-control-deck" data-mobile-stage-section="produce">
+    <div class="hardsub-control-head">
+      <div>
+        <span class="step-no">04</span>
+        <h2>选择控制方式</h2>
+        <p>两种方式共享同一份素材、预检、真实 libass 预览与输出验证；同一时刻只保留一个正式执行入口。</p>
+      </div>
+      <span class="hardsub-control-badge">HARDSUB</span>
+    </div>
+    <div id="hardsubStrategySwitcher" class="hardsub-strategy-switcher" role="group" aria-label="硬字幕压制控制方式">
+      <button type="button" data-hardsub-strategy="guided" aria-pressed="true">
+        <span class="hardsub-strategy-kicker">GOAL DRIVEN</span>
+        <strong>引导方案</strong>
+        <small>快速预设 / 目标质量 / 目标体积。先表达目标，再由系统映射编码参数。</small>
+      </button>
+      <button type="button" data-hardsub-strategy="manual" aria-pressed="false">
+        <span class="hardsub-strategy-kicker">PARAMETER DRIVEN</span>
+        <strong>精确参数</strong>
+        <small>直接控制 codec、preset、CRF/CQ、帧率、尺寸、滤镜、音轨与封装。</small>
+      </button>
+    </div>
+  </section>
+  <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>压制方案</h2><p>选编码器和质量目标。</p></div></div>
+    <div class="card-heading"><span class="step-no">05</span><div><h2>输出策略</h2><p>先定义目标，再选择实际可用的编码器与测试路径。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -301,7 +327,7 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">05</span><div><h2>正式压制</h2><p>确认后开始整片编码。</p></div></div>
+    <div class="card-heading"><span class="step-no">06</span><div><h2>执行与验证</h2><p>由实际编码器完成整片任务；结束后验证容器、视频流与输出结果。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary action-solid action-green" disabled>开始硬字幕压制</button>
