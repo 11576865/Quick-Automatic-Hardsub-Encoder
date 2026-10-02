@@ -738,7 +738,10 @@ export function mountMediaWorkspace(hooks) {
     const encoded=['aac','libopus'].includes(get('audio').value);
     for(const key of ['audioBitrate','audioChannels','audioSampleRate'])get(key).disabled=!encoded;
   }
-  get('audio').onchange=updateRate;
+  get('audio').onchange=()=>{
+    updateRate();
+    syncAudioPlaybackWarning();
+  };
   get('rateMode').onchange=updateRate;
   section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();status('配置已保存');}catch(e){status(e.message);}};
   section.querySelector('#taskRestore').onclick=()=>{try{const raw=configs()[get('savedConfig').value];if(raw){applyConfig(raw);renderPlanSummary(activeTask);}}catch(e){status(e.message);}};
