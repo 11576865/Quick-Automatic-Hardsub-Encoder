@@ -55,6 +55,32 @@ jobs:
           if ($source -notmatch '\[System\.Windows\.Forms\.Screen\]::FromPoint') { throw 'Native file picker has no monitor-aware owner placement' }
           if ($source -notmatch 'cancelled=\$true') { throw 'Native picker cancellation is not explicit' }
 
+      - name: Guard repeated native export dialog ownership
+        shell: powershell
+        run: |
+          $source = Get-Content -Raw './windows/native-bridge.ps1'
+          $saveStart = $source.IndexOf('function Show-NativeSaveFileDialog')
+          $bridgePicker = $source.IndexOf('function Show-BridgePicker', $saveStart)
+          if ($saveStart -lt 0 -or $bridgePicker -lt 0) { throw 'Native save dialog helper is missing' }
+          $saveBlock = $source.Substring($saveStart, $bridgePicker - $saveStart)
+          foreach ($required in @(
+            '[System.Windows.Forms.Cursor]::Position',
+            '[System.Windows.Forms.Screen]::FromPoint',
+            '$dialog.ShowDialog($owner)',
+            '$dialog.RestoreDirectory = $true'
+          )) {
+            if (-not $saveBlock.Contains($required)) { throw "Native save dialog lost visibility contract: $required" }
+          }
+          foreach ($name in @('Export-Sample','Export-Job')) {
+            $start = $source.IndexOf("function $name")
+            if ($start -lt 0) { throw "$name is missing" }
+            $next = $source.IndexOf("`nfunction ", $start + 10)
+            if ($next -lt 0) { $next = $source.Length }
+            $block = $source.Substring($start, $next - $start)
+            if ($block -notmatch 'Show-NativeSaveFileDialog') { throw "$name bypasses the owned save dialog helper" }
+            if ($block -match 'New-Object System\.Windows\.Forms\.SaveFileDialog') { throw "$name creates an unowned SaveFileDialog" }
+          }
+
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
