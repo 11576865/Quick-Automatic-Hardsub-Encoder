@@ -51,7 +51,13 @@ const {spawn}=require('node:child_process');
   await page.screenshot({path:'media-workspace-hardsub-goal-mobile.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');
-  if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on mobile');
+  if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible()){
+    const gateState=await page.evaluate(()=>Object.fromEntries(['planCard','encodeCard','mediaWorkspace'].map(id=>{
+      const el=document.querySelector('#'+id);
+      return [id,{className:el?.className||'',display:el?getComputedStyle(el).display:null,hidden:!!el?.hidden}];
+    }).concat([['body',{mediaOperation:document.body.dataset.mediaOperation||'',hardsubStrategy:document.body.dataset.hardsubStrategy||'',mobileStage:document.body.dataset.mobileStage||'',className:document.body.className}]])));
+    throw Error('Parameter-controlled hardsub exposes the goal execution surface on mobile: '+JSON.stringify(gateState));
+  }
   await page.screenshot({path:'media-workspace-hardsub-parameters-mobile.png',fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Hardsub mobile horizontal overflow');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
