@@ -178,6 +178,7 @@ export function mountMediaWorkspace(hooks) {
     const hardsub = mode === 'hardsub';
     const guided = hardsubStrategy === 'guided';
     document.body.dataset.hardsubStrategy = hardsubStrategy;
+    section.dataset.mobileStageSection = hardsub ? 'produce' : 'prepare';
     for (const button of strategyButtons) {
       button.setAttribute('aria-pressed', String(button.dataset.hardsubStrategy === hardsubStrategy));
     }
