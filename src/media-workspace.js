@@ -11,6 +11,7 @@ export function mountMediaWorkspace(hooks) {
   section.className = 'card media-workspace';
   section.id = 'mediaWorkspace';
   section.dataset.mobileStageSection = 'prepare';
+  section.dataset.taskState = 'idle';
   const modeNav = document.createElement('nav');
   modeNav.className = 'media-mode-switcher';
   modeNav.setAttribute('aria-label', '视频处理工作区');
@@ -56,9 +57,30 @@ export function mountMediaWorkspace(hooks) {
   <p class="note">NVENC 多阶段分析属于逐帧码率控制，与整片两遍编码不同；空间 AQ 与时间 AQ 选择一种。目标体积不会通过截断视频来满足。</p></fieldset>
   <fieldset class="media-track-panel"><legend>音频与轨道 · 输出 MKV</legend><div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioTrack','保留音轨','all 或音频轨序号，从 0 开始','all')}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${check('keepSubtitles','保留内封软字幕')}${check('keepAttachments','保留附件 / 字体')}${check('keepMetadata','保留元数据',true)}${check('keepChapters','保留章节')}</div><p>剪切默认移除旧章节，避免章节时间与成品不一致。软字幕复制后的边界与显示效果需自行核对。</p></fieldset>
   <details class="media-sample-panel"><summary>配置保存与短片试压比较</summary><div class="task-grid">${input('configName','配置名称','我的配置')}${select('savedConfig','已保存配置',[])}${input('sampleStart','试压起点（秒）','','0')}${input('sampleLength','试压长度（秒）','2–60','15')}</div><div class="button-row"><button type="button" id="taskStore" class="secondary">保存当前配置</button><button type="button" id="taskRestore" class="secondary">加载配置</button><button type="button" id="taskDelete" class="secondary">删除配置</button><button type="button" id="taskExportConfig" class="secondary">导出配置 JSON</button><label>导入配置 JSON<input type="file" id="taskImportConfig" accept="application/json,.json"></label><button type="button" id="taskSamples" class="secondary">比较三组短片</button></div><p class="note">质量模式比较质量值 ±2；码率模式比较码率 ±20%。片段体积外推不保证整片大小，建议选择运动或细节复杂的片段。原生短片可保存到设备后比较。</p><div id="taskSampleResults" aria-live="polite"></div></details>
+  <section id="taskPlanSummary" class="task-plan-summary" aria-live="polite">
+    <div class="task-plan-heading"><span>当前方案</span><strong id="taskPlanTitle">等待选择参数</strong></div>
+    <div class="task-plan-facts">
+      <div><span>编码</span><strong id="taskPlanEncoder">—</strong></div>
+      <div><span>速度倾向</span><strong id="taskPlanSpeed">—</strong></div>
+      <div><span>质量 / 体积</span><strong id="taskPlanRate">—</strong></div>
+      <div><span>输出</span><strong id="taskPlanOutput">—</strong></div>
+    </div>
+    <p id="taskPlanNote">修改参数后，这里会用任务语言解释当前选择；原始 FFmpeg 命令放在下方技术详情。</p>
+  </section>
   <p id="taskEstimate" class="note" aria-live="polite"></p>
+  <section id="taskRunState" class="task-run-state" aria-live="polite">
+    <div class="task-run-state-heading"><div><span>任务状态</span><strong id="taskStage">等待开始</strong></div><strong id="taskPercent">0%</strong></div>
+    <progress id="taskProgress" max="1" value="0"></progress>
+    <div class="task-progress-grid">
+      <div><span>媒体进度</span><strong id="taskMediaTime">—</strong></div>
+      <div><span>已用时间</span><strong id="taskElapsed">—</strong></div>
+      <div><span>处理速度</span><strong id="taskSpeed">—</strong></div>
+      <div><span>预计剩余</span><strong id="taskEta">尚未估计</strong></div>
+    </div>
+    <p id="taskStatus" role="status">未开始</p>
+  </section>
   <div class="button-row media-action-dock"><button type="button" id="taskLoadPreset" class="secondary">填入均衡预设</button><button type="button" id="taskInspect" class="secondary">检查设置与执行参数</button><button type="submit" id="taskRun">开始硬字幕压制</button><button type="button" id="taskCancel" class="secondary" disabled>取消</button><button type="button" id="taskReport" class="secondary" disabled>导出任务报告</button><button type="button" id="taskSave" class="secondary" disabled>保存成品</button></div>
-  <pre id="taskCommand" class="task-command" aria-live="polite">等待检查设置。</pre><p id="taskStatus" role="status">未开始</p><progress id="taskProgress" max="1" value="0"></progress>
+  <details class="task-technical-details"><summary>技术详情 · 实际 FFmpeg 命令</summary><pre id="taskCommand" class="task-command" aria-live="polite">等待检查设置。</pre></details>
   </form>`;
   document.querySelector('#inputCard').before(modeNav);
   document.querySelector('#inputCard').after(section);
@@ -89,7 +111,7 @@ export function mountMediaWorkspace(hooks) {
   };
   qualityRange.addEventListener('input', () => { get('quality').value = qualityRange.value; syncQualityRange(); });
   get('quality').addEventListener('input', syncQualityRange);
-  let busy = false, completed = null, lastReport = null, sampleUrls=[];
+  let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   const storageKey='media-workspace-configs-v2';
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
@@ -98,6 +120,111 @@ export function mountMediaWorkspace(hooks) {
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
+  const formatTaskClock = seconds => {
+    const value=Math.max(0,Number(seconds)||0),whole=Math.floor(value),h=Math.floor(whole/3600),m=Math.floor((whole%3600)/60),s=whole%60;
+    return h ? h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0') : m+':'+String(s).padStart(2,'0');
+  };
+  const runButtonLabel = () => get('operation').value==='hardsub'?'使用当前参数开始硬压':get('operation').value==='transcode'?'开始视频转码':'开始无损剪切';
+  const presetIntent = (encoder,preset) => {
+    if(String(encoder).endsWith('_nvenc')){
+      const n=Number(String(preset).replace(/^p/i,''));
+      return n<=2?'偏速度':n>=6?'偏质量':'均衡';
+    }
+    if(encoder==='libsvtav1'){
+      const n=Number(preset);
+      return n>=9?'偏速度':n<=4?'偏质量':'均衡';
+    }
+    if(['ultrafast','superfast','veryfast','faster','fast'].includes(preset))return '偏速度';
+    if(['slow','slower','veryslow'].includes(preset))return '偏质量';
+    return '均衡';
+  };
+  const renderPlanSummary = task => {
+    const raw=read(),operation=raw.operation,copy=operation==='copy';
+    const operationLabel=operation==='hardsub'?'硬字幕压制':operation==='transcode'?'纯视频转码':'无损快速剪切';
+    const codecLabel={h264:'H.264',h265:'H.265 / HEVC',av1:'AV1'}[raw.codec]||raw.codec||'—';
+    const encoderLabel=get('encoder').selectedOptions?.[0]?.textContent||raw.encoder||'—';
+    const speed=copy?'无需编码':presetIntent(raw.encoder,raw.preset);
+    let rate='无损复制',note='不重新编码；实际切入点受关键帧约束。';
+    if(!copy && raw.rateMode==='quality'){
+      rate='质量优先 · '+(String(raw.encoder).endsWith('_nvenc')?'CQ ':'CRF ')+(raw.quality||'—');
+      note='质量模式不会根据 CQ / CRF 伪造精确成品大小；需要大小判断时先做短片试压。';
+    }else if(!copy && raw.rateMode==='bitrate'){
+      const b=Number(raw.bitrate||0);
+      rate='码率受控'+(b>0?' · '+(b/1000000).toFixed(2)+' Mbps':'');
+      note='固定视频码率目标；实际成品大小仍受音频、封装与时长影响。';
+    }else if(!copy && raw.rateMode==='size'){
+      rate='目标体积 · '+(raw.targetSize||'—')+' '+(raw.sizeUnit||'');
+      note='目标体积会换算为视频码率预算；封装、音频和实际编码偏差仍会影响最终大小。';
+    }
+    const size=copy?'保持源画面':raw.width&&raw.height?raw.width+'×'+raw.height:raw.width?raw.width+' 宽 · 高度按比例':raw.height?'宽度按比例 · '+raw.height+' 高':'保持源分辨率';
+    const audio=raw.audio==='copy'?'原音频复制':raw.audio==='none'?'无音频':String(raw.audio||'').toUpperCase();
+    section.querySelector('#taskPlanTitle').textContent=operationLabel+(copy?'':' · '+codecLabel+' · '+speed);
+    section.querySelector('#taskPlanEncoder').textContent=copy?'直接复制':codecLabel+' · '+encoderLabel;
+    section.querySelector('#taskPlanSpeed').textContent=speed+(copy?'':' · preset '+raw.preset);
+    section.querySelector('#taskPlanRate').textContent=rate;
+    section.querySelector('#taskPlanOutput').textContent=size+' · '+audio+' · MKV';
+    section.querySelector('#taskPlanNote').textContent=note+(task?.estimatedBytes>0?' 当前任务估计数据量 '+formatSize(task.estimatedBytes)+'。':'');
+  };
+  const syncTaskActions = () => {
+    const stateName=section.dataset.taskState||'idle',run=section.querySelector('#taskRun'),save=section.querySelector('#taskSave');
+    const finished=['verified','save_failed','saved'].includes(stateName);
+    run.textContent=finished?'重新压制':runButtonLabel();
+    run.classList.toggle('task-secondary-action',finished);
+    save.textContent=stateName==='saving'?'正在保存…':stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
+    save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
+    save.disabled=busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
+    run.disabled=busy||stateName==='saving';
+  };
+  const setTaskState = next => {
+    section.dataset.taskState=next;
+    const labels={
+      idle:'等待开始',preparing:'正在检查设置',encoding:'正在处理',validating:'正在验证成品',
+      verified:'成品已验证，等待保存',saving:'正在保存成品',saved:'成品已保存',
+      save_failed:'保存失败，可直接重试',failed:'任务失败',cancelling:'正在取消'
+    };
+    section.querySelector('#taskStage').textContent=labels[next]||next;
+    section.querySelector('#taskRunState').dataset.state=next;
+    syncTaskActions();
+  };
+  const updateTaskProgress = (p,message,meta={}) => {
+    const fraction=Math.max(0,Math.min(1,Number(p)||0));
+    section.querySelector('#taskProgress').value=fraction;
+    section.querySelector('#taskPercent').textContent=(fraction*100).toFixed(fraction>0&&fraction<1?1:0)+'%';
+    if(meta.state==='encoding'||meta.state==='validating'||meta.state==='cancelling')setTaskState(meta.state);
+    const duration=Number(meta.duration||activeTask?.expectedDuration||0);
+    const timeSec=Number(meta.timeSec);
+    section.querySelector('#taskMediaTime').textContent=Number.isFinite(timeSec)&&duration>0?formatTaskClock(timeSec)+' / '+formatTaskClock(duration):duration>0?'— / '+formatTaskClock(duration):'—';
+    const elapsed=taskStartedAt?Math.max(0,(performance.now()-taskStartedAt)/1000):0;
+    section.querySelector('#taskElapsed').textContent=taskStartedAt?formatTaskClock(elapsed):'—';
+    const speed=Number(meta.speed||0);
+    section.querySelector('#taskSpeed').textContent=speed>0?speed.toFixed(2)+'× realtime':'正在采样';
+    if(activeTask?.twoPass){
+      section.querySelector('#taskEta').textContent='两遍编码不做单阶段外推';
+    }else if(meta.state==='encoding'&&speed>0&&Number.isFinite(timeSec)&&duration>timeSec&&elapsed>=6&&timeSec>=5){
+      section.querySelector('#taskEta').textContent='约 '+formatTaskClock((duration-timeSec)/speed);
+    }else{
+      section.querySelector('#taskEta').textContent=meta.state==='validating'?'验证中':'尚未可靠估计';
+    }
+    if(message)status(message);
+  };
+  const nativeExportListener = event => {
+    const data=event.detail||{};
+    if(!completed?.jobId)return;
+    if(data.jobId&&data.jobId!==completed.jobId)return;
+    if(data.ok){
+      setTaskState('saved');
+      status('成品已保存'+(data.path?' · '+data.path:'')+(data.bytes?' · '+formatSize(Number(data.bytes)):'')+'。');
+      hooks.log?.('成品保存完成。');
+    }else if(String(data.error||'').toLowerCase().includes('cancel')){
+      setTaskState('verified');
+      status('已取消保存；成品仍已验证，可再次点击“保存成品”。');
+    }else{
+      setTaskState('save_failed');
+      status('保存失败：'+(data.error||'未知错误')+'。已验证成品仍保留在当前 Native 会话，可直接重试保存，无需重新压制。');
+      hooks.log?.('成品保存失败：'+(data.error||'未知错误'));
+    }
+  };
+  window.addEventListener('quick-hardsub-native-export-result',nativeExportListener);
   function updateEncoder() {
     const c=get('codec').value,previousEncoder=get('encoder').value;
     const choices=[[SOFTWARE[c],{h264:'x264',h265:'x265',av1:'SVT-AV1'}[c]+' · CPU']];
@@ -133,7 +260,8 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#mediaWorkspaceTitle').textContent = title;
     section.querySelector('#mediaWorkspaceEyebrow').textContent = eyebrow;
     section.querySelector('#mediaWorkspaceDescription').textContent = description;
-    section.querySelector('#taskRun').textContent = hardsub ? '使用当前参数开始硬压' : transcode ? '开始视频转码' : '开始无损剪切';
+    syncTaskActions();
+    renderPlanSummary(activeTask);
 
     const heroSubtitle = document.querySelector('#heroSubtitle');
     if (heroSubtitle) heroSubtitle.textContent = hardsub
@@ -239,7 +367,7 @@ export function mountMediaWorkspace(hooks) {
   get('audio').onchange=updateRate;
   get('rateMode').onchange=updateRate;
   section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();status('配置已保存');}catch(e){status(e.message);}};
-  section.querySelector('#taskRestore').onclick=()=>{try{const raw=configs()[get('savedConfig').value];if(raw)applyConfig(raw);}catch(e){status(e.message);}};
+  section.querySelector('#taskRestore').onclick=()=>{try{const raw=configs()[get('savedConfig').value];if(raw){applyConfig(raw);renderPlanSummary(activeTask);}}catch(e){status(e.message);}};
   section.querySelector('#taskDelete').onclick=()=>{const c=configs();delete c[get('savedConfig').value];localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();};
   section.querySelector('#taskExportConfig').onclick=()=>download({version:2,settings:read()},'media-config.json');
   section.querySelector('#taskImportConfig').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>65536)throw Error('配置文件超过 64 KiB');const data=JSON.parse(await file.text());if(data.version!==2||!data.settings||typeof data.settings!=='object')throw Error('配置格式无效');applyConfig(data.settings);status('已导入配置，执行前仍会验证参数');}catch(err){status(err.message);}finally{e.target.value='';}};
@@ -247,7 +375,7 @@ export function mountMediaWorkspace(hooks) {
   get('codec').onchange=()=>{updateEncoder();get('quality').value=get('codec').value==='av1'?'32':'23';syncQualityRange();};
   get('encoder').onchange=()=>{updatePreset();updateRate();};
   get('operation').onchange=()=>{updateMode();updateRate();};
-  section.querySelector('#taskLoadPreset').onclick=()=>{updatePreset(true);get('quality').value=get('codec').value==='av1'?'32':'23';get('rateMode').value='quality';updateRate();status('已填入质量与编码速度预设；其他设置保持当前值，可继续修改。');};
+  section.querySelector('#taskLoadPreset').onclick=()=>{updatePreset(true);get('quality').value=get('codec').value==='av1'?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已填入均衡预设；其他设置保持当前值。先看“当前方案”，需要时再展开技术详情。');};
   let platformKey='';
   const platformTimer=setInterval(()=>{const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
   const prepare=async()=>{
@@ -259,30 +387,71 @@ export function mountMediaWorkspace(hooks) {
       : '';
     section.querySelector('#taskEstimate').textContent=(task.sizePlan ? '目标 '+formatSize(task.sizePlan.targetBytes)+' · 视频 '+task.bitrate+' bit/s · 预留 '+task.sizePlan.reservePercent+'% · ' : '')+'预计音视频数据：'+formatSize(task.estimatedBytes)+'。质量模式需试压估计；封装、字幕与码率偏差仍影响实际大小。'+compat;
     section.querySelector('#taskCommand').textContent=commandPreview(task);
+    renderPlanSummary(task);
     return {task,media};
   };
-  section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('设置有效，已检查可用参数与像素格式；执行时仍会验证具体编码器与滤镜组合。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);}};
-  section.querySelector('#taskCancel').onclick=()=>{hooks.cancel();status('正在取消…');};
-  section.querySelector('#taskSave').onclick=()=>{if(completed)hooks.save(completed);};
+  section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('设置有效。请先确认“当前方案”；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
+  section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};
+  section.querySelector('#taskSave').onclick=async()=>{
+    if(!completed)return;
+    setTaskState('saving');
+    status('正在打开保存位置；取消选择不会丢失已验证成品。');
+    try{
+      const result=await Promise.resolve(hooks.save(completed));
+      if(result?.pending)return;
+      if(result?.ok===false)throw Error(result.error||'保存失败');
+      setTaskState('saved');
+      status(result?.kind==='browser-download'?'已交给浏览器保存。':'成品已保存。');
+    }catch(e){
+      setTaskState('save_failed');
+      status('保存失败：'+e.message+'。已验证成品仍可直接重试保存，无需重新压制。');
+      hooks.log?.(e.stack||e.message);
+    }
+  };
   form.onsubmit=async e=>{
     e.preventDefault();if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
-    busy=true; completed=null;lastReport=null;section.querySelector('#taskReport').disabled=true; section.querySelector('#taskSave').disabled=true;
+    busy=true;completed=null;lastReport=null;activeTask=null;taskStartedAt=performance.now();
+    section.querySelector('#taskReport').disabled=true;
+    section.querySelector('#taskProgress').value=0;
+    section.querySelector('#taskPercent').textContent='0%';
+    section.querySelector('#taskMediaTime').textContent='—';
+    section.querySelector('#taskElapsed').textContent='0:00';
+    section.querySelector('#taskSpeed').textContent='正在采样';
+    section.querySelector('#taskEta').textContent='尚未可靠估计';
+    setTaskState('preparing');
     hooks.setBusy(true);
     try {
       status('正在读取素材与检查设置…');
       const {task,media}=await prepare();
+      activeTask=task;
+      renderPlanSummary(task);
       for(const control of form.elements)control.disabled=true;
       section.querySelector('#taskCancel').disabled=false;
+      setTaskState('encoding');
       const started=performance.now();
-      completed=await hooks.run(task,media,(p,message)=>{section.querySelector('#taskProgress').value=p;status(message);});
+      completed=await hooks.run(task,media,(p,message,meta)=>updateTaskProgress(p,message,meta));
       lastReport=outputReport(task,completed,(performance.now()-started)/1000);
       section.querySelector('#taskReport').disabled=false;
-      status('处理完成 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算，完整成品已保留；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 成品已验证 · 实际起点 '+Number(completed.actualStart||0).toFixed(3)+' 秒。点击“保存成品”选择保存位置。');
       section.querySelector('#taskProgress').value=1;
-    }catch(e){status('处理失败：'+e.message);hooks.log(e.stack||e.message);}
+      section.querySelector('#taskPercent').textContent='100%';
+      section.querySelector('#taskMediaTime').textContent=formatTaskClock(task.expectedDuration)+' / '+formatTaskClock(task.expectedDuration);
+      section.querySelector('#taskElapsed').textContent=formatTaskClock((performance.now()-taskStartedAt)/1000);
+      section.querySelector('#taskEta').textContent='处理完成';
+      setTaskState('verified');
+      status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 尚未保存到你的文件夹。下一步：保存成品。');
+    }catch(e){
+      if(String(e.message||'').includes('取消')){
+        setTaskState('idle');
+        status('任务已取消。');
+      }else{
+        setTaskState('failed');
+        status('处理失败：'+e.message);
+      }
+      hooks.log(e.stack||e.message);
+    }
     finally{
       busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;
-      updateMode();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskSave').disabled=!completed;section.querySelector('#taskReport').disabled=!lastReport;updateRate();
+      updateMode();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;updateRate();syncTaskActions();
     }
   };
   section.querySelector('#taskSamples').onclick=async()=>{
@@ -306,8 +475,10 @@ export function mountMediaWorkspace(hooks) {
       }
       status('三组试压完成；浏览器播放受 AV1 / MKV 支持限制，可保存短片比较。');
     }catch(e){status('试压失败：'+e.message);}
-    finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskSave').disabled=!completed;section.querySelector('#taskReport').disabled=!lastReport;}
+    finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
   };
-  updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();
-  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  form.addEventListener('input',()=>renderPlanSummary(activeTask));
+  form.addEventListener('change',()=>renderPlanSummary(activeTask));
+  updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();renderPlanSummary();setTaskState('idle');
+  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }

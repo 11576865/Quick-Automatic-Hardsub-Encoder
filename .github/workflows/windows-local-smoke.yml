@@ -29,6 +29,23 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
           }
+      - name: Guard completed-job export terminal state
+        shell: powershell
+        run: |
+          $source = Get-Content -Raw './windows/native-bridge.ps1'
+          $statusStart = $source.IndexOf('function Get-JobStatus')
+          $terminal = $source.IndexOf("if(`$j.State -eq 'completed')", $statusStart)
+          $process = $source.IndexOf('$p=$j.Started.Process', $statusStart)
+          if ($statusStart -lt 0 -or $terminal -lt 0 -or $process -lt 0 -or $terminal -gt $process) {
+            throw 'Get-JobStatus touches the Process handle before resolving completed terminal state'
+          }
+          $exportStart = $source.IndexOf('function Export-Job')
+          $exportEnd = $source.IndexOf('function Export-Sample', $exportStart)
+          $exportBlock = $source.Substring($exportStart, $exportEnd - $exportStart)
+          if ($exportBlock -notmatch 'jobId=\$JobId') {
+            throw 'Export-Job no longer returns jobId for UI correlation'
+          }
+
       - name: Guard native file picker visibility contract
         shell: powershell
         run: |

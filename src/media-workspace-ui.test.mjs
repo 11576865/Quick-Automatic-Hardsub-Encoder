@@ -17,7 +17,13 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /纯视频转码工作区/);
   assert.match(workspace, /无损快速剪切工作区/);
   assert.match(workspace, /document\.body\.dataset\.mediaOperation = mode/);
-  assert.match(workspace, /taskRun'\)\.textContent = hardsub \? '使用当前参数开始硬压' : transcode \? '开始视频转码' : '开始无损剪切'/);
+  assert.match(workspace, /const runButtonLabel = \(\) => get\('operation'\)\.value==='hardsub'\?'使用当前参数开始硬压':get\('operation'\)\.value==='transcode'\?'开始视频转码':'开始无损剪切'/);
+  assert.match(workspace, /id="taskPlanSummary"/);
+  assert.match(workspace, /id="taskRunState"/);
+  assert.match(workspace, /id="taskPercent"/);
+  assert.match(workspace, /id="taskSave"/);
+  assert.match(workspace, /save_failed/);
+  assert.match(workspace, /task-technical-details/);
 
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-hardsub"/);
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-transcode"/);
@@ -42,5 +48,8 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /body\[data-media-operation="copy"\] \.media-sample-panel/);
   assert.match(css, /\.media-inline-range::-webkit-slider-runnable-track/);
   assert.match(css, /\.media-action-dock\s*\{/);
+  assert.match(css, /#taskSave\.task-primary-action/);
+  assert.match(css, /#taskRun\.task-secondary-action/);
+  assert.match(css, /\.task-progress-grid/);
   assert.equal((css.match(/\{/g) || []).length, (css.match(/\}/g) || []).length);
 });
