@@ -45,9 +45,10 @@ const {spawn}=require('node:child_process');
   await page.screenshot({path:'media-workspace-mobile.png',fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile horizontal overflow: '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})).filter(el=>el.right>innerWidth+1).slice(0,12))));
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
-  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
+  await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('[data-hardsub-strategy="guided"]').click();});
   await page.screenshot({path:'media-workspace-hardsub-goal-mobile.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');
   await page.screenshot({path:'media-workspace-hardsub-parameters-mobile.png',fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Hardsub mobile horizontal overflow');
   await page.evaluate(async()=>{
