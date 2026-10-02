@@ -4370,7 +4370,7 @@ mountMediaWorkspace({
             timeSec:Number(result.timeMs||0)/1000,
             duration:Number(result.duration||task.expectedDuration||0),
             speed:Number(result.speed||0),
-            actualStart:Number(result.actualStart??started.actualStart??task.start||0)
+            actualStart:Number(result.actualStart??started.actualStart??task.start??0)
           });
           if(result.state==='completed')return {jobId:started.jobId,name,outputBytes:result.outputBytes,outputDuration:result.outputDuration,verified:true,actualStart:result.actualStart??started.actualStart??task.start};
           if(['failed','cancelled'].includes(result.state))throw new Error(result.error||result.state);
