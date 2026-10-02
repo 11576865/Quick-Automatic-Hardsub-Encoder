@@ -5562,7 +5562,8 @@ body.ui-phone .workflow-main {
 
 body.ui-phone .task-overview-rail { display: none !important; }
 
-body.ui-phone [data-mobile-stage-section]:not(.hidden) {
+body.ui-phone[data-mobile-stage="prepare"] [data-mobile-stage-section="prepare"]:not(.hidden):not(.media-mode-suppressed):not(.hardsub-strategy-suppressed),
+body.ui-phone[data-mobile-stage="produce"] [data-mobile-stage-section="produce"]:not(.hidden):not(.media-mode-suppressed):not(.hardsub-strategy-suppressed) {
   display: block !important;
 }
 
