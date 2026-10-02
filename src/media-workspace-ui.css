@@ -736,6 +736,22 @@ body[data-media-operation="copy"] .media-operation-branch-copy {
   color: var(--text);
 }
 
+.media-audio-playback-warning {
+  margin: 10px 0 0;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--warning, #d9a441) 52%, var(--border));
+  border-left: 3px solid var(--warning, #d9a441);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning, #d9a441) 10%, var(--surface-2));
+  color: var(--text);
+  font-size: .7rem;
+  line-height: 1.55;
+}
+
+.media-audio-playback-warning[hidden] {
+  display: none;
+}
+
 @media (max-width: 820px) {
   .media-branch-map {
     grid-template-columns: 1fr;

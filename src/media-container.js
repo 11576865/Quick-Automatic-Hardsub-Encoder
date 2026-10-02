@@ -28,6 +28,17 @@ function copiedAudioCodecs(media={}) {
   return one?[one]:[];
 }
 
+export function audioCopyPlaybackWarning(task={}, media={}) {
+  if(task.audio!=='copy' || Number(media.audioTracks||0)<=0)return null;
+  const codecs=[...new Set(copiedAudioCodecs(media))];
+  const detected=codecs.length ? codecs.join(' / ') : '未能确认';
+  return {
+    code:'audio-copy-playback-unverified',
+    codecs,
+    message:`复制原音频只保留现有码流，不会提升播放器兼容性。检测到源音频：${detected}。即使封装成功且成品中存在音轨，也不代表目标播放器一定能解码；如果成品无声，请改为“转为 AAC”。`
+  };
+}
+
 export function checkContainerCompatibility(key, task={}, media={}) {
   if(!SPECS[key])return {ok:false,reason:'未知成品容器'};
   if(key==='mkv')return {ok:true};

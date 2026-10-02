@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {checkContainerCompatibility,resolveOutputContainer,sourceContainer,outputFileName} from './media-container.js';
+import {audioCopyPlaybackWarning,checkContainerCompatibility,resolveOutputContainer,sourceContainer,outputFileName} from './media-container.js';
 
 const media={
   formatName:'mov,mp4,m4a,3gp,3g2,mj2',
@@ -38,4 +38,18 @@ test('explicit mp4 rejects transformations that would otherwise be silent',()=>{
 test('keep requires a supported source container and output naming follows resolved extension',()=>{
   assert.throws(()=>resolveOutputContainer('keep',{...base,operation:'copy'},{...media,formatName:'avi',sourceName:'x.avi'}),/保持源容器/);
   assert.equal(outputFileName('movie',{operation:'transcode',codec:'h265',outputExtension:'mp4'}),'movie_transcode_h265.mp4');
+});
+
+
+test('audio copy warns about playback compatibility without pretending mux failure',()=>{
+  const warning=audioCopyPlaybackWarning(
+    {...base,audio:'copy'},
+    {...media,audioTracks:1,audioCodecs:['dts']}
+  );
+  assert.equal(warning.code,'audio-copy-playback-unverified');
+  assert.deepEqual(warning.codecs,['dts']);
+  assert.match(warning.message,/成品中存在音轨/);
+  assert.match(warning.message,/转为 AAC/);
+  assert.equal(audioCopyPlaybackWarning({...base,audio:'aac'},{...media,audioTracks:1}),null);
+  assert.equal(audioCopyPlaybackWarning({...base,audio:'copy'},{...media,audioTracks:0}),null);
 });

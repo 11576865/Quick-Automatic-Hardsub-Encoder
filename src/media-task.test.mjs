@@ -61,6 +61,12 @@ test('track selection and mute change expected output count',()=>{
   assert.equal(build({audioTrack:'1'}).expectedAudioTracks,1);
   assert.throws(()=>build({audioTrack:'2'}));
 });
+test('copied audio carries playback warning while AAC does not',()=>{
+  const copied=build({audio:'copy'});
+  assert.ok(copied.compatibilityWarnings.some(message=>message.includes('成品中存在音轨') && message.includes('转为 AAC')));
+  const aac=build({audio:'aac'});
+  assert.equal(aac.compatibilityWarnings.some(message=>message.includes('复制原音频')),false);
+});
 test('invalid ranges, malformed filters and incompatible options are rejected',()=>{
   for(const fields of [{end:0},{start:NaN},{start:5,end:4},{width:0,height:180},{crop:'movie=/private/file'},{fps:24,fpsMode:'vfr'},{frames:30},{videoStream:1},{preset:'p7'}])assert.throws(()=>build(fields));
   assert.throws(()=>compileTask(defaults,{...media,unsafeColorPipeline:true}));
