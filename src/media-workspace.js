@@ -193,7 +193,7 @@ export function mountMediaWorkspace(hooks) {
       inputCard.after(section);
     }
 
-    section.classList.toggle('hardsub-strategy-suppressed', hardsub && guided);
+    section.classList.toggle('hardsub-strategy-suppressed', hardsub && (guided || !productionAvailable));
     document.querySelector('#planCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
     document.querySelector('#encodeCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
   }
