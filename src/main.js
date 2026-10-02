@@ -4541,22 +4541,33 @@ mountMediaWorkspace({
     const audioTrack = Math.max(0, Math.floor(Number(options?.audioTrack) || 0));
     const width = Math.max(512, Math.min(4096, Math.floor(Number(options?.width) || 2048)));
     const height = Math.max(96, Math.min(320, Math.floor(Number(options?.height) || 160)));
+    const includeKeyframes = !!options?.includeKeyframes;
+    const maxKeyframes = Math.max(256, Math.min(50000, Math.floor(Number(options?.maxKeyframes) || 12000)));
     if (state.nativeBackend?.available) {
       if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
-      if (Number(state.nativeInputProbe.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
+      if (!includeKeyframes && Number(state.nativeInputProbe.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
       return requestNativeWaveform({
         audioTrack,
         width,
         height,
+        includeKeyframes,
+        maxKeyframes,
         duration: Number(state.nativeInputProbe.duration || 0)
       });
     }
-    if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本生成波形');
+    if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本分析时间轴');
     if (!await ensureWebEngineReady()) throw new Error('浏览器 FFmpeg 核心不可用');
     if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
     const media = state.engine.mediaInfo || await state.engine.probe();
-    if (Number(media.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
-    return state.engine.renderWaveform({ audioTrack, width, height, duration: Number(media.duration || 0) });
+    if (!includeKeyframes && Number(media.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
+    return state.engine.renderWaveform({
+      audioTrack,
+      width,
+      height,
+      includeKeyframes,
+      maxKeyframes,
+      duration: Number(media.duration || 0)
+    });
   },
   validate: async task => {
     if(task.operation==='copy')return;

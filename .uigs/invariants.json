@@ -275,6 +275,97 @@
           "pattern": "media-task\\.test\\.mjs"
         }
       ]
+    },
+    {
+      "id": "MEDIA.COPY.KEYFRAME.TIMELINE_SEMANTICS",
+      "title": "无损剪切时间轴必须区分请求边界与实际关键帧切入点",
+      "status": "active",
+      "criticality": "required",
+      "claim": "Copy 模式不得把任意请求 IN 表现为可精确无损切入；时间轴必须显示关键帧分布、请求 IN 与向前吸附后的实际起点，并保持 OUT 不被伪装成关键帧约束。",
+      "boundaries": [
+        "timeline-ui",
+        "web-keyframe-scan",
+        "windows-keyframe-scan",
+        "android-keyframe-scan",
+        "copy-execution"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "timeline-shows-request-and-actual",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-workspace.js",
+          "pattern": "实际无损起点"
+        },
+        {
+          "id": "web-keyframe-scan",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/engine.js",
+          "pattern": "async listKeyframes\\(options = \\{\\}\\)"
+        },
+        {
+          "id": "windows-keyframe-scan",
+          "level": "source",
+          "kind": "pattern",
+          "path": "windows/native-bridge.ps1",
+          "pattern": "-skip_frame nokey -show_frames"
+        },
+        {
+          "id": "android-keyframe-scan",
+          "level": "source",
+          "kind": "pattern",
+          "path": "android-native/app/src/main/java/io/github/quickhardsub/NativeBridge.kt",
+          "pattern": "\"-skip_frame\", \"nokey\""
+        },
+        {
+          "id": "timeline-behavior-smoke",
+          "level": "test",
+          "kind": "pattern",
+          "path": "scripts/check-media-ui.cjs",
+          "pattern": "Copy timeline did not preview the previous keyframe as actual start"
+        },
+        {
+          "id": "cross-backend-wiring-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/keyframe-timeline-wiring.test.mjs",
+          "pattern": "keyframe-aware trim timeline is wired across Web, Windows Native and Android Native"
+        },
+        {
+          "id": "frontend-runs-keyframe-contract",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "keyframe-timeline-wiring\\.test\\.mjs"
+        },
+        {
+          "id": "frontend-runs-ui-smoke",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "node scripts/check-media-ui\\.cjs"
+        },
+        {
+          "id": "real-ffmpeg-keyframe-boundary",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.integration.test.mjs",
+          "pattern": "'-skip_frame','nokey'"
+        },
+        {
+          "id": "real-ffmpeg-keyframe-workflow",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "FFMPEG_INTEGRATION=1 node --test src/media-task\\.integration\\.test\\.mjs"
+        }
+      ]
     }
   ]
 }

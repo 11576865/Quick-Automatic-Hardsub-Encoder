@@ -353,6 +353,29 @@ function Invoke-Waveform($Body) {
     $width = [Math]::Max(512, [Math]::Min(4096, $(if($Body.width){[int]$Body.width}else{2048})))
     $height = [Math]::Max(96, [Math]::Min(320, $(if($Body.height){[int]$Body.height}else{160})))
     $duration = if($Body.duration){[double]$Body.duration}else{0.0}
+    $includeKeyframes = [bool]$Body.includeKeyframes
+    $maxKeyframes = [Math]::Max(256,[Math]::Min(50000,$(if($Body.maxKeyframes){[int]$Body.maxKeyframes}else{12000})))
+    $keyframes = New-Object System.Collections.Generic.List[double]
+    $keyframesTruncated = $false
+
+    if($includeKeyframes){
+        $probe = Invoke-BridgeTool $script:Ffprobe (
+            '-v error -select_streams v:0 -skip_frame nokey -show_frames ' +
+            '-show_entries frame=best_effort_timestamp_time -of csv=p=0 ' +
+            (Quote-NativeArg $video)
+        )
+        if($probe.ExitCode -ne 0){throw 'Keyframe timeline scan failed.'}
+        foreach($line in ($probe.StdOut -split "\r?\n")){
+            $time=0.0
+            if([double]::TryParse(($line.Split(',')[0]),[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$time) -and $time -ge 0){
+                if($duration -le 0 -or $time -le $duration + 0.001){
+                    if($keyframes.Count -lt $maxKeyframes){[void]$keyframes.Add($time)}
+                    else{$keyframesTruncated=$true;break}
+                }
+            }
+        }
+    }
+
     $work = New-BridgeWorkDir 'quick-hardsub-waveform-'
     try {
         $output = Join-Path $work 'waveform.png'
@@ -361,17 +384,22 @@ function Invoke-Waveform($Body) {
             ' -map 0:a:' + $audioTrack + ' -vn -sn -filter_complex ' + (Quote-NativeArg $filter) +
             ' -frames:v 1 -c:v png ' + (Quote-NativeArg $output)
         $result = Invoke-BridgeTool $script:Ffmpeg $args $work
-        if ($result.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $output)) {
-            $message = $result.StdErr.Trim()
-            if (-not $message) { $message = 'FFmpeg waveform generation failed.' }
-            throw $message
+        $waveformError = ''
+        $url = ''
+        if ($result.ExitCode -eq 0 -and (Test-Path -LiteralPath $output)) {
+            $bytes = [IO.File]::ReadAllBytes($output)
+            if($bytes.Length){$url='data:image/png;base64,'+[Convert]::ToBase64String($bytes)}
+            else{$waveformError='Waveform output is empty.'}
+        } else {
+            $waveformError = $result.StdErr.Trim()
+            if(-not $waveformError){$waveformError='FFmpeg waveform generation failed.'}
         }
-        $bytes = [IO.File]::ReadAllBytes($output)
-        if (-not $bytes.Length) { throw 'Waveform output is empty.' }
+        if(-not $url -and -not $includeKeyframes){throw $waveformError}
         return [pscustomobject]@{
             requestId=$requestId; ok=$true
-            url=('data:image/png;base64,'+[Convert]::ToBase64String($bytes))
+            url=$url; waveformError=$waveformError
             duration=$duration; width=$width; height=$height; audioTrack=$audioTrack
+            keyframes=@($keyframes); keyframesTruncated=$keyframesTruncated
         }
     } finally {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

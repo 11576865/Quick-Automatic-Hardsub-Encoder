@@ -103,7 +103,12 @@ const {spawn}=require('node:child_process');
       cancel:()=>{},
       save:()=>({pending:true}),
       prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
-      waveform:async()=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',duration:2181.384,audioTrack:0,width:2400,height:160}),
+      waveform:async options=>({
+        url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',
+        duration:2181.384,audioTrack:0,width:2400,height:160,
+        keyframes:options?.includeKeyframes?[0,120,240,360,480,600,720,840,960,1080,1200,1320,1440,1560,1680,1800,1920,2040,2160]:[],
+        keyframesTruncated:false
+      }),
       run:async(task,media,progress)=>{
         window.taskRuns.push(task);
         progress?.(.42,'正在处理 · 90.0 秒',{state:'encoding',timeSec:90,duration:task.expectedDuration,speed:2.5});
@@ -125,6 +130,22 @@ const {spawn}=require('node:child_process');
   await page.mouse.click(waveformBox.x+waveformBox.width*0.25,waveformBox.y+waveformBox.height*0.5);
   await page.click('#taskWaveformSetStart');
   if(!/^[0-9]+:[0-5][0-9]/.test(await page.inputValue('[name=start]')))throw Error('Waveform cursor did not write a clock-form start time');
+  await page.fill('[name=start]','0');
+  await page.locator('[name=start]').blur();
+
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
+  await page.click('#taskWaveformLoad');
+  await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('关键帧 19'));
+  if(await page.locator('#taskKeyframeLane .media-keyframe-mark').count()<10)throw Error('Keyframe lane did not render the scanned keyframes');
+  await page.fill('[name=start]','8:20');
+  await page.locator('[name=start]').blur();
+  if(!(await page.locator('#taskActualStartTime').textContent()).includes('8:00'))throw Error('Copy timeline did not preview the previous keyframe as actual start: '+await page.locator('#taskActualStartTime').textContent());
+  if(!(await page.locator('#taskKeyframeDelta').textContent()).includes('20.000'))throw Error('Copy timeline did not expose requested-vs-actual start delta');
+  await page.screenshot({path:'media-workspace-copy-keyframes-mobile.png',fullPage:true});
+  await page.click('#taskKeyframeSnapStart');
+  if((await page.inputValue('[name=start]'))!=='8:00')throw Error('Snap-to-keyframe did not align IN to the actual keyframe');
+  if(!(await page.locator('#taskKeyframeDelta').textContent()).includes('已经位于关键帧'))throw Error('Aligned IN did not report keyframe alignment');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
   await page.fill('[name=start]','0');
   await page.locator('[name=start]').blur();
   await page.locator('.media-track-panel > summary').click();await page.selectOption('[name=audio]','aac');
