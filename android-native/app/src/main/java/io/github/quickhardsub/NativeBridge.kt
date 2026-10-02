@@ -242,6 +242,7 @@ class NativeBridge(
                     .put("unsafeColorPipeline", hdr || inferredDepth > 8)
                     .put("audioTracks", audioTracks)
                     .put("audioCodec", audioStreams.firstOrNull()?.getCodec() ?: "")
+                    .put("audioCodecs", JSONArray(audioStreams.map { it.getCodec() ?: "" }))
                     .put("audioBitRate", audioBitRate)
             } catch (e: Throwable) {
                 result.put("ok", false)
@@ -968,9 +969,10 @@ class NativeBridge(
             if (estimatedOutputBytes <= 0L || estimatedOutputBytes > 1_000_000_000_000L) {
                 throw IllegalStateException("缺少合理的成品空间预算")
             }
+            val outputExtension = if (task?.optString("outputExtension", "mkv") == "mp4") "mp4" else "mkv"
             val suggestedName = NativeJobStore.sanitizeFileName(
-                incoming.optString("suggestedName", "hardsub_" + codec + ".mkv")
-            ).let { if (it.lowercase().endsWith(".mkv")) it else it + ".mkv" }
+                incoming.optString("suggestedName", "hardsub_" + codec + "." + outputExtension)
+            ).let { if (it.lowercase().endsWith("." + outputExtension)) it else it + "." + outputExtension }
 
             val x26xPresets = setOf(
                 "ultrafast", "superfast", "veryfast", "faster", "fast",
@@ -1098,7 +1100,7 @@ class NativeBridge(
                     val dir = NativeJobStore.jobDir(activity, jobId)
                     dir.listFiles()?.forEach { file ->
                         if (
-                            file.name == "output.mkv" ||
+                            file.name.startsWith("output.") ||
                             file.name == "fonts" ||
                             file.name.startsWith("input_")
                         ) {
@@ -1143,8 +1145,9 @@ class NativeBridge(
     @JavascriptInterface
     fun requestNativeExport(jobId: String, suggestedName: String) {
         if (!NativeJobStore.isSafeJobId(jobId)) return
+        val extension = NativeJobStore.outputExtension(activity, jobId)
         val safeName = NativeJobStore.sanitizeFileName(suggestedName)
-            .let { if (it.lowercase().endsWith(".mkv")) it else it + ".mkv" }
+            .let { if (it.lowercase().endsWith("." + extension)) it else it + "." + extension }
         (activity as? MainActivity)?.requestNativeExport(jobId, safeName)
     }
 
