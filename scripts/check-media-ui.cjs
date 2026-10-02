@@ -11,7 +11,7 @@ const {spawn}=require('node:child_process');
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:4179/');
-  await page.locator('#mediaWorkspace').waitFor();
+  await page.locator('#mediaWorkspace').waitFor({state:'attached'});
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub still exposes the precise parameter workspace');
   if(await page.locator('#workflowStrip span').count()!==5)throw Error('Hardsub workflow strip does not expose five semantic stages');
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
