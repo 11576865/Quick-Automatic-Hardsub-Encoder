@@ -122,8 +122,8 @@ export function mountMediaWorkspace(hooks) {
     const copy = mode === 'copy';
     const transcode = mode === 'transcode';
     const hardsub = mode === 'hardsub';
-    const title = hardsub ? '精确编码参数' : transcode ? '纯视频转码工作区' : '无损快速剪切工作区';
-    const eyebrow = hardsub ? 'HARDSUB · PRECISE' : transcode ? 'TRANSCODE' : 'LOSSLESS CUT';
+    const title = hardsub ? '编码参数' : transcode ? '纯视频转码工作区' : '无损快速剪切工作区';
+    const eyebrow = hardsub ? 'HARDSUB · PARAMETERS' : transcode ? 'TRANSCODE' : 'LOSSLESS CUT';
     const description = hardsub
       ? '直接控制编码器、质量、帧率、尺寸、滤镜、音轨与封装。执行前仍沿用同一字幕预检与真实 libass 预览门槛。'
       : transcode
@@ -133,7 +133,7 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#mediaWorkspaceTitle').textContent = title;
     section.querySelector('#mediaWorkspaceEyebrow').textContent = eyebrow;
     section.querySelector('#mediaWorkspaceDescription').textContent = description;
-    section.querySelector('#taskRun').textContent = hardsub ? '使用精确参数开始硬压' : transcode ? '开始视频转码' : '开始无损剪切';
+    section.querySelector('#taskRun').textContent = hardsub ? '使用当前参数开始硬压' : transcode ? '开始视频转码' : '开始无损剪切';
 
     const heroSubtitle = document.querySelector('#heroSubtitle');
     if (heroSubtitle) heroSubtitle.textContent = hardsub
@@ -230,7 +230,7 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#taskModeHint').textContent=copy
       ? '无损快速剪切：起点向前定位到关键帧，不重新编码。实际起点会显示在任务状态中；终点仍受压缩数据包边界约束。'
       : mode==='hardsub'
-        ? '精确参数模式：直接控制底层编码参数，但不会绕过字幕分析、字体诊断、真实 libass 预览和成品验证。'
+        ? '参数控制：直接控制底层编码参数，但不会绕过字幕分析、字体诊断、真实 libass 预览和成品验证。'
         : '纯视频转码直接使用当前参数；不会要求 ASS，也不会静默替换你选择的编码器。';
   }
   function updateRate(){const mode=get('rateMode').value;for(const key of ['targetSize','sizeUnit','sizeReserve'])get(key).disabled=mode!=='size'||get('operation').value==='copy';get('quality').disabled=mode!=='quality';get('bitrate').disabled=mode!=='bitrate';get('twoPass').disabled=get('operation').value==='copy'||get('encoder').value!=='libx264'||mode==='quality';if(get('twoPass').disabled)get('twoPass').checked=false;const encoded=['aac','libopus'].includes(get('audio').value);for(const key of ['audioBitrate','audioChannels','audioSampleRate'])get(key).disabled=!encoded;}
