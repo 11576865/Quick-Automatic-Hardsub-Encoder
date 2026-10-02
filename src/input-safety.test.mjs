@@ -12,7 +12,7 @@ const gbk = new Blob([Buffer.from(ass.slice(0, -2), 'ascii'), new Uint8Array([0x
 await assert.rejects(decodeAssFile(gbk), /无效 UTF-8/);
 
 const source = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8');
-const start = source.indexOf('function invalidateAnalysis()');
+const start = source.indexOf('function invalidateAnalysis(');
 const end = source.indexOf("for (const [inputId, role]", start);
 assert(start > 0 && end > start);
 const elements = new Map();

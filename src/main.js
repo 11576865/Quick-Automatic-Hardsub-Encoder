@@ -35,6 +35,7 @@ const state = {
   fontMatches: [],
   glyphCoverage: [],
   media: null,
+  sourceMedia: null,
   engine: null,
   webEngineInitPromise: null,
   capabilities: null,
@@ -179,7 +180,8 @@ app.innerHTML = `
         <div id="backendSummary" class="note">正在检测当前网页 / 原生运行环境…</div>
       </div>
     </div>
-    <div class="button-row action-row"><button id="analyze" class="primary action-solid action-cyan" disabled>分析素材</button></div>
+    <div id="sourceVideoSummary" class="status-list source-video-summary hidden" aria-live="polite"></div>
+    <div class="button-row action-row"><button id="analyze" class="primary action-solid action-cyan" disabled>读取视频参数</button></div>
   </section>
 
   <section id="envCard" class="card env-card" data-mobile-stage-section="prepare">
@@ -597,7 +599,15 @@ function currentFontKey() {
   return state.fonts.map(file => `${file.name}:${file.size}:${file.lastModified}`).join('|');
 }
 
-function invalidateAnalysis() {
+function invalidateAnalysis({ clearVideoMetadata = false } = {}) {
+  if (clearVideoMetadata) {
+    state.sourceMedia = null;
+    const sourceSummary = $('sourceVideoSummary');
+    if (sourceSummary) {
+      sourceSummary.classList.add('hidden');
+      sourceSummary.innerHTML = '';
+    }
+  }
   state.analyzedVideo = null;
   state.analyzedAss = null;
   state.analyzedFontKey = '';
@@ -731,7 +741,7 @@ for (const [role, config] of Object.entries(WINDOWS_NATIVE_PICKERS)) {
 $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
   state.nativeInputProbe = null;
-  invalidateAnalysis();
+  invalidateAnalysis({ clearVideoMetadata: true });
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
   if ($('videoWebPicker')) $('videoWebPicker').textContent = state.video ? '更换视频' : '选择视频';
   const browserTooLarge = !state.nativeBackend?.available && state.video?.size > MAX_BYTES;
@@ -811,7 +821,7 @@ $('acceptWarnings').addEventListener('change', e => {
   refreshBenchmarkEnabled();
 });
 
-$('analyze').addEventListener('click', () => runWebTask(analyzeAll));
+$('analyze').addEventListener('click', () => runWebTask(analyzeCurrentInputs));
 $('previewBtn').addEventListener('click', () => runWebTask(renderPreviews));
 const QUICK_PRESET_GOALS = ['speed', 'balanced', 'quality'];
 const QUICK_PRESET_LABELS = ['更快', '均衡', '更精细'];
@@ -1271,7 +1281,7 @@ function detectNativeBackend() {
           if (item) {
             state.video = { name: item.name, size: Number(item.size || 0), windowsNative: true };
             state.nativeInputProbe = null;
-            invalidateAnalysis();
+            invalidateAnalysis({ clearVideoMetadata: true });
             $('videoMeta').textContent = item.name + ' · ' + formatBytes(Number(item.size || 0)) + ' · Windows Native';
             $('videoMeta').className = '';
             globalThis.NativeHardsub?.probeSelectedVideo?.();
@@ -1349,8 +1359,10 @@ function detectNativeBackend() {
 
       const p = state.nativeInputProbe || {};
       if (p.ok) {
+        state.sourceMedia = mediaFromNativeProbe(p);
+        renderSourceVideoSummary();
         log(
-          'Android SAF 输入探测：' +
+          (state.nativeBackend?.backend === 'windows-native' ? 'Windows Native 输入探测：' : 'Android SAF 输入探测：') +
           (p.seekable ? '可 seek' : '不可 seek，将需要本地 staging') +
           ' · ' + (p.videoCodec || 'unknown') +
           ' ' + (p.width || 0) + 'x' + (p.height || 0) +
@@ -2199,14 +2211,89 @@ function renderSavedFontLibrary() {
   });
 }
 
-function refreshAnalyze() {
-  const hasFiles = !!(state.video && state.ass);
-  if (state.operationBusy) { $('analyze').disabled = true; return; }
-  if (state.nativeBackend?.available) {
-    $('analyze').disabled = !(hasFiles && state.nativeInputProbe?.ok);
+function renderSourceVideoSummary(media = state.sourceMedia) {
+  const box = $('sourceVideoSummary');
+  if (!box) return;
+  if (!media?.width || !media?.height) {
+    box.classList.add('hidden');
+    box.innerHTML = '';
     return;
   }
-  $('analyze').disabled = !(hasFiles && state.video.size <= MAX_BYTES);
+  const videoRate = Number(media.videoBitRate || media.bitRate || 0);
+  const audio = media.audioCodec
+    ? media.audioCodec + (Number(media.audioTracks || 0) > 1 ? ' · ' + Number(media.audioTracks) + ' 轨' : '')
+    : '未检测到';
+  const color = [media.colorPrimaries, media.colorTransfer, media.colorSpace].filter(Boolean).join(' / ') || '未标记';
+  const rows = [
+    ['源视频编码', media.videoCodec || '未知'],
+    ['分辨率', media.width + '×' + media.height],
+    ['帧率', Number(media.fps || 0) > 0 ? Number(media.fps).toFixed(3) + ' fps' : '未知'],
+    ['时长', Number(media.duration || 0) > 0 ? formatDuration(Number(media.duration)) : '未知'],
+    ['源视频码率', videoRate > 0 ? formatBitrate(videoRate) : '未知'],
+    ['像素格式', (media.pixelFormat || '未知') + ' · ' + Number(media.bitDepth || 8) + '-bit'],
+    ['色彩 / HDR', (media.hdr || media.unsafeColorPipeline ? 'HDR / 高位深风险 · ' : '') + color],
+    ['音频', audio],
+    ['文件大小', Number(media.size || state.video?.size || 0) > 0 ? formatBytes(Number(media.size || state.video?.size || 0)) : '未知']
+  ];
+  box.innerHTML = '<div class="source-video-summary-heading"><strong>原始视频参数</strong><span>来自 FFprobe / Native probe</span></div>' +
+    rows.map(([key,value]) => '<div class="status-item"><span>' + escapeHtml(key) + '</span><span>' + escapeHtml(value) + '</span></div>').join('');
+  box.classList.remove('hidden');
+}
+
+async function analyzeVideoOnly() {
+  invalidateAnalysis();
+  if (!state.video) throw new Error('请先选择视频');
+
+  if (state.nativeBackend?.available) {
+    const p = state.nativeInputProbe;
+    if (!p?.ok) throw new Error(p?.error || '原生视频参数仍在读取，请稍后重试');
+    state.media = mediaFromNativeProbe(p);
+  } else {
+    if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本');
+    const ready = await ensureWebEngineReady();
+    if (!ready) throw new Error('Web 压制核心不可用');
+    await state.engine.stageFiles(state.video, null, []);
+    state.media = await state.engine.probe();
+  }
+
+  if (!state.media?.width || !state.media?.height) throw new Error('所选文件没有可识别的视频流');
+  state.sourceMedia = { ...state.media };
+  renderSourceVideoSummary();
+  log(
+    '源视频参数：' +
+    state.media.videoCodec + ' · ' +
+    state.media.width + 'x' + state.media.height + ' · ' +
+    Number(state.media.fps || 0).toFixed(3) + ' fps · ' +
+    formatDuration(Number(state.media.duration || 0))
+  );
+  if (!state.ass && (document.body.dataset.mediaOperation || 'hardsub') === 'hardsub') {
+    log('视频参数已读取；选择 ASS 后再次点击“分析视频与字幕”即可继续字幕预检。');
+  }
+}
+
+async function analyzeCurrentInputs() {
+  const mode = document.body.dataset.mediaOperation || 'hardsub';
+  if (mode === 'hardsub' && state.ass) return analyzeAll();
+  return analyzeVideoOnly();
+}
+
+function refreshAnalyze() {
+  const button = $('analyze');
+  const mode = document.body.dataset.mediaOperation || 'hardsub';
+  const fullHardsub = mode === 'hardsub' && !!state.ass;
+  button.textContent = fullHardsub ? '分析视频与字幕' : '读取视频参数';
+  if (state.operationBusy) { button.disabled = true; return; }
+  if (!state.video) { button.disabled = true; return; }
+  if (state.nativeBackend?.available) {
+    if (!state.nativeInputProbe?.ok) {
+      button.disabled = true;
+      button.textContent = '正在读取视频参数…';
+      return;
+    }
+    button.disabled = false;
+    return;
+  }
+  button.disabled = state.video.size > MAX_BYTES;
 }
 
 async function analyzeAll() {
@@ -2264,6 +2351,8 @@ async function analyzeAll() {
       }
       state.media = await state.engine.probe();
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
+      state.sourceMedia = { ...state.media };
+      renderSourceVideoSummary();
       log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps · ${state.media.pixelFormat || '未知像素格式'} · ${state.media.bitDepth}-bit`);
 
       if (state.media.videoCodec === 'av1' && state.softwareDecoders.av1Dav1d === false) {
@@ -2276,6 +2365,8 @@ async function analyzeAll() {
       if (!p?.ok) throw new Error(p?.error || 'Android Native 输入探测尚未完成');
       state.media = mediaFromNativeProbe(p);
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
+      state.sourceMedia = { ...state.media };
+      renderSourceVideoSummary();
       state.inputDecodeOk = false;
       log('Native 媒体元数据已读取；首张真实字幕预览将同时完成输入解码验证。');
 
@@ -4339,6 +4430,7 @@ mountMediaWorkspace({
   busy: () => state.operationBusy || !!state.nativeJobId,
   onModeChange: mode => {
     if (mode !== 'hardsub') setMobileStage('prepare', { scroll: false });
+    queueMicrotask(refreshAnalyze);
   },
   isWindows: () => !!globalThis.NativeHardsub?.__windowsNative,
   hasNvenc: codec => {
