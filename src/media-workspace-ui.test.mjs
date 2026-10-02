@@ -50,6 +50,11 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /qualityRange\.type = 'range'/);
   assert.match(workspace, /className = 'media-inline-range'/);
   assert.match(workspace, /qualityRange\.addEventListener\('input'/);
+  assert.match(workspace, /function setRateControl\(key, active\)/);
+  assert.match(workspace, /owner\.hidden=!active/);
+  assert.match(workspace, /setRateControl\('quality', !copy && mode==='quality'\)/);
+  assert.match(workspace, /setRateControl\('bitrate', !copy && mode==='bitrate'\)/);
+  assert.match(workspace, /\['targetSize','sizeUnit','sizeReserve'\]\)setRateControl\(key, !copy && mode==='size'\)/);
 
   assert.match(css, /\.media-mode-switcher\s*\{/);
   assert.match(css, /button\[aria-pressed="true"\]/);
@@ -63,5 +68,7 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /\.task-progress-grid/);
   assert.match(css, /\.task-plan-actions/);
   assert.match(css, /\.media-advanced-panel\[hidden\]/);
+  assert.match(css, /\.media-workspace \.task-grid input:disabled/);
+  assert.match(css, /\.media-workspace \.task-grid select:disabled/);
   assert.equal((css.match(/\{/g) || []).length, (css.match(/\}/g) || []).length);
 });
