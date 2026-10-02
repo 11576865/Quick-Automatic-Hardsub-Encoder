@@ -1440,6 +1440,9 @@ function detectNativeBackend() {
       } catch {
         data = { ok: false, error: 'Native 导出结果解析失败' };
       }
+      try {
+        window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result', { detail: data }));
+      } catch {}
       if (data.ok) {
         $('liveEta').textContent = '成品已保存 · ' + formatBytes(Number(data.bytes || 0)) +
           (data.sha256 ? ' · SHA-256 ' + data.sha256.slice(0, 12) + '…' : '');
@@ -4336,8 +4339,14 @@ mountMediaWorkspace({
     else void state.engine.api?.FFmpegKit?.cancel();
   },
   save: completed => {
-    if(completed.jobId)globalThis.NativeHardsub?.requestNativeExport(completed.jobId,completed.name);
-    else downloadBlob(completed.blob,completed.name);
+    if(completed.jobId){
+      const bridge=globalThis.NativeHardsub;
+      if(!bridge?.requestNativeExport)throw new Error('Native 成品保存桥不可用');
+      void bridge.requestNativeExport(completed.jobId,completed.name);
+      return {pending:true,jobId:completed.jobId};
+    }
+    downloadBlob(completed.blob,completed.name);
+    return {ok:true,kind:'browser-download'};
   },
   run: async (task,media,progress) => {
     manualCancelRequested=false;
@@ -4356,7 +4365,13 @@ mountMediaWorkspace({
           const result=JSON.parse(await Promise.resolve(bridge.getNativeJobStatus(started.jobId)));
           if(!result.ok)throw new Error(result.error||'状态读取失败');
           const actual=result.actualStart != null ? ' · 实际起点 '+Number(result.actualStart).toFixed(3)+' 秒' : '';
-          progress(Number(result.progress||0),(result.message||result.state)+actual);
+          progress(Number(result.progress||0),(result.message||result.state)+actual,{
+            state:result.state,
+            timeSec:Number(result.timeMs||0)/1000,
+            duration:Number(result.duration||task.expectedDuration||0),
+            speed:Number(result.speed||0),
+            actualStart:Number(result.actualStart??started.actualStart??task.start||0)
+          });
           if(result.state==='completed')return {jobId:started.jobId,name,outputBytes:result.outputBytes,outputDuration:result.outputDuration,verified:true,actualStart:result.actualStart??started.actualStart??task.start};
           if(['failed','cancelled'].includes(result.state))throw new Error(result.error||result.state);
           if(manualCancelRequested)bridge.cancelNativeEncode(started.jobId);
@@ -4367,10 +4382,21 @@ mountMediaWorkspace({
     if(task.operation!=='copy'&&!state.softwareEncoders[task.codec])throw new Error('当前浏览器核心未提供此编码器');
     task=await state.engine.snapTaskStart(task);
     if(manualCancelRequested)throw new Error('已取消');
-    progress(0,'正在处理 · 实际起点 '+task.start.toFixed(3)+' 秒');
-    const result=await state.engine.encodeFullStream(task.codec||'h264',{task,onPhase:()=>{if(manualCancelRequested)throw Error('已取消');},onStatistics:stat=>{const fraction=Math.min(.98,stat.timeMs/1000/task.expectedDuration);progress(task.twoPass?(stat.phase==='pass1'?fraction*.5:.5+fraction*.5):fraction,(stat.phase==='pass1'?'第一遍统计':'正在处理')+' · '+(stat.timeMs/1000).toFixed(1)+' 秒 · 起点 '+task.start.toFixed(3)+' 秒');}});
+    const webEncodeStarted=performance.now();
+    progress(0,'正在处理 · 实际起点 '+task.start.toFixed(3)+' 秒',{
+      state:'encoding',timeSec:0,duration:task.expectedDuration,speed:0,actualStart:task.start
+    });
+    const result=await state.engine.encodeFullStream(task.codec||'h264',{task,onPhase:()=>{if(manualCancelRequested)throw Error('已取消');},onStatistics:stat=>{
+      const timeSec=Math.max(0,Number(stat.timeMs||0)/1000);
+      const fraction=Math.min(.98,timeSec/task.expectedDuration);
+      const elapsed=Math.max(.001,(performance.now()-webEncodeStarted)/1000);
+      const speed=timeSec/elapsed;
+      progress(task.twoPass?(stat.phase==='pass1'?fraction*.5:.5+fraction*.5):fraction,(stat.phase==='pass1'?'第一遍统计':'正在处理')+' · '+timeSec.toFixed(1)+' 秒 · 起点 '+task.start.toFixed(3)+' 秒',{
+        state:'encoding',timeSec,duration:task.expectedDuration,speed,phase:stat.phase||''
+      });
+    }});
     if(manualCancelRequested)throw new Error('已取消');
-    progress(.99,'正在验证成品…');
+    progress(.99,'正在验证成品…',{state:'validating',timeSec:task.expectedDuration,duration:task.expectedDuration,speed:0});
     const check=await state.engine.scanEncodedPackets(result.blob,task.expectedDuration,{task,allowShortAudio:true,expectedAudioTracks:task.expectedAudioTracks,tolerance:task.operation==='copy'?2:undefined});
     if(!check.ok)throw new Error('成品轨道或时长验证未通过：'+JSON.stringify(check));
     return {blob:result.blob,name,verified:true,actualStart:task.start};
