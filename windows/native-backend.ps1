@@ -158,7 +158,10 @@ function Resolve-NativeFfmpegToolchain([string]$ScriptRoot = $PSScriptRoot) {
 function Find-NativeTool([string]$Name, [string]$ScriptRoot = $PSScriptRoot) {
     if ($Name -eq 'ffmpeg' -or $Name -eq 'ffprobe') {
         $toolchain = Resolve-NativeFfmpegToolchain $ScriptRoot
-        return if($Name -eq 'ffmpeg'){$toolchain.Ffmpeg}else{$toolchain.Ffprobe}
+        if ($Name -eq 'ffmpeg') {
+            return $toolchain.Ffmpeg
+        }
+        return $toolchain.Ffprobe
     }
 
     $base = Split-Path $ScriptRoot -Parent
