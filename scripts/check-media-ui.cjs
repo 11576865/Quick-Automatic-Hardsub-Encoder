@@ -62,7 +62,16 @@ const {spawn}=require('node:child_process');
   });
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');await page.selectOption('[name=audio]','aac');
   await page.selectOption('[name=rateMode]','size');await page.fill('[name=targetSize]','500');
-  await page.click('#taskInspect');await page.waitForFunction(()=>document.querySelector('#taskEstimate').textContent.includes('500.00 MB'));
+  await page.click('#taskInspect');await page.waitForTimeout(100);
+  const inspectState=await page.evaluate(()=>({
+    estimate:document.querySelector('#taskEstimate').textContent,
+    status:document.querySelector('#taskStatus').textContent,
+    operation:document.querySelector('[name=operation]').value,
+    audio:document.querySelector('[name=audio]').value,
+    rateMode:document.querySelector('[name=rateMode]').value,
+    targetSize:document.querySelector('[name=targetSize]').value
+  }));
+  if(!inspectState.estimate.includes('500.00 MB'))throw Error('Size inspection failed: '+JSON.stringify(inspectState));
   await page.click('#taskRun');await page.waitForFunction(()=>document.querySelector('#taskStatus').textContent.includes('超出体积预算'));
   if(await page.locator('#taskSave').isDisabled())throw Error('Oversized full output was discarded');
   if(await page.locator('#taskReport').isDisabled())throw Error('Report unavailable');
