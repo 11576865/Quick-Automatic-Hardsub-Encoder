@@ -141,6 +141,7 @@ const {spawn}=require('node:child_process');
   await page.locator('[name=start]').blur();
   if(!(await page.locator('#taskActualStartTime').textContent()).includes('8:00'))throw Error('Copy timeline did not preview the previous keyframe as actual start: '+await page.locator('#taskActualStartTime').textContent());
   if(!(await page.locator('#taskKeyframeDelta').textContent()).includes('20.000'))throw Error('Copy timeline did not expose requested-vs-actual start delta');
+  await page.screenshot({path:'media-workspace-copy-keyframes-mobile.png',fullPage:true});
   await page.click('#taskKeyframeSnapStart');
   if((await page.inputValue('[name=start]'))!=='8:00')throw Error('Snap-to-keyframe did not align IN to the actual keyframe');
   if(!(await page.locator('#taskKeyframeDelta').textContent()).includes('已经位于关键帧'))throw Error('Aligned IN did not report keyframe alignment');
