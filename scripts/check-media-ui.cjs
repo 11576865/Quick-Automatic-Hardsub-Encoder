@@ -35,7 +35,7 @@ const {spawn}=require('node:child_process');
   await page.selectOption('[name=rateMode]','size');
   if(await page.locator('[name=targetSize]').isDisabled())throw Error('Size controls are unavailable');
   if(!await page.locator('[name=quality]').isDisabled())throw Error('Quality control conflicts with size mode');
-  await page.locator('#mediaTaskForm details').last().locator('summary').click();
+  await page.locator('.media-sample-panel > summary').click();
   await page.fill('[name=configName]','720p60');await page.fill('[name=fps]','60');await page.selectOption('[name=fpsMode]','cfr');
   await page.click('#taskStore');await page.fill('[name=fps]','30');await page.click('#taskRestore');
   if(await page.inputValue('[name=fps]')!=='60')throw Error('Saved configuration did not restore frame rate');
@@ -71,7 +71,27 @@ const {spawn}=require('node:child_process');
     document.body.innerHTML='<section id="inputCard"></section>';
     const {mountMediaWorkspace}=await import('/src/media-workspace.js');
     window.taskRuns=[];
-    mountMediaWorkspace({isWindows:()=>false,hasNvenc:()=>false,platformKey:()=>({}),busy:()=>false,setBusy:()=>{},log:()=>{},cancel:()=>{},save:()=>{},prepare:async()=>({duration:2181.384,fps:60,audioTracks:1}),run:async(task)=>{window.taskRuns.push(task);return {outputBytes:530000000,outputDuration:task.expectedDuration,verified:true};}});
+    mountMediaWorkspace({
+      isWindows:()=>false,
+      hasNvenc:()=>false,
+      platformKey:()=>({}),
+      busy:()=>false,
+      setBusy:()=>{},
+      log:()=>{},
+      cancel:()=>{},
+      save:()=>({pending:true}),
+      prepare:async()=>({duration:2181.384,fps:60,audioTracks:1}),
+      run:async(task,media,progress)=>{
+        window.taskRuns.push(task);
+        progress?.(.42,'正在处理 · 90.0 秒',{state:'encoding',timeSec:90,duration:task.expectedDuration,speed:2.5});
+        return {
+          outputBytes:530000000,
+          outputDuration:task.expectedDuration,
+          verified:true,
+          ...(task.expectedDuration>100?{jobId:'ui-smoke-job',name:'ui-smoke.mkv'}:{})
+        };
+      }
+    });
   });
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');await page.selectOption('[name=audio]','aac');
   await page.selectOption('[name=rateMode]','size');await page.fill('[name=targetSize]','500');
@@ -85,10 +105,27 @@ const {spawn}=require('node:child_process');
     targetSize:document.querySelector('[name=targetSize]').value
   }));
   if(!inspectState.estimate.includes('500.00 MB'))throw Error('Size inspection failed: '+JSON.stringify(inspectState));
+  if(!(await page.locator('#taskPlanTitle').textContent()).includes('纯视频转码'))throw Error('Task plan summary does not explain the selected operation');
+  if(await page.locator('.task-technical-details').getAttribute('open')!==null)throw Error('Raw FFmpeg command is expanded by default');
   await page.click('#taskRun');await page.waitForFunction(()=>document.querySelector('#taskStatus').textContent.includes('超出体积预算'));
+  if(await page.locator('#mediaWorkspace').getAttribute('data-task-state')!=='verified')throw Error('Completed output did not enter verified-not-saved state');
   if(await page.locator('#taskSave').isDisabled())throw Error('Oversized full output was discarded');
+  if(!await page.locator('#taskSave').evaluate(el=>el.classList.contains('task-primary-action')))throw Error('Verified output did not promote Save as primary action');
+  if((await page.locator('#taskRun').textContent()).trim()!=='重新压制')throw Error('Encode action did not demote after verification');
+  if((await page.locator('#taskPercent').textContent()).trim()!=='100%')throw Error('Completed task did not expose 100% progress');
   if(await page.locator('#taskReport').isDisabled())throw Error('Report unavailable');
-  await page.locator('#mediaTaskForm details').last().locator('summary').click();await page.click('#taskSamples');
+
+  await page.click('#taskSave');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:false,jobId:'ui-smoke-job',error:'simulated publish failure'}})));
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='save_failed');
+  if((await page.locator('#taskSave').textContent()).trim()!=='重试保存成品')throw Error('Publish failure did not expose retry action');
+  if(!(await page.locator('#taskStatus').textContent()).includes('无需重新压制'))throw Error('Publish failure did not preserve verified-output recovery guidance');
+  await page.click('#taskSave');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:true,jobId:'ui-smoke-job',bytes:530000000,path:'C:\\output.mkv'}})));
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saved');
+
+  await page.locator('.media-sample-panel > summary').click();await page.click('#taskSamples');
   await page.waitForFunction(()=>document.querySelector('#taskStatus').textContent.includes('三组试压完成'));
   if(await page.locator('.task-sample').count()!==3)throw Error('Three sample results missing');
   const runs=await page.evaluate(()=>window.taskRuns);
