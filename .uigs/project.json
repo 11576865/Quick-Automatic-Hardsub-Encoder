@@ -28,5 +28,10 @@
     "reliability",
     "operations",
     "interface-grammar"
-  ]
+  ],
+  "ui_inventory": {
+    "schema_version": 1,
+    "path": ".uigs/ui-surfaces.json",
+    "authority": "this repository"
+  }
 }

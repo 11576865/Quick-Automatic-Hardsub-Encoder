@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "project": "Quick-Automatic-Hardsub-Encoder",
+  "repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "platform": "web-plus-native-hosts",
+  "authority": "this repository",
+  "surface_count": 16,
+  "surfaces": [
+    {
+      "id": "QHE.SHELL.WORKFLOW_HEADER",
+      "kind": "navigation",
+      "name": "主工作流头部",
+      "group": "SHELL",
+      "status": "implemented",
+      "intent": "展示当前本地处理身份和准备→制作的主流程。",
+      "implementation_effect": "顶部 Hero 将产品身份、处理状态和两阶段工作流保持为稳定方向提示。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": ".app-header / .workflow-strip"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.NAV.MOBILE_STAGE",
+      "kind": "navigation",
+      "name": "移动端任务阶段导航",
+      "group": "SHELL",
+      "status": "implemented",
+      "intent": "在窄屏上明确准备素材与预览/压制两个阶段。",
+      "implementation_effect": "阶段切换器处于正常文档流而非浮动底栏；按任务准备状态控制后续阶段可达性。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#mobileStageNav"
+        },
+        {
+          "path": "src/style.css",
+          "anchor": "body.ui-mobile .mobile-stage-nav"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.HELP.RUNTIME",
+      "kind": "disclosure",
+      "name": "Android / Windows 运行教程",
+      "group": "SHELL",
+      "status": "implemented",
+      "intent": "说明 APK、Windows Bridge、FFmpeg 与本机启动路径。",
+      "implementation_effect": "Android 与 Windows 教程分别使用 details 展开，避免长期占据主任务空间。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": ".mobile-runtime-help / .mobile-runtime-option"
+        }
+      ],
+      "patterns": [],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.INPUT.MATERIALS",
+      "kind": "input",
+      "name": "素材准备区",
+      "group": "PREPARE",
+      "status": "implemented",
+      "intent": "选择视频、ASS、字体并显示当前后端。",
+      "implementation_effect": "视频、字幕、字体和处理引擎按独立 file-row 分区；不同媒体操作会隐藏不相关输入。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#inputCard"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.DIAGNOSTICS.ENVIRONMENT",
+      "kind": "diagnostics",
+      "name": "运行环境诊断",
+      "group": "PREPARE",
+      "status": "implemented",
+      "intent": "检查浏览器/Native 能力、编码器与运行环境。",
+      "implementation_effect": "默认折叠；展开后以状态列表、能力矩阵和运行时信息呈现诊断，不阻断主流程。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#envCard / #envDetails"
+        },
+        {
+          "path": "src/style.css",
+          "anchor": ".env-card / .env-details"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.PREFLIGHT.MEDIA_SUBTITLE",
+      "kind": "preflight",
+      "name": "媒体与字幕预检",
+      "group": "PREPARE",
+      "status": "implemented",
+      "intent": "在进入制作前集中显示媒体、字幕与字体风险。",
+      "implementation_effect": "分析后生成预检状态、字幕摘要、字体警告，并在移动端提供进入制作阶段的显式动作。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#preflightCard"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.PREVIEW.REAL_LIBASS",
+      "kind": "preview",
+      "name": "真实 libass 字幕预览",
+      "group": "PRODUCE",
+      "status": "implemented",
+      "intent": "在正式编码前查看实际字幕渲染结果。",
+      "implementation_effect": "主预览区显示真实 libass 预览帧，并要求显式接受字体回退/缺失警告后继续。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#subtitleCard / #preview"
+        },
+        {
+          "path": "src/style.css",
+          "anchor": ".preview-wrap"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.PREVIEW.SAMPLE_RAIL",
+      "kind": "navigation",
+      "name": "预览采样点侧栏",
+      "group": "PRODUCE",
+      "status": "implemented",
+      "intent": "在真实预览中快速切换代表性时间点。",
+      "implementation_effect": "宽屏预览工作区使用弹性主预览 + 190px 采样侧栏；当前采样点有显式状态。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#previewSampleRail"
+        },
+        {
+          "path": "src/style.css",
+          "anchor": ".preview-workspace / .preview-sample-rail"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.PLAN.ENCODE",
+      "kind": "planner",
+      "name": "压制方案",
+      "group": "PRODUCE",
+      "status": "implemented",
+      "intent": "在快速预设、目标质量和目标体积之间选择编码计划。",
+      "implementation_effect": "模式 tabs 切换不同参数面板；编码器候选、源片锚点、校准与测试片段共同形成执行前计划。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#planCard / .plan-mode-tabs"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.ENCODE.ACTION_CARD",
+      "kind": "execution",
+      "name": "正式压制执行卡",
+      "group": "PRODUCE",
+      "status": "implemented",
+      "intent": "确认方案后启动、观察和取消整片编码。",
+      "implementation_effect": "宽屏保持 sticky bottom，显示 ETA、主执行动作、取消动作与进度；≤820px 回到 static 文档流。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#encodeCard"
+        },
+        {
+          "path": "src/style.css",
+          "anchor": ".encode-card"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.STATUS.TASK_OVERVIEW",
+      "kind": "supporting-pane",
+      "name": "任务概览侧栏",
+      "group": "SHELL",
+      "status": "implemented",
+      "intent": "持续汇总当前文件、预检、预览、方案和制作状态。",
+      "implementation_effect": "作为主工作流旁的次级状态面；平板布局可 sticky，其他响应式状态按 shell 规则重排。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": "#taskOverviewRail"
+        },
+        {
+          "path": "src/style.css",
+          "anchor": ".task-overview-rail"
+        }
+      ],
+      "patterns": [
+        "UIGS.WORKSPACE.STICKY_SUPPORTING_PANE"
+      ],
+      "tests": [
+        "src/ui-shell.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.LOG.TECHNICAL",
+      "kind": "diagnostics",
+      "name": "技术日志",
+      "group": "SHELL",
+      "status": "implemented",
+      "intent": "仅在排错时查看底层执行与错误信息。",
+      "implementation_effect": "默认以 details 收起，并对日志正文设置有界滚动，避免技术输出支配主工作流。",
+      "source_refs": [
+        {
+          "path": "src/main.js",
+          "anchor": ".log-card / #log"
+        },
+        {
+          "path": "src/style.css",
+          "anchor": ".log"
+        }
+      ],
+      "patterns": [],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.MEDIA.MODE_SWITCHER",
+      "kind": "mode-switcher",
+      "name": "媒体操作模式切换",
+      "group": "MEDIA_WORKSPACE",
+      "status": "implemented",
+      "intent": "在硬字幕压制、纯视频转码和无损快速剪切之间切换任务意图。",
+      "implementation_effect": "三个模式共享任务模型但切换各自可见输入、参数和说明；不相关控制被抑制而不是维持无效状态。",
+      "source_refs": [
+        {
+          "path": "src/media-workspace.js",
+          "anchor": ".media-mode-switcher / syncModeChrome"
+        },
+        {
+          "path": "src/media-workspace-ui.css",
+          "anchor": ".media-mode-switcher"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/media-workspace-ui.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.MEDIA.WORKSPACE",
+      "kind": "workspace",
+      "name": "媒体任务工作区",
+      "group": "MEDIA_WORKSPACE",
+      "status": "implemented",
+      "intent": "为压制/转码/剪切提供统一但不过载的参数与执行工作区。",
+      "implementation_effect": "共享 compileTask 语义，但 presentation 按操作模式调整标题、输入、编码区、轨道区和状态。",
+      "source_refs": [
+        {
+          "path": "src/media-workspace.js",
+          "anchor": "#mediaTaskForm / mountMediaWorkspace"
+        },
+        {
+          "path": "src/media-workspace-ui.css",
+          "anchor": ".media-workspace"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/media-workspace-ui.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.MEDIA.ADVANCED_DISCLOSURE",
+      "kind": "disclosure",
+      "name": "媒体高级参数与短片试压折叠区",
+      "group": "MEDIA_WORKSPACE",
+      "status": "implemented",
+      "intent": "将低频编码细节、配置保存和试压比较从主路径中降级。",
+      "implementation_effect": "advanced/sample panels 使用 details/summary，按当前模式进一步隐藏不适用区域。",
+      "source_refs": [
+        {
+          "path": "src/media-workspace.js",
+          "anchor": ".media-advanced-panel / .media-sample-panel"
+        },
+        {
+          "path": "src/media-workspace-ui.css",
+          "anchor": ".media-advanced-panel / .media-sample-panel"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/media-workspace-ui.test.mjs"
+      ],
+      "visual_evidence": []
+    },
+    {
+      "id": "QHE.MEDIA.ACTION_DOCK",
+      "kind": "action-dock",
+      "name": "媒体任务动作坞",
+      "group": "MEDIA_WORKSPACE",
+      "status": "implemented",
+      "intent": "在长参数工作区中持续提供检查、开始、取消、报告和保存动作。",
+      "implementation_effect": "宽布局使用 sticky bottom + 半透明背景/blur；窄屏按响应式规则恢复可达布局。",
+      "source_refs": [
+        {
+          "path": "src/media-workspace.js",
+          "anchor": ".media-action-dock"
+        },
+        {
+          "path": "src/media-workspace-ui.css",
+          "anchor": ".media-action-dock"
+        }
+      ],
+      "patterns": [],
+      "tests": [
+        "src/media-workspace-ui.test.mjs"
+      ],
+      "visual_evidence": []
+    }
+  ]
+}
