@@ -31,13 +31,19 @@ object NativeJobStore {
         File(jobDir(context, jobId), "subtitles.ass")
 
     fun outputExtension(context: Context, jobId: String): String {
-        val task = try {
+        val extension = try {
             val request = requestFile(context, jobId)
-            if (request.isFile) JSONObject(request.readText(Charsets.UTF_8)).optJSONObject("task") else null
+            if (!request.isFile) ""
+            else {
+                val json = JSONObject(request.readText(Charsets.UTF_8))
+                json.optJSONObject("task")?.optString("outputExtension", "")
+                    ?.takeIf { it.isNotBlank() }
+                    ?: json.optString("outputExtension", "")
+            }
         } catch (_: Throwable) {
-            null
+            ""
         }
-        return when (task?.optString("outputExtension", "mkv")?.lowercase()) {
+        return when (extension.lowercase()) {
             "mp4" -> "mp4"
             else -> "mkv"
         }
