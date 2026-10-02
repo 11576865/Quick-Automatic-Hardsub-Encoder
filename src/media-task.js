@@ -1,5 +1,5 @@
 import { sizeBudget } from './media-planning.js';
-import { resolveOutputContainer } from './media-container.js';
+import { audioCopyPlaybackWarning, resolveOutputContainer } from './media-container.js';
 import { parseMediaTime } from './media-time.js';
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
 export const TASK_VERSION = 3;
@@ -19,6 +19,9 @@ export function compileTask(raw, media) {
   t.audio = t.audio || 'copy';
   if (!['copy', 'aac', 'libopus', 'none'].includes(t.audio)) throw Error('未知音频策略');
   if (t.operation === 'copy' && ['aac','libopus'].includes(t.audio)) throw Error('无损剪切不允许音频转码');
+  t.compatibilityWarnings = Array.isArray(t.compatibilityWarnings) ? t.compatibilityWarnings : [];
+  const audioCopyWarning = audioCopyPlaybackWarning(t, media);
+  if (audioCopyWarning) t.compatibilityWarnings.push(audioCopyWarning.message);
   t.audioTrack = t.audioTrack || 'all';
   if (t.audioTrack !== 'all' && !/^\d+$/.test(t.audioTrack)) throw Error('音轨索引无效');
   if (t.audioTrack !== 'all' && Number(t.audioTrack) >= media.audioTracks) throw Error('音轨索引不存在');
