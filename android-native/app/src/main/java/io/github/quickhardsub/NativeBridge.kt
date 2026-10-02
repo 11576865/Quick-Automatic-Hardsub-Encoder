@@ -594,6 +594,84 @@ class NativeBridge(
         }
     }
 
+    @JavascriptInterface
+    fun renderNativeWaveform(requestId: String, optionsJson: String) {
+        if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
+            postJsonCallback(
+                "__onNativeWaveform",
+                JSONObject()
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("busy", true)
+                    .put("error", "Android Native 正在执行其他 FFmpeg 任务，请稍后再生成波形")
+            )
+            return
+        }
+
+        thread(name = "native-waveform") {
+            val result = JSONObject().put("requestId", requestId)
+            var safUrl: String? = null
+            val waveformRoot = File(activity.cacheDir, "native-waveform")
+            try {
+                val inputUri = getPickedUris("video").firstOrNull()
+                    ?: throw IllegalStateException("没有可供 Native 波形分析使用的视频 URI")
+                val options = try { JSONObject(optionsJson.ifBlank { "{}" }) } catch (_: Throwable) { JSONObject() }
+                val audioTrack = options.optInt("audioTrack", 0).coerceIn(0, 63)
+                val width = options.optInt("width", 2048).coerceIn(512, 4096)
+                val height = options.optInt("height", 160).coerceIn(96, 320)
+                val duration = options.optDouble("duration", 0.0)
+                    .takeIf { it.isFinite() && it >= 0.0 } ?: 0.0
+
+                if (waveformRoot.exists()) waveformRoot.deleteRecursively()
+                waveformRoot.mkdirs()
+                val output = File(waveformRoot, "waveform.png")
+                safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
+                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 Native 波形 SAF URL")
+
+                val filter = "aformat=channel_layouts=mono,showwavespic=s=${width}x${height}:split_channels=0"
+                val command = arrayOf(
+                    "-y",
+                    "-hide_banner",
+                    "-v", "error",
+                    "-i", safUrl,
+                    "-map", "0:a:$audioTrack",
+                    "-vn",
+                    "-sn",
+                    "-filter_complex", filter,
+                    "-frames:v", "1",
+                    "-c:v", "png",
+                    output.absolutePath
+                )
+                val session = FFmpegKit.executeWithArguments(command)
+                if (!ReturnCode.isSuccess(session.getReturnCode()) || output.length() <= 0L) {
+                    throw IllegalStateException(
+                        session.getOutput().takeLast(1200).ifBlank { "Native 音频波形生成失败" }
+                    )
+                }
+
+                val bytes = output.readBytes()
+                result
+                    .put("ok", true)
+                    .put("url", "data:image/png;base64," + Base64.encodeToString(bytes, Base64.NO_WRAP))
+                    .put("duration", duration)
+                    .put("width", width)
+                    .put("height", height)
+                    .put("audioTrack", audioTrack)
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                if (!safUrl.isNullOrBlank()) {
+                    try { FFmpegKitConfig.unregisterSafProtocolUrl(safUrl) } catch (_: Throwable) {}
+                }
+                try { waveformRoot.deleteRecursively() } catch (_: Throwable) {}
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
+                diagnosticRunning.set(false)
+            }
+            postJsonCallback("__onNativeWaveform", result)
+        }
+    }
     private fun bitmapsDiffer(a: Bitmap, b: Bitmap): Boolean {
         if (a.width != b.width || a.height != b.height) return true
         val pixels = a.width.toLong() * a.height.toLong()
