@@ -1,0 +1,45 @@
+{
+  "packet_version": 1,
+  "packet_id": "ci-11576865-Quick-Automatic-Hardsub-Encoder-37033089756-1",
+  "status": "pending",
+  "record_type": "ci_failure",
+  "title": "Test frontend: failure",
+  "summary": "Tracked CI workflow did not complete successfully. Source adapter captured failed job/step evidence when available.",
+  "source_repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "source_event": "workflow_run",
+  "source_ref": "refactor/media-workflow-fork-join",
+  "source_sha": "a1e2781ef70b9f635b8e1c520e5c4c26c15b0505",
+  "source_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/37033089756",
+  "created_at": "2026-10-02T16:19:18+00:00",
+  "dedupe_key": "workflow_run:11576865/Quick-Automatic-Hardsub-Encoder:37033089756:1",
+  "routing_hints": [
+    "architecture",
+    "interface-grammar",
+    "operations",
+    "red-reason",
+    "reliability"
+  ],
+  "evidence": {
+    "workflow": "Test frontend",
+    "run_id": "37033089756",
+    "run_attempt": "1",
+    "conclusion": "failure",
+    "trigger_event": "pull_request",
+    "failed_jobs": [
+      {
+        "id": 110924522286,
+        "name": "frontend",
+        "conclusion": "failure"
+      }
+    ],
+    "failed_steps": [
+      {
+        "job": "frontend",
+        "number": 10,
+        "name": "Run node --test src/media-workspace-ui.test.mjs",
+        "conclusion": "failure"
+      }
+    ],
+    "capture_error": ""
+  }
+}
