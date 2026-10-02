@@ -1039,7 +1039,9 @@ document.querySelectorAll('[data-size-multiplier]').forEach(button => {
   });
 });
 document.addEventListener('change', event => {
-  if (event.target?.name === 'outputContainer') queueMicrotask(refreshGuidedContainerDecision);
+  if (['outputContainer','audio'].includes(event.target?.name)) {
+    queueMicrotask(refreshGuidedContainerDecision);
+  }
 });
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
