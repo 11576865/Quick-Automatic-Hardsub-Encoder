@@ -1,6 +1,6 @@
 ﻿# Structured output argument validation. No input URLs, file paths or shell commands.
 function Get-MediaTaskArgs($Task) {
-    if ([int]$Task.version -notin @(1,2) -or $Task.operation -notin @('copy','transcode','hardsub')) { throw 'Unsupported media task.' }
+    if ([int]$Task.version -notin @(1,2,3) -or $Task.operation -notin @('copy','transcode','hardsub')) { throw 'Unsupported media task.' }
     $start=[double]$Task.start; $end=[double]$Task.end
     if ([double]::IsNaN($start) -or [double]::IsInfinity($start) -or [double]::IsNaN($end) -or [double]::IsInfinity($end) -or $start -lt 0 -or $end -le $start) { throw 'Invalid task range.' }
     $values=@{
