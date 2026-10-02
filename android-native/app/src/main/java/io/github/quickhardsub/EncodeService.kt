@@ -230,6 +230,7 @@ class EncodeService : Service() {
         val jobDir = NativeJobStore.jobDir(this, jobId)
         val assFile = NativeJobStore.assFile(this, jobId)
         val output = NativeJobStore.outputFile(this, jobId)
+        val outputFormat = NativeJobStore.outputFormat(this, jobId)
         val fontsDir = File(jobDir, "fonts")
         var stagedInput: File? = null
         var safUrl: String? = null
@@ -445,7 +446,7 @@ class EncodeService : Service() {
                 if (actualStart > 0.0) args.addAll(listOf("-ss", actualStart.toString()))
                 args.addAll(listOf("-i", inputPath, "-t", (requestedEnd - actualStart).toString()))
                 args.addAll(manualArgs.map { it.replace("__ASS__", NativeJobStore.escapeFilterPath(assFile.absolutePath)).replace("__FONTS__", NativeJobStore.escapeFilterPath(fontsDir.absolutePath)) })
-                args.addAll(listOf("-f", "matroska", output.absolutePath))
+                args.addAll(listOf("-f", outputFormat, output.absolutePath))
                 NativeJobStore.writeStatus(this, jobId, JSONObject().put("state", "staging").put("actualStart", actualStart).put("message", "实际切入点 " + actualStart + " 秒"))
             }
 
@@ -676,7 +677,7 @@ class EncodeService : Service() {
             updateStatus(jobId, "validating", "完整解码通过，正在计算成品 SHA-256", 0.999)
             updateNotification("正在计算成品校验值…", 99)
             val sha256 = sha256(output)
-            val suggestedName = request.optString("suggestedName", "hardsub_" + codec + ".mkv")
+            val suggestedName = request.optString("suggestedName", "hardsub_" + codec + "." + NativeJobStore.outputExtension(this, jobId))
 
             val thermalEnd = currentThermalStatus(powerManager)
             val powerSaveEnd = powerManager.isPowerSaveMode
