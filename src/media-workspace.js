@@ -50,9 +50,9 @@ export function mountMediaWorkspace(hooks) {
     <p id="taskPlanNote">先确认这里是否符合你的目的；大多数任务不需要修改下面的详细参数。</p>
     <div class="button-row task-plan-actions"><button type="button" id="taskLoadPreset" class="secondary">恢复推荐方案</button><button type="button" id="taskInspect" class="secondary">验证当前方案</button></div>
   </section>
-  <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">先决定编码格式、编码器、速度倾向和质量 / 体积目标。帧率、尺寸、像素格式和编码细节默认沿用源视频或编码器安全默认值，需要时再展开。</p><div class="task-grid media-core-decision-grid">
+  <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">先决定编码格式、编码器、速度倾向和质量 / 体积目标。不确定时直接保留推荐方案；CRF / CQ 通常数值越低越保真、体积越大。帧率、尺寸、像素格式和编码细节默认沿用源视频或编码器安全默认值，需要时再展开。</p><div class="task-grid media-core-decision-grid">
   ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
-  ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
+  ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ（通常越低越保真）','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
   ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}
   </div><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
   ${check('legacyFps','兼容旧 FFmpeg（使用 -vsync）')}
@@ -239,7 +239,7 @@ export function mountMediaWorkspace(hooks) {
     const previous=get('preset').value;
     const nv=get('encoder').value.endsWith('_nvenc');
     const vals=nv?['p1','p2','p3','p4','p5','p6','p7']:get('codec').value==='av1'?Array.from({length:14},(_,i)=>String(i)):['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
-    get('preset').innerHTML=vals.map(v=>`<option>${v}</option>`).join('');
+    get('preset').innerHTML=vals.map(v=>`<option value="${v}">${v} · ${presetIntent(get('encoder').value,v)}</option>`).join('');
     get('preset').value=!reset&&vals.includes(previous)?previous:nv?'p5':get('codec').value==='av1'?'6':'medium';
     section.querySelector('#taskNvencDetails').hidden=!nv;
   }
