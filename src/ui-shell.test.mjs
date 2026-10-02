@@ -177,7 +177,8 @@ test('phone tablet and desktop use coordinated responsive shells', async () => {
   assert.match(css, /Runtime-first responsive workbench v4/);
   assert.match(css, /body\.ui-desktop \.workspace-layout\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /body\.ui-tablet \.workspace-layout/);
-  assert.match(css, /body\.ui-phone \[data-mobile-stage-section\]:not\(\.hidden\)/);
+  assert.match(css, /body\.ui-phone\[data-mobile-stage="prepare"\] \[data-mobile-stage-section="prepare"\]/);
+  assert.match(css, /body\.ui-phone\[data-mobile-stage="produce"\] \[data-mobile-stage-section="produce"\]/);
 });
 
 
