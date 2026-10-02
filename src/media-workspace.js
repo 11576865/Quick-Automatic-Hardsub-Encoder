@@ -510,8 +510,13 @@ export function mountMediaWorkspace(hooks) {
     }catch(e){status('试压失败：'+e.message);}
     finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
   };
-  form.addEventListener('input',()=>renderPlanSummary(activeTask));
-  form.addEventListener('change',()=>renderPlanSummary(activeTask));
+  const invalidateCompiledPlan = () => {
+    activeTask=null;
+    renderContainerDecision(null);
+    renderPlanSummary();
+  };
+  form.addEventListener('input',invalidateCompiledPlan);
+  form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();renderPlanSummary();setTaskState('idle');
   return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
