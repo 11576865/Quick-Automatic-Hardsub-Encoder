@@ -94,13 +94,25 @@ function Get-SelectedPath([string]$Role) {
 }
 
 function Show-NativeOpenFileDialog([string]$Filter, [bool]$Multiselect = $false) {
+    # The hidden Bridge process still needs a real on-screen owner for modal
+    # dialogs. An owner placed at (-32000,-32000) can cause OpenFileDialog to
+    # inherit an off-screen location, which looks like the picker never opened.
+    # Anchor the tiny owner to the monitor under the cursor instead.
+    $cursor = [System.Windows.Forms.Cursor]::Position
+    $screen = [System.Windows.Forms.Screen]::FromPoint($cursor)
+    $work = $screen.WorkingArea
+    $x = [Math]::Max($work.Left, [Math]::Min($cursor.X, $work.Right - 1))
+    $y = [Math]::Max($work.Top, [Math]::Min($cursor.Y, $work.Bottom - 1))
+
     $owner = New-Object System.Windows.Forms.Form
     $owner.ShowInTaskbar = $false
     $owner.StartPosition = 'Manual'
-    $owner.Location = New-Object System.Drawing.Point(-32000, -32000)
+    $owner.Location = New-Object System.Drawing.Point($x, $y)
     $owner.Size = New-Object System.Drawing.Size(1, 1)
+    $owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
     $owner.TopMost = $true
-    $owner.Opacity = 0
+    $owner.Opacity = 0.01
+
     $dialog = New-Object System.Windows.Forms.OpenFileDialog
     $dialog.Filter = $Filter
     $dialog.Multiselect = $Multiselect
@@ -109,6 +121,7 @@ function Show-NativeOpenFileDialog([string]$Filter, [bool]$Multiselect = $false)
     try {
         $owner.Show()
         $owner.Activate()
+        $owner.BringToFront()
         $result = $dialog.ShowDialog($owner)
         if ($result -eq [System.Windows.Forms.DialogResult]::OK) {
             return @($dialog.FileNames)
@@ -134,6 +147,10 @@ function Show-BridgePicker([string]$Role) {
         if ($picked.Count) { $script:Selections.fonts = @($picked) }
     } else {
         throw 'Unsupported picker role.'
+    }
+
+    if (-not $picked.Count) {
+        return [pscustomobject]@{ role=$Role; count=0; names=@(); files=@(); ok=$true; cancelled=$true }
     }
 
     $paths = @($script:Selections[$Role])
