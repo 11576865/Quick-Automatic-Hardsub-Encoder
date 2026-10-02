@@ -344,6 +344,39 @@ function Invoke-Preview($Body) {
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+function Invoke-Waveform($Body) {
+    $video = Get-SelectedPath 'video'
+    if (-not $video) { throw 'No video selected.' }
+    $requestId = [string]$Body.requestId
+    $audioTrack = if ($null -ne $Body.audioTrack) { [int]$Body.audioTrack } else { 0 }
+    if ($audioTrack -lt 0 -or $audioTrack -gt 63) { throw 'Audio track index out of range.' }
+    $width = [Math]::Max(512, [Math]::Min(4096, $(if($Body.width){[int]$Body.width}else{2048})))
+    $height = [Math]::Max(96, [Math]::Min(320, $(if($Body.height){[int]$Body.height}else{160})))
+    $duration = if($Body.duration){[double]$Body.duration}else{0.0}
+    $work = New-BridgeWorkDir 'quick-hardsub-waveform-'
+    try {
+        $output = Join-Path $work 'waveform.png'
+        $filter = "aformat=channel_layouts=mono,showwavespic=s=${width}x${height}:split_channels=0"
+        $args = '-hide_banner -loglevel error -y -i ' + (Quote-NativeArg $video) +
+            ' -map 0:a:' + $audioTrack + ' -vn -sn -filter_complex ' + (Quote-NativeArg $filter) +
+            ' -frames:v 1 -c:v png ' + (Quote-NativeArg $output)
+        $result = Invoke-BridgeTool $script:Ffmpeg $args $work
+        if ($result.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $output)) {
+            $message = $result.StdErr.Trim()
+            if (-not $message) { $message = 'FFmpeg waveform generation failed.' }
+            throw $message
+        }
+        $bytes = [IO.File]::ReadAllBytes($output)
+        if (-not $bytes.Length) { throw 'Waveform output is empty.' }
+        return [pscustomobject]@{
+            requestId=$requestId; ok=$true
+            url=('data:image/png;base64,'+[Convert]::ToBase64String($bytes))
+            duration=$duration; width=$width; height=$height; audioTrack=$audioTrack
+        }
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 function Get-Ssim([string]$Candidate,[string]$Reference,[string]$Work) {
     $r=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -nostdin -i '+(Quote-NativeArg $Candidate)+' -i '+(Quote-NativeArg $Reference)+' -lavfi "[0:v][1:v]ssim" -f null NUL') $Work
     $m=[regex]::Match(($r.StdErr+[Environment]::NewLine+$r.StdOut),'All:(?<v>[0-9.]+)')
@@ -725,6 +758,7 @@ function Handle-Request($Request) {
         }
         if($Request.Method -eq 'POST' -and $path -eq '/api/probe'){Send-HttpJson $Request 200 (Get-ProbeMedia);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/preview'){Send-HttpJson $Request 200 (Invoke-Preview $body);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/waveform'){Send-HttpJson $Request 200 (Invoke-Waveform $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/sample'){Send-HttpJson $Request 200 (Invoke-Sample $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/sample/export'){Send-HttpJson $Request 200 (Export-Sample ([string]$body.sampleId) ([string]$body.suggestedName));return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/encode'){Send-HttpJson $Request 200 (Start-EncodeJob $body);return}
