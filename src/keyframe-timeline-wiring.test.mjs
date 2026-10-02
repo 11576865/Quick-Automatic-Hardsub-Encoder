@@ -16,7 +16,7 @@ test('keyframe-aware trim timeline is wired across Web, Windows Native and Andro
   assert.match(workspace, /将 IN 对齐关键帧/);
   assert.match(workspace, /实际无损起点/);
 
-  assert.match(main, /includeKeyframes,s*maxKeyframes/);
+  assert.match(main, /includeKeyframes,\s*maxKeyframes/);
   assert.match(engine, /async listKeyframes\(options = \{\}\)/);
   assert.match(engine, /-skip_frame nokey/);
   assert.match(engine, /keyframesTruncated/);
