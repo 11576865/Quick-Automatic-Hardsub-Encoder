@@ -160,6 +160,7 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#taskLoadPreset').classList.toggle('media-copy-suppressed', copy);
     syncWorkflowStrip(mode);
     syncHardsubStrategyChrome(mode);
+    hooks.onModeChange?.(mode);
   }
 
   function syncWorkflowStrip(mode) {
