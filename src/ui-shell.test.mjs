@@ -63,9 +63,15 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /body\.ui-mobile\[data-mobile-stage="prepare"\]/);
   assert.match(css, /body\.ui-mobile\[data-mobile-stage="produce"\]/);
   assert.match(main, /detectBasicCapabilities/);
-  assert.match(main, /data-workflow-step="prepare"/);
-  assert.match(main, /data-workflow-step="produce"/);
-  assert.equal((main.match(/data-workflow-step="/g) || []).length, 2);
+  assert.match(main, /data-workflow-step="assets"/);
+  assert.match(main, /data-workflow-step="preflight"/);
+  assert.match(main, /data-workflow-step="preview"/);
+  assert.match(main, /data-workflow-step="plan"/);
+  assert.match(main, /data-workflow-step="encode"/);
+  assert.equal((main.match(/data-workflow-step="/g) || []).length, 5);
+  assert.match(main, /id="hardsubStrategySwitcher"/);
+  assert.match(main, /data-hardsub-strategy="guided"/);
+  assert.match(main, /data-hardsub-strategy="manual"/);
   assert.match(main, /function ensureWebEngineReady\(\)/);
   assert.match(main, /function ensureNativeSelfTestStarted\(\)/);
   assert.match(main, /首张真实预览已成功解码输入视频/);
@@ -171,7 +177,8 @@ test('phone tablet and desktop use coordinated responsive shells', async () => {
   assert.match(css, /Runtime-first responsive workbench v4/);
   assert.match(css, /body\.ui-desktop \.workspace-layout\s*\{[\s\S]*grid-template-columns:/);
   assert.match(css, /body\.ui-tablet \.workspace-layout/);
-  assert.match(css, /body\.ui-phone \[data-mobile-stage-section\]:not\(\.hidden\)/);
+  assert.match(css, /body\.ui-phone\[data-mobile-stage="prepare"\] \[data-mobile-stage-section="prepare"\]/);
+  assert.match(css, /body\.ui-phone\[data-mobile-stage="produce"\] \[data-mobile-stage-section="produce"\]/);
 });
 
 
@@ -190,6 +197,8 @@ test('design-faithful preview sample rail and visual hierarchy are present', asy
   assert.match(css, /\.preview-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,1fr\) 190px/);
   assert.match(css, /\.preview-sample-card\.is-current/);
   assert.match(css, /\.action-green\s*\{/);
+  assert.match(css, /\.hardsub-strategy-switcher\s*\{/);
+  assert.match(css, /\.hardsub-strategy-suppressed\s*\{/);
 });
 
 
@@ -205,10 +214,12 @@ test('runtime-first three-endpoint layout keeps Android and Windows entry visibl
   assert.match(main, /id="androidAppCard"/);
   assert.match(main, /第一次使用？3 步启动/);
   assert.match(main, /第一次使用？3 步安装/);
-  assert.match(main, /<span class="step-no">02<\/span><div><h2>准备素材/);
+  assert.match(main, /<span class="step-no">01<\/span><div><h2>准备素材/);
+  assert.match(main, /<span class="step-no">02<\/span>[\s\S]*?<span class="preflight-heading">媒体与字幕预检/);
   assert.match(main, /<span class="step-no">03<\/span>[\s\S]*?<h2>真实字幕预览/);
-  assert.match(main, /<span class="step-no">04<\/span><div><h2>压制方案/);
-  assert.match(main, /<span class="step-no">05<\/span><div><h2>正式压制/);
+  assert.match(main, /<h2>选择控制方式<\/h2>/);
+  assert.match(main, /<span class="step-no">04<\/span><div><h2>输出策略/);
+  assert.match(main, /<span class="step-no">05<\/span><div><h2>执行与验证/);
 
   assert.match(css, /Runtime-first responsive workbench v4/);
   assert.match(css, /body\.ui-desktop \.workspace-layout\s*\{[\s\S]*?"runtime runtime"[\s\S]*?"main overview"/);
@@ -249,4 +260,17 @@ test('phone browser exposes dedicated Android and Windows tutorials', async () =
   assert.match(css, /body\.ui-phone \.mobile-runtime-help\s*\{[\s\S]*?display:\s*block !important/);
   assert.match(css, /body\.ui-phone \.platform-rail\s*\{[\s\S]*?display:\s*none !important/);
   assert.match(css, /body\.ui-phone \.mobile-runtime-help-grid\s*\{[\s\S]*?repeat\(2,minmax\(0,1fr\)\)/);
+});
+
+
+test('phone stage visibility respects active stage and hardsub strategy suppression', async () => {
+  const css = await readFile(new URL('./style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(
+    css,
+    /body\.ui-phone \[data-mobile-stage-section\]:not\(\.hidden\)\s*\{/
+  );
+  assert.match(
+    css,
+    /body\.ui-phone\[data-mobile-stage="prepare"\] \[data-mobile-stage-section="prepare"\][\s\S]*?:not\(\.hardsub-strategy-suppressed\)[\s\S]*?body\.ui-phone\[data-mobile-stage="produce"\] \[data-mobile-stage-section="produce"\]/
+  );
 });

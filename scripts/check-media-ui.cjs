@@ -11,12 +11,24 @@ const {spawn}=require('node:child_process');
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:4179/');
-  await page.locator('#mediaWorkspace').waitFor();
-  await page.selectOption('[name=operation]','copy');
+  await page.locator('#mediaWorkspace').waitFor({state:'attached'});
+  if(await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub still exposes the precise parameter workspace');
+  if(await page.locator('#workflowStrip span').count()!==5)throw Error('Hardsub workflow strip does not expose five semantic stages');
+  await page.evaluate(()=>['subtitleCard','planCard','encodeCard'].forEach(id=>document.querySelector('#'+id)?.classList.remove('hidden')));
+  await page.screenshot({path:'media-workspace-hardsub-goal-desktop.png',fullPage:true});
+  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace');
+  if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
+  await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
+  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
+  if(await page.locator('#mediaWorkspace').isVisible())throw Error('Returning to goal-controlled hardsub left the parameter workspace visible');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
   await page.screenshot({path:'media-workspace-copy.png',fullPage:true});
   if(!await page.locator('[name=width]').isDisabled())throw Error('Copy controls remain enabled');
   if(await page.locator('.input-ass').isVisible())throw Error('Copy still requests subtitles');
-  await page.selectOption('[name=operation]','transcode');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  if(await page.locator('#workflowStrip span').count()!==3)throw Error('Transcode workflow strip did not collapse to three stages');
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace is not visible');
   await page.fill('[name=width]','1280');await page.fill('[name=quality]','18');
   await page.click('#taskLoadPreset');
   if(await page.inputValue('[name=width]')!=='1280')throw Error('Preset overwrote resolution');
@@ -33,15 +45,46 @@ const {spawn}=require('node:child_process');
   await page.evaluate(()=>scrollTo(0,0));
   await page.screenshot({path:'media-workspace-mobile.png',fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile horizontal overflow: '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})).filter(el=>el.right>innerWidth+1).slice(0,12))));
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
+  await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('[data-hardsub-strategy="guided"]').click();});
+  if(await page.locator('#mediaWorkspace').isVisible())throw Error('Goal-controlled hardsub exposes parameter controls on mobile');
+  await page.screenshot({path:'media-workspace-hardsub-goal-mobile.png',fullPage:true});
+  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');
+  if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible()){
+    const gateState=await page.evaluate(()=>Object.fromEntries(['planCard','encodeCard','mediaWorkspace'].map(id=>{
+      const el=document.querySelector('#'+id);
+      return [id,{className:el?.className||'',display:el?getComputedStyle(el).display:null,hidden:!!el?.hidden}];
+    }).concat([['body',{mediaOperation:document.body.dataset.mediaOperation||'',hardsubStrategy:document.body.dataset.hardsubStrategy||'',mobileStage:document.body.dataset.mobileStage||'',className:document.body.className}]])));
+    throw Error('Parameter-controlled hardsub exposes the goal execution surface on mobile: '+JSON.stringify(gateState));
+  }
+  await page.screenshot({path:'media-workspace-hardsub-parameters-mobile.png',fullPage:true});
+  if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Hardsub mobile horizontal overflow');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  if(await page.evaluate(()=>document.body.dataset.mobileStage)!=='prepare')throw Error('Leaving hardsub did not reset the mobile stage');
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace remained hidden after leaving hardsub on mobile');
   await page.evaluate(async()=>{
-    document.querySelector('#mediaWorkspace').remove();
+    // Isolate the task-planning smoke from the production mount. The production
+    // workspace owns MutationObservers that may legally re-host its section;
+    // removing only the DOM node leaves those owners alive and can resurrect
+    // the old workspace during a second mount.
+    document.body.innerHTML='<section id="inputCard"></section>';
     const {mountMediaWorkspace}=await import('/src/media-workspace.js');
     window.taskRuns=[];
     mountMediaWorkspace({isWindows:()=>false,hasNvenc:()=>false,platformKey:()=>({}),busy:()=>false,setBusy:()=>{},log:()=>{},cancel:()=>{},save:()=>{},prepare:async()=>({duration:2181.384,fps:60,audioTracks:1}),run:async(task)=>{window.taskRuns.push(task);return {outputBytes:530000000,outputDuration:task.expectedDuration,verified:true};}});
   });
-  await page.selectOption('[name=operation]','transcode');await page.selectOption('[name=audio]','aac');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');await page.selectOption('[name=audio]','aac');
   await page.selectOption('[name=rateMode]','size');await page.fill('[name=targetSize]','500');
-  await page.click('#taskInspect');await page.waitForFunction(()=>document.querySelector('#taskEstimate').textContent.includes('500.00 MB'));
+  await page.click('#taskInspect');await page.waitForTimeout(100);
+  const inspectState=await page.evaluate(()=>({
+    estimate:document.querySelector('#taskEstimate').textContent,
+    status:document.querySelector('#taskStatus').textContent,
+    operation:document.querySelector('[name=operation]').value,
+    audio:document.querySelector('[name=audio]').value,
+    rateMode:document.querySelector('[name=rateMode]').value,
+    targetSize:document.querySelector('[name=targetSize]').value
+  }));
+  if(!inspectState.estimate.includes('500.00 MB'))throw Error('Size inspection failed: '+JSON.stringify(inspectState));
   await page.click('#taskRun');await page.waitForFunction(()=>document.querySelector('#taskStatus').textContent.includes('超出体积预算'));
   if(await page.locator('#taskSave').isDisabled())throw Error('Oversized full output was discarded');
   if(await page.locator('#taskReport').isDisabled())throw Error('Report unavailable');

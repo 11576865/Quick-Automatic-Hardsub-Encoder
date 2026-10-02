@@ -15,9 +15,9 @@ export function mountMediaWorkspace(hooks) {
   modeNav.className = 'media-mode-switcher';
   modeNav.setAttribute('aria-label', '视频处理工作区');
   modeNav.innerHTML =
-    '<button type="button" data-media-mode="hardsub" aria-pressed="true"><span class="media-mode-index">01</span><span><strong>硬字幕压制</strong><small>ASS / 字体 / libass 预览 / 重编码</small></span></button>' +
-    '<button type="button" data-media-mode="transcode" aria-pressed="false"><span class="media-mode-index">02</span><span><strong>纯视频转码</strong><small>编码 / 画面 / 帧率 / 音频 / 封装</small></span></button>' +
-    '<button type="button" data-media-mode="copy" aria-pressed="false"><span class="media-mode-index">03</span><span><strong>无损快速剪切</strong><small>时间范围 / 关键帧边界 / 直接复制</small></span></button>';
+    '<button type="button" data-media-mode="hardsub" aria-pressed="true"><span class="media-mode-index">ASS</span><span><strong>硬字幕压制</strong><small>预检 / 真实预览 / 方案 / 重编码</small></span></button>' +
+    '<button type="button" data-media-mode="transcode" aria-pressed="false"><span class="media-mode-index">VIDEO</span><span><strong>纯视频转码</strong><small>编码 / 画面 / 帧率 / 音频 / 封装</small></span></button>' +
+    '<button type="button" data-media-mode="copy" aria-pressed="false"><span class="media-mode-index">COPY</span><span><strong>无损快速剪切</strong><small>时间范围 / 关键帧边界 / 直接复制</small></span></button>';
   section.innerHTML = `<div class="media-workspace-heading">
     <div>
       <span id="mediaWorkspaceEyebrow" class="media-workspace-eyebrow">HARDSUB</span>
@@ -64,6 +64,11 @@ export function mountMediaWorkspace(hooks) {
   document.querySelector('#inputCard').after(section);
   const form = section.querySelector('form'), get = name => form.elements.namedItem(name);
   const modeButtons = [...modeNav.querySelectorAll('[data-media-mode]')];
+  const strategyButtons = [...document.querySelectorAll('[data-hardsub-strategy]')];
+  const manualMount = document.querySelector('#hardsubManualMount');
+  const inputCard = document.querySelector('#inputCard');
+  const productionDeck = document.querySelector('#hardsubControlDeck');
+  let hardsubStrategy = localStorage.getItem('hardsub-control-strategy-v1') === 'manual' ? 'manual' : 'guided';
   const qualityField = get('quality').closest('label');
   const qualityRange = document.createElement('input');
   qualityRange.type = 'range';
@@ -117,10 +122,10 @@ export function mountMediaWorkspace(hooks) {
     const copy = mode === 'copy';
     const transcode = mode === 'transcode';
     const hardsub = mode === 'hardsub';
-    const title = hardsub ? '硬字幕压制工作区' : transcode ? '纯视频转码工作区' : '无损快速剪切工作区';
-    const eyebrow = hardsub ? 'HARDSUB' : transcode ? 'TRANSCODE' : 'LOSSLESS CUT';
+    const title = hardsub ? '编码参数' : transcode ? '纯视频转码工作区' : '无损快速剪切工作区';
+    const eyebrow = hardsub ? 'HARDSUB · PARAMETERS' : transcode ? 'TRANSCODE' : 'LOSSLESS CUT';
     const description = hardsub
-      ? '字幕预检与真实 libass 预览完成后，在这里控制最终视频编码、音频与封装。'
+      ? '直接控制编码器、质量、帧率、尺寸、滤镜、音轨与封装。执行前仍沿用同一字幕预检与真实 libass 预览门槛。'
       : transcode
         ? '只处理视频、音频与封装；字幕输入不会参与编码链路。所有编码器与画面参数由当前任务显式决定。'
         : '围绕时间范围和轨道保留直接复制压缩数据；不运行视频编码，也不做质量校准。';
@@ -128,7 +133,7 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#mediaWorkspaceTitle').textContent = title;
     section.querySelector('#mediaWorkspaceEyebrow').textContent = eyebrow;
     section.querySelector('#mediaWorkspaceDescription').textContent = description;
-    section.querySelector('#taskRun').textContent = hardsub ? '开始硬字幕压制' : transcode ? '开始视频转码' : '开始无损剪切';
+    section.querySelector('#taskRun').textContent = hardsub ? '使用当前参数开始硬压' : transcode ? '开始视频转码' : '开始无损剪切';
 
     const heroSubtitle = document.querySelector('#heroSubtitle');
     if (heroSubtitle) heroSubtitle.textContent = hardsub
@@ -153,7 +158,60 @@ export function mountMediaWorkspace(hooks) {
     if (stageNav) stageNav.classList.toggle('media-mode-suppressed', !hardsub);
     section.querySelector('#taskSamples').closest('.button-row')?.classList.toggle('media-copy-suppressed', copy);
     section.querySelector('#taskLoadPreset').classList.toggle('media-copy-suppressed', copy);
+    syncWorkflowStrip(mode);
+    syncHardsubStrategyChrome(mode);
+    hooks.onModeChange?.(mode);
   }
+
+  function syncWorkflowStrip(mode) {
+    const strip = document.querySelector('#workflowStrip');
+    if (!strip) return;
+    const steps = mode === 'hardsub'
+      ? [['01','素材'],['02','预检'],['03','预览'],['04','方案'],['05','压制']]
+      : mode === 'transcode'
+        ? [['01','素材'],['02','参数'],['03','执行']]
+        : [['01','素材'],['02','边界'],['03','导出']];
+    strip.setAttribute('aria-label', mode === 'hardsub' ? '硬字幕压制流程' : mode === 'transcode' ? '视频转码流程' : '无损剪切流程');
+    strip.innerHTML = steps.map(([index,label]) => '<span><b>'+index+'</b>'+label+'</span>').join('');
+  }
+
+  function syncHardsubStrategyChrome(mode = get('operation').value) {
+    const hardsub = mode === 'hardsub';
+    const guided = hardsubStrategy === 'guided';
+    document.body.dataset.hardsubStrategy = hardsubStrategy;
+    section.dataset.mobileStageSection = hardsub ? 'produce' : 'prepare';
+    for (const button of strategyButtons) {
+      button.setAttribute('aria-pressed', String(button.dataset.hardsubStrategy === hardsubStrategy));
+    }
+
+    const subtitleCard = document.querySelector('#subtitleCard');
+    const productionAvailable = hardsub && subtitleCard && !subtitleCard.classList.contains('hidden');
+    productionDeck?.classList.toggle('hidden', !productionAvailable);
+    productionDeck?.classList.toggle('media-mode-suppressed', !hardsub);
+
+    if (hardsub) {
+      if (manualMount && section.parentElement !== manualMount) manualMount.append(section);
+    } else if (inputCard && section.previousElementSibling !== inputCard) {
+      inputCard.after(section);
+    }
+
+    section.classList.toggle('hardsub-strategy-suppressed', hardsub && (guided || !productionAvailable));
+    document.querySelector('#planCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
+    document.querySelector('#encodeCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
+  }
+
+  for (const button of strategyButtons) {
+    button.addEventListener('click', () => {
+      if (busy || hooks.busy()) return;
+      hardsubStrategy = button.dataset.hardsubStrategy === 'manual' ? 'manual' : 'guided';
+      localStorage.setItem('hardsub-control-strategy-v1', hardsubStrategy);
+      syncHardsubStrategyChrome();
+    });
+  }
+
+  const subtitleCardObserver = new MutationObserver(() => syncHardsubStrategyChrome());
+  const observedSubtitleCard = document.querySelector('#subtitleCard');
+  if (observedSubtitleCard) subtitleCardObserver.observe(observedSubtitleCard, { attributes:true, attributeFilter:['class'] });
 
   for (const button of modeButtons) {
     button.addEventListener('click', () => {
@@ -171,7 +229,11 @@ export function mountMediaWorkspace(hooks) {
     document.querySelectorAll('.input-ass,.input-font').forEach(el=>el.classList.toggle('hidden',get('operation').value!=='hardsub'));
     for(const o of get('audio').options)o.disabled=copy&&['aac','libopus'].includes(o.value);
     if(copy && ['aac','libopus'].includes(get('audio').value))get('audio').value='copy';
-    section.querySelector('#taskModeHint').textContent=copy?'无损快速剪切：起点向前定位到关键帧，不重新编码。实际起点会显示在任务状态中；终点仍受压缩数据包边界约束。':'手动模式无需质量校准。硬字幕模式仍需确认真实字幕预览；纯视频转码无需字幕。';
+    section.querySelector('#taskModeHint').textContent=copy
+      ? '无损快速剪切：起点向前定位到关键帧，不重新编码。实际起点会显示在任务状态中；终点仍受压缩数据包边界约束。'
+      : mode==='hardsub'
+        ? '参数控制：直接控制底层编码参数，但不会绕过字幕分析、字体诊断、真实 libass 预览和成品验证。'
+        : '纯视频转码直接使用当前参数；不会要求 ASS，也不会静默替换你选择的编码器。';
   }
   function updateRate(){const mode=get('rateMode').value;for(const key of ['targetSize','sizeUnit','sizeReserve'])get(key).disabled=mode!=='size'||get('operation').value==='copy';get('quality').disabled=mode!=='quality';get('bitrate').disabled=mode!=='bitrate';get('twoPass').disabled=get('operation').value==='copy'||get('encoder').value!=='libx264'||mode==='quality';if(get('twoPass').disabled)get('twoPass').checked=false;const encoded=['aac','libopus'].includes(get('audio').value);for(const key of ['audioBitrate','audioChannels','audioSampleRate'])get(key).disabled=!encoded;}
   get('audio').onchange=updateRate;
@@ -247,5 +309,5 @@ export function mountMediaWorkspace(hooks) {
     finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskSave').disabled=!completed;section.querySelector('#taskReport').disabled=!lastReport;}
   };
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();
-  return {section,dispose:()=>{clearInterval(platformTimer);for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();delete document.body.dataset.mediaOperation;}};
+  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
