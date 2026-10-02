@@ -216,7 +216,7 @@ function Get-BackendInfo {
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
         bridgeVersion=4
-        taskSchemaVersion=2
+        taskSchemaVersion=3
         fpsModeSupported=[bool]$script:Capabilities.FpsModeSupported
         globalOptions=[object[]]$script:Capabilities.GlobalOptions
     }
