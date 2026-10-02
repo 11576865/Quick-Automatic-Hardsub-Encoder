@@ -32,6 +32,10 @@ const {spawn}=require('node:child_process');
   if(await page.inputValue('[name=start]')!=='3:57.25')throw Error('Full-width clock input did not normalize');
   if(await page.locator('#workflowStrip span').count()!==3)throw Error('Transcode workflow strip did not collapse to three stages');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace is not visible');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
+  if((await page.locator('#mediaWorkspaceTitle').textContent()).trim()!=='硬字幕压制工作区')throw Error('Transcode -> hardsub did not restore hardsub chrome');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  if((await page.locator('#mediaWorkspaceTitle').textContent()).trim()!=='纯视频转码工作区')throw Error('Hardsub -> transcode did not restore transcode chrome');
   if((await page.locator('#taskLoadPreset').textContent()).trim()!=='恢复推荐方案')throw Error('Recommended-plan recovery is not explained in user language');
   if(!(await page.locator('.media-decision-hint').textContent()).includes('不确定时直接保留推荐方案'))throw Error('Core parameter area lacks uncertainty guidance');
   if(!(await page.locator('[name=preset] option:checked').textContent()).includes('均衡'))throw Error('Preset selector does not expose human-readable intent');
@@ -151,15 +155,27 @@ const {spawn}=require('node:child_process');
   if((await page.locator('#taskPercent').textContent()).trim()!=='100%')throw Error('Completed task did not expose 100% progress');
   if(await page.locator('#taskReport').isDisabled())throw Error('Report unavailable');
 
+  await page.selectOption('[name=rateMode]','quality');
+  if(await page.locator('#mediaWorkspace').getAttribute('data-completed-stale')!=='true')throw Error('Changing task settings did not mark the verified artifact as belonging to the previous task');
+  if((await page.locator('#taskSave').textContent()).trim()!=='保存上一成品')throw Error('Verified prior artifact is not clearly labeled after settings change');
+  if((await page.locator('#taskRun').textContent()).trim()!=='开始视频转码')throw Error('Run action still claims re-encode after current settings diverged from the completed task');
+  if(!await page.locator('#taskSave').evaluate(el=>el.classList.contains('task-primary-action')))throw Error('Unsaved previous artifact lost primary save action after settings change');
+
   await page.click('#taskSave');
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:false,jobId:'ui-smoke-job',error:'simulated publish failure'}})));
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='save_failed');
-  if((await page.locator('#taskSave').textContent()).trim()!=='重试保存成品')throw Error('Publish failure did not expose retry action');
+  if((await page.locator('#taskSave').textContent()).trim()!=='重试保存上一成品')throw Error('Publish failure lost previous-artifact identity');
   if(!(await page.locator('#taskStatus').textContent()).includes('无需重新压制'))throw Error('Publish failure did not preserve verified-output recovery guidance');
   await page.click('#taskSave');
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:true,jobId:'ui-smoke-job',bytes:530000000,path:'C:\\output.mkv'}})));
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saved');
+  if((await page.locator('#taskSave').textContent()).trim()!=='再次保存上一成品')throw Error('Saved prior artifact lost identity after current settings diverged');
+
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
+  if((await page.locator('#taskRun').textContent()).trim()!=='开始无损剪切')throw Error('Mode change after completion retained stale re-encode label');
+  if((await page.locator('#taskSave').textContent()).trim()!=='再次保存上一成品')throw Error('Mode change discarded access to the previous saved artifact');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
 
   await page.locator('.media-sample-panel > summary').click();await page.click('#taskSamples');
   await page.waitForFunction(()=>document.querySelector('#taskStatus').textContent.includes('三组试压完成'));
