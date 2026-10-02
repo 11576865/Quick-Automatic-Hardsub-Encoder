@@ -27,6 +27,9 @@ const {spawn}=require('node:child_process');
   if(!await page.locator('[name=width]').isDisabled())throw Error('Copy controls remain enabled');
   if(await page.locator('.input-ass').isVisible())throw Error('Copy still requests subtitles');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  await page.fill('[name=start]','3：57.250');
+  await page.locator('[name=start]').blur();
+  if(await page.inputValue('[name=start]')!=='3:57.25')throw Error('Full-width clock input did not normalize');
   if(await page.locator('#workflowStrip span').count()!==3)throw Error('Transcode workflow strip did not collapse to three stages');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace is not visible');
   if((await page.locator('#taskLoadPreset').textContent()).trim()!=='恢复推荐方案')throw Error('Recommended-plan recovery is not explained in user language');
@@ -100,6 +103,7 @@ const {spawn}=require('node:child_process');
       cancel:()=>{},
       save:()=>({pending:true}),
       prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
+      waveform:async()=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',duration:2181.384,audioTrack:0,width:2400,height:160}),
       run:async(task,media,progress)=>{
         window.taskRuns.push(task);
         progress?.(.42,'正在处理 · 90.0 秒',{state:'encoding',timeSec:90,duration:task.expectedDuration,speed:2.5});
@@ -113,6 +117,16 @@ const {spawn}=require('node:child_process');
     });
   });
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  await page.click('#taskWaveformLoad');
+  await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('第 1 条音轨'));
+  if(await page.locator('#taskWaveformImage').isHidden())throw Error('Waveform image did not become visible');
+  const waveformBox=await page.locator('#taskWaveformTrack').boundingBox();
+  if(!waveformBox)throw Error('Waveform track has no layout box');
+  await page.mouse.click(waveformBox.x+waveformBox.width*0.25,waveformBox.y+waveformBox.height*0.5);
+  await page.click('#taskWaveformSetStart');
+  if(!/^[0-9]+:[0-5][0-9]/.test(await page.inputValue('[name=start]')))throw Error('Waveform cursor did not write a clock-form start time');
+  await page.fill('[name=start]','0');
+  await page.locator('[name=start]').blur();
   await page.locator('.media-track-panel > summary').click();await page.selectOption('[name=audio]','aac');
   await page.selectOption('[name=rateMode]','size');await page.fill('[name=targetSize]','500');
   await page.click('#taskInspect');await page.waitForTimeout(100);

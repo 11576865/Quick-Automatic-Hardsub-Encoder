@@ -1,3 +1,4 @@
+import { parseMediaTime } from './media-time.js';
 // Size budgets are estimates, never a reason to truncate or delete a valid movie.
 export const SIZE_UNITS = { MB: 1000000, GB: 1000000000, MiB: 1048576, GiB: 1073741824 };
 export function sizeBudget(raw, duration, audioTracks) {
@@ -19,8 +20,10 @@ export function formatSize(bytes) {
 }
 export function sampleSettings(raw, media) {
   if (raw.operation === 'copy') throw Error('无损剪切无需比较编码质量');
-  const start = Number(raw.sampleStart || 0), length = Number(raw.sampleLength || 15);
-  const rangeStart = Number(raw.start || 0), rangeEnd = raw.end === '' || raw.end == null ? media.duration : Number(raw.end);
+  const start = parseMediaTime(raw.sampleStart, { empty: 0, max: media.duration, label: '试压起点' });
+  const length = Number(raw.sampleLength || 15);
+  const rangeStart = parseMediaTime(raw.start, { empty: 0, max: media.duration, label: '开始时间' });
+  const rangeEnd = parseMediaTime(raw.end, { empty: media.duration, max: media.duration, label: '结束时间' });
   if (!Number.isFinite(start) || !Number.isFinite(length) || length < 2 || length > 60 || start < rangeStart || start >= rangeEnd) throw Error('试压起点须在所选范围内，长度须为 2–60 秒');
   const end = Math.min(rangeEnd, start + length);
   if (end - start < 2) throw Error('试压片段不足 2 秒');

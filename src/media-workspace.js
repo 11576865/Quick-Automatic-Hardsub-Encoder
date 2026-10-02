@@ -1,5 +1,6 @@
 import { formatSize, outputReport, sampleSettings, sampleProjection } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
+import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import './media-workspace-ui.css';
 
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -28,7 +29,29 @@ export function mountMediaWorkspace(hooks) {
     <div class="media-workspace-badges"><span>同一任务格式</span><span>Native / Web</span></div>
   </div>
   <form id="mediaTaskForm">
-  <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','无损快速剪切']])}${input('start','开始时间（秒）','0','0')}${input('end','结束时间（秒）','留空表示片尾')}</div>
+  <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','无损快速剪切']])}${input('start','开始时间','例如 3:57.250','0')}${input('end','结束时间','留空表示片尾；例如 5:12.800')}</div>
+  <p class="note media-time-format-note">时间支持秒、小数秒、MM:SS.mmm、HH:MM:SS.mmm；中文全角冒号会自动识别。</p>
+  <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="音频波形时间轴">
+    <div class="media-waveform-heading">
+      <div><strong>音频波形</strong><span id="taskWaveformStatus">尚未生成 · 默认显示第 1 条音轨</span></div>
+      <button type="button" id="taskWaveformLoad" class="secondary">生成波形</button>
+    </div>
+    <div id="taskWaveformScroll" class="media-waveform-scroll">
+      <div id="taskWaveformTrack" class="media-waveform-track" tabindex="0" aria-label="可点击定位的音频波形">
+        <div id="taskWaveformPlaceholder" class="media-waveform-placeholder">选择视频后生成波形，可直接定位剪切边界。</div>
+        <img id="taskWaveformImage" alt="音频波形" draggable="false" hidden>
+        <span id="taskWaveformStart" class="media-waveform-boundary media-waveform-boundary-start" data-boundary="start" title="拖动开始时间" hidden></span>
+        <span id="taskWaveformEnd" class="media-waveform-boundary media-waveform-boundary-end" data-boundary="end" title="拖动结束时间" hidden></span>
+        <span id="taskWaveformCursor" class="media-waveform-cursor" aria-hidden="true" hidden></span>
+      </div>
+    </div>
+    <div class="media-waveform-controls">
+      <span>光标 <strong id="taskWaveformCursorTime">0:00</strong></span>
+      <button type="button" id="taskWaveformSetStart" class="secondary">光标设为开始</button>
+      <button type="button" id="taskWaveformSetEnd" class="secondary">光标设为结束</button>
+      <label class="media-waveform-zoom">缩放 <input id="taskWaveformZoom" type="range" min="1" max="8" step="1" value="1" aria-label="波形时间轴缩放"></label>
+    </div>
+  </section>
   <p id="taskModeHint" class="note media-mode-hint"></p>
   <div class="media-branch-map" aria-label="当前媒体任务结构">
     <span>共享入口 · 源媒体 / 探测</span><b>→</b><strong>当前任务分支</strong><b>→</b><span>共享出口 · 封装 / 执行 / 验证 / 保存</span>
@@ -85,7 +108,7 @@ export function mountMediaWorkspace(hooks) {
     <div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${select('outputContainer','成品容器',[['auto','Auto · 自动选择安全容器'],['keep','保持源容器（可用时）'],['mkv','MKV · Matroska'],['mp4','MP4 · MPEG-4']])}</div>
     <p id="taskContainerDecision" class="note">执行检查后显示实际容器选择及原因。</p>
   </section>
-  <details class="media-sample-panel"><summary>配置保存与短片试压比较</summary><div class="task-grid">${input('configName','配置名称','我的配置')}${select('savedConfig','已保存配置',[])}${input('sampleStart','试压起点（秒）','','0')}${input('sampleLength','试压长度（秒）','2–60','15')}</div><div class="button-row"><button type="button" id="taskStore" class="secondary">保存当前配置</button><button type="button" id="taskRestore" class="secondary">加载配置</button><button type="button" id="taskDelete" class="secondary">删除配置</button><button type="button" id="taskExportConfig" class="secondary">导出配置 JSON</button><label>导入配置 JSON<input type="file" id="taskImportConfig" accept="application/json,.json"></label><button type="button" id="taskSamples" class="secondary">比较三组短片</button></div><p class="note">质量模式比较质量值 ±2；码率模式比较码率 ±20%。片段体积外推不保证整片大小，建议选择运动或细节复杂的片段。原生短片可保存到设备后比较。</p><div id="taskSampleResults" aria-live="polite"></div></details>
+  <details class="media-sample-panel"><summary>配置保存与短片试压比较</summary><div class="task-grid">${input('configName','配置名称','我的配置')}${select('savedConfig','已保存配置',[])}${input('sampleStart','试压起点','例如 3:57.250','0')}${input('sampleLength','试压长度（秒）','2–60','15')}</div><div class="button-row"><button type="button" id="taskStore" class="secondary">保存当前配置</button><button type="button" id="taskRestore" class="secondary">加载配置</button><button type="button" id="taskDelete" class="secondary">删除配置</button><button type="button" id="taskExportConfig" class="secondary">导出配置 JSON</button><label>导入配置 JSON<input type="file" id="taskImportConfig" accept="application/json,.json"></label><button type="button" id="taskSamples" class="secondary">比较三组短片</button></div><p class="note">质量模式比较质量值 ±2；码率模式比较码率 ±20%。片段体积外推不保证整片大小，建议选择运动或细节复杂的片段。原生短片可保存到设备后比较。</p><div id="taskSampleResults" aria-live="polite"></div></details>
     <p id="taskEstimate" class="note" aria-live="polite"></p>
   <section id="taskRunState" class="task-run-state" aria-live="polite">
     <div class="task-run-state-heading"><div><span>任务状态</span><strong id="taskStage">等待开始</strong></div><strong id="taskPercent">0%</strong></div>
@@ -136,6 +159,7 @@ export function mountMediaWorkspace(hooks) {
   qualityRange.addEventListener('input', () => { get('quality').value = qualityRange.value; syncQualityRange(); });
   get('quality').addEventListener('input', syncQualityRange);
   let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
+  let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null;
   const storageKey='media-workspace-configs-v2';
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
@@ -147,6 +171,119 @@ export function mountMediaWorkspace(hooks) {
   const formatTaskClock = seconds => {
     const value=Math.max(0,Number(seconds)||0),whole=Math.floor(value),h=Math.floor(whole/3600),m=Math.floor((whole%3600)/60),s=whole%60;
     return h ? h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0') : m+':'+String(s).padStart(2,'0');
+  };
+  const timeLabels={start:'开始时间',end:'结束时间',sampleStart:'试压起点'};
+  const normalizeTimeControl=(name,allowEmpty=false)=>{
+    const el=get(name);if(!el)return true;
+    const raw=String(el.value||'').trim();
+    if(!raw&&allowEmpty){el.setCustomValidity('');syncWaveformMarkers();return true;}
+    try{
+      const seconds=parseMediaTime(raw,{empty:allowEmpty?undefined:0,label:timeLabels[name]||'时间'});
+      el.value=formatMediaTimeInput(seconds,3);
+      el.setCustomValidity('');
+      syncWaveformMarkers();
+      return true;
+    }catch(error){
+      el.setCustomValidity(error.message);
+      return false;
+    }
+  };
+  for(const [name,allowEmpty] of [['start',false],['end',true],['sampleStart',false]]){
+    const el=get(name);
+    el?.addEventListener('blur',()=>normalizeTimeControl(name,allowEmpty));
+    el?.addEventListener('input',()=>{el.setCustomValidity('');if(name!=='sampleStart')syncWaveformMarkers();});
+  }
+  const waveformPanel=section.querySelector('#taskWaveformPanel');
+  const waveformScroll=section.querySelector('#taskWaveformScroll');
+  const waveformTrack=section.querySelector('#taskWaveformTrack');
+  const waveformImage=section.querySelector('#taskWaveformImage');
+  const waveformPlaceholder=section.querySelector('#taskWaveformPlaceholder');
+  const waveformStatus=section.querySelector('#taskWaveformStatus');
+  const waveformCursorEl=section.querySelector('#taskWaveformCursor');
+  const waveformCursorTime=section.querySelector('#taskWaveformCursorTime');
+  const waveformStartEl=section.querySelector('#taskWaveformStart');
+  const waveformEndEl=section.querySelector('#taskWaveformEnd');
+  const waveformZoom=section.querySelector('#taskWaveformZoom');
+  const clampWaveformTime=value=>Math.max(0,Math.min(waveformDuration||0,Number(value)||0));
+  function readBoundary(name,fallback){
+    try{return clampWaveformTime(parseMediaTime(get(name)?.value,{empty:fallback,label:timeLabels[name]||'时间'}));}
+    catch{return clampWaveformTime(fallback);}
+  }
+  function syncWaveformMarkers(){
+    if(!(waveformDuration>0))return;
+    const start=readBoundary('start',0);
+    const end=readBoundary('end',waveformDuration);
+    waveformStartEl.style.left=(start/waveformDuration*100)+'%';
+    waveformEndEl.style.left=(end/waveformDuration*100)+'%';
+    waveformCursor=clampWaveformTime(waveformCursor);
+    waveformCursorEl.style.left=(waveformCursor/waveformDuration*100)+'%';
+    waveformCursorTime.textContent=formatMediaTimeInput(waveformCursor,3);
+  }
+  function setBoundary(name,value){
+    const el=get(name);if(!el)return;
+    el.value=formatMediaTimeInput(clampWaveformTime(value),3);
+    el.setCustomValidity('');
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+    el.dispatchEvent(new Event('change',{bubbles:true}));
+    syncWaveformMarkers();
+  }
+  function pointerTime(event){
+    if(!(waveformDuration>0))return 0;
+    const rect=waveformTrack.getBoundingClientRect();
+    return clampWaveformTime((event.clientX-rect.left)/Math.max(1,rect.width)*waveformDuration);
+  }
+  function setWaveformCursor(value){
+    waveformCursor=clampWaveformTime(value);
+    syncWaveformMarkers();
+  }
+  waveformTrack.addEventListener('pointerdown',event=>{
+    if(!(waveformDuration>0))return;
+    const boundary=event.target?.dataset?.boundary;
+    waveformDragging=boundary==='start'||boundary==='end'?boundary:null;
+    setWaveformCursor(pointerTime(event));
+    if(waveformDragging)setBoundary(waveformDragging,waveformCursor);
+    waveformTrack.setPointerCapture?.(event.pointerId);
+  });
+  waveformTrack.addEventListener('pointermove',event=>{
+    if(!waveformDragging)return;
+    setWaveformCursor(pointerTime(event));
+    setBoundary(waveformDragging,waveformCursor);
+  });
+  const finishWaveformDrag=event=>{waveformDragging=null;try{waveformTrack.releasePointerCapture?.(event.pointerId);}catch{}};
+  waveformTrack.addEventListener('pointerup',finishWaveformDrag);
+  waveformTrack.addEventListener('pointercancel',finishWaveformDrag);
+  section.querySelector('#taskWaveformSetStart').onclick=()=>{if(waveformDuration>0)setBoundary('start',waveformCursor);};
+  section.querySelector('#taskWaveformSetEnd').onclick=()=>{if(waveformDuration>0)setBoundary('end',waveformCursor);};
+  waveformZoom.oninput=()=>{
+    waveformTrack.style.width=(Math.max(1,Number(waveformZoom.value)||1)*100)+'%';
+    syncWaveformMarkers();
+  };
+  section.querySelector('#taskWaveformLoad').onclick=async()=>{
+    const button=section.querySelector('#taskWaveformLoad');
+    if(!hooks.waveform){waveformStatus.textContent='当前后端未提供波形生成能力';return;}
+    if(busy||hooks.busy())return;
+    button.disabled=true;
+    waveformStatus.textContent='正在由 FFmpeg 生成波形…';
+    try{
+      const audioValue=String(get('audioTrack')?.value||'all');
+      const audioTrack=audioValue==='all'?0:Math.max(0,Number(audioValue)||0);
+      const result=await hooks.waveform({audioTrack,width:2400,height:160});
+      if(!(Number(result?.duration)>0)||!result?.url)throw Error('波形结果缺少有效时长或图像');
+      if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
+      waveformUrl=result.url;
+      waveformDuration=Number(result.duration);
+      waveformImage.src=waveformUrl;
+      waveformImage.hidden=false;
+      waveformPlaceholder.hidden=true;
+      waveformStartEl.hidden=false;
+      waveformEndEl.hidden=false;
+      waveformCursorEl.hidden=false;
+      waveformCursor=readBoundary('start',0);
+      waveformStatus.textContent='第 '+(Number(result.audioTrack??audioTrack)+1)+' 条音轨 · '+formatMediaTimeInput(waveformDuration,3);
+      syncWaveformMarkers();
+    }catch(error){
+      waveformStatus.textContent='波形生成失败：'+error.message;
+    }finally{button.disabled=false;}
   };
   const runButtonLabel = () => get('operation').value==='hardsub'?'使用当前参数开始硬压':get('operation').value==='transcode'?'开始视频转码':'开始无损剪切';
   const presetIntent = (encoder,preset) => {
@@ -551,5 +688,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();renderPlanSummary();setTaskState('idle');
-  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }

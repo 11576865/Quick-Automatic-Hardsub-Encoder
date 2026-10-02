@@ -1,11 +1,33 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { compileTask } from './media-task.js';
+import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import { EncoderEngine } from './engine.js';
 import schema from './task-argument-schema.json' with {type:'json'};
 const media={duration:6,fps:30,audioTracks:2,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'source.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac','aac']};
 export const defaults={operation:'transcode',codec:'h264',encoder:'libx264',preset:'medium',rateMode:'quality',quality:23,start:0,end:'',audio:'copy',audioTrack:'all',fpsMode:'auto',pixelFormat:'yuv420p',scaleAlgorithm:'lanczos',rotation:'none',deinterlace:'none',multipass:'fullres',lookahead:'',aqStrength:'',outputContainer:'auto'};
 const build=(changes={})=>compileTask({...defaults,...changes},media);
+
+test('human media time accepts seconds, clock forms and full-width punctuation',()=>{
+  assert.equal(parseMediaTime('3.57'),3.57);
+  assert.equal(parseMediaTime('3:57'),237);
+  assert.equal(parseMediaTime('3:57.250'),237.25);
+  assert.equal(parseMediaTime('1:03:57.250'),3837.25);
+  assert.equal(parseMediaTime('3：57.250'),237.25);
+  assert.equal(formatMediaTimeInput(237.25),'3:57.25');
+  assert.throws(()=>parseMediaTime('3:99'),/秒必须小于 60/);
+  assert.throws(()=>parseMediaTime('-1'),/不能为负数/);
+});
+
+test('compiled trim range accepts clock-form inputs and still rejects reversed range',()=>{
+  const longMedia={...media,duration:4000};
+  const task=compileTask({...defaults,start:'3:57.250',end:'4:00'},longMedia);
+  assert.equal(task.start,237.25);
+  assert.equal(task.end,240);
+  assert.equal(task.expectedDuration,2.75);
+  assert.throws(()=>compileTask({...defaults,start:'4:00',end:'3:57.250'},longMedia),/结束时间必须晚于开始时间/);
+});
+
 test('manual values survive compilation and are emitted once',()=>{
   const task=build({width:320,height:180,fpsMode:'cfr',fps:24,gop:72,maxrate:6000000,bufsize:12000000,quality:18,preset:'slow'});
   assert.equal(task.outputArgs[task.outputArgs.indexOf('-crf')+1],'18');
