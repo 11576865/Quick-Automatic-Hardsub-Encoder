@@ -4280,6 +4280,9 @@ function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&am
 let manualCancelRequested = false;
 mountMediaWorkspace({
   busy: () => state.operationBusy || !!state.nativeJobId,
+  onModeChange: mode => {
+    if (mode !== 'hardsub') setMobileStage('prepare', { scroll: false });
+  },
   isWindows: () => !!globalThis.NativeHardsub?.__windowsNative,
   hasNvenc: codec => {
     const key = {h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc'}[codec];
