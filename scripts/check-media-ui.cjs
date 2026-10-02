@@ -51,6 +51,9 @@ const {spawn}=require('node:child_process');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');
   await page.screenshot({path:'media-workspace-hardsub-parameters-mobile.png',fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Hardsub mobile horizontal overflow');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  if(await page.evaluate(()=>document.body.dataset.mobileStage)!=='prepare')throw Error('Leaving hardsub did not reset the mobile stage');
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace remained hidden after leaving hardsub on mobile');
   await page.evaluate(async()=>{
     document.querySelector('#mediaWorkspace').remove();
     const {mountMediaWorkspace}=await import('/src/media-workspace.js');
