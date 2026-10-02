@@ -25,6 +25,7 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /data-hardsub-strategy/);
   assert.match(workspace, /hardsub-control-strategy-v1/);
   assert.match(workspace, /syncHardsubStrategyChrome/);
+  assert.match(workspace, /section\.dataset\.mobileStageSection = hardsub \? 'produce' : 'prepare'/);
   assert.match(workspace, /hardsub-strategy-suppressed/);
   assert.match(workspace, /HARDSUB · PARAMETERS/);
   assert.match(workspace, /使用当前参数开始硬压/);
