@@ -8,7 +8,6 @@
       "id": "QHE.PREPARE_SHELL.DESKTOP_DARK",
       "surface_ids": [
         "QHE.SHELL.WORKFLOW_HEADER",
-        "QHE.HELP.RUNTIME",
         "QHE.INPUT.MATERIALS",
         "QHE.DIAGNOSTICS.ENVIRONMENT",
         "QHE.PREFLIGHT.MEDIA_SUBTITLE",
@@ -59,7 +58,7 @@
       "adapter": "playwright-web",
       "evidence_level": "production-rendered",
       "route": "/",
-      "selector": "#workflowMain",
+      "selector": ".workflow-main",
       "capture_region": "full-page",
       "viewport": {
         "width": 1365,
@@ -133,7 +132,8 @@
         "QHE.NAV.MOBILE_STAGE",
         "QHE.PREVIEW.REAL_LIBASS",
         "QHE.PLAN.ENCODE",
-        "QHE.ENCODE.ACTION_CARD"
+        "QHE.ENCODE.ACTION_CARD",
+        "QHE.HELP.RUNTIME"
       ],
       "adapter": "playwright-web",
       "evidence_level": "production-rendered",
