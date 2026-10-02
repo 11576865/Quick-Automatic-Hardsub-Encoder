@@ -31,25 +31,43 @@ export function mountMediaWorkspace(hooks) {
   <form id="mediaTaskForm">
   <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','无损快速剪切']])}${input('start','开始时间','例如 3:57.250','0')}${input('end','结束时间','留空表示片尾；例如 5:12.800')}</div>
   <p class="note media-time-format-note">时间支持秒、小数秒、MM:SS.mmm、HH:MM:SS.mmm；中文全角冒号会自动识别。</p>
-  <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="音频波形时间轴">
+  <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="媒体剪辑时间轴">
     <div class="media-waveform-heading">
-      <div><strong>音频波形</strong><span id="taskWaveformStatus">尚未生成 · 默认显示第 1 条音轨</span></div>
-      <button type="button" id="taskWaveformLoad" class="secondary">生成波形</button>
+      <div><strong>剪辑时间轴</strong><span id="taskWaveformStatus">尚未分析 · 可显示波形；无损剪切还会显示关键帧</span></div>
+      <button type="button" id="taskWaveformLoad" class="secondary">分析时间轴</button>
+    </div>
+    <div class="media-timeline-legend" aria-label="时间轴图例">
+      <span><i class="media-timeline-legend-wave"></i>音频波形</span>
+      <span class="media-timeline-keyframe-only"><i class="media-timeline-legend-key"></i>关键帧</span>
+      <span><i class="media-timeline-legend-request"></i>请求边界</span>
+      <span class="media-timeline-keyframe-only"><i class="media-timeline-legend-actual"></i>实际无损起点</span>
     </div>
     <div id="taskWaveformScroll" class="media-waveform-scroll">
-      <div id="taskWaveformTrack" class="media-waveform-track" tabindex="0" aria-label="可点击定位的音频波形">
-        <div id="taskWaveformPlaceholder" class="media-waveform-placeholder">选择视频后生成波形，可直接定位剪切边界。</div>
+      <div id="taskWaveformTrack" class="media-waveform-track" tabindex="0" aria-label="可点击定位的媒体剪辑时间轴">
+        <div id="taskWaveformRuler" class="media-waveform-ruler" aria-hidden="true"></div>
+        <div id="taskWaveformPlaceholder" class="media-waveform-placeholder">选择视频后分析时间轴。拖动 IN / OUT 调整范围，点击空白处移动光标。</div>
         <img id="taskWaveformImage" alt="音频波形" draggable="false" hidden>
-        <span id="taskWaveformStart" class="media-waveform-boundary media-waveform-boundary-start" data-boundary="start" title="拖动开始时间" hidden></span>
-        <span id="taskWaveformEnd" class="media-waveform-boundary media-waveform-boundary-end" data-boundary="end" title="拖动结束时间" hidden></span>
+        <span id="taskWaveformSelection" class="media-waveform-selection" hidden></span>
+        <div id="taskKeyframeLane" class="media-keyframe-lane media-timeline-keyframe-only" aria-label="视频关键帧分布"></div>
+        <span id="taskWaveformActualStart" class="media-waveform-actual-start media-timeline-keyframe-only" title="无损剪切实际起点" hidden></span>
+        <span id="taskWaveformStart" class="media-waveform-boundary media-waveform-boundary-start" data-boundary="start" data-label="IN" title="拖动请求开始时间" hidden></span>
+        <span id="taskWaveformEnd" class="media-waveform-boundary media-waveform-boundary-end" data-boundary="end" data-label="OUT" title="拖动结束时间" hidden></span>
         <span id="taskWaveformCursor" class="media-waveform-cursor" aria-hidden="true" hidden></span>
       </div>
     </div>
+    <div id="taskCopyBoundaryInfo" class="media-copy-boundary-info media-timeline-keyframe-only" hidden>
+      <span>请求起点 <strong id="taskRequestedStartTime">—</strong></span>
+      <span>实际无损起点 <strong id="taskActualStartTime">—</strong></span>
+      <span id="taskKeyframeDelta">分析关键帧后显示偏移</span>
+    </div>
     <div class="media-waveform-controls">
       <span>光标 <strong id="taskWaveformCursorTime">0:00</strong></span>
-      <button type="button" id="taskWaveformSetStart" class="secondary">光标设为开始</button>
-      <button type="button" id="taskWaveformSetEnd" class="secondary">光标设为结束</button>
-      <label class="media-waveform-zoom">缩放 <input id="taskWaveformZoom" type="range" min="1" max="8" step="1" value="1" aria-label="波形时间轴缩放"></label>
+      <button type="button" id="taskWaveformSetStart" class="secondary">设为 IN</button>
+      <button type="button" id="taskWaveformSetEnd" class="secondary">设为 OUT</button>
+      <button type="button" id="taskKeyframePrev" class="secondary media-timeline-keyframe-only" hidden>← 前一关键帧</button>
+      <button type="button" id="taskKeyframeNext" class="secondary media-timeline-keyframe-only" hidden>后一关键帧 →</button>
+      <button type="button" id="taskKeyframeSnapStart" class="secondary media-timeline-keyframe-only" hidden>将 IN 对齐关键帧</button>
+      <label class="media-waveform-zoom">缩放 <input id="taskWaveformZoom" type="range" min="1" max="12" step="1" value="1" aria-label="剪辑时间轴缩放"></label>
     </div>
   </section>
   <p id="taskModeHint" class="note media-mode-hint"></p>
@@ -160,6 +178,7 @@ export function mountMediaWorkspace(hooks) {
   get('quality').addEventListener('input', syncQualityRange);
   let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null;
+  let timelineKeyframes=[],timelineKeyframesTruncated=false;
   const storageKey='media-workspace-configs-v2';
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
@@ -203,25 +222,117 @@ export function mountMediaWorkspace(hooks) {
   const waveformCursorTime=section.querySelector('#taskWaveformCursorTime');
   const waveformStartEl=section.querySelector('#taskWaveformStart');
   const waveformEndEl=section.querySelector('#taskWaveformEnd');
+  const waveformSelection=section.querySelector('#taskWaveformSelection');
+  const waveformRuler=section.querySelector('#taskWaveformRuler');
+  const keyframeLane=section.querySelector('#taskKeyframeLane');
+  const actualStartEl=section.querySelector('#taskWaveformActualStart');
+  const copyBoundaryInfo=section.querySelector('#taskCopyBoundaryInfo');
+  const requestedStartTime=section.querySelector('#taskRequestedStartTime');
+  const actualStartTime=section.querySelector('#taskActualStartTime');
+  const keyframeDelta=section.querySelector('#taskKeyframeDelta');
+  const keyframePrev=section.querySelector('#taskKeyframePrev');
+  const keyframeNext=section.querySelector('#taskKeyframeNext');
+  const keyframeSnapStart=section.querySelector('#taskKeyframeSnapStart');
   const waveformZoom=section.querySelector('#taskWaveformZoom');
   const clampWaveformTime=value=>Math.max(0,Math.min(waveformDuration||0,Number(value)||0));
   function readBoundary(name,fallback){
     try{return clampWaveformTime(parseMediaTime(get(name)?.value,{empty:fallback,label:timeLabels[name]||'时间'}));}
     catch{return clampWaveformTime(fallback);}
   }
+  const niceTimelineStep = raw => {
+    const choices=[.1,.2,.5,1,2,5,10,15,30,60,120,300,600,900,1800,3600];
+    return choices.find(value=>value>=raw)||choices.at(-1);
+  };
+  function renderTimelineRuler(){
+    if(!(waveformDuration>0)){waveformRuler.replaceChildren();return;}
+    const zoom=Math.max(1,Number(waveformZoom.value)||1);
+    const step=niceTimelineStep(waveformDuration/Math.max(8,Math.min(80,12*zoom)));
+    const frag=document.createDocumentFragment();
+    for(let time=0,count=0;time<=waveformDuration+.0001&&count<160;time+=step,count++){
+      const tick=document.createElement('span');
+      tick.className='media-waveform-ruler-tick';
+      tick.style.left=(time/waveformDuration*100)+'%';
+      tick.innerHTML='<i></i><b>'+escape(formatMediaTimeInput(time,step<1?1:0))+'</b>';
+      frag.append(tick);
+    }
+    waveformRuler.replaceChildren(frag);
+  }
+  const previousKeyframe = value => {
+    const time=clampWaveformTime(value);
+    let previous=null;
+    for(const key of timelineKeyframes){if(key>time+.000001)break;previous=key;}
+    return previous;
+  };
+  const nextKeyframe = value => {
+    const time=clampWaveformTime(value);
+    return timelineKeyframes.find(key=>key>time+.000001) ?? null;
+  };
+  function renderKeyframeLane(){
+    keyframeLane.replaceChildren();
+    if(get('operation').value!=='copy'||!(waveformDuration>0)||!timelineKeyframes.length)return;
+    const maxMarkers=1400;
+    const stride=Math.max(1,Math.ceil(timelineKeyframes.length/maxMarkers));
+    const frag=document.createDocumentFragment();
+    for(let i=0;i<timelineKeyframes.length;i+=stride){
+      const key=timelineKeyframes[i];
+      const mark=document.createElement('span');
+      mark.className='media-keyframe-mark';
+      mark.style.left=(key/waveformDuration*100)+'%';
+      mark.title='关键帧 '+formatMediaTimeInput(key,3);
+      frag.append(mark);
+    }
+    keyframeLane.replaceChildren(frag);
+  }
+  function syncCopyBoundaryPreview(start){
+    const copy=get('operation').value==='copy';
+    copyBoundaryInfo.hidden=!copy||!(waveformDuration>0);
+    for(const el of [keyframePrev,keyframeNext,keyframeSnapStart])el.hidden=!copy;
+    if(!copy)return;
+    requestedStartTime.textContent=formatMediaTimeInput(start,3);
+    const actual=start<=0?0:previousKeyframe(start);
+    if(actual==null){
+      actualStartEl.hidden=true;
+      actualStartTime.textContent='尚未取得';
+      keyframeDelta.textContent=timelineKeyframes.length
+        ? '当前关键帧数据不足以确定该位置'
+        : '分析时间轴后显示实际无损切入点';
+      keyframeSnapStart.disabled=true;
+      return;
+    }
+    actualStartEl.hidden=false;
+    actualStartEl.style.left=(actual/waveformDuration*100)+'%';
+    actualStartTime.textContent=formatMediaTimeInput(actual,3);
+    const delta=Math.max(0,start-actual);
+    keyframeDelta.textContent=delta<.0005?'请求起点已经位于关键帧':'实际起点会提前 '+delta.toFixed(3)+' 秒';
+    keyframeSnapStart.disabled=delta<.0005;
+  }
   function syncWaveformMarkers(){
     if(!(waveformDuration>0))return;
     const start=readBoundary('start',0);
-    const end=readBoundary('end',waveformDuration);
-    waveformStartEl.style.left=(start/waveformDuration*100)+'%';
-    waveformEndEl.style.left=(end/waveformDuration*100)+'%';
+    const end=Math.max(start,readBoundary('end',waveformDuration));
+    const left=start/waveformDuration*100;
+    const right=end/waveformDuration*100;
+    waveformStartEl.style.left=left+'%';
+    waveformEndEl.style.left=right+'%';
+    waveformSelection.hidden=false;
+    waveformSelection.style.left=left+'%';
+    waveformSelection.style.width=Math.max(0,right-left)+'%';
     waveformCursor=clampWaveformTime(waveformCursor);
     waveformCursorEl.style.left=(waveformCursor/waveformDuration*100)+'%';
     waveformCursorTime.textContent=formatMediaTimeInput(waveformCursor,3);
+    syncCopyBoundaryPreview(start);
   }
   function setBoundary(name,value){
     const el=get(name);if(!el)return;
-    el.value=formatMediaTimeInput(clampWaveformTime(value),3);
+    let next=clampWaveformTime(value);
+    if(name==='start'){
+      const end=readBoundary('end',waveformDuration);
+      next=Math.min(next,end);
+    }else if(name==='end'){
+      const start=readBoundary('start',0);
+      next=Math.max(next,start);
+    }
+    el.value=formatMediaTimeInput(next,3);
     el.setCustomValidity('');
     el.dispatchEvent(new Event('input',{bubbles:true}));
     el.dispatchEvent(new Event('change',{bubbles:true}));
@@ -252,37 +363,70 @@ export function mountMediaWorkspace(hooks) {
   const finishWaveformDrag=event=>{waveformDragging=null;try{waveformTrack.releasePointerCapture?.(event.pointerId);}catch{}};
   waveformTrack.addEventListener('pointerup',finishWaveformDrag);
   waveformTrack.addEventListener('pointercancel',finishWaveformDrag);
+  waveformTrack.addEventListener('keydown',event=>{
+    if(!(waveformDuration>0)||['INPUT','SELECT','TEXTAREA'].includes(event.target?.tagName))return;
+    if(event.key==='ArrowLeft'||event.key==='ArrowRight'){
+      event.preventDefault();
+      const step=event.shiftKey?1:Math.max(.01,Math.min(.25,waveformDuration/5000));
+      setWaveformCursor(waveformCursor+(event.key==='ArrowRight'?step:-step));
+    }
+  });
   section.querySelector('#taskWaveformSetStart').onclick=()=>{if(waveformDuration>0)setBoundary('start',waveformCursor);};
   section.querySelector('#taskWaveformSetEnd').onclick=()=>{if(waveformDuration>0)setBoundary('end',waveformCursor);};
+  keyframePrev.onclick=()=>{const value=previousKeyframe(waveformCursor-.000001);if(value!=null)setWaveformCursor(value);};
+  keyframeNext.onclick=()=>{const value=nextKeyframe(waveformCursor);if(value!=null)setWaveformCursor(value);};
+  keyframeSnapStart.onclick=()=>{const value=previousKeyframe(readBoundary('start',0));if(value!=null){setBoundary('start',value);setWaveformCursor(value);}};
   waveformZoom.oninput=()=>{
     waveformTrack.style.width=(Math.max(1,Number(waveformZoom.value)||1)*100)+'%';
+    renderTimelineRuler();
+    renderKeyframeLane();
     syncWaveformMarkers();
   };
   section.querySelector('#taskWaveformLoad').onclick=async()=>{
     const button=section.querySelector('#taskWaveformLoad');
-    if(!hooks.waveform){waveformStatus.textContent='当前后端未提供波形生成能力';return;}
+    if(!hooks.waveform){waveformStatus.textContent='当前后端未提供时间轴分析能力';return;}
     if(busy||hooks.busy())return;
     button.disabled=true;
-    waveformStatus.textContent='正在由 FFmpeg 生成波形…';
+    const copy=get('operation').value==='copy';
+    waveformStatus.textContent=copy?'正在分析波形与视频关键帧…':'正在由 FFmpeg 生成波形…';
     try{
       const audioValue=String(get('audioTrack')?.value||'all');
       const audioTrack=audioValue==='all'?0:Math.max(0,Number(audioValue)||0);
-      const result=await hooks.waveform({audioTrack,width:2400,height:160});
-      if(!(Number(result?.duration)>0)||!result?.url)throw Error('波形结果缺少有效时长或图像');
+      const result=await hooks.waveform({audioTrack,width:2400,height:160,includeKeyframes:copy,maxKeyframes:12000});
+      if(!(Number(result?.duration)>0))throw Error('时间轴结果缺少有效时长');
       if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
-      waveformUrl=result.url;
+      waveformUrl=result.url||null;
       waveformDuration=Number(result.duration);
-      waveformImage.src=waveformUrl;
-      waveformImage.hidden=false;
-      waveformPlaceholder.hidden=true;
+      timelineKeyframes=copy&&Array.isArray(result.keyframes)
+        ? result.keyframes.map(Number).filter(Number.isFinite).filter(value=>value>=0&&value<=waveformDuration).sort((a,b)=>a-b)
+        : [];
+      timelineKeyframesTruncated=!!result.keyframesTruncated;
+      if(waveformUrl){
+        waveformImage.src=waveformUrl;
+        waveformImage.hidden=false;
+        waveformPlaceholder.hidden=true;
+      }else{
+        waveformImage.removeAttribute('src');
+        waveformImage.hidden=true;
+        waveformPlaceholder.hidden=false;
+        waveformPlaceholder.textContent=result.waveformError
+          ? '没有可显示的音频波形；关键帧时间轴仍可使用。'
+          : '当前素材没有音频波形；关键帧时间轴仍可使用。';
+      }
       waveformStartEl.hidden=false;
       waveformEndEl.hidden=false;
       waveformCursorEl.hidden=false;
       waveformCursor=readBoundary('start',0);
-      waveformStatus.textContent='第 '+(Number(result.audioTrack??audioTrack)+1)+' 条音轨 · '+formatMediaTimeInput(waveformDuration,3);
+      renderTimelineRuler();
+      renderKeyframeLane();
+      const waveText=waveformUrl?'第 '+(Number(result.audioTrack??audioTrack)+1)+' 条音轨':'无音频波形';
+      const keyText=copy
+        ? ' · 关键帧 '+timelineKeyframes.length+(timelineKeyframesTruncated?'（已截断显示）':'')
+        : '';
+      waveformStatus.textContent=waveText+keyText+' · '+formatMediaTimeInput(waveformDuration,3);
       syncWaveformMarkers();
     }catch(error){
-      waveformStatus.textContent='波形生成失败：'+error.message;
+      waveformStatus.textContent='时间轴分析失败：'+error.message;
     }finally{button.disabled=false;}
   };
   const runButtonLabel = () => get('operation').value==='hardsub'?'使用当前参数开始硬压':get('operation').value==='transcode'?'开始视频转码':'开始无损剪切';
@@ -537,11 +681,14 @@ export function mountMediaWorkspace(hooks) {
     for(const o of get('audio').options)o.disabled=copy&&['aac','libopus'].includes(o.value);
     if(copy && ['aac','libopus'].includes(get('audio').value))get('audio').value='copy';
     section.querySelector('#taskModeHint').textContent=copy
-      ? '无损快速剪切：起点向前定位到关键帧，不重新编码。实际起点会显示在任务状态中；终点仍受压缩数据包边界约束。'
+      ? '无损快速剪切：IN 是请求起点，实际切入会向前定位到关键帧。时间轴会同时显示请求 IN 与实际无损起点；OUT 不强制吸附关键帧。'
       : mode==='hardsub'
         ? '硬字幕分支：字幕、字体与真实 libass 预览属于这一分支；编码完成后与其他任务共享封装、验证和保存出口。'
         : '纯视频转码分支：只处理媒体编码参数；不会要求 ASS，也不会静默替换你选择的编码器。';
     renderContainerDecision(null);
+    document.querySelectorAll('.media-timeline-keyframe-only').forEach(el=>el.hidden=!copy);
+    renderKeyframeLane();
+    syncWaveformMarkers();
   }
   function setRateControl(key, active) {
     const control=get(key);
