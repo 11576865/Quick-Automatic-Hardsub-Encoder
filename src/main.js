@@ -114,7 +114,6 @@ app.innerHTML = `
 
   <section class="mobile-runtime-help" aria-label="本机运行教程">
     <div class="mobile-runtime-help-title">
-      <span class="step-no">01</span>
       <div><strong>运行方式与教程</strong><span>Android / Windows</span></div>
     </div>
     <div class="mobile-runtime-help-grid">
@@ -158,7 +157,7 @@ app.innerHTML = `
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
   <section id="inputCard" class="card input-card" data-mobile-stage-section="prepare">
-    <div class="card-heading"><span class="step-no">02</span><div><h2>准备素材</h2><p>选择视频；硬字幕模式另需 ASS 和可选字体。</p></div></div>
+    <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>选择视频；硬字幕模式另需 ASS 和可选字体。</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
       <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
@@ -199,6 +198,7 @@ app.innerHTML = `
   <section id="preflightCard" class="card preflight-card hidden" data-mobile-stage-section="prepare">
     <details id="preflightDetails" class="preflight-details">
       <summary>
+        <span class="step-no">02</span>
         <span class="preflight-heading">媒体与字幕预检</span>
         <span id="preflightStatus" class="preflight-status">等待分析</span>
       </summary>
@@ -234,7 +234,6 @@ app.innerHTML = `
   <section id="hardsubControlDeck" class="card hardsub-control-deck" data-mobile-stage-section="produce">
     <div class="hardsub-control-head">
       <div>
-        <span class="step-no">04</span>
         <h2>选择控制方式</h2>
         <p>两种方式共享同一份素材、预检、真实 libass 预览与输出验证；同一时刻只保留一个正式执行入口。</p>
       </div>
@@ -255,7 +254,7 @@ app.innerHTML = `
   </section>
   <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">05</span><div><h2>输出策略</h2><p>先定义目标，再选择实际可用的编码器与测试路径。</p></div></div>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>先定义目标，再选择实际可用的编码器与测试路径。</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -327,7 +326,7 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">06</span><div><h2>执行与验证</h2><p>由实际编码器完成整片任务；结束后验证容器、视频流与输出结果。</p></div></div>
+    <div class="card-heading"><span class="step-no">05</span><div><h2>执行与验证</h2><p>由实际编码器完成整片任务；结束后验证容器、视频流与输出结果。</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary action-solid action-green" disabled>开始硬字幕压制</button>
@@ -375,7 +374,6 @@ app.innerHTML = `
     </aside>
     <aside class="platform-rail" aria-label="运行方式">
       <div class="platform-rail-heading">
-        <span class="step-no">01</span>
         <div>
           <h2>选择运行方式</h2>
           <p>网页可直接使用；长任务可切到 Android App 或 Windows 本地。</p>
