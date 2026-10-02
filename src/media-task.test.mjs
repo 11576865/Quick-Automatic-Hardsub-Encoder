@@ -69,3 +69,21 @@ test('fractional fps and codec-specific overrides remain exact',()=>{
  assert.throws(()=>build({fpsMode:'cfr',fps:'24/0'}));
  assert.throws(()=>build({codecParams:'analysis-save=private'}));
 });
+
+
+test('web staging reuses an already mounted source for media-only work',async()=>{
+  const engine=new EncoderEngine();
+  let mounts=0,fallbackLoads=0;
+  engine.ready=true;
+  engine.api={
+    mount:async()=>{mounts++;},
+    writeFile:async()=>{},
+    FFmpegKitConfig:{setFontDirectoryList:async()=>{}}
+  };
+  engine.getBundledFallbackFont=async()=>{fallbackLoads++;return null;};
+  const video={name:'source.mkv',size:432800000,lastModified:1};
+  await engine.stageFiles(video,null,[]);
+  await engine.stageFiles(video,null,[]);
+  assert.equal(mounts,1);
+  assert.equal(fallbackLoads,0);
+});
