@@ -43,9 +43,10 @@ test('report retains oversized outputs and suggests a lower video rate',()=>{
  assert.equal(report.withinBudget,false);assert.ok(report.suggestedVideoRate<1650000);assert.equal(report.outputBytes,530000000);
  assert.equal(outputReport(task,{},1).withinBudget,null);
 });
-test('sample range respects trimmed span; extrapolation is calculated from actual sample length',()=>{
+test('sample range respects trimmed span and accepts clock-form sample starts',()=>{
  const raw={operation:'transcode',start:100,end:200,sampleStart:195,sampleLength:15};
  assert.deepEqual(sampleSettings(raw,media),{start:195,end:200,length:5});
+ assert.deepEqual(sampleSettings({operation:'transcode',start:'3:00',end:'4:00',sampleStart:'3:15',sampleLength:15},media),{start:195,end:210,length:15});
  assert.throws(()=>sampleSettings({...raw,sampleStart:50},media));
  assert.throws(()=>sampleSettings({...raw,sampleStart:199},media));
  assert.equal(sampleProjection(1000000,5,100),20000000);
