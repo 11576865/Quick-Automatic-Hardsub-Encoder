@@ -240,6 +240,42 @@ select:focus {
   text-align: right;
 }
 
+.source-video-summary {
+  margin-top: 12px;
+}
+
+.source-video-summary-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  background: var(--surface-2);
+}
+
+.source-video-summary-heading strong {
+  font-size: .78rem;
+  color: var(--text);
+}
+
+.source-video-summary-heading span {
+  color: var(--muted);
+  font-size: .68rem;
+}
+
+@media (max-width: 620px) {
+  .source-video-summary .status-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(7.5rem, auto);
+  }
+
+  .source-video-summary-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}
+
 .ok { color: var(--ok) !important; }
 .warn { color: var(--warn) !important; }
 .bad { color: var(--bad) !important; }

@@ -274,3 +274,24 @@ test('phone stage visibility respects active stage and hardsub strategy suppress
     /body\.ui-phone\[data-mobile-stage="prepare"\] \[data-mobile-stage-section="prepare"\][\s\S]*?:not\(\.hardsub-strategy-suppressed\)[\s\S]*?body\.ui-phone\[data-mobile-stage="produce"\] \[data-mobile-stage-section="produce"\]/
   );
 });
+
+
+test('source video metadata is independent from subtitle preflight', async () => {
+  const [main, css] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(main, /id="sourceVideoSummary"/);
+  assert.match(main, /function renderSourceVideoSummary/);
+  assert.match(main, /async function analyzeVideoOnly/);
+  assert.match(main, /async function analyzeCurrentInputs/);
+  assert.match(main, /button\.textContent = fullHardsub \? '分析视频与字幕' : '读取视频参数'/);
+  assert.match(main, /if \(!state\.video\) \{ button\.disabled = true; return; \}/);
+  assert.doesNotMatch(main, /const hasFiles = !!\(state\.video && state\.ass\)/);
+  assert.match(main, /state\.sourceMedia = mediaFromNativeProbe\(p\);[\s\S]*?renderSourceVideoSummary\(\)/);
+  assert.match(main, /invalidateAnalysis\(\{ clearVideoMetadata: true \}\)/);
+  assert.match(css, /\.source-video-summary\s*\{/);
+  assert.match(css, /\.source-video-summary-heading\s*\{/);
+});
+
