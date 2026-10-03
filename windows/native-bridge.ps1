@@ -273,7 +273,7 @@ function Get-BackendInfo {
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
         bridgeVersion=5
-        taskSchemaVersion=3
+        taskSchemaVersion=4
         fpsModeSupported=[bool]$script:Capabilities.FpsModeSupported
         globalOptions=[object[]]$script:Capabilities.GlobalOptions
     }
@@ -318,14 +318,37 @@ function Get-ProbeMedia {
     $r = Invoke-BridgeTool $script:Ffprobe ('-v error -show_format -show_streams -of json ' + (Quote-NativeArg $video))
     if ($r.ExitCode -ne 0) { throw ($r.StdErr.Trim()) }
     $json = $r.StdOut | ConvertFrom-Json
-    $v = @($json.streams | Where-Object { $_.codec_type -eq 'video' }) | Select-Object -First 1
-    if (-not $v) { throw 'FFprobe found no video stream.' }
+    $videos = @($json.streams | Where-Object { $_.codec_type -eq 'video' })
+    if (-not $videos.Count) { throw 'FFprobe found no video stream.' }
     $audios = @($json.streams | Where-Object { $_.codec_type -eq 'audio' })
-    $pix = [string]$v.pix_fmt
-    $bitDepth = if ($v.bits_per_raw_sample -as [int]) { [int]$v.bits_per_raw_sample } elseif ($pix -match '(10|12|14|16)(?:le|be)?') { [int]$Matches[1] } else { 8 }
-    $transfer = [string]$v.color_transfer
-    $primaries = [string]$v.color_primaries
-    $hdr = ($transfer -match 'smpte2084|arib-std-b67') -or (($primaries -match 'bt2020') -and $bitDepth -gt 8)
+    $videoFacts = @()
+    for($i=0;$i -lt $videos.Count;$i++){
+        $stream=$videos[$i]
+        $streamPix=[string]$stream.pix_fmt
+        $streamDepth=if($stream.bits_per_raw_sample -as [int]){[int]$stream.bits_per_raw_sample}elseif($streamPix -match '(10|12|14|16)(?:le|be)?'){[int]$Matches[1]}else{8}
+        $streamTransfer=[string]$stream.color_transfer
+        $streamPrimaries=[string]$stream.color_primaries
+        $streamHdr=($streamTransfer -match 'smpte2084|arib-std-b67') -or (($streamPrimaries -match 'bt2020') -and $streamDepth -gt 8)
+        $videoFacts += [pscustomobject]@{
+            ordinal=$i; index=if($null -ne $stream.index){[int]$stream.index}else{$i}
+            codec=[string]$stream.codec_name; bitRate=if($stream.bit_rate){[long]$stream.bit_rate}else{0}
+            width=[int]$stream.width; height=[int]$stream.height; fps=[string]$stream.avg_frame_rate
+            pixelFormat=$streamPix; bitDepth=$streamDepth; colorTransfer=$streamTransfer
+            colorPrimaries=$streamPrimaries; colorSpace=[string]$stream.color_space
+            hdr=$streamHdr; unsafeColorPipeline=($streamHdr -or $streamDepth -gt 8)
+        }
+    }
+    $audioFacts=@()
+    for($i=0;$i -lt $audios.Count;$i++){
+        $stream=$audios[$i]
+        $audioFacts += [pscustomobject]@{
+            ordinal=$i; index=if($null -ne $stream.index){[int]$stream.index}else{$i}
+            codec=[string]$stream.codec_name; bitRate=if($stream.bit_rate){[long]$stream.bit_rate}else{0}
+            channels=if($stream.channels){[int]$stream.channels}else{0}
+            sampleRate=if($stream.sample_rate){[int]$stream.sample_rate}else{0}
+        }
+    }
+    $v=$videoFacts[0]
     $duration = [double]($json.format.duration)
     $decode = Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -ss 0 -i ' + (Quote-NativeArg $video) + ' -map 0:v:0 -frames:v 1 -f null NUL')
     $audioRate = 0L
@@ -334,11 +357,12 @@ function Get-ProbeMedia {
         ok=$true; seekable=$true; statSize=(Get-Item -LiteralPath $video).Length
         inputDecodeSmoke=($decode.ExitCode -eq 0); inputDecodeError=$decode.StdErr.Trim()
         format=[string]$json.format.format_name; duration=$duration; bitRate=[long]($json.format.bit_rate)
-        videoCodec=[string]$v.codec_name; videoBitRate=if($v.bit_rate){[long]$v.bit_rate}else{0}
-        width=[int]$v.width; height=[int]$v.height; fps=[string]$v.avg_frame_rate
-        pixelFormat=$pix; bitDepth=$bitDepth; colorTransfer=$transfer; colorPrimaries=$primaries
-        colorSpace=[string]$v.color_space; hdr=$hdr; unsafeColorPipeline=($hdr -or $bitDepth -gt 8)
-        audioTracks=$audios.Count; audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}; audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$audioRate
+        videoTracks=$videoFacts.Count; videoStreams=$videoFacts
+        videoCodec=[string]$v.codec; videoBitRate=[long]$v.bitRate
+        width=[int]$v.width; height=[int]$v.height; fps=[string]$v.fps
+        pixelFormat=[string]$v.pixelFormat; bitDepth=[int]$v.bitDepth; colorTransfer=[string]$v.colorTransfer; colorPrimaries=[string]$v.colorPrimaries
+        colorSpace=[string]$v.colorSpace; hdr=[bool]$v.hdr; unsafeColorPipeline=[bool]$v.unsafeColorPipeline
+        audioTracks=$audios.Count; audioStreams=$audioFacts; audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}; audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$audioRate
     }
 }
 
@@ -406,13 +430,14 @@ function Invoke-Frame($Body) {
     if (-not $video) { throw 'No video selected.' }
     $time = [Math]::Max(0.0, [double]$Body.timeSeconds)
     $width = [Math]::Max(320, [Math]::Min(1280, $(if($Body.width){[int]$Body.width}else{720})))
+    $videoStream = [Math]::Max(0, [Math]::Min(63, $(if($null -ne $Body.videoStream){[int]$Body.videoStream}else{0})))
     $work = New-BridgeWorkDir 'quick-hardsub-frame-'
     try {
         $output = Join-Path $work 'frame.png'
         $timeText = $time.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
         $args = '-hide_banner -loglevel error -y -ss ' + $timeText +
             ' -i ' + (Quote-NativeArg $video) +
-            ' -map 0:v:0 -an -sn -frames:v 1 -vf scale=' + $width + ':-2:force_original_aspect_ratio=decrease -c:v png ' +
+            ' -map 0:v:' + $videoStream + ' -an -sn -frames:v 1 -vf scale=' + $width + ':-2:force_original_aspect_ratio=decrease -c:v png ' +
             (Quote-NativeArg $output)
         $result = Invoke-BridgeTool $script:Ffmpeg $args $work
         if($result.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $output)){throw ($result.StdErr.Trim())}
@@ -496,9 +521,10 @@ function Invoke-HardsubReferenceFrame([string]$JobId,$Body) {
         Copy-Item -LiteralPath $ass -Destination (Join-Path $work 'subtitle.ass') -Force
         if(Test-Path -LiteralPath $fonts){Copy-Item -LiteralPath $fonts -Destination (Join-Path $work 'fonts') -Recurse -Force}
         $output=Join-Path $work 'reference.png'
+        $primaryVideo=if(@($job.Task.videoStreams).Count){[int]@($job.Task.videoStreams)[0]}elseif($null -ne $job.Task.videoStream){[int]$job.Task.videoStream}else{0}
         $cmd='-hide_banner -loglevel error -y -ss '+$timeText+
             ' -i '+(Quote-NativeArg $job.Source)+
-            ' -map 0:v:0 -an -sn -frames:v 1 -vf '+(Quote-NativeArg $filter)+' -c:v png '+(Quote-NativeArg $output)
+            ' -map 0:v:'+$primaryVideo+' -an -sn -frames:v 1 -vf '+(Quote-NativeArg $filter)+' -c:v png '+(Quote-NativeArg $output)
         $run=Invoke-BridgeTool $script:Ffmpeg $cmd $work
         if($run.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $output)){throw ($run.StdErr.Trim())}
         $bytes=[IO.File]::ReadAllBytes($output)
@@ -517,6 +543,8 @@ function Invoke-Waveform($Body) {
     $requestId = [string]$Body.requestId
     $audioTrack = if ($null -ne $Body.audioTrack) { [int]$Body.audioTrack } else { 0 }
     if ($audioTrack -lt 0 -or $audioTrack -gt 63) { throw 'Audio track index out of range.' }
+    $videoStream = if ($null -ne $Body.videoStream) { [int]$Body.videoStream } else { 0 }
+    if ($videoStream -lt 0 -or $videoStream -gt 63) { throw 'Video stream index out of range.' }
     $width = [Math]::Max(512, [Math]::Min(4096, $(if($Body.width){[int]$Body.width}else{2048})))
     $height = [Math]::Max(96, [Math]::Min(320, $(if($Body.height){[int]$Body.height}else{160})))
     $duration = if($Body.duration){[double]$Body.duration}else{0.0}
@@ -527,7 +555,7 @@ function Invoke-Waveform($Body) {
 
     if($includeKeyframes){
         $probe = Invoke-BridgeTool $script:Ffprobe (
-            '-v error -select_streams v:0 -skip_frame nokey -show_frames ' +
+            '-v error -select_streams v:'+$videoStream+' -skip_frame nokey -show_frames ' +
             '-show_entries frame=best_effort_timestamp_time -of csv=p=0 ' +
             (Quote-NativeArg $video)
         )
@@ -644,7 +672,14 @@ function Start-MediaTaskJob($Body) {
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $probe=Get-ProbeMedia
-    if($task.operation -ne 'copy' -and $probe.unsafeColorPipeline){throw 'HDR/high-bit-depth transcode is not validated.'}
+    if($task.operation -ne 'copy'){
+        $selected=@($task.videoStreams)
+        if(-not $selected.Count){$selected=@(0)}
+        foreach($ordinal in $selected){
+            if([int]$ordinal -lt 0 -or [int]$ordinal -ge @($probe.videoStreams).Count){throw 'Selected video stream does not exist.'}
+            if(@($probe.videoStreams)[[int]$ordinal].unsafeColorPipeline){throw 'Selected HDR/high-bit-depth video stream cannot be transcoded safely.'}
+        }
+    }
     if([double]$task.end -gt [double]$probe.duration + 0.1){throw 'Range exceeds source duration.'}
     $codecIndex=[Array]::IndexOf($outputArgs,'-c:v')
     $encoder=$outputArgs[$codecIndex+1]
@@ -656,9 +691,10 @@ function Start-MediaTaskJob($Body) {
     }
     if($task.audio -in @('aac','libopus')){$audioHelp=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -h encoder='+$task.audio);if($audioHelp.StdOut -notmatch ('(?m)^Encoder '+[regex]::Escape([string]$task.audio)+'\s')){throw 'Selected audio encoder is unavailable.'}}
     $actualStart=[double]$task.start
-    if($task.operation -eq 'copy' -and $actualStart -gt 0){
+    if($task.operation -eq 'copy' -and [string]$task.videoRange -ne 'full' -and $actualStart -gt 0){
         $stop=($actualStart+1).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture)
-        $scan=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -skip_frame nokey -read_intervals 0%'+$stop+' -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 '+(Quote-NativeArg $video))
+        $primary=if(@($task.videoStreams).Count){[int]@($task.videoStreams)[0]}else{0}
+        $scan=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:'+$primary+' -skip_frame nokey -read_intervals 0%'+$stop+' -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 '+(Quote-NativeArg $video))
         if($scan.ExitCode -ne 0){throw 'Keyframe scan failed.'}
         $found=$false; $last=0.0
         foreach($line in ($scan.StdOut -split "\r?\n")){
@@ -678,8 +714,17 @@ function Start-MediaTaskJob($Body) {
     if($task.operation -eq 'hardsub'){Stage-BridgeAssets $work ([string]$Body.assText)}
     $parts=New-Object 'System.Collections.Generic.List[string]'
     foreach($a in @('-hide_banner','-nostdin','-loglevel','error','-y','-progress','progress.txt')){$parts.Add($a)}
-    if($actualStart -gt 0){$parts.Add('-ss');$parts.Add($actualStart.ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))}
-    $parts.Add('-i');$parts.Add($video);$parts.Add('-t');$parts.Add(([double]$task.end-$actualStart).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))
+    if([int]$task.version -ge 4){
+        $parts.Add('-i');$parts.Add($video)
+        if([bool]$task.usesTrimInput){
+            $parts.Add('-ss');$parts.Add($actualStart.ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))
+            $parts.Add('-t');$parts.Add(([double]$task.end-$actualStart).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))
+            $parts.Add('-i');$parts.Add($video)
+        }
+    }else{
+        if($actualStart -gt 0){$parts.Add('-ss');$parts.Add($actualStart.ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))}
+        $parts.Add('-i');$parts.Add($video);$parts.Add('-t');$parts.Add(([double]$task.end-$actualStart).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture))
+    }
     $baseParts=@($parts.ToArray())
     foreach($a in $outputArgs){$parts.Add($a.Replace('__ASS__','subtitle.ass').Replace('__FONTS__','fonts'))}
     if($task.twoPass){foreach($a in @('-pass','2','-passlogfile','task-pass')){$parts.Add($a)}}
@@ -688,10 +733,15 @@ function Start-MediaTaskJob($Body) {
     $secondArgs=$args
     if($task.twoPass){$first=@($baseParts)+@((Get-MediaFirstPassArgs $outputArgs) | ForEach-Object {$_.Replace('__ASS__','subtitle.ass').Replace('__FONTS__','fonts')})+@('-pass','1','-passlogfile','task-pass','-f','null','NUL');$args=($first | ForEach-Object { Quote-NativeArg $_ }) -join ' '}
     $started=Start-BridgeTool $script:Ffmpeg $args $work
-    $duration=if($task.operation -eq 'copy'){[double]$task.end-$actualStart}else{[double]$task.expectedDuration}
+    $trimDuration=[Math]::Max(0.0,[double]$task.end-$actualStart)
+    $sourceDuration=[double]$probe.duration
+    $videoDuration=if([int]$task.version -ge 4 -and [string]$task.videoRange -eq 'full'){$sourceDuration}else{$trimDuration}
+    $audioDuration=if([int]$task.expectedAudioTracks -le 0){0.0}elseif([int]$task.version -ge 4 -and [string]$task.audioRange -eq 'full'){$sourceDuration}else{$trimDuration}
+    $subtitleDuration=if(-not [bool]$task.keepSubtitles){0.0}elseif([int]$task.version -ge 4 -and [string]$task.subtitleRange -eq 'full'){$sourceDuration}else{$trimDuration}
+    $duration=[Math]::Max($videoDuration,[Math]::Max($audioDuration,$subtitleDuration))
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
-        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;Source=$video;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
+        Duration=$duration;ExpectedVideoDuration=$videoDuration;ExpectedAudioDuration=$audioDuration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;Source=$video;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
         StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
     }
@@ -763,6 +813,12 @@ function Get-CodecKeyForEncoder([string]$Encoder) {
 
 function Ensure-CompletedJobHistory($Job) {
     if(-not $Job -or $Job.HistoryRecorded -or $Job.State -ne 'completed' -or $Job.Encoder -eq 'copy'){return}
+    if($Job.Task -and $null -ne $Job.Task.expectedVideoTracks -and [int]$Job.Task.expectedVideoTracks -ne 1){
+        # The current Compression Evidence model is single-video. Do not collapse
+        # a multi-video execution into one misleading source/bitrate observation.
+        $Job.HistoryRecorded=$true
+        return
+    }
     try {
         $codec=Get-CodecKeyForEncoder ([string]$Job.Encoder)
         if(-not $codec){return}
@@ -896,9 +952,10 @@ function Get-JobStatus([string]$JobId) {
                         $videos=@($info.streams | Where-Object {$_.codec_type -eq 'video'})
                         $audios=@($info.streams | Where-Object {$_.codec_type -eq 'audio'})
                         $duration=[double]::Parse([string]$info.format.duration,[Globalization.CultureInfo]::InvariantCulture)
-                        if($videos.Count -ne 1 -or $audios.Count -ne [int]$j.Task.expectedAudioTracks -or $duration -le 0 -or [Math]::Abs($duration-$j.Duration) -gt 2){throw 'Output stream count/duration validation failed.'}
-                        Test-MediaOutput $j.Task $videos[0]
-                        $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -i '+(Quote-NativeArg $j.Output)+' -map 0:v:0 -map 0:a? -c copy -f null -')
+                        $expectedVideos=if($null -ne $j.Task.expectedVideoTracks){[int]$j.Task.expectedVideoTracks}else{1}
+                        if($videos.Count -ne $expectedVideos -or $audios.Count -ne [int]$j.Task.expectedAudioTracks -or $duration -le 0 -or [Math]::Abs($duration-$j.Duration) -gt 2){throw 'Output stream count/duration validation failed.'}
+                        foreach($outVideo in $videos){Test-MediaOutput $j.Task $outVideo}
+                        $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -i '+(Quote-NativeArg $j.Output)+' -map 0:v -map 0:a? -c copy -f null -')
                         if($scan.ExitCode -ne 0){throw 'Output packet scan failed.'}
                     }catch{$j.State='failed';$j.Error=$_.Exception.Message}
                 }

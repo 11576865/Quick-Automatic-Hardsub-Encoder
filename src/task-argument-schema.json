@@ -1,7 +1,7 @@
 {
   "values": {
     "-ss": "0",
-    "-map": "0:(?:v:0|a\\?|a:\\d{1,2}|s\\?|t\\?)",
+    "-map": "(?:[01]:(?:v:\\d{1,2}|a\\?|a:\\d{1,2}|s\\?)|0:t\\?)",
     "-c:v": "copy|libx264|libx265|libsvtav1|h264_nvenc|hevc_nvenc|av1_nvenc",
     "-c:a": "copy|aac|libopus",
     "-c:s": "copy",

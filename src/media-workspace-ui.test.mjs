@@ -15,9 +15,9 @@ test('three media operations use dedicated workspace presentation', async () => 
 
   assert.match(workspace, /硬字幕压制工作区/);
   assert.match(workspace, /纯视频转码工作区/);
-  assert.match(workspace, /无损快速剪切工作区/);
+  assert.match(workspace, /视频流复制 \/ 快速剪辑工作区/);
   assert.match(workspace, /document\.body\.dataset\.mediaOperation = mode/);
-  assert.match(workspace, /const runButtonLabel = \(\) => get\('operation'\)\.value==='hardsub'\?'使用当前参数开始硬压':get\('operation'\)\.value==='transcode'\?'开始视频转码':'开始无损剪切'/);
+  assert.match(workspace, /const runButtonLabel = \(\) => get\('operation'\)\.value==='hardsub'\?'使用当前参数开始硬压':get\('operation'\)\.value==='transcode'\?'开始视频转码':'开始视频流复制 \/ 剪辑'/);
   assert.match(workspace, /id="taskPlanSummary"/);
   assert.equal((workspace.match(/id="taskPlanSummary"/g) || []).length, 1);
   assert.ok(workspace.indexOf('id="taskPlanSummary"') < workspace.indexOf('id="taskEncoding"'), 'plan summary must precede detailed encoding controls');
@@ -27,7 +27,11 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /通常越低越保真/);
   assert.match(workspace, /presetIntent\(get\('encoder'\)\.value,v\)/);
   assert.match(workspace, /media-video-details/);
-  assert.match(workspace, /轨道保留/);
+  assert.match(workspace, /流选择与时间策略/);
+  assert.match(workspace, /input\('videoStreams'/);
+  assert.match(workspace, /select\('videoRange'/);
+  assert.match(workspace, /select\('audioRange'/);
+  assert.match(workspace, /select\('subtitleRange'/);
   assert.match(workspace, /<strong>音频与封装<\/strong>/);
   assert.match(workspace, /select\('audio','音频策略'/);
   assert.match(workspace, /outputPolicy\?\.querySelectorAll\('\[name\]'\)\.forEach\(control => control\.setAttribute\('form','mediaTaskForm'\)\)/);
@@ -72,9 +76,11 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /scheduleBoundaryFramePreview/);
   assert.match(workspace, /autoScrollTimeline/);
   assert.match(workspace, /id="taskKeyframeSnapStart"/);
-  assert.match(workspace, /includeKeyframes:copy/);
+  assert.match(workspace, /includeKeyframes:videoTrim/);
   assert.match(workspace, /previousKeyframe/);
   assert.match(workspace, /实际无损起点/);
+  assert.match(workspace, /primaryVideoStream/);
+  assert.match(workspace, /hooks\.frame\(\{time:clamped,width:720,videoStream\}\)/);
   assert.match(workspace, /MM:SS\.mmm/);
   assert.match(workspace, /parseMediaTime/);
   assert.match(workspace, /formatMediaTimeInput/);

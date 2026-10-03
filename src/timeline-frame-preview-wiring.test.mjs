@@ -17,6 +17,7 @@ test('timeline source-frame preview is wired across Web, Windows Native and Andr
   assert.match(workspace, /scheduleCursorFramePreview/);
   assert.match(workspace, /scheduleBoundaryFramePreview/);
   assert.match(workspace, /autoScrollTimeline/);
+  assert.match(workspace, /videoStream/);
 
   assert.match(main, /nativeFrameWaiters: new Map\(\)/);
   assert.match(main, /function requestNativeFrame\(/);
@@ -26,13 +27,14 @@ test('timeline source-frame preview is wired across Web, Windows Native and Andr
   assert.match(engine, /async renderTimelineFrame\(timeSeconds, options = \{\}\)/);
   assert.match(engine, /-frames:v 1/);
   assert.match(engine, /force_original_aspect_ratio=decrease/);
+  assert.match(engine, /0:v:\$\{videoStream\}/);
 
-  assert.match(client, /renderNativeFrame\(requestId, timeSeconds, width\)/);
+  assert.match(client, /renderNativeFrame\(requestId, timeSeconds, width, videoStream = 0\)/);
   assert.match(client, /'\/api\/frame'/);
   assert.match(windows, /function Invoke-Frame\(\$Body\)/);
   assert.match(windows, /\$path -eq '\/api\/frame'/);
 
-  assert.match(android, /fun renderNativeFrame\(requestId: String, timeSeconds: Double, width: Int\)/);
+  assert.match(android, /fun renderNativeFrame\(requestId: String, timeSeconds: Double, width: Int, videoStream: Int\)/);
   assert.match(android, /"__onNativeFrame"/);
   assert.match(android, /native-timeline-frame/);
 });
