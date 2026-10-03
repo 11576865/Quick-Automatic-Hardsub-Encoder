@@ -36,6 +36,7 @@ jobs:
       - run: node src/font-diagnostics.test.mjs
       - run: node src/input-safety.test.mjs
       - run: node --test src/native-input-probe.test.mjs
+      - run: node --test src/native-job-monitor.test.mjs
       - run: node src/ui-shell.test.mjs
       - run: node src/uigs-visual-capture.test.mjs
       - run: node --test src/media-workspace-ui.test.mjs
