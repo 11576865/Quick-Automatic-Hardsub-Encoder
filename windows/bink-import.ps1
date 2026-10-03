@@ -37,7 +37,7 @@ function Find-RadVideoConverter([string]$Root = '') {
         if ($name -notin @('radvideo64.exe', 'binkconv.exe')) { return }
         $mode = if ($name -eq 'radvideo64.exe') { 'radvideo64' } else { 'binkconv' }
         if (-not @($candidates | Where-Object { $_.Path -eq $full }).Count) {
-            $candidates.Add([pscustomobject]@{
+            [void]$candidates.Add([pscustomobject]@{
                 Path = $full
                 Mode = $mode
                 Source = $Source
@@ -78,7 +78,8 @@ function Find-RadVideoConverter([string]$Root = '') {
         } catch {}
     }
 
-    return @($candidates)[0]
+    if ($candidates.Count -gt 0) { return $candidates[0] }
+    return $null
 }
 
 function Get-RadBinkConvertArguments($Converter, [string]$InputPath, [string]$OutputPath) {
