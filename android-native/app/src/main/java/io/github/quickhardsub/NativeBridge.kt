@@ -383,7 +383,7 @@ class NativeBridge(
 
             val record = JSONObject()
             val allowed = listOf(
-                "evidenceVersion", "evidenceKind", "evidenceScope", "sourceIdentity",
+                "evidenceVersion", "evidenceKind", "evidenceScope", "sourceIdentity", "runtimeIdentity",
                 "backend", "codec", "preset", "crf", "targetSsim", "ssim",
                 "averageSsim", "sampleBitrate", "averageSpeed", "sampleCount",
                 "testedCrfs", "width", "height", "fps", "sourceCodec",
