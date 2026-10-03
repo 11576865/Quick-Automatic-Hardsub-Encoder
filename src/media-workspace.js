@@ -360,7 +360,7 @@ export function mountMediaWorkspace(hooks) {
     return request;
   }
   function scheduleCursorFramePreview(time,delay=150){
-    if(!hooks.frame||!(waveformDuration>0))return;
+    if(!hooks.frame||!(waveformDuration>0)||busy||hooks.busy())return;
     clearTimeout(timelineFrameTimer);
     const seq=++timelineFrameRequestSeq;
     framePreviewPanel.hidden=false;
@@ -374,7 +374,7 @@ export function mountMediaWorkspace(hooks) {
         framePreviewImage.hidden=false;
         framePreviewPlaceholder.hidden=true;
         framePreviewTime.textContent=formatMediaTimeInput(result.time,3);
-        framePreviewStatus.textContent='源视频画面 · 不叠加字幕';
+        framePreviewStatus.textContent='源视频解码帧 · 用于定位，不作为 HDR 色彩判定';
       }catch(error){
         if(seq!==timelineFrameRequestSeq)return;
         framePreviewStatus.textContent='画面预览失败：'+error.message;
@@ -382,7 +382,7 @@ export function mountMediaWorkspace(hooks) {
     },delay);
   }
   function scheduleBoundaryFramePreview(requested,actual){
-    if(!hooks.frame||get('operation').value!=='copy'||!(waveformDuration>0))return;
+    if(!hooks.frame||get('operation').value!=='copy'||!(waveformDuration>0)||busy||hooks.busy())return;
     const previewKey=frameCacheKey(requested)+'|'+(actual==null?'none':frameCacheKey(actual));
     if(previewKey===lastBoundaryPreviewKey)return;
     lastBoundaryPreviewKey=previewKey;
