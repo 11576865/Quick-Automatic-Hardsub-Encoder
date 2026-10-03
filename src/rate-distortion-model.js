@@ -376,7 +376,10 @@ export function createSizeQualityFrontier(model, {
         targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
       }));
 
-  const knee = model.estimateKnee();
+  const rawKnee = model.estimateKnee();
+  const knee = rawKnee && rawKnee.bitrate >= minimumEvidenceBitrate
+    ? rawKnee
+    : null;
   const kneeTargetBytes = knee
     ? targetBytesForVideoBitrate(knee.bitrate, budget)
     : null;
