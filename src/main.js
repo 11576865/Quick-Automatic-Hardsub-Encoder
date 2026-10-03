@@ -710,7 +710,8 @@ async function runWebTask(task) {
   if (state.operationBusy) return;
   state.operationBusy = true;
   for (const id of ['video', 'ass', 'fonts', 'videoNativePickerBtn', 'assNativePickerBtn', 'fontsNativePickerBtn', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) if($(id)) $(id).disabled = true;
-  document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control => { control.disabled = true; });
+  document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font').forEach(control => { control.disabled = true; });
+  if ($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled = true;
   refreshAnalyze();
   refreshBenchmarkEnabled();
   $('previewBtn').disabled = true;
@@ -727,7 +728,8 @@ async function runWebTask(task) {
       const button = $(WINDOWS_NATIVE_PICKERS[role].buttonId);
       setWindowsNativePickerBusy(role, button?.getAttribute('aria-busy') === 'true');
     }
-    document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control => { control.disabled = false; });
+    document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font').forEach(control => { control.disabled = false; });
+    if ($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled = !state.savedFonts.length;
     refreshAnalyze();
     refreshBenchmarkEnabled();
     $('previewBtn').disabled =
@@ -1142,9 +1144,10 @@ $('clearSavedFontsBtn').addEventListener('click', async () => {
   try {
     await clearSavedFonts();
     state.savedFonts = [];
+    invalidateAnalysis();
     renderSavedFontLibrary();
     updateFontMeta();
-    log('本机常用字体库已清空。');
+    log('本机常用字体库已清空；字体来源已变化，需要重新分析与预览。');
   } catch (error) {
     log(`清空常用字体库失败：${error.message}`);
   }
@@ -2337,9 +2340,10 @@ function renderSavedFontLibrary() {
       try {
         await deleteSavedFont(file);
         state.savedFonts = await listSavedFonts();
+        invalidateAnalysis();
         renderSavedFontLibrary();
         updateFontMeta();
-        log(`已从常用字体库删除：${file.name}`);
+        log(`已从常用字体库删除：${file.name}；字体来源已变化，需要重新分析与预览。`);
       } catch (error) {
         log(`删除常用字体失败：${error.message}`);
       }
@@ -4682,7 +4686,8 @@ mountMediaWorkspace({
   setBusy: value => {
     state.operationBusy=value;
     for (const id of ['video','ass','fonts','videoNativePickerBtn','assNativePickerBtn','fontsNativePickerBtn','analyze','encodeBtn','previewBtn','benchmarkBtn','calibrateQualityBtn']) if($(id)) $(id).disabled=value;
-    document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control=>{control.disabled=value;});
+    document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font').forEach(control=>{control.disabled=value;});
+    if($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled=value||!state.savedFonts.length;
     if(!value){refreshAnalyze();refreshBenchmarkEnabled();}
   },
   log,
