@@ -351,17 +351,24 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(main, /currentSourceEvidenceKey/);
   assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
   assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null\)/);
+  assert.doesNotMatch(main, /reusableSourceQualityByCrf/);
 
   assert.match(windowsClient, /recordCompressionEvidence\(recordJson\)/);
   assert.match(windowsClient, /\/api\/history/);
   assert.match(windowsBridge, /compression-history\.ps1/);
   assert.match(windowsBridge, /Ensure-CompletedJobHistory/);
+  assert.match(windowsBridge, /EncodeSeconds=0\.0;TimedProcessKey=''/);
+  assert.match(windowsBridge, /\$j\.EncodeSeconds \+= \[Math\]::Max\(\.001,\(\$p\.ExitTime-\$p\.StartTime\)\.TotalSeconds\)/);
+  assert.match(windowsBridge, /\$elapsed=\[Math\]::Max\(\.001,\[double\]\$Job\.EncodeSeconds\)/);
+  assert.doesNotMatch(windowsBridge, /\(\(Get-Date\)-\$Job\.StartedAt\)\.TotalSeconds/);
   assert.match(windowsBridge, /Add-ClientCompressionEvidence \$body\.record/);
   assert.match(windowsHistory, /CompressionHistoryMaxRecords = 500/);
   assert.match(windowsHistory, /LocalApplicationData/);
   assert.match(windowsHistory, /quality-sample/);
+  assert.match(windowsHistory, /quality-sample'\)\{'observation'\}else\{'source'\}/);
 
   assert.match(androidBridge, /fun recordCompressionEvidence\(recordJson: String\)/);
+  assert.match(androidBridge, /kind == "quality-sample"\) record\.put\("evidenceScope", "observation"\)/);
   assert.match(androidStore, /MAX_RECORDS = 500/);
   assert.match(androidStore, /fun appendEvidence/);
   assert.match(encodeService, /"evidenceKind", "full-encode"/);
