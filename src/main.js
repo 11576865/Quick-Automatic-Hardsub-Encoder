@@ -10,6 +10,7 @@ import { EncoderEngine } from './engine.js';
 import { decodeAssFile } from './ass-decoding.js';
 import { detectWindowsNativeBridge } from './windows-native-client.js';
 import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics.js';
+import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, sourceEvidenceKey } from './compression-evidence.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -1615,17 +1616,54 @@ function loadLocalBenchmarkHistory() {
   }
   try {
     const snapshot = JSON.parse(bridge.getLocalBenchmarkHistory());
-    state.localBenchmarkHistory = Array.isArray(snapshot?.records)
-      ? snapshot.records.filter(Boolean)
-      : [];
+    state.localBenchmarkHistory = normalizeCompressionEvidenceList(snapshot?.records);
     if (state.localBenchmarkHistory.length) {
-      log('已加载本机成功压制历史：' + state.localBenchmarkHistory.length + ' 条。');
+      const qualitySamples = state.localBenchmarkHistory.filter(x => x.evidenceKind === 'quality-sample').length;
+      const fullEncodes = state.localBenchmarkHistory.filter(x => x.evidenceKind === 'full-encode').length;
+      log(
+        '已加载本机压制证据：' + state.localBenchmarkHistory.length + ' 条' +
+        ' · 正式压制 ' + fullEncodes +
+        ' · 质量样本 ' + qualitySamples + '。'
+      );
     }
   } catch (error) {
     state.localBenchmarkHistory = [];
     log('读取本机压制历史失败：' + error.message);
   }
   return state.localBenchmarkHistory;
+}
+
+async function persistCompressionEvidence(record) {
+  const normalized = normalizeCompressionEvidence(record);
+  if (!normalized) return false;
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.recordCompressionEvidence) return false;
+  try {
+    const payload = await Promise.resolve(
+      bridge.recordCompressionEvidence(JSON.stringify(normalized))
+    );
+    const result = typeof payload === 'string' ? JSON.parse(payload) : payload;
+    if (result?.ok === false) throw new Error(result.error || '证据写入失败');
+    state.localBenchmarkHistory.push({
+      ...normalized,
+      recordedAt: Number(result?.recordedAt || Date.now())
+    });
+    if (state.localBenchmarkHistory.length > 500) {
+      state.localBenchmarkHistory.splice(0, state.localBenchmarkHistory.length - 500);
+    }
+    return true;
+  } catch (error) {
+    log('记录压制证据失败，不影响当前任务：' + error.message);
+    return false;
+  }
+}
+
+function currentSourceEvidenceKey() {
+  return sourceEvidenceKey(
+    state.media || {},
+    state.video?.name || state.media?.sourceName || '',
+    Number(state.video?.size || state.media?.size || 0)
+  );
 }
 
 function medianNumber(values) {
@@ -3566,7 +3604,7 @@ function qualitySampleStarts(duration) {
   return distinct.slice(0, 2);
 }
 
-async function evaluateQualityCandidate(codec, crf, preset) {
+async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
   // Two seconds reduces keyframe/GOP overhead bias compared with the tiny
   // diagnostic benchmark while keeping repeated AV1 calibration tolerable.
   const duration = Math.min(2.0, Math.max(1.2, Number(state.media?.duration || 2.0) / 20));
@@ -3605,7 +3643,7 @@ async function evaluateQualityCandidate(codec, crf, preset) {
   const totalWall = results.reduce((sum, x) => sum + x.elapsedSeconds, 0);
   const validBitrates = results.map(x => x.bitrate).filter(v => v > 0);
 
-  return {
+  const summary = {
     codec,
     crf,
     preset,
@@ -3617,6 +3655,24 @@ async function evaluateQualityCandidate(codec, crf, preset) {
     encodeSpeed: totalWall > 0 ? totalMedia / totalWall : 0,
     sampleCount: results.length
   };
+
+  await persistCompressionEvidence(qualityEvidenceRecord({
+    media: state.media,
+    sourceName: state.video?.name || state.media?.sourceName || '',
+    sourceSize: Number(state.video?.size || state.media?.size || 0),
+    backend: state.nativeBackend?.backend || 'web',
+    codec,
+    preset,
+    crf,
+    targetSsim,
+    ssim: summary.ssim,
+    averageSsim: summary.averageSsim,
+    sampleBitrate: summary.sampleBitrate,
+    encodeSpeed: summary.encodeSpeed,
+    sampleCount: summary.sampleCount
+  }));
+
+  return summary;
 }
 
 async function calibrateCodecQuality(codec, target) {
@@ -3634,7 +3690,7 @@ async function calibrateCodecQuality(codec, target) {
       '正在校准 ' + codec.toUpperCase() +
       ' · CRF ' + crf +
       ' · 目标 SSIM ' + target.toFixed(3) + '…';
-    const result = await evaluateQualityCandidate(codec, crf, preset);
+    const result = await evaluateQualityCandidate(codec, crf, preset, target);
     tested.set(crf, result);
     if (!bestQuality || result.ssim > bestQuality.ssim) bestQuality = result;
     log(
@@ -4323,6 +4379,14 @@ async function runNativeEncode() {
       0
     ),
     calibrationSampleBitrate: Number(plan.calibration?.sampleBitrate || 0),
+    sourceIdentity: currentSourceEvidenceKey(),
+    sourceCodec: state.media?.videoCodec || '',
+    sourcePixelFormat: state.media?.pixelFormat || '',
+    sourceVideoBitrate: Number(state.media?.videoBitRate || 0),
+    sourceWidth: Number(state.media?.width || 0),
+    sourceHeight: Number(state.media?.height || 0),
+    sourceFps: Number(state.media?.fps || 0),
+    sourceSize: Number(state.video?.size || state.media?.size || 0),
     outputContainer: container.key,
     outputFormat: container.format,
     outputExtension: container.extension,
