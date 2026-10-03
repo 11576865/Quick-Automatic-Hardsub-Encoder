@@ -202,7 +202,7 @@ export function mountMediaWorkspace(hooks) {
   let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
-  let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0;
+  let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='';
   const timelineFrameCache=new Map();
   const storageKey='media-workspace-configs-v2';
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
@@ -310,6 +310,7 @@ export function mountMediaWorkspace(hooks) {
     clearTimeout(boundaryFrameTimer);
     timelineFrameRequestSeq++;
     boundaryFrameRequestSeq++;
+    lastBoundaryPreviewKey='';
     for(const value of timelineFrameCache.values()){
       if(value?.url?.startsWith('blob:'))URL.revokeObjectURL(value.url);
     }
@@ -371,6 +372,9 @@ export function mountMediaWorkspace(hooks) {
   }
   function scheduleBoundaryFramePreview(requested,actual){
     if(!hooks.frame||get('operation').value!=='copy'||!(waveformDuration>0))return;
+    const previewKey=frameCacheKey(requested)+'|'+(actual==null?'none':frameCacheKey(actual));
+    if(previewKey===lastBoundaryPreviewKey)return;
+    lastBoundaryPreviewKey=previewKey;
     clearTimeout(boundaryFrameTimer);
     boundaryFrameInspector.hidden=false;
     requestedFrameTime.textContent=formatMediaTimeInput(requested,3);
