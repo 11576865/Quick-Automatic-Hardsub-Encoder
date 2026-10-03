@@ -169,13 +169,10 @@ function Get-Bink2ImportAdapterInfo {
 function Start-Bink2ImportJob {
     if (Test-Bink2ImportBusy) { throw 'A Bink 2 import is already running.' }
     foreach ($existing in $script:Jobs.Values) {
-        if ($existing.State -eq 'encoding') {
-            try {
-                if (-not $existing.Started.Process.HasExited) { throw 'A Native encode job is already running.' }
-            } catch {
-                throw 'A Native encode job is already running.'
-            }
-        }
+        if ($existing.State -ne 'encoding') { continue }
+        $alive = $false
+        try { $alive = -not $existing.Started.Process.HasExited } catch { $alive = $true }
+        if ($alive) { throw 'A Native encode job is already running.' }
     }
 
     $source = Get-OriginalVideoPath
@@ -225,6 +222,11 @@ function Get-Bink2ImportJobStatus([string]$JobId) {
     $j = $script:ImportJobs[$JobId]
 
     if ($j.State -eq 'completed') {
+        if (-not (Test-Path -LiteralPath $j.Output -PathType Leaf)) {
+            $j.State = 'failed'
+            $j.Error = 'Bink 2 staging file is missing.'
+            return [pscustomobject]@{ ok=$true; state='failed'; jobId=$JobId; kind='rad-bink2'; error=$j.Error }
+        }
         return [pscustomobject]@{
             ok=$true; state='completed'; jobId=$JobId; kind='rad-bink2'
             outputBytes=(Get-Item -LiteralPath $j.Output).Length
@@ -264,7 +266,8 @@ function Get-Bink2ImportJobStatus([string]$JobId) {
             $decode = Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -ss 0 -i ' + (Quote-NativeArg $j.Output) + ' -map 0:v:0 -frames:v 1 -f null NUL')
             if ($probe.ExitCode -ne 0 -or $decode.ExitCode -ne 0) {
                 $j.State = 'failed'
-                $j.Error = 'RAD import completed, but FFmpeg could not validate/decode the staging AVI. ' + ($probe.StdErr.Trim() + ' ' + $decode.StdErr.Trim()).Trim()
+                $detail = ($probe.StdErr.Trim() + ' ' + $decode.StdErr.Trim()).Trim()
+                $j.Error = 'RAD import completed, but FFmpeg could not validate/decode the staging AVI. ' + $detail
                 Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
             } else {
                 $json = $probe.StdOut | ConvertFrom-Json
@@ -558,11 +561,13 @@ function Get-ProbeMedia {
     $v = @($json.streams | Where-Object { $_.codec_type -eq 'video' }) | Select-Object -First 1
     if (-not $v) {
         if ($adapter.isBink2 -and -not $adapterApplied) {
+            $fallbackDuration = 0.0
+            [void][double]::TryParse([string]$json.format.duration,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$fallbackDuration)
             return [pscustomobject]@{
                 ok=$true; seekable=$true
                 statSize=$sourceItem.Length; executionStatSize=$sourceItem.Length
                 inputDecodeSmoke=$false; inputDecodeError='FFprobe found no decodable video stream.'
-                format=[string]$json.format.format_name; duration=[double]($json.format.duration)
+                format=[string]$json.format.format_name; duration=$fallbackDuration
                 bitRate=0; videoCodec='bink2'; videoBitRate=0
                 width=0; height=0; fps='0/1'; pixelFormat=''; bitDepth=8
                 colorTransfer=''; colorPrimaries=''; colorSpace=''; hdr=$false; unsafeColorPipeline=$false
@@ -593,9 +598,6 @@ function Get-ProbeMedia {
     $audioRate = 0L
     foreach($a in $audios){ if($a.bit_rate){ $audioRate += [long]$a.bit_rate } }
 
-    # When RAD has decoded Bink 2 into an AVI staging file, keep source size as
-    # the planning anchor. The staging AVI can be orders of magnitude larger
-    # and must not silently distort target-size recommendations.
     $planningBitRate = if($adapterApplied){0L}elseif($json.format.bit_rate){[long]$json.format.bit_rate}else{0L}
     $planningVideoBitRate = if($adapterApplied){0L}elseif($v.bit_rate){[long]$v.bit_rate}else{0L}
     $planningAudioBitRate = if($adapterApplied){0L}else{$audioRate}
@@ -621,7 +623,6 @@ function Get-ProbeMedia {
         sourceOriginalKind=if($adapter.isBink2){'bink2'}else{'native'}
     }
 }
-
 function Get-SelfTest {
     $enc = @($script:Capabilities.Encoders)
     $filters = if($script:Ffmpeg){(Invoke-BridgeTool $script:Ffmpeg '-hide_banner -filters').StdOut}else{''}
@@ -1171,7 +1172,7 @@ function Handle-Request($Request) {
         }
         if($Request.Method -eq 'POST' -and $path -eq '/api/probe'){Send-HttpJson $Request 200 (Get-ProbeMedia);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/import/bink2'){Send-HttpJson $Request 200 (Start-Bink2ImportJob);return}
-        if($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)
+        if($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+){Send-HttpJson $Request 200 (Invoke-Preview $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/frame'){Send-HttpJson $Request 200 (Invoke-Frame $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/waveform'){Send-HttpJson $Request 200 (Invoke-Waveform $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/sample'){Send-HttpJson $Request 200 (Invoke-Sample $body);return}
@@ -1385,7 +1386,7 @@ try{
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
 }
 ){Send-HttpJson $Request 200 (Get-Bink2ImportJobStatus $Matches[1]);return}
-        if($Request.Method -eq 'POST' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)/cancel
+        if($Request.Method -eq 'POST' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)/cancel{Send-HttpJson $Request 200 (Invoke-Preview $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/frame'){Send-HttpJson $Request 200 (Invoke-Frame $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/waveform'){Send-HttpJson $Request 200 (Invoke-Waveform $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/sample'){Send-HttpJson $Request 200 (Invoke-Sample $body);return}
