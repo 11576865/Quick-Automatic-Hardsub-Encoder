@@ -835,12 +835,16 @@ function Invoke-Sample($Body) {
 }
 
 function Start-MediaTaskJob($Body) {
+    if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $request=$Body.request; $task=$request.task
     $outputArgs=Get-MediaTaskArgs $task
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $probe=Get-ProbeMedia
+    if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
+    if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
+    if($probe.sourceAdapterApplied -and $task.operation -eq 'copy'){throw 'Stream Copy is unavailable for a Bink 2 source after external decode import; choose transcode or hard-sub instead.'}
     if($task.operation -ne 'copy' -and $probe.unsafeColorPipeline){throw 'HDR/high-bit-depth transcode is not validated.'}
     if([double]$task.end -gt [double]$probe.duration + 0.1){throw 'Range exceeds source duration.'}
     $codecIndex=[Array]::IndexOf($outputArgs,'-c:v')
@@ -896,11 +900,15 @@ function Start-MediaTaskJob($Body) {
 }
 
 function Start-EncodeJob($Body) {
+    if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $request=$Body.request
     if($request.task){return Start-MediaTaskJob $Body}
+    $probe=Get-ProbeMedia
+    if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
+    if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
     $outputFormat=if([string]$request.outputFormat){[string]$request.outputFormat}else{'matroska'}
     $outputExtension=if([string]$request.outputExtension){[string]$request.outputExtension}else{'mkv'}
     if($outputFormat -notin @('matroska','mp4')){throw 'Unsupported output container format.'}
