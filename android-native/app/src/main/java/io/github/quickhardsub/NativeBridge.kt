@@ -595,6 +595,80 @@ class NativeBridge(
     }
 
     @JavascriptInterface
+    fun renderNativeFrame(requestId: String, timeSeconds: Double, width: Int) {
+        if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
+            postJsonCallback(
+                "__onNativeFrame",
+                JSONObject()
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("busy", true)
+                    .put("error", "Android Native 正在执行其他 FFmpeg 任务，请稍后预览画面")
+            )
+            return
+        }
+
+        thread(name = "native-timeline-frame") {
+            val result = JSONObject().put("requestId", requestId)
+            var safUrl: String? = null
+            val frameRoot = File(activity.cacheDir, "native-timeline-frame")
+            try {
+                if (!timeSeconds.isFinite() || timeSeconds < 0.0) {
+                    throw IllegalStateException("时间轴预览时间无效")
+                }
+                val inputUri = getPickedUris("video").firstOrNull()
+                    ?: throw IllegalStateException("没有可供 Native 时间轴预览使用的视频 URI")
+                val safeWidth = width.coerceIn(320, 1280)
+
+                if (frameRoot.exists()) frameRoot.deleteRecursively()
+                frameRoot.mkdirs()
+                val output = File(frameRoot, "frame.png")
+                safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
+                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法创建 Native 时间轴预览 SAF URL")
+
+                val command = arrayOf(
+                    "-y",
+                    "-hide_banner",
+                    "-v", "error",
+                    "-ss", String.format(java.util.Locale.US, "%.3f", timeSeconds),
+                    "-i", safUrl,
+                    "-map", "0:v:0",
+                    "-an",
+                    "-sn",
+                    "-frames:v", "1",
+                    "-vf", "scale=$safeWidth:-2:force_original_aspect_ratio=decrease",
+                    "-c:v", "png",
+                    output.absolutePath
+                )
+                val session = FFmpegKit.executeWithArguments(command)
+                if (!ReturnCode.isSuccess(session.getReturnCode()) || output.length() <= 0L) {
+                    throw IllegalStateException(
+                        session.getOutput().takeLast(1200).ifBlank { "Native 时间轴画面预览失败" }
+                    )
+                }
+
+                result
+                    .put("ok", true)
+                    .put("url", "data:image/png;base64," + Base64.encodeToString(output.readBytes(), Base64.NO_WRAP))
+                    .put("time", timeSeconds)
+                    .put("width", safeWidth)
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                if (!safUrl.isNullOrBlank()) {
+                    try { FFmpegKitConfig.unregisterSafProtocolUrl(safUrl) } catch (_: Throwable) {}
+                }
+                try { frameRoot.deleteRecursively() } catch (_: Throwable) {}
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
+                diagnosticRunning.set(false)
+            }
+            postJsonCallback("__onNativeFrame", result)
+        }
+    }
+
+    @JavascriptInterface
     fun renderNativeWaveform(requestId: String, optionsJson: String) {
         if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
             postJsonCallback(
