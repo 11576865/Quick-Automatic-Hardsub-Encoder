@@ -2,6 +2,7 @@ import { formatSize, outputReport, sampleSettings, sampleProjection } from './me
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { audioCopyPlaybackWarning } from './media-container.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
+import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
 
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -188,6 +189,29 @@ export function mountMediaWorkspace(hooks) {
     </div>
     <p id="taskStatus" role="status">未开始</p>
   </section>
+  <section id="taskOutputVerification" class="media-output-verification" hidden aria-label="转码成品画质验证">
+    <div class="media-output-verification-heading">
+      <div><span>OUTPUT VERIFICATION</span><strong>源帧 ↔ 转码成品</strong><p>按时间位置映射，不按“第 N 帧”强行对应。用于检查转码后的实际画面变化。</p></div>
+      <button type="button" id="taskVerifyFrames" class="secondary">提取对比帧</button>
+    </div>
+    <div class="media-output-verification-controls">
+      <label>成品时间<input id="taskVerifyOutputTime" value="0:00" autocomplete="off"></label>
+      <input id="taskVerifyOutputSlider" type="range" min="0" max="1" step="0.001" value="0" aria-label="成品画质验证时间">
+      <span id="taskVerifyMapping">源 0:00 ↔ 成品 0:00</span>
+    </div>
+    <p id="taskVerifyTransformWarning" class="media-output-verification-warning" hidden>当前任务包含缩放、裁切、旋转或画面滤镜；比较结果会同时包含这些有意处理，不应全部归因于编码损失。</p>
+    <div class="media-output-verification-grid">
+      <article>
+        <div><span>源素材</span><strong id="taskVerifySourceTime">—</strong></div>
+        <div class="media-output-verification-image-shell"><img id="taskVerifySourceImage" alt="源素材验证帧" tabindex="0" role="button" title="点击全屏比较源帧与转码成品" hidden><span id="taskVerifySourcePlaceholder">等待提取</span></div>
+      </article>
+      <article>
+        <div><span>转码成品</span><strong id="taskVerifyOutputFrameTime">—</strong></div>
+        <div class="media-output-verification-image-shell"><img id="taskVerifyOutputImage" alt="转码成品验证帧" tabindex="0" role="button" title="点击全屏比较源帧与转码成品" hidden><span id="taskVerifyOutputPlaceholder">等待提取</span></div>
+      </article>
+    </div>
+    <p id="taskVerifyStatus" class="note">任务完成后可从任意时间点提取源帧与成品帧；点击任一图进入全屏中线滑块比较。</p>
+  </section>
   <div class="button-row media-action-dock"><button type="submit" id="taskRun">开始硬字幕压制</button><button type="button" id="taskCancel" class="secondary" disabled>取消</button><button type="button" id="taskReport" class="secondary" disabled>导出任务报告</button><button type="button" id="taskSave" class="secondary" disabled>保存成品</button></div>
   <details class="task-technical-details"><summary>技术详情 · 实际 FFmpeg 命令</summary><pre id="taskCommand" class="task-command" aria-live="polite">等待检查设置。</pre></details>
   </form>`;
@@ -313,6 +337,20 @@ export function mountMediaWorkspace(hooks) {
   const frameFullscreenWipe=section.querySelector('#taskFrameFullscreenWipe');
   const frameFullscreenReset=section.querySelector('#taskFrameFullscreenReset');
   const frameFullscreenClose=section.querySelector('#taskFrameFullscreenClose');
+  const outputVerification=section.querySelector('#taskOutputVerification');
+  const verifyFramesButton=section.querySelector('#taskVerifyFrames');
+  const verifyOutputTime=section.querySelector('#taskVerifyOutputTime');
+  const verifyOutputSlider=section.querySelector('#taskVerifyOutputSlider');
+  const verifyMapping=section.querySelector('#taskVerifyMapping');
+  const verifyTransformWarning=section.querySelector('#taskVerifyTransformWarning');
+  const verifySourceImage=section.querySelector('#taskVerifySourceImage');
+  const verifyOutputImage=section.querySelector('#taskVerifyOutputImage');
+  const verifySourcePlaceholder=section.querySelector('#taskVerifySourcePlaceholder');
+  const verifyOutputPlaceholder=section.querySelector('#taskVerifyOutputPlaceholder');
+  const verifySourceTime=section.querySelector('#taskVerifySourceTime');
+  const verifyOutputFrameTime=section.querySelector('#taskVerifyOutputFrameTime');
+  const verifyStatus=section.querySelector('#taskVerifyStatus');
+  let verificationSourceUrl=null,verificationOutputUrl=null;
   let frameFullscreenMode='single';
   let frameFullscreenDragging=false;
   const clampWaveformTime=value=>Math.max(0,Math.min(waveformDuration||0,Number(value)||0));
@@ -365,6 +403,8 @@ export function mountMediaWorkspace(hooks) {
     delete frameFullscreenStage.dataset.mode;
   }
   function openFrameFullscreen(kind){
+    frameFullscreenControls.querySelector('span:first-child').textContent='请求 IN';
+    frameFullscreenControls.querySelector('span:nth-of-type(2)').textContent='实际无损 IN';
     const compareReady=!requestedFrameImage.hidden&&!actualFrameImage.hidden&&requestedFrameImage.src&&actualFrameImage.src;
     const boundary=kind==='requested'||kind==='actual';
     frameFullscreenMode=boundary&&compareReady?'compare':'single';
@@ -440,6 +480,121 @@ export function mountMediaWorkspace(hooks) {
     if(event.key==='Escape'){event.preventDefault();closeFrameFullscreen();}
   };
   document.addEventListener('keydown',frameFullscreenKeyHandler);
+  function revokeVerificationFrames(){
+    for(const url of [verificationSourceUrl,verificationOutputUrl]){
+      if(url?.startsWith('blob:'))URL.revokeObjectURL(url);
+    }
+    verificationSourceUrl=null;
+    verificationOutputUrl=null;
+    for(const [img,placeholder] of [[verifySourceImage,verifySourcePlaceholder],[verifyOutputImage,verifyOutputPlaceholder]]){
+      img.removeAttribute('src');img.hidden=true;placeholder.hidden=false;
+    }
+    verifySourceTime.textContent='—';
+    verifyOutputFrameTime.textContent='—';
+  }
+  function outputVerificationTimes(){
+    const duration=verificationDuration(activeTask,completed);
+    const max=Math.max(0,duration-.001);
+    let outputTime=0;
+    try{outputTime=parseMediaTime(verifyOutputTime.value,{empty:0,max:duration,label:'成品验证时间'});}catch{outputTime=Number(verifyOutputSlider.value)||0;}
+    outputTime=Math.max(0,Math.min(max,outputTime));
+    const sourceTime=verificationSourceTime(activeTask,completed,outputTime);
+    return {duration,outputTime,sourceTime};
+  }
+  function syncOutputVerificationTime(value,fromSlider=false){
+    if(!activeTask||!completed)return;
+    const duration=verificationDuration(activeTask,completed);
+    const max=Math.max(0,duration-.001);
+    const outputTime=Math.max(0,Math.min(max,Number(value)||0));
+    verifyOutputSlider.max=String(max||1);
+    verifyOutputSlider.value=String(outputTime);
+    if(fromSlider||document.activeElement!==verifyOutputTime)verifyOutputTime.value=formatMediaTimeInput(outputTime,3);
+    const sourceTime=verificationSourceTime(activeTask,completed,outputTime);
+    verifyMapping.textContent='源 '+formatMediaTimeInput(sourceTime,3)+' ↔ 成品 '+formatMediaTimeInput(outputTime,3);
+  }
+  function syncOutputVerificationAvailability(){
+    const available=!!completed&&!!activeTask&&activeTask.operation==='transcode'&&!!hooks.verifyFramePair;
+    outputVerification.hidden=!available;
+    if(!available){
+      revokeVerificationFrames();
+      return;
+    }
+    const duration=verificationDuration(activeTask,completed);
+    const midpoint=Math.max(0,Math.min(Math.max(0,duration-.001),duration/2));
+    verifyTransformWarning.hidden=!verificationHasSpatialTransforms(activeTask);
+    if(!verificationSourceUrl&&!verificationOutputUrl)syncOutputVerificationTime(midpoint,true);
+  }
+  function openOutputVerificationFullscreen(){
+    if(!verificationSourceUrl||!verificationOutputUrl)return;
+    const times=outputVerificationTimes();
+    frameFullscreenMode='compare';
+    frameFullscreen.hidden=false;
+    frameFullscreenStage.dataset.mode='compare';
+    document.body.classList.add('media-frame-lightbox-open');
+    frameFullscreenTitle.textContent='源帧 ↔ 转码成品';
+    frameFullscreenMeta.textContent=formatMediaTimeInput(times.sourceTime,3)+' ↔ '+formatMediaTimeInput(times.outputTime,3);
+    frameFullscreenBase.src=verificationOutputUrl;
+    frameFullscreenBase.alt='转码成品全屏验证帧';
+    frameFullscreenCompare.src=verificationSourceUrl;
+    frameFullscreenCompare.alt='源素材全屏验证帧';
+    frameFullscreenCompare.hidden=false;
+    frameFullscreenDivider.hidden=false;
+    frameFullscreenLeftLabel.hidden=false;
+    frameFullscreenRightLabel.hidden=false;
+    frameFullscreenControls.hidden=false;
+    frameFullscreenLeftLabel.textContent='源素材 · '+formatMediaTimeInput(times.sourceTime,3);
+    frameFullscreenRightLabel.textContent='转码成品 · '+formatMediaTimeInput(times.outputTime,3);
+    frameFullscreenControls.querySelector('span:first-child').textContent='源素材';
+    frameFullscreenControls.querySelector('span:nth-of-type(2)').textContent='转码成品';
+    setFrameFullscreenWipe(50);
+    requestAnimationFrame(()=>frameFullscreenStage.focus({preventScroll:true}));
+  }
+  for(const img of [verifySourceImage,verifyOutputImage]){
+    img.addEventListener('click',openOutputVerificationFullscreen);
+    img.addEventListener('keydown',event=>{
+      if((event.key==='Enter'||event.key===' ')&&!img.hidden){
+        event.preventDefault();openOutputVerificationFullscreen();
+      }
+    });
+  }
+  verifyOutputSlider.addEventListener('input',()=>syncOutputVerificationTime(verifyOutputSlider.value,true));
+  verifyOutputTime.addEventListener('blur',()=>{
+    try{
+      const duration=verificationDuration(activeTask,completed);
+      const value=parseMediaTime(verifyOutputTime.value,{empty:0,max:duration,label:'成品验证时间'});
+      verifyOutputTime.setCustomValidity('');
+      syncOutputVerificationTime(value,true);
+    }catch(error){verifyOutputTime.setCustomValidity(error.message);}
+  });
+  verifyFramesButton.onclick=async()=>{
+    if(!completed||!activeTask||activeTask.operation!=='transcode'||!hooks.verifyFramePair)return;
+    if(busy||hooks.busy())return;
+    const {duration,outputTime,sourceTime}=outputVerificationTimes();
+    if(!(duration>0)){verifyStatus.textContent='成品时长不可用，无法建立源帧映射。';return;}
+    verifyFramesButton.disabled=true;
+    verifyStatus.textContent='正在从源素材与已验证成品提取对应画面…';
+    try{
+      const result=await hooks.verifyFramePair({
+        completed,
+        task:activeTask,
+        sourceTime,
+        outputTime,
+        outputExtension:activeTask.outputExtension,
+        width:1200
+      });
+      revokeVerificationFrames();
+      verificationSourceUrl=result.source?.url||null;
+      verificationOutputUrl=result.output?.url||null;
+      if(!verificationSourceUrl||!verificationOutputUrl)throw Error('画质验证没有返回完整帧对');
+      verifySourceImage.src=verificationSourceUrl;verifySourceImage.hidden=false;verifySourcePlaceholder.hidden=true;
+      verifyOutputImage.src=verificationOutputUrl;verifyOutputImage.hidden=false;verifyOutputPlaceholder.hidden=true;
+      verifySourceTime.textContent=formatMediaTimeInput(Number(result.source?.time??sourceTime),3);
+      verifyOutputFrameTime.textContent=formatMediaTimeInput(Number(result.output?.time??outputTime),3);
+      verifyStatus.textContent='帧对已提取。点击任一图进入全屏中线滑块比较；这是一种视觉检查，不等同于 SSIM / VMAF 分数。';
+    }catch(error){
+      verifyStatus.textContent='成品画质验证失败：'+error.message;
+    }finally{verifyFramesButton.disabled=false;}
+  };
   function clearTimelineFrameCache(){
     closeFrameFullscreen();
     clearTimeout(timelineFrameTimer);
@@ -1061,6 +1216,7 @@ export function mountMediaWorkspace(hooks) {
         : '纯视频转码分支：时间轴用于选择源素材的转码范围与定位源帧；不是转码前后质量对比。不会要求 ASS，也不会静默替换你选择的编码器。';
     renderContainerDecision(null);
     renderKeyframeLane();
+    syncOutputVerificationAvailability();
     if(copy&&waveformDuration>0)syncWaveformMarkers();
     else{
       copyBoundaryInfo.hidden=true;
@@ -1148,7 +1304,7 @@ export function mountMediaWorkspace(hooks) {
   };
   form.onsubmit=async e=>{
     e.preventDefault();if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
-    busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;taskStartedAt=performance.now();
+    busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
     section.querySelector('#taskReport').disabled=true;
     section.querySelector('#taskProgress').value=0;
     section.querySelector('#taskPercent').textContent='0%';
@@ -1176,6 +1332,7 @@ export function mountMediaWorkspace(hooks) {
       section.querySelector('#taskElapsed').textContent=formatTaskClock((performance.now()-taskStartedAt)/1000);
       section.querySelector('#taskEta').textContent='处理完成';
       setTaskState('verified');
+      syncOutputVerificationAvailability();
       status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 尚未保存到你的文件夹。下一步：保存成品。');
     }catch(e){
       if(isCancellationError(e)){
@@ -1227,5 +1384,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
-  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{closeFrameFullscreen();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
