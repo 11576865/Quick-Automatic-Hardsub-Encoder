@@ -1,5 +1,6 @@
 import { parseEncoderHelp, validateEncoderSupport } from './media-capabilities.js';
 import { taskInputArgs, taskDurationArgs, firstPassArgs } from './media-task.js';
+import { hardsubReferenceFilter } from './media-verification.js';
 const VENDOR_ENTRY = './vendor/ffmpeg-kit-next-web/dist/index.js';
 const FALLBACK_FONT_URL = './vendor/fallback-fonts/NotoSansSC-Regular.otf';
 const FALLBACK_FONT_FAMILY = 'Noto Sans SC';
@@ -296,6 +297,33 @@ export class EncoderEngine {
       .catch(()=>{})
       .then(run);
     return this.timelineFrameQueue;
+  }
+
+  async renderHardsubReferenceFrame(timeSeconds, task, options = {}) {
+    this.assertReady();
+    if (task?.operation !== 'hardsub') throw new Error('当前任务不是硬字幕压制');
+    if (!this.sourceAssFile && !this.activeAssText) throw new Error('硬字幕参考帧缺少 ASS');
+    const time = Math.max(0, Number(timeSeconds) || 0);
+    const width = Math.max(320, Math.min(1600, Math.floor(Number(options.width) || 1200)));
+    const output = '/hardsub_reference_frame.png';
+    const decoder = this.inputDecoderArgs();
+    const filter = hardsubReferenceFilter(
+      task,
+      time,
+      escapeFilter(this.assPath),
+      escapeFilter(this.fontDir),
+      width
+    );
+    const cmd = `-y -ss ${time.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
+    await this.execute(cmd, false, 60000);
+    const bytes = await this.api.readFile(output);
+    if (!bytes || !bytes.length) throw new Error('硬字幕权威参考帧没有生成');
+    return {
+      url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+      time,
+      width,
+      referenceKind: 'hardsub-authoritative'
+    };
   }
 
   async renderVerifiedOutputFrame(blob, timeSeconds, options = {}) {

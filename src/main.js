@@ -48,6 +48,7 @@ const state = {
   nativePreviewWaiters: new Map(),
   nativeFrameWaiters: new Map(),
   nativeOutputFrameWaiters: new Map(),
+  nativeReferenceFrameWaiters: new Map(),
   nativeWaveformWaiters: new Map(),
   nativeSampleWaiters: new Map(),
   nativeJobId: null,
@@ -1525,6 +1526,21 @@ function detectNativeBackend() {
       clearTimeout(waiter.timer);
       if (data.ok) waiter.resolve(data);
       else waiter.reject(new Error(data.error || 'Native 成品验证帧生成失败'));
+    };
+
+    globalThis.__onNativeReferenceFrame = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 硬字幕参考帧结果解析失败' };
+      }
+      const waiter = state.nativeReferenceFrameWaiters.get(data.requestId);
+      if (!waiter) return;
+      state.nativeReferenceFrameWaiters.delete(data.requestId);
+      clearTimeout(waiter.timer);
+      if (data.ok) waiter.resolve(data);
+      else waiter.reject(new Error(data.error || 'Native 硬字幕参考帧生成失败'));
     };
 
     globalThis.__onNativeWaveform = payload => {
@@ -4337,6 +4353,22 @@ function requestNativeOutputFrame(jobId, timeSeconds, width = 960) {
   });
 }
 
+function requestNativeReferenceFrame(jobId, timeSeconds, width = 1200) {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.renderNativeReferenceFrame) {
+    return Promise.reject(new Error('Native 硬字幕参考帧桥不可用'));
+  }
+  const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      state.nativeReferenceFrameWaiters.delete(requestId);
+      reject(new Error('Native 硬字幕参考帧生成超时'));
+    }, 60000);
+    state.nativeReferenceFrameWaiters.set(requestId, { resolve, reject, timer });
+    bridge.renderNativeReferenceFrame(requestId, String(jobId || ''), Number(timeSeconds || 0), Number(width || 1200));
+  });
+}
+
 function requestNativeWaveform(options = {}) {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.renderNativeWaveform) {
@@ -4945,22 +4977,39 @@ mountMediaWorkspace({
   verifyFramePair: async options => {
     if (!state.video) throw new Error('请先选择视频');
     const completed = options?.completed || {};
+    const task = options?.task || {};
     const sourceTime = Math.max(0, Number(options?.sourceTime) || 0);
     const outputTime = Math.max(0, Number(options?.outputTime) || 0);
     const width = Math.max(480, Math.min(1600, Math.floor(Number(options?.width) || 1200)));
+    const hardsub = task.operation === 'hardsub';
 
     let sourceFrame;
     let outputFrame;
     if (state.nativeBackend?.available) {
       if (!completed.jobId) throw new Error('Native 成品验证缺少 job id');
-      sourceFrame = await requestNativeFrame(sourceTime, width);
+      sourceFrame = hardsub
+        ? await requestNativeReferenceFrame(completed.jobId, sourceTime, width)
+        : await requestNativeFrame(sourceTime, width);
       outputFrame = await requestNativeOutputFrame(completed.jobId, outputTime, width);
     } else {
       if (!completed.blob) throw new Error('浏览器成品验证缺少成品数据');
       if (!await ensureWebEngineReady()) throw new Error('浏览器 FFmpeg 核心不可用');
-      if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
-      if (!state.engine.mediaInfo) await state.engine.probe();
-      sourceFrame = await state.engine.renderTimelineFrame(sourceTime, { width });
+      if (hardsub) {
+        const sameSource = state.engine.sourceVideoFile === state.video;
+        const sameAss = state.engine.sourceAssFile === state.ass;
+        if (!sameSource || !sameAss) {
+          await state.engine.stageFiles(state.video, state.ass, state.effectiveFonts);
+          await state.engine.setAssText(state.activeAssText || state.assText);
+        } else if (state.activeAssText) {
+          await state.engine.setAssText(state.activeAssText);
+        }
+        if (!state.engine.mediaInfo) await state.engine.probe();
+        sourceFrame = await state.engine.renderHardsubReferenceFrame(sourceTime, task, { width });
+      } else {
+        if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
+        if (!state.engine.mediaInfo) await state.engine.probe();
+        sourceFrame = await state.engine.renderTimelineFrame(sourceTime, { width });
+      }
       outputFrame = await state.engine.renderVerifiedOutputFrame(
         completed.blob,
         outputTime,
@@ -4972,7 +5021,8 @@ mountMediaWorkspace({
       output: outputFrame,
       sourceTime,
       outputTime,
-      width
+      width,
+      referenceKind: hardsub ? 'hardsub-authoritative' : 'source-frame'
     };
   },
   validate: async task => {

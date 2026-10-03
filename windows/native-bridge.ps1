@@ -458,6 +458,59 @@ function Invoke-OutputFrame([string]$JobId,$Body) {
     }
 }
 
+function Invoke-HardsubReferenceFrame([string]$JobId,$Body) {
+    if(-not $script:Jobs.ContainsKey($JobId)){throw 'Unknown job.'}
+    $job=$script:Jobs[$JobId]
+    $status=Get-JobStatus $JobId
+    if(-not $status.ok -or $status.state -ne 'completed'){throw 'Verified output is not ready.'}
+    if(-not $job.Task -or [string]$job.Task.operation -ne 'hardsub'){throw 'Reference frame requires a structured hardsub job.'}
+    if(-not $job.Source -or -not(Test-Path -LiteralPath $job.Source)){throw 'Original source is unavailable for reference rendering.'}
+    $ass=Join-Path $job.Work 'subtitle.ass'
+    $fonts=Join-Path $job.Work 'fonts'
+    if(-not(Test-Path -LiteralPath $ass)){throw 'Hardsub reference ASS is missing.'}
+
+    $time=[Math]::Max(0.0,[double]$Body.timeSeconds)
+    $width=[Math]::Max(320,[Math]::Min(1600,$(if($Body.width){[int]$Body.width}else{1200})))
+    $argsList=@($job.Task.outputArgs)
+    $vfIndex=[Array]::IndexOf($argsList,'-vf')
+    if($vfIndex -lt 0 -or $vfIndex+1 -ge $argsList.Count){throw 'Hardsub task has no video filter chain.'}
+    $parts=New-Object 'System.Collections.Generic.List[string]'
+    $foundAss=$false
+    $timeText=$time.ToString('0.######',[Globalization.CultureInfo]::InvariantCulture)
+    foreach($raw in ([string]$argsList[$vfIndex+1]).Split(',')){
+        $part=$raw.Trim()
+        if($part -match '^setpts=PTS[+-]\d+(?:\.\d+)?/TB$'){continue}
+        if($part -eq 'ass=__ASS__:fontsdir=__FONTS__'){
+            $foundAss=$true
+            $parts.Add('setpts=PTS-STARTPTS+'+$timeText+'/TB')
+            $parts.Add('ass=subtitle.ass:fontsdir=fonts')
+            $parts.Add('setpts=PTS-STARTPTS')
+        }else{$parts.Add($part)}
+    }
+    if(-not $foundAss){throw 'Hardsub task filter chain has no authoritative ASS step.'}
+    $parts.Add('scale='+$width+':-2:force_original_aspect_ratio=decrease')
+    $filter=$parts -join ','
+
+    $work=New-BridgeWorkDir 'quick-hardsub-reference-frame-'
+    try {
+        Copy-Item -LiteralPath $ass -Destination (Join-Path $work 'subtitle.ass') -Force
+        if(Test-Path -LiteralPath $fonts){Copy-Item -LiteralPath $fonts -Destination (Join-Path $work 'fonts') -Recurse -Force}
+        $output=Join-Path $work 'reference.png'
+        $cmd='-hide_banner -loglevel error -y -ss '+$timeText+
+            ' -i '+(Quote-NativeArg $job.Source)+
+            ' -map 0:v:0 -an -sn -frames:v 1 -vf '+(Quote-NativeArg $filter)+' -c:v png '+(Quote-NativeArg $output)
+        $run=Invoke-BridgeTool $script:Ffmpeg $cmd $work
+        if($run.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $output)){throw ($run.StdErr.Trim())}
+        $bytes=[IO.File]::ReadAllBytes($output)
+        if(-not $bytes.Length){throw 'Hardsub reference frame is empty.'}
+        return [pscustomobject]@{
+            requestId=[string]$Body.requestId;ok=$true
+            url=('data:image/png;base64,'+[Convert]::ToBase64String($bytes))
+            time=$time;width=$width;referenceKind='hardsub-authoritative'
+        }
+    } finally {Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
 function Invoke-Waveform($Body) {
     $video = Get-SelectedPath 'video'
     if (-not $video) { throw 'No video selected.' }
@@ -638,7 +691,7 @@ function Start-MediaTaskJob($Body) {
     $duration=if($task.operation -eq 'copy'){[double]$task.end-$actualStart}else{[double]$task.expectedDuration}
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
-        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
+        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;Source=$video;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
         StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
     }
@@ -1006,6 +1059,7 @@ function Handle-Request($Request) {
             Send-HttpJson $Request 200 @{ok=$true};return
         }
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-OutputFrame $Matches[1] $body);return}
+        if($path -match '^/api/jobs/([A-Za-z0-9]+)/reference-frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-HardsubReferenceFrame $Matches[1] $body);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/export$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Export-Job $Matches[1] ([string]$body.suggestedName));return}
         Send-HttpJson $Request 404 @{ok=$false;error='Unknown bridge endpoint.'}
     }catch{

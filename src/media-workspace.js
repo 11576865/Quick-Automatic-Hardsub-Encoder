@@ -189,9 +189,9 @@ export function mountMediaWorkspace(hooks) {
     </div>
     <p id="taskStatus" role="status">未开始</p>
   </section>
-  <section id="taskOutputVerification" class="media-output-verification" hidden aria-label="转码成品画质验证">
+  <section id="taskOutputVerification" class="media-output-verification" hidden aria-label="成品画质验证">
     <div class="media-output-verification-heading">
-      <div><span>OUTPUT VERIFICATION</span><strong>源帧 ↔ 转码成品</strong><p>按时间位置映射，不按“第 N 帧”强行对应。用于检查转码后的实际画面变化。</p></div>
+      <div><span>OUTPUT VERIFICATION</span><strong id="taskVerifyTitle">源帧 ↔ 转码成品</strong><p id="taskVerifyDescription">按时间位置映射，不按“第 N 帧”强行对应。用于检查转码后的实际画面变化。</p></div>
       <button type="button" id="taskVerifyFrames" class="secondary">提取对比帧</button>
     </div>
     <div class="media-output-verification-controls">
@@ -202,12 +202,12 @@ export function mountMediaWorkspace(hooks) {
     <p id="taskVerifyTransformWarning" class="media-output-verification-warning" hidden>当前任务包含缩放、裁切、旋转或画面滤镜；比较结果会同时包含这些有意处理，不应全部归因于编码损失。</p>
     <div class="media-output-verification-grid">
       <article>
-        <div><span>源素材</span><strong id="taskVerifySourceTime">—</strong></div>
-        <div class="media-output-verification-image-shell"><img id="taskVerifySourceImage" alt="源素材验证帧" tabindex="0" role="button" title="点击全屏比较源帧与转码成品" hidden><span id="taskVerifySourcePlaceholder">等待提取</span></div>
+        <div><span id="taskVerifyReferenceLabel">源素材</span><strong id="taskVerifySourceTime">—</strong></div>
+        <div class="media-output-verification-image-shell"><img id="taskVerifySourceImage" alt="源素材验证帧" tabindex="0" role="button" title="点击全屏比较参考帧与成品" hidden><span id="taskVerifySourcePlaceholder">等待提取</span></div>
       </article>
       <article>
-        <div><span>转码成品</span><strong id="taskVerifyOutputFrameTime">—</strong></div>
-        <div class="media-output-verification-image-shell"><img id="taskVerifyOutputImage" alt="转码成品验证帧" tabindex="0" role="button" title="点击全屏比较源帧与转码成品" hidden><span id="taskVerifyOutputPlaceholder">等待提取</span></div>
+        <div><span id="taskVerifyOutputLabel">转码成品</span><strong id="taskVerifyOutputFrameTime">—</strong></div>
+        <div class="media-output-verification-image-shell"><img id="taskVerifyOutputImage" alt="成品验证帧" tabindex="0" role="button" title="点击全屏比较参考帧与成品" hidden><span id="taskVerifyOutputPlaceholder">等待提取</span></div>
       </article>
     </div>
     <p id="taskVerifyStatus" class="note">任务完成后可从任意时间点提取源帧与成品帧；点击任一图进入全屏中线滑块比较。</p>
@@ -343,6 +343,10 @@ export function mountMediaWorkspace(hooks) {
   const frameFullscreenClose=section.querySelector('#taskFrameFullscreenClose');
   const outputVerification=section.querySelector('#taskOutputVerification');
   const verifyFramesButton=section.querySelector('#taskVerifyFrames');
+  const verifyTitle=section.querySelector('#taskVerifyTitle');
+  const verifyDescription=section.querySelector('#taskVerifyDescription');
+  const verifyReferenceLabel=section.querySelector('#taskVerifyReferenceLabel');
+  const verifyOutputLabel=section.querySelector('#taskVerifyOutputLabel');
   const verifyOutputTime=section.querySelector('#taskVerifyOutputTime');
   const verifyOutputSlider=section.querySelector('#taskVerifyOutputSlider');
   const verifyMapping=section.querySelector('#taskVerifyMapping');
@@ -525,15 +529,36 @@ export function mountMediaWorkspace(hooks) {
     verifyMapping.textContent='源 '+formatMediaTimeInput(sourceTime,3)+' ↔ 成品 '+formatMediaTimeInput(outputTime,3);
   }
   function syncOutputVerificationAvailability(){
-    const available=!!completed&&!!activeTask&&activeTask.operation==='transcode'&&get('operation').value==='transcode'&&!!hooks.verifyFramePair;
+    const operation=activeTask?.operation;
+    const available=!!completed&&!!activeTask&&['transcode','hardsub'].includes(operation)&&get('operation').value===operation&&!!hooks.verifyFramePair;
     outputVerification.hidden=!available;
     if(!available){
       revokeVerificationFrames();
       return;
     }
+    const hardsub=operation==='hardsub';
+    verifyTitle.textContent=hardsub?'权威字幕参考 ↔ 硬压成品':'源帧 ↔ 转码成品';
+    verifyDescription.textContent=hardsub
+      ? '参考侧重新执行与正式任务一致的预编码画面滤镜和 libass 字幕渲染，再与已验证硬压成品按时间位置比较。'
+      : '按时间位置映射，不按“第 N 帧”强行对应。用于检查转码后的实际画面变化。';
+    verifyReferenceLabel.textContent=hardsub?'权威字幕参考':'源素材';
+    verifyOutputLabel.textContent=hardsub?'硬压成品':'转码成品';
+    verifySourceImage.alt=hardsub?'权威字幕参考帧':'源素材验证帧';
+    verifyOutputImage.alt=hardsub?'硬字幕成品验证帧':'转码成品验证帧';
     const duration=verificationDuration(activeTask,completed);
     const midpoint=Math.max(0,Math.min(Math.max(0,duration-.001),duration/2));
-    verifyTransformWarning.hidden=!verificationHasSpatialTransforms(activeTask);
+    const cadenceChanged=!!activeTask.expectedFps;
+    const spatialChanged=verificationHasSpatialTransforms(activeTask);
+    verifyTransformWarning.hidden=hardsub?!cadenceChanged:!(spatialChanged||cadenceChanged);
+    verifyTransformWarning.textContent=hardsub
+      ? '当前硬压任务指定了目标帧率；参考侧按时间戳重新取源帧，成品侧可能因 CFR 采样 / 丢帧 / 复制帧选择到相邻画面。不要把这种时序采样差异当成编码损失。'
+      : [
+          spatialChanged?'当前转码任务包含缩放、裁切、旋转或画面滤镜；比较结果会同时包含这些有意处理，不应全部归因于编码损失。':'',
+          cadenceChanged?'任务指定了目标帧率；时间点附近可能出现 CFR 帧采样差异。':''
+        ].filter(Boolean).join(' ');
+    verifyStatus.textContent=hardsub
+      ? '任务完成后可提取“预编码权威字幕参考帧”和硬压成品帧；参考侧包含任务画面滤镜与 libass 字幕，但不包含最终有损编码。'
+      : '任务完成后可从任意时间点提取源帧与成品帧；点击任一图进入全屏中线滑块比较。';
     if(!verificationSourceUrl&&!verificationOutputUrl)syncOutputVerificationTime(midpoint,true);
   }
   function openOutputVerificationFullscreen(){
@@ -544,21 +569,24 @@ export function mountMediaWorkspace(hooks) {
     frameFullscreen.hidden=false;
     frameFullscreenStage.dataset.mode='compare';
     document.body.classList.add('media-frame-lightbox-open');
-    frameFullscreenTitle.textContent='源帧 ↔ 转码成品';
+    const hardsub=activeTask?.operation==='hardsub';
+    const leftLabel=hardsub?'权威字幕参考':'源素材';
+    const rightLabel=hardsub?'硬压成品':'转码成品';
+    frameFullscreenTitle.textContent=hardsub?'权威字幕参考 ↔ 硬压成品':'源帧 ↔ 转码成品';
     frameFullscreenMeta.textContent=formatMediaTimeInput(times.sourceTime,3)+' ↔ '+formatMediaTimeInput(times.outputTime,3);
     frameFullscreenBase.src=verificationOutputUrl;
-    frameFullscreenBase.alt='转码成品全屏验证帧';
+    frameFullscreenBase.alt=rightLabel+'全屏验证帧';
     frameFullscreenCompare.src=verificationSourceUrl;
-    frameFullscreenCompare.alt='源素材全屏验证帧';
+    frameFullscreenCompare.alt=leftLabel+'全屏验证帧';
     frameFullscreenCompare.hidden=false;
     frameFullscreenDivider.hidden=false;
     frameFullscreenLeftLabel.hidden=false;
     frameFullscreenRightLabel.hidden=false;
     frameFullscreenControls.hidden=false;
-    frameFullscreenLeftLabel.textContent='源素材 · '+formatMediaTimeInput(times.sourceTime,3);
-    frameFullscreenRightLabel.textContent='转码成品 · '+formatMediaTimeInput(times.outputTime,3);
-    frameFullscreenControls.querySelector('span:first-child').textContent='源素材';
-    frameFullscreenControls.querySelector('span:nth-of-type(2)').textContent='转码成品';
+    frameFullscreenLeftLabel.textContent=leftLabel+' · '+formatMediaTimeInput(times.sourceTime,3);
+    frameFullscreenRightLabel.textContent=rightLabel+' · '+formatMediaTimeInput(times.outputTime,3);
+    frameFullscreenControls.querySelector('span:first-child').textContent=leftLabel;
+    frameFullscreenControls.querySelector('span:nth-of-type(2)').textContent=rightLabel;
     setFrameFullscreenWipe(50);
     requestAnimationFrame(()=>frameFullscreenStage.focus({preventScroll:true}));
   }
@@ -580,12 +608,13 @@ export function mountMediaWorkspace(hooks) {
     }catch(error){verifyOutputTime.setCustomValidity(error.message);}
   });
   verifyFramesButton.onclick=async()=>{
-    if(!completed||!activeTask||activeTask.operation!=='transcode'||!hooks.verifyFramePair)return;
+    if(!completed||!activeTask||!['transcode','hardsub'].includes(activeTask.operation)||!hooks.verifyFramePair)return;
     if(busy||hooks.busy())return;
     const {duration,outputTime,sourceTime}=outputVerificationTimes();
     if(!(duration>0)){verifyStatus.textContent='成品时长不可用，无法建立源帧映射。';return;}
     verifyFramesButton.disabled=true;
-    verifyStatus.textContent='正在从源素材与已验证成品提取对应画面…';
+    const hardsub=activeTask.operation==='hardsub';
+    verifyStatus.textContent=hardsub?'正在生成权威字幕参考帧并读取已验证硬压成品…':'正在从源素材与已验证成品提取对应画面…';
     try{
       const result=await hooks.verifyFramePair({
         completed,
@@ -605,7 +634,9 @@ export function mountMediaWorkspace(hooks) {
       verifyOutputImage.src=verificationOutputUrl;verifyOutputImage.hidden=false;verifyOutputPlaceholder.hidden=true;
       verifySourceTime.textContent=formatMediaTimeInput(verificationFrameSourceTime,3);
       verifyOutputFrameTime.textContent=formatMediaTimeInput(verificationFrameOutputTime,3);
-      verifyStatus.textContent='帧对已提取。点击任一图进入全屏中线滑块比较；这是一种视觉检查，不等同于 SSIM / VMAF 分数。';
+      verifyStatus.textContent=hardsub
+        ? '参考帧与硬压成品已提取。参考侧复现预编码画面滤镜 + libass 字幕；点击任一图进入全屏中线滑块比较。'
+        : '帧对已提取。点击任一图进入全屏中线滑块比较；这是一种视觉检查，不等同于 SSIM / VMAF 分数。';
     }catch(error){
       verifyStatus.textContent='成品画质验证失败：'+error.message;
     }finally{verifyFramesButton.disabled=false;}
