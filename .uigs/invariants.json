@@ -455,6 +455,20 @@
           "kind": "pattern",
           "path": ".github/workflows/test-frontend.yml",
           "pattern": "node scripts/check-media-ui\\.cjs"
+        },
+        {
+          "id": "real-ffmpeg-scrub-frame",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.integration.test.mjs",
+          "pattern": "const scrubFrame=time=>run\\('ffmpeg'"
+        },
+        {
+          "id": "real-ffmpeg-scrub-workflow",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "FFMPEG_INTEGRATION=1 node --test src/media-task\\.integration\\.test\\.mjs"
         }
       ]
     }
