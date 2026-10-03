@@ -62,7 +62,11 @@ test('unkeyed quality samples are persisted as observation-only evidence', () =>
       averageSsim: 0.979,
       sampleBitrate: 500000,
       encodeSpeed: 0.8,
-      sampleCount: 2
+      sampleCount: 2,
+      sampleMeasurements: [
+        { start: 42, duration: 2, ssim: 0.975, bitrate: 490000, elapsedSeconds: 2.5 },
+        { start: 84, duration: 2, ssim: 0.981, bitrate: 510000, elapsedSeconds: 2.4 }
+      ]
     }),
     qualityEvidenceRecord({
       media,
@@ -97,6 +101,9 @@ test('unkeyed quality samples are persisted as observation-only evidence', () =>
 
   const normalized = normalizeCompressionEvidenceList(records);
   assert.ok(normalized.every(x => x.evidenceScope === 'observation'));
+  assert.equal(normalized[0].sampleMeasurements.length, 2);
+  assert.equal(normalized[0].sampleMeasurements[0].start, 42);
+  assert.equal(normalized[0].sampleMeasurements[1].bitrate, 510000);
   const points = sourceQualityEvidence(normalized, sourceIdentity, 'av1');
   assert.equal(points.length, 0);
 });
