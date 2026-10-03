@@ -354,6 +354,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(main, /currentSourceEvidenceKey/);
   assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
   assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null\)/);
+  assert.match(main, /sampleMeasurements: results\.map/);
   assert.doesNotMatch(main, /reusableSourceQualityByCrf/);
 
   assert.match(windowsClient, /recordCompressionEvidence\(recordJson\)/);
@@ -369,9 +370,11 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(windowsHistory, /CompressionHistoryMaxRecords = 500/);
   assert.match(windowsHistory, /LocalApplicationData/);
   assert.match(windowsHistory, /quality-sample/);
+  assert.match(windowsHistory, /sampleMeasurements','testedCrfs/);
   assert.match(windowsHistory, /quality-sample'\)\{'observation'\}else\{'source'\}/);
 
   assert.match(androidBridge, /fun recordCompressionEvidence\(recordJson: String\)/);
+  assert.match(androidBridge, /"sampleMeasurements"/);
   assert.match(androidBridge, /kind == "quality-sample"\) record\.put\("evidenceScope", "observation"\)/);
   assert.match(androidStore, /MAX_RECORDS = 500/);
   assert.match(androidStore, /fun appendEvidence/);
