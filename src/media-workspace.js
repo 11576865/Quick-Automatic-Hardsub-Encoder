@@ -314,6 +314,7 @@ export function mountMediaWorkspace(hooks) {
     boundaryFrameRequestSeq++;
     timelineFrameGeneration++;
     lastBoundaryPreviewKey='';
+    timelineFramePending.clear();
     for(const value of timelineFrameCache.values()){
       if(value?.url?.startsWith('blob:'))URL.revokeObjectURL(value.url);
     }
@@ -360,7 +361,7 @@ export function mountMediaWorkspace(hooks) {
         }
         return value;
       })
-      .finally(()=>timelineFramePending.delete(key));
+      .finally(()=>{if(timelineFramePending.get(key)===request)timelineFramePending.delete(key);});
     timelineFramePending.set(key,request);
     timelineFrameFetchQueue=request.then(()=>undefined,()=>undefined);
     return request;
