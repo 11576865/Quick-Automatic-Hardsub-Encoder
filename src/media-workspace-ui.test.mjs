@@ -88,6 +88,10 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /id="taskVerifySourceImage"/);
   assert.match(workspace, /id="taskVerifyOutputImage"/);
   assert.match(workspace, /源帧 ↔ 转码成品/);
+  assert.match(workspace, /权威字幕参考 ↔ 硬压成品/);
+  assert.match(workspace, /id="taskVerifyTitle"/);
+  assert.match(workspace, /id="taskVerifyReferenceLabel"/);
+  assert.match(workspace, /预编码画面滤镜和 libass 字幕渲染/);
   assert.match(workspace, /openOutputVerificationFullscreen/);
   assert.match(workspace, /hooks\.verifyFramePair/);
   assert.match(workspace, /verificationHasSpatialTransforms/);
