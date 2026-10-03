@@ -6447,3 +6447,104 @@ body.ui-phone .media-mode-switcher .media-mode-index {
   height: 28px;
   font-size: 8px;
 }
+
+
+@layer current {
+/* Runtime identity ---------------------------------------------------------- */
+.runtime-mode-banner {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr);
+  align-items: center;
+  gap: 11px;
+  margin: 10px 0 14px;
+  padding: 10px 13px;
+  border: 1px solid color-mix(in srgb,var(--plan) 34%,var(--border));
+  border-left: 3px solid var(--plan);
+  border-radius: 11px;
+  background: color-mix(in srgb,var(--plan) 5%,var(--surface));
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+
+.runtime-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 5px 8px;
+  border: 1px solid color-mix(in srgb,var(--plan) 42%,var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb,var(--plan) 10%,var(--surface-2));
+  color: var(--plan);
+  font: 750 9px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+
+.runtime-mode-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.runtime-mode-copy strong {
+  color: var(--text-strong);
+  font-size: .75rem;
+}
+
+.runtime-mode-copy span {
+  color: var(--muted);
+  font-size: .66rem;
+  line-height: 1.45;
+}
+
+body[data-runtime-backend="windows-native"] .runtime-mode-banner {
+  border-color: color-mix(in srgb,var(--engine) 42%,var(--border));
+  border-left-color: var(--engine);
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb,var(--engine) 10%,var(--surface)),
+      color-mix(in srgb,var(--engine) 3%,var(--surface)) 52%,
+      var(--surface));
+}
+
+body[data-runtime-backend="windows-native"] .runtime-mode-badge {
+  border-color: color-mix(in srgb,var(--engine) 52%,var(--border));
+  background: color-mix(in srgb,var(--engine) 12%,var(--surface-2));
+  color: var(--engine);
+}
+
+body[data-runtime-backend="windows-native"] .app-header {
+  border-color: color-mix(in srgb,var(--engine) 38%,var(--border));
+  box-shadow:
+    inset 0 2px 0 color-mix(in srgb,var(--engine) 42%,transparent),
+    var(--shadow-soft);
+}
+
+body[data-runtime-backend="android-native"] .runtime-mode-banner {
+  border-color: color-mix(in srgb,var(--font) 38%,var(--border));
+  border-left-color: var(--font);
+  background: color-mix(in srgb,var(--font) 6%,var(--surface));
+}
+
+body[data-runtime-backend="android-native"] .runtime-mode-badge {
+  border-color: color-mix(in srgb,var(--font) 48%,var(--border));
+  background: color-mix(in srgb,var(--font) 10%,var(--surface-2));
+  color: var(--font);
+}
+
+body[data-runtime-backend="web"] .runtime-mode-banner {
+  border-left-color: var(--plan);
+}
+
+@media (max-width: 640px) {
+  .runtime-mode-banner {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    margin: 7px 0 9px;
+    padding: 9px 10px;
+  }
+
+  .runtime-mode-badge {
+    justify-self: start;
+  }
+}
+}
