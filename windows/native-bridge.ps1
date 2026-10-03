@@ -610,7 +610,7 @@ function Start-MediaTaskJob($Body) {
         Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
         Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
-        StartedAt=(Get-Date);HistoryRecorded=$false
+        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
@@ -698,7 +698,7 @@ function Ensure-CompletedJobHistory($Job) {
             if($outVideo.Count -and $outVideo[0].bit_rate){[void][long]::TryParse([string]$outVideo[0].bit_rate,[ref]$outputVideoBitrate)}
         }
 
-        $elapsed=[Math]::Max(.001,((Get-Date)-$Job.StartedAt).TotalSeconds)
+        $elapsed=[Math]::Max(.001,[double]$Job.EncodeSeconds)
         $sourceIdentity=if($request -and $request.sourceIdentity){[string]$request.sourceIdentity}else{''}
         $mode=if($request -and $request.mode){[string]$request.mode}elseif($task){[string]$task.rateMode}else{''}
         $preset=if($request -and $request.preset){[string]$request.preset}elseif($task){[string]$task.preset}else{''}
@@ -782,6 +782,11 @@ function Get-JobStatus([string]$JobId) {
         $elapsed=((Get-Date)-$p.StartTime).TotalSeconds
         $speed=if($elapsed -gt 0){($timeMs/1000)/$elapsed}else{0}
         return [pscustomobject]@{ok=$true;state=if($j.Cancelled){'cancelling'}else{'encoding'};progress=$progress;timeMs=$timeMs;duration=$j.Duration;speed=$speed;encoder=$j.Encoder;hardware=$j.Hardware;actualStart=$j.ActualStart}
+    }
+    $processKey=([string]$p.Id)+':'+([string]$p.StartTime.Ticks)
+    if([string]$j.TimedProcessKey -ne $processKey){
+        $j.EncodeSeconds += [Math]::Max(.001,($p.ExitTime-$p.StartTime).TotalSeconds)
+        $j.TimedProcessKey=$processKey
     }
     if($j.Task -and $j.Task.twoPass -and $j.Phase -eq 1 -and -not $j.Cancelled -and $p.ExitCode -eq 0){
         $p.Dispose();Remove-Item -LiteralPath $j.Progress -Force -ErrorAction SilentlyContinue
