@@ -1162,7 +1162,8 @@ function Handle-Request($Request) {
             $p=Get-OriginalVideoPath
             if(-not $p -or -not(Test-Path -LiteralPath $p -PathType Leaf)){Send-HttpJson $Request 200 @{ok=$false;error='No video selected.'};return}
             $item=Get-Item -LiteralPath $p
-            Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;lastModified=[DateTimeOffset]$item.LastWriteTimeUtc | ForEach-Object {$_.ToUnixTimeMilliseconds()}};return
+            $modified=[DateTimeOffset]$item.LastWriteTimeUtc
+            Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;lastModified=$modified.ToUnixTimeMilliseconds()};return
         }
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/ass'){
             $p=Get-SelectedPath 'ass';if(-not $p){throw 'No ASS selected.'};$item=Get-Item -LiteralPath $p
