@@ -315,8 +315,8 @@ test('input identity is locked across native async work', async () => {
   assert.match(main, /ass:\s*\{ inputId: 'ass', buttonId: 'assNativePickerBtn'/);
   assert.match(main, /fonts:\s*\{ inputId: 'fonts', buttonId: 'fontsNativePickerBtn'/);
   assert.match(main, /function syncTaskInputMutationLocks\(\)/);
-  assert.match(main, /button\.disabled = !!busy \|\| state\.operationBusy \|\| !!state\.nativeJobId/);
-  assert.match(main, /if \(state\.operationBusy \|\| state\.nativeJobId\) \{[\s\S]*?任务运行期间不能更换输入素材/);
+  assert.match(main, /button\.disabled = !!busy \|\| state\.operationBusy \|\| !!state\.nativeJobId \|\| !!state\.nativeImportJobId/);
+  assert.match(main, /if \(state\.operationBusy \|\| state\.nativeJobId \|\| state\.nativeImportJobId\) \{[\s\S]*?任务运行期间不能更换输入素材/);
   assert.match(main, /const hasExistingSelection = role === 'video'/);
   assert.match(main, /if \(!hasExistingSelection && config\?\.metaId/);
   assert.match(main, /正在请求取消 ' \+ nativePlatformName\(\) \+ ' 压制/);
@@ -330,5 +330,38 @@ test('input identity is locked across native async work', async () => {
   assert.match(main, /statusReadFailures >= 5/);
   assert.match(main, /当前任务 ID 已保留/);
   assert.match(main, /state\.nativeJobId = jobId;[\s\S]*?syncTaskInputMutationLocks\(\)/);
+});
+
+test('Bink 2 input adapter distinguishes probe, decode, and external import state', async () => {
+  const [main, client, css] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./windows-native-client.js', import.meta.url), 'utf8'),
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+  ]);
+
+  assert.match(main, /id="sourceAdapterPanel"/);
+  assert.match(main, /id="sourceAdapterImportBtn"/);
+  assert.match(main, /id="sourceAdapterCancelBtn"/);
+  assert.match(main, /function renderSourceAdapterState/);
+  assert.match(main, /async function startBink2Import/);
+  assert.match(main, /async function monitorBink2Import/);
+  assert.match(main, /async function recoverBink2ImportJob/);
+  assert.match(main, /async function recoverWindowsNativeVideoSelection/);
+  assert.match(main, /sourceAdapterRequired/);
+  assert.match(main, /sourceAdapterApplied/);
+  assert.match(main, /inputDecodeSmoke === false && !state\.nativeInputProbe\.inputDecodeDeferred/);
+  assert.match(main, /Bink 2 已经过外部解码导入/);
+  assert.match(main, /nativeImportJobId/);
+  assert.match(main, /nativeBink2ImportJobId/);
+  assert.match(main, /不显示未经证实的 ETA/);
+  assert.match(main, /任务 ID 已保留/);
+
+  assert.match(client, /async startBink2Import\(\)/);
+  assert.match(client, /async getBink2ImportStatus\(jobId\)/);
+  assert.match(client, /cancelBink2Import\(jobId\)/);
+  assert.match(client, /async readSelectedVideoInfo\(\)/);
+
+  assert.match(css, /\.source-adapter-panel\s*\{/);
+  assert.match(css, /\.source-adapter-heading\s*\{/);
 });
 
