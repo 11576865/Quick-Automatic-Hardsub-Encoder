@@ -1,4 +1,5 @@
 function finite(value, fallback = null) {
+  if (value === null || value === undefined || value === '') return fallback;
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
@@ -138,9 +139,11 @@ function logSpaced(min, max, count) {
   if (count <= 1 || min === max) return [min];
   const lo = Math.log(min);
   const hi = Math.log(max);
-  return Array.from({ length: count }, (_, index) =>
-    Math.exp(lo + (hi - lo) * index / (count - 1))
-  );
+  return Array.from({ length: count }, (_, index) => {
+    if (index === 0) return min;
+    if (index === count - 1) return max;
+    return Math.exp(lo + (hi - lo) * index / (count - 1));
+  });
 }
 
 export function fitRateDistortionModel(rawPoints, options = {}) {
@@ -248,41 +251,72 @@ export function fitRateDistortionModel(rawPoints, options = {}) {
   };
 }
 
-export function targetBytesForVideoBitrate(videoBitrate, {
+function normalizeBudgetOptions({
   durationSeconds,
   audioBitrate = 0,
-  reservePercent = 4
+  reservePercent = 4,
+  containerReservePercent = 0,
+  fixedReserveBytes = 0
 } = {}) {
-  const video = finite(videoBitrate);
   const duration = finite(durationSeconds);
   const audio = finite(audioBitrate, 0);
   const reserve = finite(reservePercent, 4);
-  if (!(video >= 0) || !(duration > 0) || !(audio >= 0) || !(reserve >= 0 && reserve < 100)) {
-    return null;
-  }
-  const payloadBytes = (video + audio) * duration / 8;
-  return payloadBytes / (1 - reserve / 100);
+  const containerReserve = finite(containerReservePercent, 0);
+  const fixedReserve = finite(fixedReserveBytes, 0);
+  if (
+    !(duration > 0) ||
+    !(audio >= 0) ||
+    !(reserve >= 0 && reserve < 100) ||
+    !(containerReserve >= 0 && containerReserve < 100) ||
+    !(fixedReserve >= 0)
+  ) return null;
+  return {
+    duration,
+    audio,
+    reserveFraction: reserve / 100,
+    containerReserveFraction: containerReserve / 100,
+    fixedReserve
+  };
 }
 
-export function videoBitrateForTargetBytes(targetBytes, {
-  durationSeconds,
-  audioBitrate = 0,
-  reservePercent = 4
-} = {}) {
+export function targetBytesForVideoBitrate(videoBitrate, options = {}) {
+  const video = finite(videoBitrate);
+  const budget = normalizeBudgetOptions(options);
+  if (!(video >= 0) || !budget) return null;
+
+  const payloadBytes = (video + budget.audio) * budget.duration / 8;
+  const percentPayloadFraction = 1 - budget.containerReserveFraction;
+  if (!(percentPayloadFraction > 0)) return null;
+
+  const safeBudgetIfPercentReserve = payloadBytes / percentPayloadFraction;
+  const percentReserveBytes = safeBudgetIfPercentReserve * budget.containerReserveFraction;
+  const safeBudgetBytes = percentReserveBytes >= budget.fixedReserve
+    ? safeBudgetIfPercentReserve
+    : payloadBytes + budget.fixedReserve;
+  return safeBudgetBytes / (1 - budget.reserveFraction);
+}
+
+export function videoBitrateForTargetBytes(targetBytes, options = {}) {
   const bytes = finite(targetBytes);
-  const duration = finite(durationSeconds);
-  const audio = finite(audioBitrate, 0);
-  const reserve = finite(reservePercent, 4);
-  if (!(bytes > 0) || !(duration > 0) || !(audio >= 0) || !(reserve >= 0 && reserve < 100)) {
-    return null;
-  }
-  return bytes * (1 - reserve / 100) * 8 / duration - audio;
+  const budget = normalizeBudgetOptions(options);
+  if (!(bytes > 0) || !budget) return null;
+
+  const safeBudgetBytes = bytes * (1 - budget.reserveFraction);
+  const containerReserveBytes = Math.max(
+    budget.fixedReserve,
+    safeBudgetBytes * budget.containerReserveFraction
+  );
+  const payloadBytes = safeBudgetBytes - containerReserveBytes;
+  if (!(payloadBytes >= 0)) return -budget.audio;
+  return payloadBytes * 8 / budget.duration - budget.audio;
 }
 
 export function createSizeQualityFrontier(model, {
   durationSeconds,
   audioBitrate = 0,
   reservePercent = 4,
+  containerReservePercent = 0,
+  fixedReserveBytes = 0,
   minimumVideoBitrate = 1000
 } = {}) {
   if (!model?.ok) {
@@ -292,14 +326,25 @@ export function createSizeQualityFrontier(model, {
   const duration = finite(durationSeconds);
   const audio = finite(audioBitrate, 0);
   const reserve = finite(reservePercent, 4);
+  const containerReserve = finite(containerReservePercent, 0);
+  const fixedReserve = finite(fixedReserveBytes, 0);
   const minimumVideo = Math.max(0, finite(minimumVideoBitrate, 1000));
-  if (!(duration > 0) || !(audio >= 0) || !(reserve >= 0 && reserve < 100)) {
+  const budget = {
+    durationSeconds: duration,
+    audioBitrate: audio,
+    reservePercent: reserve,
+    containerReservePercent: containerReserve,
+    fixedReserveBytes: fixedReserve
+  };
+  if (!normalizeBudgetOptions(budget)) {
     return { ok: false, reason: 'invalid-size-budget' };
   }
-
-  const budget = { durationSeconds: duration, audioBitrate: audio, reservePercent: reserve };
+  if (model.maxBitrate < minimumVideo) {
+    return { ok: false, reason: 'evidence-below-minimum-video-bitrate' };
+  }
+  const minimumEvidenceBitrate = Math.max(model.minBitrate, minimumVideo);
   const minimumFeasibleTargetBytes = targetBytesForVideoBitrate(minimumVideo, budget);
-  const minimumEvidenceTargetBytes = targetBytesForVideoBitrate(model.minBitrate, budget);
+  const minimumEvidenceTargetBytes = targetBytesForVideoBitrate(minimumEvidenceBitrate, budget);
   const maximumEvidenceTargetBytes = targetBytesForVideoBitrate(model.maxBitrate, budget);
 
   const evaluateTargetBytes = targetBytes => {
@@ -326,12 +371,22 @@ export function createSizeQualityFrontier(model, {
   };
 
   const sampleCurve = (count = 64) =>
-    model.sampleCurve(count).map(point => ({
-      ...point,
-      targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
-    }));
+    logSpaced(
+      minimumEvidenceBitrate,
+      model.maxBitrate,
+      Math.max(2, Math.round(count))
+    )
+      .map(model.predictAtBitrate)
+      .filter(Boolean)
+      .map(point => ({
+        ...point,
+        targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
+      }));
 
-  const knee = model.estimateKnee();
+  const rawKnee = model.estimateKnee();
+  const knee = rawKnee && rawKnee.bitrate >= minimumEvidenceBitrate
+    ? rawKnee
+    : null;
   const kneeTargetBytes = knee
     ? targetBytesForVideoBitrate(knee.bitrate, budget)
     : null;
@@ -341,11 +396,20 @@ export function createSizeQualityFrontier(model, {
     durationSeconds: duration,
     audioBitrate: audio,
     reservePercent: reserve,
+    containerReservePercent: containerReserve,
+    fixedReserveBytes: fixedReserve,
     minimumVideoBitrate: minimumVideo,
+    minimumEvidenceBitrate,
     minimumFeasibleTargetBytes,
     minimumEvidenceTargetBytes,
     maximumEvidenceTargetBytes,
     knee: knee ? { ...knee, targetBytes: kneeTargetBytes } : null,
+    evidencePoints: model.points
+      .filter(point => point.bitrate >= minimumEvidenceBitrate)
+      .map(point => ({
+        ...point,
+        targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
+      })),
     evaluateTargetBytes,
     sampleCurve
   };

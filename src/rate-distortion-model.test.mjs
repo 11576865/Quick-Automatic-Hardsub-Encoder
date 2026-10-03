@@ -154,3 +154,81 @@ test('insufficient evidence does not fabricate a model', () => {
   assert.equal(model.ok, false);
   assert.equal(model.reason, 'insufficient-evidence');
 });
+
+
+test('planner reserve transform matches the guided size-budget accounting', () => {
+  const budget = {
+    durationSeconds: 3600,
+    audioBitrate: 128000,
+    reservePercent: 4,
+    containerReservePercent: 1,
+    fixedReserveBytes: 256 * 1024
+  };
+
+  const impossibleTarget = 20 * 1024 * 1024;
+  const impossibleVideoBitrate = videoBitrateForTargetBytes(impossibleTarget, budget);
+  assert.ok(impossibleVideoBitrate < 0);
+  assert.ok(impossibleTarget < targetBytesForVideoBitrate(0, budget));
+
+  for (const targetBytes of [80 * 1024 * 1024, 800 * 1024 * 1024]) {
+    const videoBitrate = videoBitrateForTargetBytes(targetBytes, budget);
+    const roundTrip = targetBytesForVideoBitrate(videoBitrate, budget);
+    assert.ok(videoBitrate >= 0);
+    assert.ok(Math.abs(roundTrip - targetBytes) < 1e-6);
+  }
+});
+
+test('size frontier exposes measured evidence points in target-byte coordinates', () => {
+  const model = fitRateDistortionModel([
+    { sampleBitrate: 150000, averageSsim: 0.82, ssim: 0.79 },
+    { sampleBitrate: 600000, averageSsim: 0.95, ssim: 0.92 }
+  ]);
+  const frontier = createSizeQualityFrontier(model, {
+    durationSeconds: 1800,
+    audioBitrate: 64000,
+    reservePercent: 4,
+    containerReservePercent: 1,
+    fixedReserveBytes: 256 * 1024,
+    minimumVideoBitrate: 150000
+  });
+
+  assert.equal(frontier.ok, true);
+  assert.equal(frontier.evidencePoints.length, 2);
+  assert.ok(frontier.evidencePoints[0].targetBytes < frontier.evidencePoints[1].targetBytes);
+  assert.ok(frontier.evidencePoints.every(point => point.targetBytes > 0));
+});
+
+
+test('minimum executable bitrate clips the plotted evidence domain', () => {
+  const model = fitRateDistortionModel([
+    { sampleBitrate: 80000, averageSsim: 0.70, ssim: 0.66 },
+    { sampleBitrate: 200000, averageSsim: 0.84, ssim: 0.81 },
+    { sampleBitrate: 500000, averageSsim: 0.94, ssim: 0.92 }
+  ]);
+  const frontier = createSizeQualityFrontier(model, {
+    durationSeconds: 1800,
+    audioBitrate: 64000,
+    reservePercent: 4,
+    containerReservePercent: 1,
+    fixedReserveBytes: 256 * 1024,
+    minimumVideoBitrate: 150000
+  });
+
+  assert.equal(frontier.ok, true);
+  assert.equal(frontier.minimumEvidenceBitrate, 150000);
+  assert.ok(frontier.minimumEvidenceTargetBytes >= frontier.minimumFeasibleTargetBytes);
+  const sampled = frontier.sampleCurve(64);
+  assert.ok(Math.abs(sampled[0].bitrate - 150000) < 1e-8);
+  assert.ok(sampled.every(point => point.bitrate >= 150000));
+  assert.ok(frontier.evidencePoints.every(point => point.bitrate >= 150000));
+});
+
+test('null quality fields do not silently become zero-quality evidence', () => {
+  const model = fitRateDistortionModel([
+    { sampleBitrate: 100000, averageSsim: null, ssim: null },
+    { sampleBitrate: 200000, averageSsim: 0.9, ssim: 0.88 }
+  ]);
+
+  assert.equal(model.ok, false);
+  assert.equal(model.points.length, 1);
+});

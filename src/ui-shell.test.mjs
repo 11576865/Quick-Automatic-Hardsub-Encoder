@@ -401,3 +401,37 @@ test('rate-distortion model is fed by in-session calibration evidence', async ()
   assert.match(model, /status: 'below-evidence'/);
   assert.match(model, /status: 'above-evidence'/);
 });
+
+
+test('target-size mode exposes a draggable measured frontier', async () => {
+  const [main, css, frontierUi] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+    readFile(new URL('./size-frontier-ui.js', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(main, /id="sizeFrontierPanel"/);
+  assert.match(main, /id="sizeFrontierChart"[^>]*role="slider"/);
+  assert.match(main, /id="calibrateSizeFrontierBtn"/);
+  assert.match(main, /function renderSizeFrontier\(\)/);
+  assert.match(main, /function sizeFrontierTargetFromPointer\(event\)/);
+  assert.match(main, /function commitSizeFrontierKeyboard\(event\)/);
+  assert.match(main, /sizeFrontierChart'\)\.addEventListener\('pointerdown'/);
+  assert.match(main, /sizeFrontierChart'\)\.addEventListener\('pointermove'/);
+  assert.match(main, /sizeFrontierChart'\)\.addEventListener\('keydown', commitSizeFrontierKeyboard\)/);
+  assert.match(main, /state\.sizeBudgetTargetBytes = Math\.round\(clamped\)/);
+  assert.match(main, /budgetSource: directBudgetBytes > 0 \? 'frontier' : 'multiplier'/);
+  assert.match(main, /directBudgetBytes > 0\s*\? ceilingVideoBitrate/);
+  assert.match(main, /state\.rateDistortionModels = \{\}/);
+  assert.match(main, /state\.sizeBudgetTargetBytes = null/);
+
+  assert.match(css, /Measured target-size frontier/);
+  assert.match(css, /\.size-frontier-chart\s*\{[\s\S]*?touch-action:\s*none/);
+  assert.match(css, /\.size-frontier-band\s*\{/);
+  assert.match(css, /\.size-frontier-thumb\s*\{/);
+
+  assert.match(frontierUi, /targetBytesAtEvidenceFraction/);
+  assert.match(frontierUi, /evidenceFractionForTargetBytes/);
+  assert.match(frontierUi, /buildSizeFrontierPlot/);
+  assert.match(frontierUi, /bandPath/);
+});
