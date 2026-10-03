@@ -346,6 +346,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   ]);
 
   assert.match(main, /qualityEvidenceRecord/);
+  assert.match(main, /record\?\.evidenceKind !== 'full-encode'/);
   assert.match(main, /persistCompressionEvidence/);
   assert.match(main, /currentSourceEvidenceKey/);
   assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
