@@ -383,6 +383,10 @@ export function mountMediaWorkspace(hooks) {
     }
     syncTaskActions();
   };
+  const isCancellationError = error => {
+    const text=String(error?.message||error||'').toLowerCase();
+    return text.includes('取消')||text.includes('cancelled')||text.includes('canceled');
+  };
   const updateTaskProgress = (p,message,meta={}) => {
     const fraction=Math.max(0,Math.min(1,Number(p)||0));
     section.querySelector('#taskProgress').value=fraction;
@@ -669,12 +673,14 @@ export function mountMediaWorkspace(hooks) {
       setTaskState('verified');
       status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 尚未保存到你的文件夹。下一步：保存成品。');
     }catch(e){
-      if(String(e.message||'').includes('取消')){
+      if(isCancellationError(e)){
         setTaskState('idle');
         status('任务已取消。');
+        section.querySelector('#taskEta').textContent='已取消';
       }else{
         setTaskState('failed');
         status('处理失败：'+e.message);
+        section.querySelector('#taskEta').textContent='处理失败';
       }
       hooks.log(e.stack||e.message);
     }
