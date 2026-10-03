@@ -114,7 +114,7 @@ function Add-ClientCompressionEvidence($InputRecord) {
         }
     }
     $record.evidenceKind = $kind
-    $record.evidenceScope = 'source'
+    $record.evidenceScope = if($kind -eq 'quality-sample'){'observation'}else{'source'}
     $record.sourceIdentity = $sourceIdentity
     $record.backend = 'windows-native'
     $recordedAt = Add-CompressionHistoryRecord $record
