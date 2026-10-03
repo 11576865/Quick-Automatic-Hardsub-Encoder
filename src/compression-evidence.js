@@ -96,6 +96,7 @@ export function qualityEvidenceRecord({
   sampleBitrate,
   encodeSpeed,
   sampleCount,
+  sampleMeasurements,
   testedCrfs
 }) {
   return {
@@ -114,6 +115,15 @@ export function qualityEvidenceRecord({
     sampleBitrate: finite(sampleBitrate),
     averageSpeed: finite(encodeSpeed),
     sampleCount: Math.max(0, Math.round(finite(sampleCount))),
+    sampleMeasurements: (Array.isArray(sampleMeasurements) ? sampleMeasurements : [])
+      .map(sample => ({
+        start: finite(sample?.start),
+        duration: finite(sample?.duration),
+        ssim: optionalFinite(sample?.ssim),
+        bitrate: finite(sample?.bitrate),
+        elapsedSeconds: finite(sample?.elapsedSeconds)
+      }))
+      .filter(sample => sample.duration > 0 && Number.isFinite(sample.ssim)),
     testedCrfs: Array.isArray(testedCrfs) ? testedCrfs.map(Number).filter(Number.isFinite) : [],
     width: finite(media?.width),
     height: finite(media?.height),
