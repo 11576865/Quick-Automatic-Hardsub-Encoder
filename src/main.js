@@ -3637,6 +3637,7 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
     const measuredDuration = Math.max(0.001, Number(sample.duration || duration));
     const videoBytes = Number(sample.totalVideoBytes || 0);
     results.push({
+      start,
       ssim,
       bitrate: videoBytes > 0 ? videoBytes * 8 / measuredDuration : 0,
       mediaSeconds: measuredDuration,
@@ -3658,7 +3659,14 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
       ? validBitrates.reduce((sum, x) => sum + x, 0) / validBitrates.length
       : 0,
     encodeSpeed: totalWall > 0 ? totalMedia / totalWall : 0,
-    sampleCount: results.length
+    sampleCount: results.length,
+    sampleMeasurements: results.map(item => ({
+      start: item.start,
+      duration: item.mediaSeconds,
+      ssim: item.ssim,
+      bitrate: item.bitrate,
+      elapsedSeconds: item.elapsedSeconds
+    }))
   };
 
   await persistCompressionEvidence(qualityEvidenceRecord({
@@ -3675,7 +3683,8 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
     averageSsim: summary.averageSsim,
     sampleBitrate: summary.sampleBitrate,
     encodeSpeed: summary.encodeSpeed,
-    sampleCount: summary.sampleCount
+    sampleCount: summary.sampleCount,
+    sampleMeasurements: summary.sampleMeasurements
   }));
 
   return summary;
