@@ -36,6 +36,31 @@ export function runtimeEvidenceKey(backend = {}) {
   return 'runtime-' + stableFNV1a(identity);
 }
 
+export function renderEvidenceKey({ assText = '', fonts = [], fontBindings = {}, autoFontFallbacks = {} } = {}) {
+  const fontSignature = (Array.isArray(fonts) ? fonts : [])
+    .map(file => [
+      cleanText(file?.name),
+      Math.round(finite(file?.size)),
+      Math.round(finite(file?.lastModified))
+    ].join(':'))
+    .sort()
+    .join(',');
+  const bindingSignature = Object.entries(fontBindings || {})
+    .map(([key, value]) => cleanText(key) + '=' + cleanText(value))
+    .sort()
+    .join(',');
+  const fallbackSignature = Object.entries(autoFontFallbacks || {})
+    .map(([key, value]) => cleanText(key) + '=' + cleanText(value))
+    .sort()
+    .join(',');
+  return 'render-' + stableFNV1a([
+    cleanText(assText),
+    fontSignature,
+    bindingSignature,
+    fallbackSignature
+  ].join('|'));
+}
+
 export function sourceEvidenceKey(media = {}, sourceName = '', sourceSize = 0) {
   const identity = [
     cleanText(sourceName || media.sourceName).toLowerCase(),
@@ -61,6 +86,7 @@ export function normalizeCompressionEvidence(record) {
     recordedAt: finite(record.recordedAt),
     sourceIdentity: cleanText(record.sourceIdentity),
     runtimeIdentity: cleanText(record.runtimeIdentity),
+    renderIdentity: cleanText(record.renderIdentity),
     codec: cleanText(record.codec),
     preset: cleanText(record.preset),
     width: finite(record.width),
@@ -87,6 +113,7 @@ export function qualityEvidenceRecord({
   sourceSize,
   backend,
   runtimeIdentity,
+  renderIdentity,
   codec,
   preset,
   crf,
@@ -105,6 +132,7 @@ export function qualityEvidenceRecord({
     sourceIdentity: sourceEvidenceKey(media, sourceName, sourceSize),
     backend: cleanText(backend),
     runtimeIdentity: cleanText(runtimeIdentity),
+    renderIdentity: cleanText(renderIdentity),
     codec: cleanText(codec),
     preset: cleanText(preset),
     crf: finite(crf),
@@ -125,7 +153,7 @@ export function qualityEvidenceRecord({
   };
 }
 
-export function sourceQualityEvidence(records, sourceIdentity, codec = '', preset = '', runtimeIdentity = '') {
+export function sourceQualityEvidence(records, sourceIdentity, codec = '', preset = '', runtimeIdentity = '', renderIdentity = '') {
   const normalized = normalizeCompressionEvidenceList(records);
   return normalized
     .filter(record =>
@@ -134,6 +162,7 @@ export function sourceQualityEvidence(records, sourceIdentity, codec = '', prese
       (!codec || record.codec === codec) &&
       (!preset || record.preset === preset) &&
       (!runtimeIdentity || record.runtimeIdentity === runtimeIdentity) &&
+      (!renderIdentity || record.renderIdentity === renderIdentity) &&
       record.sampleBitrate > 0 &&
       Number.isFinite(record.ssim)
     )
@@ -141,9 +170,9 @@ export function sourceQualityEvidence(records, sourceIdentity, codec = '', prese
 }
 
 
-export function reusableSourceQualityByCrf(records, sourceIdentity, codec, preset = '', runtimeIdentity = '') {
+export function reusableSourceQualityByCrf(records, sourceIdentity, codec, preset = '', runtimeIdentity = '', renderIdentity = '') {
   const latest = new Map();
-  for (const record of sourceQualityEvidence(records, sourceIdentity, codec, preset, runtimeIdentity)) {
+  for (const record of sourceQualityEvidence(records, sourceIdentity, codec, preset, runtimeIdentity, renderIdentity)) {
     const crf = Number(record.crf);
     if (!Number.isFinite(crf)) continue;
     const previous = latest.get(crf);
