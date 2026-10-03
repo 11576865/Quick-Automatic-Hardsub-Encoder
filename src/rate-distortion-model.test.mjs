@@ -154,3 +154,40 @@ test('insufficient evidence does not fabricate a model', () => {
   assert.equal(model.ok, false);
   assert.equal(model.reason, 'insufficient-evidence');
 });
+
+
+test('planner reserve transform matches the guided size-budget accounting', () => {
+  const budget = {
+    durationSeconds: 3600,
+    audioBitrate: 128000,
+    reservePercent: 4,
+    containerReservePercent: 1,
+    fixedReserveBytes: 256 * 1024
+  };
+
+  for (const targetBytes of [20 * 1024 * 1024, 80 * 1024 * 1024, 800 * 1024 * 1024]) {
+    const videoBitrate = videoBitrateForTargetBytes(targetBytes, budget);
+    const roundTrip = targetBytesForVideoBitrate(videoBitrate, budget);
+    assert.ok(Math.abs(roundTrip - targetBytes) < 1e-6);
+  }
+});
+
+test('size frontier exposes measured evidence points in target-byte coordinates', () => {
+  const model = fitRateDistortionModel([
+    { sampleBitrate: 150000, averageSsim: 0.82, ssim: 0.79 },
+    { sampleBitrate: 600000, averageSsim: 0.95, ssim: 0.92 }
+  ]);
+  const frontier = createSizeQualityFrontier(model, {
+    durationSeconds: 1800,
+    audioBitrate: 64000,
+    reservePercent: 4,
+    containerReservePercent: 1,
+    fixedReserveBytes: 256 * 1024,
+    minimumVideoBitrate: 150000
+  });
+
+  assert.equal(frontier.ok, true);
+  assert.equal(frontier.evidencePoints.length, 2);
+  assert.ok(frontier.evidencePoints[0].targetBytes < frontier.evidencePoints[1].targetBytes);
+  assert.ok(frontier.evidencePoints.every(point => point.targetBytes > 0));
+});
