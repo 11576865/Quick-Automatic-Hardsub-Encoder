@@ -8,11 +8,51 @@ const {spawn}=require('node:child_process');
   let ready=false;for(let attempt=0;attempt<100;attempt++){try{if((await fetch('http://127.0.0.1:4179/')).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,200));}
   if(!ready)throw Error('Vite startup timeout: '+startupLog);
   browser=await chromium.launch({headless:true});
+
+  // Exercise the real browser refresh boundary for Windows Native. The launch
+  // URL is intentionally one-shot; the second load must reconnect from
+  // tab-scoped sessionStorage after the query credentials have been stripped.
+  const windowsPage=await browser.newPage({viewport:{width:1280,height:900}});
+  let windowsHealthRequests=0;
+  await windowsPage.route('http://127.0.0.1:9347/**',async route=>{
+    const url=new URL(route.request().url());
+    if(url.pathname==='/api/health'){
+      windowsHealthRequests++;
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+        backend:'windows-native',platform:'windows',available:true,
+        cpu:'CI CPU',gpus:['CI GPU'],ffmpeg:'C:\\ffmpeg.exe',ffprobe:'C:\\ffprobe.exe',
+        ffmpegVersion:'ci',ffmpegSource:'ci',encoders:[],bridgeVersion:4,taskSchemaVersion:3,
+        fpsModeSupported:true,globalOptions:[],multipassSupported:false,multipassFullresSupported:false,hasAss:true
+      })});
+      return;
+    }
+    if(url.pathname==='/api/history'){
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({records:[]})});
+      return;
+    }
+    if(url.pathname==='/api/self-test'){
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,x264EncodeSmoke:true,x265EncodeSmoke:true,svtAv1EncodeSmoke:true,dav1d:true,ssim:true})});
+      return;
+    }
+    await route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({ok:false,error:'not mocked'})});
+  });
+  await windowsPage.goto('http://127.0.0.1:4179/?windowsNative=http%3A%2F%2F127.0.0.1%3A9347&token=ui-smoke-token');
+  await windowsPage.waitForFunction(()=>document.querySelector('#runtimeModeBadge')?.textContent.trim()==='WINDOWS NATIVE');
+  if(new URL(windowsPage.url()).searchParams.has('token'))throw Error('Windows launch token remained in the visible URL after connection');
+  if((await windowsPage.locator('#runtimeModeTitle').textContent()).trim()!=='Windows 本机后端已连接')throw Error('Windows runtime identity is not persistent in the main chrome');
+  await windowsPage.reload();
+  await windowsPage.waitForFunction(()=>document.querySelector('#runtimeModeBadge')?.textContent.trim()==='WINDOWS NATIVE');
+  if(windowsHealthRequests<2)throw Error('Windows page refresh did not reconnect to the localhost Bridge');
+  if(await windowsPage.locator('body').getAttribute('data-runtime-backend')!=='windows-native')throw Error('Windows runtime identity was not reflected in semantic body state after refresh');
+  await windowsPage.screenshot({path:'media-workspace-windows-native-desktop.png',fullPage:true});
+  await windowsPage.close();
+
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:4179/');
   await page.locator('#mediaWorkspace').waitFor({state:'attached'});
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub still exposes the precise parameter workspace');
+  if((await page.locator('#runtimeModeBadge').textContent()).trim()!=='WEB / WASM')throw Error('Browser runtime identity is not visibly labeled');
   if(await page.locator('#workflowStrip span').count()!==5)throw Error('Hardsub workflow strip does not expose five semantic stages');
   await page.evaluate(()=>['subtitleCard','planCard','encodeCard'].forEach(id=>document.querySelector('#'+id)?.classList.remove('hidden')));
   if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Guided hardsub does not expose the copied-audio playback warning');
@@ -38,6 +78,10 @@ const {spawn}=require('node:child_process');
   if(await page.inputValue('[name=start]')!=='3:57.25')throw Error('Full-width clock input did not normalize');
   if(await page.locator('#workflowStrip span').count()!==3)throw Error('Transcode workflow strip did not collapse to three stages');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace is not visible');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
+  if((await page.locator('#mediaWorkspaceTitle').textContent()).trim()!=='硬字幕压制工作区')throw Error('Transcode -> hardsub did not restore hardsub chrome');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  if((await page.locator('#mediaWorkspaceTitle').textContent()).trim()!=='纯视频转码工作区')throw Error('Hardsub -> transcode did not restore transcode chrome');
   if((await page.locator('#taskLoadPreset').textContent()).trim()!=='恢复推荐方案')throw Error('Recommended-plan recovery is not explained in user language');
   if(!(await page.locator('.media-decision-hint').textContent()).includes('不确定时直接保留推荐方案'))throw Error('Core parameter area lacks uncertainty guidance');
   if(!(await page.locator('[name=preset] option:checked').textContent()).includes('均衡'))throw Error('Preset selector does not expose human-readable intent');
@@ -58,6 +102,17 @@ const {spawn}=require('node:child_process');
   await page.fill('[name=width]','1280');await page.fill('[name=quality]','18');
   await page.click('#taskLoadPreset');
   if(await page.inputValue('[name=width]')!=='1280')throw Error('Preset overwrote resolution');
+
+  await page.fill('[name=quality]','19');
+  await page.locator('.media-sample-panel > summary').click();
+  await page.fill('[name=configName]','quality-restore');
+  await page.click('#taskStore');
+  await page.fill('[name=quality]','31');
+  await page.click('#taskRestore');
+  if(await page.inputValue('[name=quality]')!=='19')throw Error('Saved configuration did not restore quality value');
+  if(await page.inputValue('.media-inline-range')!=='19')throw Error('Saved configuration restored quality text but left the quality slider stale');
+  await page.locator('.media-sample-panel > summary').click();
+
   await page.selectOption('[name=rateMode]','size');
   if(await page.locator('[name=targetSize]').isDisabled())throw Error('Size controls are unavailable');
   if(!await page.locator('[name=targetSize]').isVisible())throw Error('Size controls are hidden in size mode');
@@ -105,6 +160,8 @@ const {spawn}=require('node:child_process');
     document.body.innerHTML='<section id="inputCard"></section>';
     const {mountMediaWorkspace}=await import('/src/media-workspace.js');
     window.taskRuns=[];
+    window.taskBehavior='normal';
+    window.taskCancelRequested=false;
     window.mockAudioMedia={
       duration:2181.384,
       fps:60,
@@ -124,7 +181,7 @@ const {spawn}=require('node:child_process');
       busy:()=>false,
       setBusy:()=>{},
       log:()=>{},
-      cancel:()=>{},
+      cancel:()=>{window.taskCancelRequested=true;},
       save:()=>({pending:true}),
       prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
       frame:async options=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',time:Number(options?.time||0),width:Number(options?.width||720)}),
@@ -137,6 +194,11 @@ const {spawn}=require('node:child_process');
       run:async(task,media,progress)=>{
         window.taskRuns.push(task);
         progress?.(.42,'正在处理 · 90.0 秒',{state:'encoding',timeSec:90,duration:task.expectedDuration,speed:2.5});
+        if(window.taskBehavior==='cancel'){
+          while(!window.taskCancelRequested)await new Promise(resolve=>setTimeout(resolve,10));
+          throw new Error('cancelled');
+        }
+        if(window.taskBehavior==='fail')throw new Error('simulated encode failure');
         return {
           outputBytes:530000000,
           outputDuration:task.expectedDuration,
@@ -223,21 +285,55 @@ const {spawn}=require('node:child_process');
   if((await page.locator('#taskPercent').textContent()).trim()!=='100%')throw Error('Completed task did not expose 100% progress');
   if(await page.locator('#taskReport').isDisabled())throw Error('Report unavailable');
 
+  await page.selectOption('[name=rateMode]','quality');
+  if(await page.locator('#mediaWorkspace').getAttribute('data-completed-stale')!=='true')throw Error('Changing task settings did not mark the verified artifact as belonging to the previous task');
+  if((await page.locator('#taskSave').textContent()).trim()!=='保存上一成品')throw Error('Verified prior artifact is not clearly labeled after settings change');
+  if((await page.locator('#taskRun').textContent()).trim()!=='开始视频转码')throw Error('Run action still claims re-encode after current settings diverged from the completed task');
+  if(!await page.locator('#taskSave').evaluate(el=>el.classList.contains('task-primary-action')))throw Error('Unsaved previous artifact lost primary save action after settings change');
+
   await page.click('#taskSave');
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:false,jobId:'ui-smoke-job',error:'simulated publish failure'}})));
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='save_failed');
-  if((await page.locator('#taskSave').textContent()).trim()!=='重试保存成品')throw Error('Publish failure did not expose retry action');
+  if((await page.locator('#taskSave').textContent()).trim()!=='重试保存上一成品')throw Error('Publish failure lost previous-artifact identity');
   if(!(await page.locator('#taskStatus').textContent()).includes('无需重新压制'))throw Error('Publish failure did not preserve verified-output recovery guidance');
   await page.click('#taskSave');
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:true,jobId:'ui-smoke-job',bytes:530000000,path:'C:\\output.mkv'}})));
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saved');
+  if((await page.locator('#taskSave').textContent()).trim()!=='再次保存上一成品')throw Error('Saved prior artifact lost identity after current settings diverged');
+
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
+  if((await page.locator('#taskRun').textContent()).trim()!=='开始无损剪切')throw Error('Mode change after completion retained stale re-encode label');
+  if((await page.locator('#taskSave').textContent()).trim()!=='再次保存上一成品')throw Error('Mode change discarded access to the previous saved artifact');
+  await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
 
   await page.locator('.media-sample-panel > summary').click();await page.click('#taskSamples');
   await page.waitForFunction(()=>document.querySelector('#taskStatus').textContent.includes('三组试压完成'));
   if(await page.locator('.task-sample').count()!==3)throw Error('Three sample results missing');
   const runs=await page.evaluate(()=>window.taskRuns);
   if(runs.length!==4 || runs.slice(1).some(t=>t.expectedDuration!==15))throw Error('Sample duration or run count is wrong');
+
+  await page.evaluate(()=>{window.taskBehavior='cancel';window.taskCancelRequested=false;});
+  await page.click('#taskRun');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='encoding');
+  await page.click('#taskCancel');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='idle');
+  if(!(await page.locator('#taskStatus').textContent()).includes('任务已取消'))throw Error('English Native cancellation was misclassified as failure');
+  if((await page.locator('#taskEta').textContent()).trim()!=='已取消')throw Error('Cancelled task did not expose terminal cancellation state');
+  if(await page.locator('#taskRun').isDisabled())throw Error('Run action stayed disabled after cancellation');
+
+  await page.evaluate(()=>{window.taskBehavior='fail';window.taskCancelRequested=false;});
+  await page.click('#taskRun');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='failed');
+  if(!(await page.locator('#taskStatus').textContent()).includes('simulated encode failure'))throw Error('Failure reason was not surfaced');
+  if((await page.locator('#taskEta').textContent()).trim()!=='处理失败')throw Error('Failed task did not expose terminal failure state');
+  if(await page.locator('#taskRun').isDisabled())throw Error('Run action stayed disabled after failure');
+
+  await page.evaluate(()=>{window.taskBehavior='normal';window.taskCancelRequested=false;});
+  await page.click('#taskRun');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='verified');
+  if(await page.locator('#taskSave').isDisabled())throw Error('Successful rerun after failure did not restore save handoff');
+
   if(errors.length)throw Error(errors.join('\n'));
   console.log('Desktop/mobile UI, mode gating, preset preservation: passed');
  }finally{await browser?.close();server.kill();}

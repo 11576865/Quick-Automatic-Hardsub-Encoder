@@ -11,6 +11,13 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /id="windowsNativeCard"/);
   assert.match(main, /WINDOWS NATIVE/);
   assert.match(main, /id="nativeStatusBar"/);
+  assert.match(main, /id="runtimeModeBanner"/);
+  assert.match(main, /id="runtimeModeBadge"/);
+  assert.match(main, /id="heroRuntimeTitle"/);
+  assert.match(main, /function renderRuntimeIdentity\(\)/);
+  assert.match(main, /WINDOWS NATIVE WORKBENCH/);
+  assert.match(main, /WEB \/ WASM/);
+  assert.match(main, /刷新页面会继续连接本次 Bridge 会话/);
   assert.match(main, /renderNativeStatusBar/);
   assert.match(main, /nativeGpuLabel/);
   assert.match(main, /id="videoNativePickerBtn"/);
@@ -30,8 +37,8 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.doesNotMatch(main, /data-theme-choice=/);
   assert.doesNotMatch(main, /THEME_KEY/);
   assert.doesNotMatch(main, /prefers-color-scheme/);
-  assert.match(main, /MEDIA PROCESSING WORKBENCH/);
-  assert.match(main, /<h1>本地媒体处理工作台<\/h1>/);
+  assert.match(main, /WEB MEDIA WORKBENCH/);
+  assert.match(main, /<h1 id="runtimeWorkbenchTitle">浏览器媒体处理工作台<\/h1>/);
   assert.match(main, /class="app-header-main"/);
   assert.match(main, /largeMax:\s*1599/);
   assert.match(main, /return 'extra-large'/);
@@ -39,6 +46,9 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(css, /\.workspace-layout\s*\{\s*display:\s*block/);
   assert.match(css, /\.windows-native-connected \.platform-rail\s*\{\s*display:\s*none/);
   assert.match(css, /\.native-status-bar\s*\{/);
+  assert.match(css, /\.runtime-mode-banner\s*\{/);
+  assert.match(css, /data-runtime-backend="windows-native"/);
+  assert.match(css, /data-runtime-backend="android-native"/);
   assert.match(css, /data-window-size="medium"\] \.input-card > \.grid\.two\s*\{\s*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.native-picker-button\s*\{/);
   assert.match(css, /\.file-input-control\s*\{/);

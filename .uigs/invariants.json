@@ -471,6 +471,190 @@
           "pattern": "FFMPEG_INTEGRATION=1 node --test src/media-task\\.integration\\.test\\.mjs"
         }
       ]
+    },
+    {
+      "id": "WINDOWS.NATIVE.SESSION.REFRESH_CONTINUITY",
+      "title": "Windows Native 页面刷新必须保持本次 Bridge 会话",
+      "status": "active",
+      "criticality": "required",
+      "claim": "Windows Web 控制台在首次 localhost Bridge 健康检查成功后，必须以标签页作用域保存本次 Bridge endpoint/token；清理 URL 凭据后刷新仍应重连，Bridge 已退出时必须清除过期会话而不是误报 Native。",
+      "boundaries": [
+        "windows-launch-url",
+        "browser-session",
+        "bridge-health",
+        "runtime-detection"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "session-key-source",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/windows-native-client.js",
+          "pattern": "WINDOWS_SESSION_KEY = 'quick-hardsub-windows-bridge-v1'"
+        },
+        {
+          "id": "session-persist-source",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/windows-native-client.js",
+          "pattern": "persistBridgeConfig\\(config\\)"
+        },
+        {
+          "id": "session-stale-clear-source",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/windows-native-client.js",
+          "pattern": "if \\(config\\.source === 'session'\\) clearStoredBridgeConfig\\(\\)"
+        },
+        {
+          "id": "refresh-continuity-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/native-input-probe.test.mjs",
+          "pattern": "survives a page refresh through tab-scoped session state"
+        },
+        {
+          "id": "stale-session-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/native-input-probe.test.mjs",
+          "pattern": "stale Windows bridge session state is cleared"
+        },
+        {
+          "id": "frontend-runs-native-session-test",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "native-input-probe\\.test\\.mjs"
+        }
+      ]
+    },
+    {
+      "id": "RUNTIME.IDENTITY.VISIBLE",
+      "title": "共享业务 UI 必须持续显示当前实际运行后端",
+      "status": "active",
+      "criticality": "required",
+      "claim": "Web、Windows Native、Android Native 可以共享业务界面，但页面主 chrome 必须持续显示当前 runtime 身份与处理边界；不能只依赖一次性介绍文案。",
+      "boundaries": [
+        "runtime-detection",
+        "application-shell",
+        "responsive-presentation"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "runtime-banner-source",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/main.js",
+          "pattern": "id=\"runtimeModeBanner\""
+        },
+        {
+          "id": "runtime-identity-renderer",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/main.js",
+          "pattern": "function renderRuntimeIdentity\\(\\)"
+        },
+        {
+          "id": "runtime-body-state",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/main.js",
+          "pattern": "document\\.body\\.dataset\\.runtimeBackend"
+        },
+        {
+          "id": "runtime-shell-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/ui-shell.test.mjs",
+          "pattern": "id=\"runtimeModeBanner\""
+        },
+        {
+          "id": "runtime-web-smoke",
+          "level": "test",
+          "kind": "pattern",
+          "path": "scripts/check-media-ui.cjs",
+          "pattern": "Browser runtime identity is not visibly labeled"
+        },
+        {
+          "id": "frontend-runs-shell-and-smoke",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "node src/ui-shell\\.test\\.mjs"
+        }
+      ]
+    },
+    {
+      "id": "WINDOWS.BRIDGE.CONSOLE.OBSERVABLE",
+      "title": "默认 Windows Native 启动器必须提供可观察的 Bridge 状态",
+      "status": "active",
+      "criticality": "required",
+      "claim": "默认 Windows Native 启动路径若创建控制台窗口，该窗口必须可见且显示启动、工具链、硬件与主要任务状态；静默后台运行应作为显式替代入口，而不是空白或隐藏的默认行为。",
+      "boundaries": [
+        "windows-launcher",
+        "bridge-process",
+        "operator-observability"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "default-launcher-visible",
+          "level": "source",
+          "kind": "pattern",
+          "path": "windows/start_windows.bat",
+          "pattern": "Quick Hardsub - Windows Native Bridge"
+        },
+        {
+          "id": "bridge-log-source",
+          "level": "source",
+          "kind": "pattern",
+          "path": "windows/native-bridge.ps1",
+          "pattern": "function Write-BridgeLog"
+        },
+        {
+          "id": "startup-status-source",
+          "level": "source",
+          "kind": "pattern",
+          "path": "windows/native-bridge.ps1",
+          "pattern": "Starting local backend and detecting FFmpeg / GPU capabilities"
+        },
+        {
+          "id": "background-launcher-explicit",
+          "level": "source",
+          "kind": "pattern",
+          "path": "windows/start_windows_background.bat",
+          "pattern": "-WindowStyle Hidden"
+        },
+        {
+          "id": "windows-console-smoke",
+          "level": "test",
+          "kind": "pattern",
+          "path": ".github/workflows/windows-local-smoke.yml",
+          "pattern": "Guard Windows launcher and console visibility contract"
+        },
+        {
+          "id": "windows-workflow",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/windows-local-smoke.yml",
+          "pattern": "name: Windows local smoke"
+        }
+      ]
     }
   ]
 }

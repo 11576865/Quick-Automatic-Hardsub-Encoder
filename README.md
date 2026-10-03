@@ -119,9 +119,15 @@ Bridge 会检测：
 
 同一格式下，只有 **实际运行探测通过** 的 NVENC 才会被标记可用；否则回退 CPU 软件编码器，而不是因为 FFmpeg 列出了 encoder 名称就假定 GPU 一定能用。
 
-默认启动器隐藏后台 Bridge，不再弹出旧 WinForms 主窗口。
+默认启动器会显示一个轻量的 Windows Native Bridge 状态控制台，持续显示本机 FFmpeg / GPU / 编码器与主要任务状态；关闭该窗口会断开本机后端。Web UI 首次连接后会在当前标签页保持本次 localhost 会话，因此刷新页面不会退回 WebAssembly。
 
-调试：
+如果希望静默后台运行：
+
+```text
+windows/start_windows_background.bat
+```
+
+需要前台调试并在启动失败时暂停：
 
 ```text
 windows/start_windows_debug.bat

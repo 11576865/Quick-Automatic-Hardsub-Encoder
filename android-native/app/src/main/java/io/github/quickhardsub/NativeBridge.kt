@@ -27,6 +27,7 @@ import java.net.URL
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 class NativeBridge(
@@ -50,6 +51,7 @@ class NativeBridge(
 
     private val pickedUris = mutableMapOf<String, List<Uri>>()
     private val pickerLock = Any()
+    private val inputProbeGeneration = AtomicInteger(0)
 
     @JavascriptInterface
     fun preparePickerRole(role: String) {
@@ -145,24 +147,29 @@ class NativeBridge(
     }
     @JavascriptInterface
     fun probeSelectedVideo() {
+        val generation = inputProbeGeneration.incrementAndGet()
         if (EncodeService.isEncoding()) {
             postJsonCallback(
                 "__onNativeInputProbe",
                 JSONObject()
                     .put("ok", false)
                     .put("busy", true)
+                    .put("probeGeneration", generation)
                     .put("error", "Android 原生压制运行中，暂不执行输入探测")
             )
             return
         }
         thread(name = "native-input-probe") {
             val result = JSONObject()
+                .put("probeGeneration", generation)
             val uri = getPickedUris("video").firstOrNull()
 
             if (uri == null) {
                 result.put("ok", false)
                 result.put("error", "没有可供原生后端访问的视频 URI")
-                postJsonCallback("__onNativeInputProbe", result)
+                if (generation == inputProbeGeneration.get()) {
+                    postJsonCallback("__onNativeInputProbe", result)
+                }
                 return@thread
             }
 
@@ -254,7 +261,9 @@ class NativeBridge(
                 try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
             }
 
-            postJsonCallback("__onNativeInputProbe", result)
+            if (generation == inputProbeGeneration.get()) {
+                postJsonCallback("__onNativeInputProbe", result)
+            }
         }
     }
 

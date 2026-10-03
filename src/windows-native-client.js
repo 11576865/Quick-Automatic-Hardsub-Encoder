@@ -1,20 +1,58 @@
 const WINDOWS_BRIDGE_PARAM = 'windowsNative';
 const WINDOWS_TOKEN_PARAM = 'token';
+const WINDOWS_SESSION_KEY = 'quick-hardsub-windows-bridge-v1';
+
+function normalizeBridgeConfig(base, token, source = 'url') {
+  if (!base || !token) return null;
+  try {
+    const parsed = new URL(base);
+    const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+    if (parsed.protocol !== 'http:' || !loopback) return null;
+    return { base: parsed.origin, token: String(token), source };
+  } catch {
+    return null;
+  }
+}
+
+function bridgeSessionStorage() {
+  try {
+    return window.sessionStorage || globalThis.sessionStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredBridgeConfig() {
+  try {
+    const raw = bridgeSessionStorage()?.getItem(WINDOWS_SESSION_KEY);
+    if (!raw) return null;
+    const stored = JSON.parse(raw);
+    return normalizeBridgeConfig(stored?.base, stored?.token, 'session');
+  } catch {
+    return null;
+  }
+}
+
+function persistBridgeConfig(config) {
+  if (!config?.base || !config?.token) return;
+  try {
+    bridgeSessionStorage()?.setItem(
+      WINDOWS_SESSION_KEY,
+      JSON.stringify({ base: config.base, token: config.token })
+    );
+  } catch {}
+}
+
+function clearStoredBridgeConfig() {
+  try { bridgeSessionStorage()?.removeItem(WINDOWS_SESSION_KEY); } catch {}
+}
 
 function bridgeLaunchConfig() {
   const url = new URL(window.location.href);
   const base = url.searchParams.get(WINDOWS_BRIDGE_PARAM);
   const token = url.searchParams.get(WINDOWS_TOKEN_PARAM);
-  if (!base || !token) return null;
-
-  try {
-    const parsed = new URL(base);
-    const loopback = parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
-    if (parsed.protocol !== 'http:' || !loopback) return null;
-    return { base: parsed.origin, token };
-  } catch {
-    return null;
-  }
+  if (base || token) return normalizeBridgeConfig(base, token, 'url');
+  return readStoredBridgeConfig();
 }
 
 function stripLaunchSecrets() {
@@ -48,6 +86,7 @@ function postCallback(name, payload) {
 
 function installWindowsBridge(config, backendInfo) {
   let lastAssSelection = null;
+  let inputProbeGeneration = 0;
   const bridge = {
     __windowsNative: true,
     getBackendInfo() {
@@ -70,9 +109,16 @@ function installWindowsBridge(config, backendInfo) {
       return JSON.stringify({ ok: true, ...lastAssSelection });
     },
     probeSelectedVideo() {
+      const generation = ++inputProbeGeneration;
       void makeRequest(config, 'POST', '/api/probe')
-        .then(payload => postCallback('__onNativeInputProbe', payload))
-        .catch(error => postCallback('__onNativeInputProbe', { ok: false, error: error.message }));
+        .then(payload => {
+          if (generation !== inputProbeGeneration) return;
+          postCallback('__onNativeInputProbe', { ...payload, probeGeneration: generation });
+        })
+        .catch(error => {
+          if (generation !== inputProbeGeneration) return;
+          postCallback('__onNativeInputProbe', { ok: false, probeGeneration: generation, error: error.message });
+        });
     },
     runSelfTest() {
       void makeRequest(config, 'GET', '/api/self-test')
@@ -145,20 +191,25 @@ export async function detectWindowsNativeBridge() {
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 1800);
+  const failStoredSession = () => {
+    if (config.source === 'session') clearStoredBridgeConfig();
+    return false;
+  };
   try {
     const response = await fetch(config.base + '/api/health', {
       cache: 'no-store',
       headers: { 'X-Quick-Hardsub-Token': config.token },
       signal: controller.signal
     });
-    if (!response.ok) return false;
+    if (!response.ok) return failStoredSession();
     const backendInfo = await response.json();
-    if (backendInfo?.backend !== 'windows-native' || backendInfo?.available !== true) return false;
+    if (backendInfo?.backend !== 'windows-native' || backendInfo?.available !== true) return failStoredSession();
     installWindowsBridge(config, backendInfo);
-    stripLaunchSecrets();
+    persistBridgeConfig(config);
+    if (config.source === 'url') stripLaunchSecrets();
     return true;
   } catch {
-    return false;
+    return failStoredSession();
   } finally {
     clearTimeout(timer);
   }
