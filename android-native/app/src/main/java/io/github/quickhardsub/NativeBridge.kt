@@ -678,6 +678,82 @@ class NativeBridge(
     }
 
     @JavascriptInterface
+    fun renderNativeOutputFrame(requestId: String, jobId: String, timeSeconds: Double, width: Int) {
+        if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
+            postJsonCallback(
+                "__onNativeOutputFrame",
+                JSONObject()
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("busy", true)
+                    .put("error", "Android Native 正在执行其他 FFmpeg 任务，请稍后验证成品画面")
+            )
+            return
+        }
+
+        thread(name = "native-output-frame") {
+            val result = JSONObject().put("requestId", requestId)
+            val frameRoot = File(activity.cacheDir, "native-output-frame")
+            try {
+                if (!NativeJobStore.isSafeJobId(jobId)) {
+                    throw IllegalStateException("无效 Native job id")
+                }
+                if (!timeSeconds.isFinite() || timeSeconds < 0.0) {
+                    throw IllegalStateException("成品验证时间无效")
+                }
+                val status = NativeJobStore.readStatus(activity, jobId)
+                    ?: throw IllegalStateException("找不到 Native 任务")
+                if (status.optString("state") != "completed") {
+                    throw IllegalStateException("Native 成品尚未完成验证")
+                }
+                val input = NativeJobStore.outputFile(activity, jobId)
+                if (!input.isFile || input.length() <= 0L) {
+                    throw IllegalStateException("Native 成品 staging 文件不存在")
+                }
+                val safeWidth = width.coerceIn(320, 1600)
+
+                if (frameRoot.exists()) frameRoot.deleteRecursively()
+                frameRoot.mkdirs()
+                val output = File(frameRoot, "frame.png")
+                val command = arrayOf(
+                    "-y",
+                    "-hide_banner",
+                    "-v", "error",
+                    "-ss", String.format(java.util.Locale.US, "%.3f", timeSeconds),
+                    "-i", input.absolutePath,
+                    "-map", "0:v:0",
+                    "-an",
+                    "-sn",
+                    "-frames:v", "1",
+                    "-vf", "scale=$safeWidth:-2:force_original_aspect_ratio=decrease",
+                    "-c:v", "png",
+                    output.absolutePath
+                )
+                val session = FFmpegKit.executeWithArguments(command)
+                if (!ReturnCode.isSuccess(session.getReturnCode()) || output.length() <= 0L) {
+                    throw IllegalStateException(
+                        session.getOutput().takeLast(1200).ifBlank { "Native 成品验证帧生成失败" }
+                    )
+                }
+                result
+                    .put("ok", true)
+                    .put("url", "data:image/png;base64," + Base64.encodeToString(output.readBytes(), Base64.NO_WRAP))
+                    .put("time", timeSeconds)
+                    .put("width", safeWidth)
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                try { frameRoot.deleteRecursively() } catch (_: Throwable) {}
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
+                diagnosticRunning.set(false)
+            }
+            postJsonCallback("__onNativeOutputFrame", result)
+        }
+    }
+
+    @JavascriptInterface
     fun renderNativeWaveform(requestId: String, optionsJson: String) {
         if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
             postJsonCallback(
