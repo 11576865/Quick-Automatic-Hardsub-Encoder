@@ -2409,6 +2409,189 @@ function renderSourceVideoSummary(media = state.sourceMedia) {
   box.classList.remove('hidden');
 }
 
+function renderSourceAdapterState(probe = state.nativeInputProbe) {
+  const panel = $('sourceAdapterPanel');
+  if (!panel) return;
+  const importing = !!state.nativeImportJobId;
+  const relevant = importing || probe?.sourceAdapter === 'rad-bink2' || probe?.sourceOriginalKind === 'bink2';
+  if (!relevant) {
+    panel.classList.add('hidden');
+    return;
+  }
+
+  const available = !!probe?.sourceAdapterAvailable || !!state.nativeBackend?.bink2ImportAvailable;
+  const applied = !!probe?.sourceAdapterApplied;
+  const required = !!probe?.sourceAdapterRequired;
+  const tool = probe?.sourceAdapterTool || state.nativeBackend?.bink2ImportTool || 'RAD Video Tools';
+
+  panel.classList.remove('hidden');
+  $('sourceAdapterImportBtn').classList.toggle('hidden', importing || applied || !required);
+  $('sourceAdapterCancelBtn').classList.toggle('hidden', !importing);
+  $('sourceAdapterInstallLink').classList.toggle('hidden', available || applied);
+  $('sourceAdapterImportBtn').disabled = importing || !available || !required;
+  $('sourceAdapterCancelBtn').disabled = !importing;
+
+  if (importing) {
+    $('sourceAdapterBadge').textContent = 'IMPORTING';
+    $('sourceAdapterTitle').textContent = '正在导入 Bink 2';
+    $('sourceAdapterDetail').textContent =
+      'RAD Video Tools 正在把 Bink 2 解码到临时 AVI。这里不伪造百分比或 ETA；完成后会用 FFmpeg 再做实际解码验证。';
+    return;
+  }
+
+  if (applied) {
+    $('sourceAdapterBadge').textContent = 'READY';
+    $('sourceAdapterTitle').textContent = 'Bink 2 已导入';
+    $('sourceAdapterDetail').textContent =
+      '当前任务使用 RAD Video Tools 生成的临时 AVI 作为执行输入；原始 .bk2 不会被修改。由于已经发生外部解码，Stream Copy 不再等价于复制原始 Bink 码流。Bink 2 的 Alpha 与多音轨语义仍需按素材实际情况核对。';
+    $('sourceAdapterStatus').textContent = '适配器：' + tool + ' · 临时文件会在更换源视频或关闭 Windows Bridge 时清理。';
+    return;
+  }
+
+  $('sourceAdapterBadge').textContent = available ? 'ADAPTER READY' : 'DECODER MISSING';
+  $('sourceAdapterTitle').textContent = '检测到 Bink 2';
+  if (required && available) {
+    $('sourceAdapterDetail').textContent =
+      'FFprobe 能识别这个 Bink 2 文件，但当前 FFmpeg 不能解码它的视频流。可以调用本机 RAD Video Tools 先解码为临时 AVI，再进入现有转码 / 硬字幕流程。';
+    $('sourceAdapterStatus').textContent = '已检测到：' + tool + '。此依赖由用户单独安装，本项目不捆绑 RAD/Bink 组件。';
+  } else if (required) {
+    $('sourceAdapterDetail').textContent =
+      'FFprobe 能识别这个 Bink 2 文件，但当前 FFmpeg 不能解码它的视频流；同时没有检测到 RAD Video Tools，因此暂时不能进入转码。';
+    $('sourceAdapterStatus').textContent =
+      '安装或解压 RAD Video Tools 后重新启动 Windows Bridge；也可设置 RADVIDEO64 或 RADVIDEO_HOME 指向本机工具。';
+  } else {
+    $('sourceAdapterDetail').textContent =
+      '该源文件带有 Bink 2 标识，但当前执行路径已经能够解码；无需外部导入。';
+    $('sourceAdapterStatus').textContent = '';
+  }
+}
+
+async function monitorBink2Import(jobId) {
+  const bridge = globalThis.NativeHardsub;
+  let statusReadFailures = 0;
+  while (state.nativeImportJobId === jobId) {
+    let result;
+    try {
+      result = JSON.parse(await Promise.resolve(bridge.getBink2ImportStatus(jobId)));
+      statusReadFailures = 0;
+    } catch (error) {
+      statusReadFailures++;
+      log('Bink 2 导入状态读取失败（' + statusReadFailures + '/5）：' + error.message);
+      if (statusReadFailures >= 5) {
+        $('sourceAdapterStatus').textContent =
+          '导入状态连接连续失败；任务 ID 已保留。保持 Windows Bridge 运行并刷新页面，可重新连接当前导入任务。';
+        syncTaskInputMutationLocks();
+        return;
+      }
+      $('sourceAdapterStatus').textContent = '导入状态读取失败，正在重试 ' + statusReadFailures + '/5…';
+      await sleepMs(1000);
+      continue;
+    }
+
+    if (!result?.ok) {
+      statusReadFailures++;
+      if (statusReadFailures >= 5) {
+        $('sourceAdapterStatus').textContent =
+          '无法确认导入任务状态；任务 ID 已保留。保持 Windows Bridge 运行并刷新页面重连。';
+        syncTaskInputMutationLocks();
+        return;
+      }
+      await sleepMs(1000);
+      continue;
+    }
+
+    if (result.state === 'importing' || result.state === 'cancelling') {
+      renderSourceAdapterState();
+      const elapsed = Number(result.elapsedSeconds || 0);
+      $('sourceAdapterStatus').textContent =
+        (result.state === 'cancelling' ? '正在取消导入' : '正在通过 RAD Video Tools 解码') +
+        (elapsed > 0 ? ' · 已用 ' + formatDuration(elapsed) : '') +
+        ' · 不显示未经证实的 ETA';
+      await sleepMs(800);
+      continue;
+    }
+
+    if (result.state === 'completed') {
+      state.nativeImportJobId = null;
+      localStorage.removeItem('nativeBink2ImportJobId');
+      syncTaskInputMutationLocks();
+      invalidateAnalysis({ clearVideoMetadata: true });
+      state.nativeInputProbe = null;
+      $('sourceAdapterPanel').classList.remove('hidden');
+      $('sourceAdapterTitle').textContent = 'Bink 2 导入完成';
+      $('sourceAdapterBadge').textContent = 'VERIFYING';
+      $('sourceAdapterDetail').textContent = '临时 AVI 已生成，正在用 FFprobe / FFmpeg 重新读取并验证可解码性。';
+      $('sourceAdapterStatus').textContent = '临时输入 ' + formatBytes(Number(result.outputBytes || 0)) + '。';
+      log('Bink 2 导入完成；正在重新探测 RAD staging 输入。');
+      bridge.probeSelectedVideo?.();
+      refreshAnalyze();
+      return;
+    }
+
+    state.nativeImportJobId = null;
+    localStorage.removeItem('nativeBink2ImportJobId');
+    syncTaskInputMutationLocks();
+    renderSourceAdapterState(state.nativeInputProbe);
+    if (result.state === 'cancelled') {
+      $('sourceAdapterStatus').textContent = 'Bink 2 导入已取消；原始文件仍保持选中。';
+      log('Bink 2 导入已取消。');
+    } else {
+      $('sourceAdapterStatus').textContent = 'Bink 2 导入失败：' + (result.error || '未知错误');
+      log('Bink 2 导入失败：' + (result.error || '未知错误'));
+    }
+    refreshAnalyze();
+    return;
+  }
+}
+
+async function startBink2Import() {
+  const bridge = globalThis.NativeHardsub;
+  const probe = state.nativeInputProbe;
+  if (!bridge?.__windowsNative || !bridge?.startBink2Import || !bridge?.getBink2ImportStatus) {
+    throw new Error('Windows Native Bink 2 导入桥不可用');
+  }
+  if (!probe?.sourceAdapterRequired) throw new Error('当前源视频不需要 Bink 2 外部导入');
+  if (!probe?.sourceAdapterAvailable && !state.nativeBackend?.bink2ImportAvailable) {
+    throw new Error('未检测到 RAD Video Tools');
+  }
+  if (state.nativeJobId || state.operationBusy || state.nativeImportJobId) {
+    throw new Error('当前已有任务占用输入素材');
+  }
+
+  const started = JSON.parse(await Promise.resolve(bridge.startBink2Import()));
+  if (!started?.ok || !started.jobId) throw new Error(started?.error || '创建 Bink 2 导入任务失败');
+  state.nativeImportJobId = started.jobId;
+  localStorage.setItem('nativeBink2ImportJobId', started.jobId);
+  syncTaskInputMutationLocks();
+  renderSourceAdapterState(probe);
+  log('Bink 2 导入任务已创建：' + started.jobId + ' · ' + (started.converter || 'RAD Video Tools'));
+  void monitorBink2Import(started.jobId);
+}
+
+async function recoverBink2ImportJob() {
+  const bridge = globalThis.NativeHardsub;
+  const jobId = localStorage.getItem('nativeBink2ImportJobId');
+  if (!jobId || !bridge?.getBink2ImportStatus) return;
+  try {
+    const status = JSON.parse(await Promise.resolve(bridge.getBink2ImportStatus(jobId)));
+    if (!status?.ok || !['importing','cancelling','completed'].includes(status.state)) {
+      localStorage.removeItem('nativeBink2ImportJobId');
+      return;
+    }
+    state.nativeImportJobId = jobId;
+    syncTaskInputMutationLocks();
+    renderSourceAdapterState(state.nativeInputProbe);
+    log('恢复 Bink 2 导入任务监视：' + jobId);
+    if (status.state === 'completed') {
+      await monitorBink2Import(jobId);
+    } else {
+      void monitorBink2Import(jobId);
+    }
+  } catch (error) {
+    log('恢复 Bink 2 导入任务失败：' + error.message);
+  }
+}
+
 async function analyzeVideoOnly() {
   invalidateAnalysis();
   if (!state.video) throw new Error('请先选择视频');
