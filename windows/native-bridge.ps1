@@ -389,6 +389,33 @@ function Invoke-Preview($Body) {
     } finally { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
+function Invoke-Frame($Body) {
+    $video = Get-SelectedPath 'video'
+    if (-not $video) { throw 'No video selected.' }
+    $time = [Math]::Max(0.0, [double]$Body.timeSeconds)
+    $width = [Math]::Max(320, [Math]::Min(1280, $(if($Body.width){[int]$Body.width}else{720})))
+    $work = New-BridgeWorkDir 'quick-hardsub-frame-'
+    try {
+        $output = Join-Path $work 'frame.png'
+        $timeText = $time.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
+        $args = '-hide_banner -loglevel error -y -ss ' + $timeText +
+            ' -i ' + (Quote-NativeArg $video) +
+            ' -map 0:v:0 -an -sn -frames:v 1 -vf scale=' + $width + ':-2:force_original_aspect_ratio=decrease -c:v png ' +
+            (Quote-NativeArg $output)
+        $result = Invoke-BridgeTool $script:Ffmpeg $args $work
+        if($result.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $output)){throw ($result.StdErr.Trim())}
+        $bytes=[IO.File]::ReadAllBytes($output)
+        if(-not $bytes.Length){throw 'Timeline frame output is empty.'}
+        return [pscustomobject]@{
+            requestId=[string]$Body.requestId; ok=$true
+            url=('data:image/png;base64,'+[Convert]::ToBase64String($bytes))
+            time=$time; width=$width
+        }
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Waveform($Body) {
     $video = Get-SelectedPath 'video'
     if (-not $video) { throw 'No video selected.' }
@@ -830,6 +857,7 @@ function Handle-Request($Request) {
         }
         if($Request.Method -eq 'POST' -and $path -eq '/api/probe'){Send-HttpJson $Request 200 (Get-ProbeMedia);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/preview'){Send-HttpJson $Request 200 (Invoke-Preview $body);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/frame'){Send-HttpJson $Request 200 (Invoke-Frame $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/waveform'){Send-HttpJson $Request 200 (Invoke-Waveform $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/sample'){Send-HttpJson $Request 200 (Invoke-Sample $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/sample/export'){Send-HttpJson $Request 200 (Export-Sample ([string]$body.sampleId) ([string]$body.suggestedName));return}

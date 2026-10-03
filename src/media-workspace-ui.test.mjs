@@ -53,6 +53,14 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /id="taskKeyframeLane"/);
   assert.match(workspace, /id="taskWaveformActualStart"/);
   assert.match(workspace, /id="taskCopyBoundaryInfo"/);
+  assert.match(workspace, /id="taskFramePreviewPanel"/);
+  assert.match(workspace, /id="taskFramePreviewImage"/);
+  assert.match(workspace, /id="taskBoundaryFrameInspector"/);
+  assert.match(workspace, /id="taskRequestedFrameImage"/);
+  assert.match(workspace, /id="taskActualFrameImage"/);
+  assert.match(workspace, /scheduleCursorFramePreview/);
+  assert.match(workspace, /scheduleBoundaryFramePreview/);
+  assert.match(workspace, /autoScrollTimeline/);
   assert.match(workspace, /id="taskKeyframeSnapStart"/);
   assert.match(workspace, /includeKeyframes:copy/);
   assert.match(workspace, /previousKeyframe/);

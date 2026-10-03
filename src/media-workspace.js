@@ -61,6 +61,28 @@ export function mountMediaWorkspace(hooks) {
       <span>实际无损起点 <strong id="taskActualStartTime">—</strong></span>
       <span id="taskKeyframeDelta">分析关键帧后显示偏移</span>
     </div>
+    <section id="taskFramePreviewPanel" class="media-frame-preview-panel" hidden aria-label="时间轴画面预览">
+      <div class="media-frame-preview-heading">
+        <div><strong>画面预览</strong><span id="taskFramePreviewStatus">移动时间轴光标后显示源视频画面</span></div>
+        <span id="taskFramePreviewTime">—</span>
+      </div>
+      <div class="media-frame-preview-current">
+        <div class="media-frame-preview-image-shell">
+          <img id="taskFramePreviewImage" alt="时间轴光标处源视频画面" hidden>
+          <div id="taskFramePreviewPlaceholder">点击或拖动时间轴以预览画面。</div>
+        </div>
+      </div>
+      <div id="taskBoundaryFrameInspector" class="media-boundary-frame-inspector media-timeline-keyframe-only" hidden>
+        <article>
+          <header><span>请求 IN</span><strong id="taskRequestedFrameTime">—</strong></header>
+          <div class="media-boundary-frame-image-shell"><img id="taskRequestedFrameImage" alt="请求 IN 对应画面" hidden><span id="taskRequestedFramePlaceholder">等待请求边界</span></div>
+        </article>
+        <article>
+          <header><span>实际无损 IN</span><strong id="taskActualFrameTime">—</strong></header>
+          <div class="media-boundary-frame-image-shell"><img id="taskActualFrameImage" alt="实际无损起点对应画面" hidden><span id="taskActualFramePlaceholder">等待关键帧分析</span></div>
+        </article>
+      </div>
+    </section>
     <div class="media-waveform-controls">
       <span>光标 <strong id="taskWaveformCursorTime">0:00</strong></span>
       <button type="button" id="taskWaveformSetStart" class="secondary">设为 IN</button>
@@ -179,8 +201,12 @@ export function mountMediaWorkspace(hooks) {
   qualityRange.addEventListener('input', () => { get('quality').value = qualityRange.value; syncQualityRange(); });
   get('quality').addEventListener('input', syncQualityRange);
   let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
-  let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null;
+  let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
+  let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='',timelineFrameGeneration=0;
+  const timelineFrameCache=new Map();
+  const timelineFramePending=new Map();
+  let timelineFrameFetchQueue=Promise.resolve();
   const storageKey='media-workspace-configs-v2';
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
@@ -236,6 +262,18 @@ export function mountMediaWorkspace(hooks) {
   const keyframeNext=section.querySelector('#taskKeyframeNext');
   const keyframeSnapStart=section.querySelector('#taskKeyframeSnapStart');
   const waveformZoom=section.querySelector('#taskWaveformZoom');
+  const framePreviewPanel=section.querySelector('#taskFramePreviewPanel');
+  const framePreviewImage=section.querySelector('#taskFramePreviewImage');
+  const framePreviewPlaceholder=section.querySelector('#taskFramePreviewPlaceholder');
+  const framePreviewStatus=section.querySelector('#taskFramePreviewStatus');
+  const framePreviewTime=section.querySelector('#taskFramePreviewTime');
+  const boundaryFrameInspector=section.querySelector('#taskBoundaryFrameInspector');
+  const requestedFrameImage=section.querySelector('#taskRequestedFrameImage');
+  const actualFrameImage=section.querySelector('#taskActualFrameImage');
+  const requestedFramePlaceholder=section.querySelector('#taskRequestedFramePlaceholder');
+  const actualFramePlaceholder=section.querySelector('#taskActualFramePlaceholder');
+  const requestedFrameTime=section.querySelector('#taskRequestedFrameTime');
+  const actualFrameTime=section.querySelector('#taskActualFrameTime');
   const clampWaveformTime=value=>Math.max(0,Math.min(waveformDuration||0,Number(value)||0));
   function readBoundary(name,fallback){
     try{return clampWaveformTime(parseMediaTime(get(name)?.value,{empty:fallback,label:timeLabels[name]||'时间'}));}
@@ -270,6 +308,122 @@ export function mountMediaWorkspace(hooks) {
     const time=clampWaveformTime(value);
     return timelineKeyframes.find(key=>key>time+.000001) ?? null;
   };
+  function clearTimelineFrameCache(){
+    clearTimeout(timelineFrameTimer);
+    clearTimeout(boundaryFrameTimer);
+    timelineFrameRequestSeq++;
+    boundaryFrameRequestSeq++;
+    timelineFrameGeneration++;
+    lastBoundaryPreviewKey='';
+    timelineFramePending.clear();
+    for(const value of timelineFrameCache.values()){
+      if(value?.url?.startsWith('blob:'))URL.revokeObjectURL(value.url);
+    }
+    timelineFrameCache.clear();
+    framePreviewImage.removeAttribute('src');
+    framePreviewImage.hidden=true;
+    framePreviewPlaceholder.hidden=false;
+    framePreviewPlaceholder.textContent='点击或拖动时间轴以预览画面。';
+    framePreviewTime.textContent='—';
+    framePreviewStatus.textContent='移动时间轴光标后显示源视频画面';
+    for(const [img,placeholder,label] of [
+      [requestedFrameImage,requestedFramePlaceholder,'等待请求边界'],
+      [actualFrameImage,actualFramePlaceholder,'等待关键帧分析']
+    ]){
+      img.removeAttribute('src');img.hidden=true;placeholder.hidden=false;placeholder.textContent=label;
+    }
+    requestedFrameTime.textContent='—';
+    actualFrameTime.textContent='—';
+  }
+  const frameCacheKey=time=>Math.max(0,Number(time)||0).toFixed(3);
+  async function getTimelineFrame(time){
+    if(!hooks.frame)throw Error('当前后端未提供时间轴画面预览');
+    const clamped=clampWaveformTime(time);
+    const key=frameCacheKey(clamped);
+    if(timelineFrameCache.has(key))return timelineFrameCache.get(key);
+    if(timelineFramePending.has(key))return timelineFramePending.get(key);
+    const generation=timelineFrameGeneration;
+    const request=timelineFrameFetchQueue
+      .catch(()=>{})
+      .then(()=>hooks.frame({time:clamped,width:720}))
+      .then(result=>{
+        if(!result?.url)throw Error('画面预览没有返回图像');
+        if(generation!==timelineFrameGeneration){
+          if(result.url.startsWith?.('blob:'))URL.revokeObjectURL(result.url);
+          throw Error('时间轴画面预览已过期');
+        }
+        const value={url:result.url,time:Number(result.time??clamped)};
+        timelineFrameCache.set(key,value);
+        while(timelineFrameCache.size>24){
+          const oldest=timelineFrameCache.keys().next().value;
+          const removed=timelineFrameCache.get(oldest);
+          if(removed?.url?.startsWith('blob:'))URL.revokeObjectURL(removed.url);
+          timelineFrameCache.delete(oldest);
+        }
+        return value;
+      })
+      .finally(()=>{if(timelineFramePending.get(key)===request)timelineFramePending.delete(key);});
+    timelineFramePending.set(key,request);
+    timelineFrameFetchQueue=request.then(()=>undefined,()=>undefined);
+    return request;
+  }
+  function scheduleCursorFramePreview(time,delay=150){
+    if(!hooks.frame||!(waveformDuration>0)||busy||hooks.busy())return;
+    clearTimeout(timelineFrameTimer);
+    const seq=++timelineFrameRequestSeq;
+    framePreviewPanel.hidden=false;
+    framePreviewTime.textContent=formatMediaTimeInput(time,3);
+    framePreviewStatus.textContent='正在读取光标处画面…';
+    timelineFrameTimer=setTimeout(async()=>{
+      try{
+        const result=await getTimelineFrame(time);
+        if(seq!==timelineFrameRequestSeq)return;
+        framePreviewImage.src=result.url;
+        framePreviewImage.hidden=false;
+        framePreviewPlaceholder.hidden=true;
+        framePreviewTime.textContent=formatMediaTimeInput(result.time,3);
+        framePreviewStatus.textContent='源视频解码帧 · 用于定位，不作为 HDR 色彩判定';
+      }catch(error){
+        if(seq!==timelineFrameRequestSeq)return;
+        framePreviewStatus.textContent='画面预览失败：'+error.message;
+      }
+    },delay);
+  }
+  function scheduleBoundaryFramePreview(requested,actual){
+    if(!hooks.frame||get('operation').value!=='copy'||!(waveformDuration>0)||busy||hooks.busy())return;
+    const previewKey=frameCacheKey(requested)+'|'+(actual==null?'none':frameCacheKey(actual));
+    if(previewKey===lastBoundaryPreviewKey)return;
+    lastBoundaryPreviewKey=previewKey;
+    clearTimeout(boundaryFrameTimer);
+    boundaryFrameInspector.hidden=false;
+    requestedFrameTime.textContent=formatMediaTimeInput(requested,3);
+    actualFrameTime.textContent=actual==null?'—':formatMediaTimeInput(actual,3);
+    requestedFramePlaceholder.textContent='正在读取请求 IN…';
+    requestedFramePlaceholder.hidden=false;requestedFrameImage.hidden=true;
+    actualFramePlaceholder.textContent=actual==null?'尚未取得实际无损起点':'正在读取实际无损 IN…';
+    actualFramePlaceholder.hidden=false;actualFrameImage.hidden=true;
+    const seq=++boundaryFrameRequestSeq;
+    boundaryFrameTimer=setTimeout(async()=>{
+      try{
+        const requestedResult=await getTimelineFrame(requested);
+        if(seq!==boundaryFrameRequestSeq)return;
+        requestedFrameImage.src=requestedResult.url;
+        requestedFrameImage.hidden=false;
+        requestedFramePlaceholder.hidden=true;
+        if(actual!=null){
+          const actualResult=Math.abs(actual-requested)<.0005?requestedResult:await getTimelineFrame(actual);
+          if(seq!==boundaryFrameRequestSeq)return;
+          actualFrameImage.src=actualResult.url;
+          actualFrameImage.hidden=false;
+          actualFramePlaceholder.hidden=true;
+        }
+      }catch(error){
+        if(seq!==boundaryFrameRequestSeq)return;
+        requestedFramePlaceholder.textContent='边界画面读取失败：'+error.message;
+        actualFramePlaceholder.textContent='边界画面读取失败';
+      }
+    },220);
+  }
   function renderKeyframeLane(){
     keyframeLane.replaceChildren();
     if(get('operation').value!=='copy'||!(waveformDuration>0)||!timelineKeyframes.length)return;
@@ -302,6 +456,7 @@ export function mountMediaWorkspace(hooks) {
         ? '当前关键帧数据不足以确定该位置'
         : '分析时间轴后显示实际无损切入点';
       keyframeSnapStart.disabled=true;
+      scheduleBoundaryFramePreview(start,null);
       return;
     }
     actualStartEl.hidden=false;
@@ -310,6 +465,7 @@ export function mountMediaWorkspace(hooks) {
     const delta=Math.max(0,start-actual);
     keyframeDelta.textContent=delta<.0005?'请求起点已经位于关键帧':'实际起点会提前 '+delta.toFixed(3)+' 秒';
     keyframeSnapStart.disabled=delta<.0005;
+    scheduleBoundaryFramePreview(start,actual);
   }
   function syncWaveformMarkers(){
     if(!(waveformDuration>0))return;
@@ -348,24 +504,41 @@ export function mountMediaWorkspace(hooks) {
     const rect=waveformTrack.getBoundingClientRect();
     return clampWaveformTime((event.clientX-rect.left)/Math.max(1,rect.width)*waveformDuration);
   }
-  function setWaveformCursor(value){
+  function setWaveformCursor(value,{preview=true}={}){
     waveformCursor=clampWaveformTime(value);
     syncWaveformMarkers();
+    if(preview)scheduleCursorFramePreview(waveformCursor);
+  }
+  function autoScrollTimeline(event){
+    if(!waveformScroll||waveformScroll.scrollWidth<=waveformScroll.clientWidth)return;
+    const rect=waveformScroll.getBoundingClientRect();
+    const edge=Math.min(56,Math.max(28,rect.width*.1));
+    let delta=0;
+    if(event.clientX<rect.left+edge)delta=-Math.max(10,(rect.left+edge-event.clientX)*.45);
+    else if(event.clientX>rect.right-edge)delta=Math.max(10,(event.clientX-(rect.right-edge))*.45);
+    if(delta)waveformScroll.scrollLeft=Math.max(0,Math.min(waveformScroll.scrollWidth-waveformScroll.clientWidth,waveformScroll.scrollLeft+delta));
   }
   waveformTrack.addEventListener('pointerdown',event=>{
     if(!(waveformDuration>0))return;
     const boundary=event.target?.dataset?.boundary;
     waveformDragging=boundary==='start'||boundary==='end'?boundary:null;
+    waveformScrubbing=!waveformDragging;
     setWaveformCursor(pointerTime(event));
     if(waveformDragging)setBoundary(waveformDragging,waveformCursor);
     waveformTrack.setPointerCapture?.(event.pointerId);
   });
   waveformTrack.addEventListener('pointermove',event=>{
-    if(!waveformDragging)return;
+    if(!waveformDragging&&!waveformScrubbing)return;
+    autoScrollTimeline(event);
     setWaveformCursor(pointerTime(event));
-    setBoundary(waveformDragging,waveformCursor);
+    if(waveformDragging)setBoundary(waveformDragging,waveformCursor);
   });
-  const finishWaveformDrag=event=>{waveformDragging=null;try{waveformTrack.releasePointerCapture?.(event.pointerId);}catch{}};
+  const finishWaveformDrag=event=>{
+    const hadInteraction=!!(waveformDragging||waveformScrubbing);
+    waveformDragging=null;waveformScrubbing=false;
+    try{waveformTrack.releasePointerCapture?.(event.pointerId);}catch{}
+    if(hadInteraction)scheduleCursorFramePreview(waveformCursor,0);
+  };
   waveformTrack.addEventListener('pointerup',finishWaveformDrag);
   waveformTrack.addEventListener('pointercancel',finishWaveformDrag);
   waveformTrack.addEventListener('keydown',event=>{
@@ -382,16 +555,24 @@ export function mountMediaWorkspace(hooks) {
   keyframeNext.onclick=()=>{const value=nextKeyframe(waveformCursor);if(value!=null)setWaveformCursor(value);};
   keyframeSnapStart.onclick=()=>{const value=previousKeyframe(readBoundary('start',0));if(value!=null){setBoundary('start',value);setWaveformCursor(value);}};
   waveformZoom.oninput=()=>{
-    waveformTrack.style.width=(Math.max(1,Number(waveformZoom.value)||1)*100)+'%';
+    const zoom=Math.max(1,Number(waveformZoom.value)||1);
+    waveformTrack.style.width=(zoom*100)+'%';
     renderTimelineRuler();
     renderKeyframeLane();
     syncWaveformMarkers();
+    requestAnimationFrame(()=>{
+      const cursorX=(waveformCursor/Math.max(.001,waveformDuration))*waveformTrack.scrollWidth;
+      waveformScroll.scrollLeft=Math.max(0,Math.min(waveformScroll.scrollWidth-waveformScroll.clientWidth,cursorX-waveformScroll.clientWidth/2));
+    });
   };
   section.querySelector('#taskWaveformLoad').onclick=async()=>{
     const button=section.querySelector('#taskWaveformLoad');
     if(!hooks.waveform){waveformStatus.textContent='当前后端未提供时间轴分析能力';return;}
     if(busy||hooks.busy())return;
     button.disabled=true;
+    clearTimelineFrameCache();
+    framePreviewPanel.hidden=!hooks.frame;
+    boundaryFrameInspector.hidden=true;
     const copy=get('operation').value==='copy';
     waveformStatus.textContent=copy?'正在分析波形与视频关键帧…':'正在由 FFmpeg 生成波形…';
     try{
@@ -424,6 +605,7 @@ export function mountMediaWorkspace(hooks) {
       waveformCursor=readBoundary('start',0);
       renderTimelineRuler();
       renderKeyframeLane();
+      if(hooks.frame)scheduleCursorFramePreview(waveformCursor,0);
       const waveText=waveformUrl?'第 '+(Number(result.audioTrack??audioTrack)+1)+' 条音轨':'无音频波形';
       const keyText=copy
         ? ' · 关键帧 '+timelineKeyframes.length+(timelineKeyframesTruncated?'（已截断显示）':'')
@@ -717,6 +899,7 @@ export function mountMediaWorkspace(hooks) {
     if(copy&&waveformDuration>0)syncWaveformMarkers();
     else{
       copyBoundaryInfo.hidden=true;
+      boundaryFrameInspector.hidden=true;
       actualStartEl.hidden=true;
       for(const el of [keyframePrev,keyframeNext,keyframeSnapStart])el.hidden=true;
     }

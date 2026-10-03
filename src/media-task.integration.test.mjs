@@ -39,6 +39,10 @@ test('real FFmpeg transcode, hardsub and packet-identical fast cut',{skip:!enabl
   assert.equal(legacy.info.streams[0].avg_frame_rate,'60/1');
   const opus=execute(compileTask({...base,audio:'libopus',audioBitrate:96000,audioTrack:'0',audioChannels:2,audioSampleRate:48000},media),'opus');
   assert.equal(opus.info.streams.find(s=>s.codec_type==='audio').codec_name,'opus');
+  const scrubFrame=time=>run('ffmpeg',['-v','error','-ss',String(time),'-i',source,'-map','0:v:0','-an','-sn','-frames:v','1','-vf','scale=72:-2:force_original_aspect_ratio=decrease','-f','md5','-']);
+  const scrubA=scrubFrame(.5),scrubB=scrubFrame(2.5);
+  assert.match(scrubA,/MD5=/);assert.match(scrubB,/MD5=/);assert.notEqual(scrubA,scrubB);
+
   const keyframes=run('ffprobe',['-v','error','-skip_frame','nokey','-select_streams','v:0','-show_frames','-show_entries','frame=best_effort_timestamp_time','-of','csv=p=0',source]).split('\n').map(l=>parseFloat(l)).filter(n=>Number.isFinite(n)&&n<=1.4);
   const actual=Math.max(...keyframes);
   assert.ok(actual<=1.4&&actual>.9);

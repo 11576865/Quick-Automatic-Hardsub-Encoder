@@ -44,6 +44,7 @@ const state = {
   nativeSelfTestStarted: false,
   nativeInputProbe: null,
   nativePreviewWaiters: new Map(),
+  nativeFrameWaiters: new Map(),
   nativeWaveformWaiters: new Map(),
   nativeSampleWaiters: new Map(),
   nativeJobId: null,
@@ -1428,6 +1429,21 @@ function detectNativeBackend() {
       clearTimeout(waiter.timer);
       if (data.ok) waiter.resolve(data);
       else waiter.reject(new Error(data.error || 'Native 预览失败'));
+    };
+
+    globalThis.__onNativeFrame = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 时间轴画面结果解析失败' };
+      }
+      const waiter = state.nativeFrameWaiters.get(data.requestId);
+      if (!waiter) return;
+      state.nativeFrameWaiters.delete(data.requestId);
+      clearTimeout(waiter.timer);
+      if (data.ok) waiter.resolve(data);
+      else waiter.reject(new Error(data.error || 'Native 时间轴画面预览失败'));
     };
 
     globalThis.__onNativeWaveform = payload => {
@@ -4060,6 +4076,22 @@ function requestNativePreview(timeSeconds, assText) {
   });
 }
 
+function requestNativeFrame(timeSeconds, width = 720) {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.renderNativeFrame) {
+    return Promise.reject(new Error('Native 时间轴画面桥不可用'));
+  }
+  const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      state.nativeFrameWaiters.delete(requestId);
+      reject(new Error('Native 时间轴画面预览超时'));
+    }, 60000);
+    state.nativeFrameWaiters.set(requestId, { resolve, reject, timer });
+    bridge.renderNativeFrame(requestId, Number(timeSeconds || 0), Number(width || 720));
+  });
+}
+
 function requestNativeWaveform(options = {}) {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.renderNativeWaveform) {
@@ -4564,6 +4596,20 @@ mountMediaWorkspace({
     const media=await state.engine.probe();
     const caps=await state.engine.taskCapabilities('copy');
     return {...media,sourceName:state.video.name,fpsModeSupported:caps.fpsModeSupported};
+  },
+  frame: async options => {
+    if (!state.video) throw new Error('请先选择视频');
+    const time = Math.max(0, Number(options?.time) || 0);
+    const width = Math.max(320, Math.min(1280, Math.floor(Number(options?.width) || 720)));
+    if (state.nativeBackend?.available) {
+      if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
+      return requestNativeFrame(time, width);
+    }
+    if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本预览时间轴画面');
+    if (!await ensureWebEngineReady()) throw new Error('浏览器 FFmpeg 核心不可用');
+    if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
+    if (!state.engine.mediaInfo) await state.engine.probe();
+    return state.engine.renderTimelineFrame(time, { width });
   },
   waveform: async options => {
     if (!state.video) throw new Error('请先选择视频');

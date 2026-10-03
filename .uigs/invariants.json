@@ -366,6 +366,111 @@
           "pattern": "FFMPEG_INTEGRATION=1 node --test src/media-task\\.integration\\.test\\.mjs"
         }
       ]
+    },
+    {
+      "id": "MEDIA.TIMELINE.SOURCE_FRAME_PREVIEW",
+      "title": "时间轴必须用真实源视频帧解释光标与受约束剪切边界",
+      "status": "active",
+      "criticality": "required",
+      "claim": "时间轴画面预览必须来自源视频解码；Copy 模式应能并列显示请求 IN 与实际无损 IN 的画面，不得以占位图或仅有时间数字替代边界视觉证据。",
+      "boundaries": [
+        "timeline-ui",
+        "web-frame-extraction",
+        "windows-frame-extraction",
+        "android-frame-extraction",
+        "requested-vs-realizable-boundary"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "timeline-frame-panel",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-workspace.js",
+          "pattern": "id=\"taskFramePreviewPanel\""
+        },
+        {
+          "id": "boundary-frame-inspector",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-workspace.js",
+          "pattern": "id=\"taskBoundaryFrameInspector\""
+        },
+        {
+          "id": "web-frame-extraction",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/engine.js",
+          "pattern": "async renderTimelineFrame\\(timeSeconds, options = \\{\\}\\)"
+        },
+        {
+          "id": "windows-frame-extraction",
+          "level": "source",
+          "kind": "pattern",
+          "path": "windows/native-bridge.ps1",
+          "pattern": "function Invoke-Frame\\(\\$Body\\)"
+        },
+        {
+          "id": "android-frame-extraction",
+          "level": "source",
+          "kind": "pattern",
+          "path": "android-native/app/src/main/java/io/github/quickhardsub/NativeBridge.kt",
+          "pattern": "fun renderNativeFrame\\(requestId: String, timeSeconds: Double, width: Int\\)"
+        },
+        {
+          "id": "cross-backend-frame-wiring",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/timeline-frame-preview-wiring.test.mjs",
+          "pattern": "timeline source-frame preview is wired across Web, Windows Native and Android Native"
+        },
+        {
+          "id": "web-frame-command-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.test.mjs",
+          "pattern": "timeline frame preview seeks exact requested time and scales bounded output"
+        },
+        {
+          "id": "boundary-frame-ui-smoke",
+          "level": "test",
+          "kind": "pattern",
+          "path": "scripts/check-media-ui.cjs",
+          "pattern": "Requested boundary frame time is wrong"
+        },
+        {
+          "id": "frontend-runs-frame-contract",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "timeline-frame-preview-wiring\\.test\\.mjs"
+        },
+        {
+          "id": "frontend-runs-frame-ui-smoke",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "node scripts/check-media-ui\\.cjs"
+        },
+        {
+          "id": "real-ffmpeg-scrub-frame",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/media-task.integration.test.mjs",
+          "pattern": "const scrubFrame=time=>run\\('ffmpeg'"
+        },
+        {
+          "id": "real-ffmpeg-scrub-workflow",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "FFMPEG_INTEGRATION=1 node --test src/media-task\\.integration\\.test\\.mjs"
+        }
+      ]
     }
   ]
 }
