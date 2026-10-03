@@ -251,6 +251,7 @@ const {spawn}=require('node:child_process');
   await page.click('#taskWaveformLoad');
   await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('无音频波形 · 时间范围仍可用'));
   if((await page.locator('#taskWaveformStatus').textContent()).includes('失败'))throw Error('No-audio transcode timeline still reports analysis failure');
+  await page.waitForFunction(()=>!document.querySelector('#taskFramePreviewImage').hidden);
   if(await page.locator('#taskFramePreviewImage').isHidden())throw Error('No-audio transcode timeline lost source-frame preview');
   await page.evaluate(()=>{
     window.mockAudioMedia={...window.mockAudioMedia,audioTracks:1,audioCodec:'aac',audioCodecs:['aac'],audioBitRate:192000};
