@@ -11,6 +11,17 @@ Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'media-task.ps1')
 
 $ErrorActionPreference = 'Stop'
+
+function Write-BridgeLog([string]$Message,[string]$Level='INFO') {
+    $stamp=(Get-Date).ToString('HH:mm:ss')
+    Write-Host "[$stamp][$Level] $Message"
+}
+
+Write-Host ''
+Write-Host 'Quick Automatic Hardsub Encoder · Windows Native Bridge'
+Write-Host '-------------------------------------------------------'
+Write-BridgeLog 'Starting local backend and detecting FFmpeg / GPU capabilities...'
+
 $script:AllowedOrigin = 'https://11576865.github.io'
 $script:Token = if($Token){$Token}else{[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '[^A-Za-z0-9]', ''}
 $script:Selections = @{ video=@(); ass=@(); fonts=@() }
@@ -19,11 +30,6 @@ $script:Samples = @{}
 $script:Ffmpeg = Find-NativeTool 'ffmpeg' $PSScriptRoot
 $script:Ffprobe = Find-NativeTool 'ffprobe' $PSScriptRoot
 $script:Capabilities = if ($script:Ffmpeg) { Get-NativeCapabilities $script:Ffmpeg $script:Ffprobe $PSScriptRoot } else { $null }
-
-function Write-BridgeLog([string]$Message,[string]$Level='INFO') {
-    $stamp=(Get-Date).ToString('HH:mm:ss')
-    Write-Host "[$stamp][$Level] $Message"
-}
 
 function ConvertTo-JsonUtf8($Object) {
     return ($Object | ConvertTo-Json -Depth 12 -Compress)
@@ -900,9 +906,6 @@ for($candidate=$Port;$candidate -lt ($Port+20);$candidate++){
 }
 if(-not $listener){throw 'Could not bind a localhost port for Windows Native Bridge.'}
 
-Write-Host ''
-Write-Host 'Quick Automatic Hardsub Encoder · Windows Native Bridge'
-Write-Host '-------------------------------------------------------'
 Write-BridgeLog ("Bridge ready: http://127.0.0.1:"+$Port)
 Write-BridgeLog ("FFmpeg: "+$script:Ffmpeg)
 if($script:Capabilities){
