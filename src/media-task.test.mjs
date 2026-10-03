@@ -137,3 +137,22 @@ test('timeline keyframe scan returns ordered bounded keyframes and reports trunc
   assert.equal(result.keyframesTruncated,true);
   assert.equal(result.duration,400);
 });
+
+
+test('timeline frame preview seeks exact requested time and scales bounded output',async()=>{
+  const engine=new EncoderEngine();
+  engine.ready=true;
+  engine.inputPath='/input/source.mkv';
+  engine.mediaInfo={videoCodec:'h264'};
+  let command='';
+  engine.execute=async value=>{command=value;};
+  engine.api={readFile:async()=>new Uint8Array([137,80,78,71])};
+  const result=await engine.renderTimelineFrame(12.345,{width:640});
+  assert.match(command,/-ss 12\.345/);
+  assert.match(command,/-frames:v 1/);
+  assert.match(command,/scale=640:-2:force_original_aspect_ratio=decrease/);
+  assert.equal(result.time,12.345);
+  assert.equal(result.width,640);
+  assert.match(result.url,/^blob:/);
+  URL.revokeObjectURL(result.url);
+});
