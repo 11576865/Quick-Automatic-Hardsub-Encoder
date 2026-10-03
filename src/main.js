@@ -2245,9 +2245,20 @@ function renderSourceVideoSummary(media = state.sourceMedia) {
     return;
   }
   const videoRate = Number(media.videoBitRate || media.bitRate || 0);
-  const audio = media.audioCodec
-    ? media.audioCodec + (Number(media.audioTracks || 0) > 1 ? ' · ' + Number(media.audioTracks) + ' 轨' : '')
-    : '未检测到';
+  const audioTracks = Number(media.audioTracks || 0);
+  const audioCodecs = [...new Set(
+    (Array.isArray(media.audioCodecs) && media.audioCodecs.length
+      ? media.audioCodecs
+      : media.audioCodec ? [media.audioCodec] : [])
+      .map(codec => String(codec || '').trim())
+      .filter(Boolean)
+  )];
+  const audioRate = Number(media.audioBitRate || 0);
+  const audio = audioTracks > 0
+    ? (audioCodecs.length ? audioCodecs.map(codec => codec.toUpperCase()).join(' / ') : 'CODEC 未知') +
+      ' · ' + audioTracks + ' 轨' +
+      (audioRate > 0 ? ' · ' + formatBitrate(audioRate) : '')
+    : '未检测到音轨';
   const color = [media.colorPrimaries, media.colorTransfer, media.colorSpace].filter(Boolean).join(' / ') || '未标记';
   const rows = [
     ['源视频编码', media.videoCodec || '未知'],
