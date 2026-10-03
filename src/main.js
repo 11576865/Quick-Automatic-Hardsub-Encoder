@@ -11,7 +11,8 @@ import { decodeAssFile } from './ass-decoding.js';
 import { detectWindowsNativeBridge } from './windows-native-client.js';
 import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics.js';
 import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
-import { fitRateDistortionModel } from './rate-distortion-model.js';
+import { createSizeQualityFrontier, fitRateDistortionModel } from './rate-distortion-model.js';
+import { buildSizeFrontierPlot, evidenceFractionForTargetBytes, targetBytesAtEvidenceFraction } from './size-frontier-ui.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -68,6 +69,8 @@ const state = {
   benchmarks: {},
   qualityCalibration: {},
   rateDistortionModels: {},
+  sizeBudgetTargetBytes: null,
+  sizeFrontierPointerId: null,
   qualityCalibrationTarget: null,
   qualityCalibrationBusy: false,
   selectedCodec: null,
@@ -277,6 +280,7 @@ app.innerHTML = `
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
     <input id="sizeBudgetMultiplier" type="hidden" value="1.60">
+    <input id="sizeBudgetBytes" type="hidden" value="">
 
     <div class="plan-mode-tabs" role="tablist" aria-label="压制方式">
       <button type="button" class="plan-mode-tab plan-interaction selected" data-plan-mode="quick" aria-pressed="true">
@@ -314,14 +318,38 @@ app.innerHTML = `
 
         <div id="sizePlanPanel" class="plan-mode-panel hidden" data-plan-panel="size">
           <div class="plan-slider-head"><div><strong>目标输出上限</strong></div><output id="sizeBudgetValue" class="plan-slider-value">×1.60</output></div>
-          <input id="sizeBudgetRange" class="plan-slider plan-interaction" type="range" min="0.75" max="2.00" step="0.05" value="1.60" aria-label="目标输出体积相对源文件倍率">
-          <div class="plan-slider-scale"><span>更紧</span><span>源文件 ×1.0</span><span>更宽松</span></div>
-          <div class="size-snap-row" aria-label="体积预算快捷值">
-            <button type="button" class="plan-interaction" data-size-multiplier="1.00">×1.00</button>
-            <button type="button" class="plan-interaction" data-size-multiplier="1.25">×1.25</button>
-            <button type="button" class="plan-interaction" data-size-multiplier="1.60">×1.60</button>
-            <button type="button" class="plan-interaction" data-size-multiplier="2.00">×2.00</button>
+
+          <div id="sizeFrontierPanel" class="size-frontier-panel">
+            <div class="size-frontier-head">
+              <div>
+                <strong>实测效率曲线</strong>
+                <small id="sizeFrontierSubtitle">先对当前编码器做短片段实测；有足够证据后可直接沿曲线选择体积。</small>
+              </div>
+              <button id="calibrateSizeFrontierBtn" class="plan-interaction" type="button">生成当前编码器曲线</button>
+            </div>
+            <div id="sizeFrontierEmpty" class="size-frontier-empty note">尚无当前编码器的 R-D 模型。仍可使用下方手动倍率预算。</div>
+            <div id="sizeFrontierChartWrap" class="size-frontier-chart-wrap hidden">
+              <svg id="sizeFrontierChart" class="size-frontier-chart" viewBox="0 0 720 220" role="slider" tabindex="0" aria-label="沿实测体积质量曲线选择目标体积"></svg>
+              <div class="size-frontier-scale">
+                <span id="sizeFrontierMin">—</span>
+                <span id="sizeFrontierKnee">实测范围</span>
+                <span id="sizeFrontierMax">—</span>
+              </div>
+            </div>
+            <div id="sizeFrontierReadout" class="size-frontier-readout">当前仍按手动倍率规划；拖动曲线后切换为实测预算。</div>
           </div>
+
+          <details id="sizeManualBudget" class="size-manual-budget">
+            <summary>手动按源文件倍率设置</summary>
+            <input id="sizeBudgetRange" class="plan-slider plan-interaction" type="range" min="0.75" max="2.00" step="0.05" value="1.60" aria-label="目标输出体积相对源文件倍率">
+            <div class="plan-slider-scale"><span>更紧</span><span>源文件 ×1.0</span><span>更宽松</span></div>
+            <div class="size-snap-row" aria-label="体积预算快捷值">
+              <button type="button" class="plan-interaction" data-size-multiplier="1.00">×1.00</button>
+              <button type="button" class="plan-interaction" data-size-multiplier="1.25">×1.25</button>
+              <button type="button" class="plan-interaction" data-size-multiplier="1.60">×1.60</button>
+              <button type="button" class="plan-interaction" data-size-multiplier="2.00">×2.00</button>
+            </div>
+          </details>
           <div id="sizeBudgetDetail" class="plan-value-detail plan-slider-feedback">选择视频后显示对应的实际字节上限。</div>
         </div>
       </div>
@@ -3357,7 +3385,11 @@ function chooseDefaultCodec(goal) {
 
 function invalidateQualityCalibration() {
   state.qualityCalibration = {};
+  state.rateDistortionModels = {};
+  state.sizeBudgetTargetBytes = null;
+  state.sizeFrontierPointerId = null;
   state.qualityCalibrationTarget = null;
+  if ($('sizeBudgetBytes')) $('sizeBudgetBytes').value = '';
   if ($('qualityCalibrationResult')) $('qualityCalibrationResult').textContent = '';
 }
 
