@@ -160,9 +160,9 @@ const {spawn}=require('node:child_process');
     document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
   });
   await page.evaluate(value=>{const control=document.querySelector('[name=audio]');control.value=value;control.dispatchEvent(new Event('change',{bubbles:true}));},'aac');
-  if(!await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Codec-aware copy guidance remains visible after explicit AAC transcode');
+  if(!await page.locator('#taskAudioPlaybackWarning').evaluate(el=>el.hidden))throw Error('Codec-aware copy guidance remains active after explicit AAC transcode');
   await page.evaluate(value=>{const control=document.querySelector('[name=audio]');control.value=value;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
-  if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Codec-aware copy guidance does not return after selecting copy');
+  if(await page.locator('#taskAudioPlaybackWarning').evaluate(el=>el.hidden))throw Error('Codec-aware copy guidance does not return after selecting copy');
   if((await page.locator('#taskAudioPlaybackWarning').getAttribute('data-state'))!=='info')throw Error('Restored AAC copy guidance lost informational state');
 
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
