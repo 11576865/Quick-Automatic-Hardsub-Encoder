@@ -751,7 +751,7 @@ function syncTaskInputMutationLocks() {
   for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) {
     if ($(id)) $(id).disabled = locked;
   }
-  document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font').forEach(control => {
+  document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font, #taskOutputPolicy [name]').forEach(control => {
     control.disabled = locked;
   });
   if ($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled = locked || !state.savedFonts.length;
