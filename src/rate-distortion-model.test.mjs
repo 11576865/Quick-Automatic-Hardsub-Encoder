@@ -165,9 +165,15 @@ test('planner reserve transform matches the guided size-budget accounting', () =
     fixedReserveBytes: 256 * 1024
   };
 
-  for (const targetBytes of [20 * 1024 * 1024, 80 * 1024 * 1024, 800 * 1024 * 1024]) {
+  const impossibleTarget = 20 * 1024 * 1024;
+  const impossibleVideoBitrate = videoBitrateForTargetBytes(impossibleTarget, budget);
+  assert.ok(impossibleVideoBitrate < 0);
+  assert.ok(impossibleTarget < targetBytesForVideoBitrate(0, budget));
+
+  for (const targetBytes of [80 * 1024 * 1024, 800 * 1024 * 1024]) {
     const videoBitrate = videoBitrateForTargetBytes(targetBytes, budget);
     const roundTrip = targetBytesForVideoBitrate(videoBitrate, budget);
+    assert.ok(videoBitrate >= 0);
     assert.ok(Math.abs(roundTrip - targetBytes) < 1e-6);
   }
 });
