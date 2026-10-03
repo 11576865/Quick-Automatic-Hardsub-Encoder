@@ -795,6 +795,103 @@ class NativeBridge(
     }
 
     @JavascriptInterface
+    fun renderNativeReferenceFrame(requestId: String, jobId: String, timeSeconds: Double, width: Int) {
+        if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
+            postJsonCallback(
+                "__onNativeReferenceFrame",
+                JSONObject()
+                    .put("requestId", requestId)
+                    .put("ok", false)
+                    .put("busy", true)
+                    .put("error", "Android Native 正在执行其他 FFmpeg 任务，请稍后生成硬字幕参考帧")
+            )
+            return
+        }
+
+        thread(name = "native-hardsub-reference-frame") {
+            val result = JSONObject().put("requestId", requestId)
+            var safUrl: String? = null
+            val frameRoot = File(activity.cacheDir, "native-hardsub-reference-frame")
+            try {
+                if (!NativeJobStore.isSafeJobId(jobId)) throw IllegalStateException("无效 Native job id")
+                if (!timeSeconds.isFinite() || timeSeconds < 0.0) throw IllegalStateException("硬字幕参考时间无效")
+                val status = NativeJobStore.readStatus(activity, jobId)
+                    ?: throw IllegalStateException("找不到 Native 任务")
+                if (status.optString("state") != "completed") throw IllegalStateException("Native 成品尚未完成验证")
+
+                val requestFile = NativeJobStore.requestFile(activity, jobId)
+                if (!requestFile.isFile) throw IllegalStateException("Native 任务请求文件不存在")
+                val request = JSONObject(requestFile.readText(Charsets.UTF_8))
+                val task = request.optJSONObject("task")
+                    ?: throw IllegalStateException("硬字幕参考帧要求结构化媒体任务")
+                if (task.optString("operation") != "hardsub") throw IllegalStateException("当前任务不是硬字幕压制")
+
+                val assFile = NativeJobStore.assFile(activity, jobId)
+                if (!assFile.isFile || assFile.length() <= 0L) throw IllegalStateException("硬字幕参考 ASS 不存在")
+                val fontsDir = File(NativeJobStore.jobDir(activity, jobId), "fonts")
+                NativeJobStore.configureFonts(
+                    activity,
+                    if (fontsDir.isDirectory) listOf(fontsDir.absolutePath) else emptyList()
+                )
+
+                val inputUri = Uri.parse(request.getString("inputUri"))
+                safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
+                if (safUrl.isNullOrBlank()) throw IllegalStateException("无法重新打开任务源视频")
+                val safeWidth = width.coerceIn(320, 1600)
+                val filter = MediaTaskArguments.hardsubReferenceFilter(
+                    task,
+                    timeSeconds,
+                    NativeJobStore.escapeFilterPath(assFile.absolutePath),
+                    NativeJobStore.escapeFilterPath(fontsDir.absolutePath),
+                    safeWidth
+                )
+
+                if (frameRoot.exists()) frameRoot.deleteRecursively()
+                frameRoot.mkdirs()
+                val output = File(frameRoot, "reference.png")
+                val command = arrayOf(
+                    "-y",
+                    "-hide_banner",
+                    "-v", "error",
+                    "-ss", String.format(java.util.Locale.US, "%.3f", timeSeconds),
+                    "-i", safUrl,
+                    "-map", "0:v:0",
+                    "-an",
+                    "-sn",
+                    "-frames:v", "1",
+                    "-vf", filter,
+                    "-c:v", "png",
+                    output.absolutePath
+                )
+                val session = FFmpegKit.executeWithArguments(command)
+                if (!ReturnCode.isSuccess(session.getReturnCode()) || output.length() <= 0L) {
+                    throw IllegalStateException(
+                        session.getOutput().takeLast(1200).ifBlank { "Native 硬字幕权威参考帧生成失败" }
+                    )
+                }
+                result
+                    .put("ok", true)
+                    .put("url", "data:image/png;base64," + Base64.encodeToString(output.readBytes(), Base64.NO_WRAP))
+                    .put("time", timeSeconds)
+                    .put("width", safeWidth)
+                    .put("referenceKind", "hardsub-authoritative")
+            } catch (e: Throwable) {
+                result
+                    .put("ok", false)
+                    .put("error", e.message ?: e.javaClass.simpleName)
+            } finally {
+                if (!safUrl.isNullOrBlank()) {
+                    try { FFmpegKitConfig.unregisterSafProtocolUrl(safUrl) } catch (_: Throwable) {}
+                }
+                try { frameRoot.deleteRecursively() } catch (_: Throwable) {}
+                try { FFmpegKitConfig.clearSessions() } catch (_: Throwable) {}
+                diagnosticRunning.set(false)
+            }
+            postJsonCallback("__onNativeReferenceFrame", result)
+        }
+    }
+
+    @JavascriptInterface
     fun renderNativeWaveform(requestId: String, optionsJson: String) {
         if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
             postJsonCallback(
