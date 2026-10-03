@@ -150,6 +150,10 @@ jobs:
             if (-not $bridgeSource.Contains($required)) { throw "Bink 2 bridge contract lost: $required" }
           }
 
+      - name: Install FFmpeg for encoding smoke
+        shell: powershell
+        run: choco install ffmpeg --yes --no-progress
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
