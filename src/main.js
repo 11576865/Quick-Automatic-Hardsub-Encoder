@@ -5030,26 +5030,54 @@ function buildEncodePlan(codec) {
   }
 
   if (goal !== 'sizeBudget') return null;
-  const multiplier = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetMultiplier')?.value || 1.6)));
-  const sizeCeiling = Math.floor(state.video.size * multiplier);
+  const manualMultiplier = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetMultiplier')?.value || 1.6)));
+  const directBudgetBytes = Number(state.sizeBudgetTargetBytes || 0);
+  const sizeCeiling = Math.floor(
+    directBudgetBytes > 0
+      ? directBudgetBytes
+      : state.video.size * manualMultiplier
+  );
+  const multiplier = state.video.size > 0 ? sizeCeiling / state.video.size : manualMultiplier;
   const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
   const containerReserveBytes = Math.max(256 * 1024, Math.floor(safeBudgetBytes * 0.01));
-  const totalAverage = state.video.size * 8 / media.duration;
   const sourceVideoBitrate = getSourceVideoBitrate();
-  let audioBitRate = media.audioBitRate || 0;
-  if (!audioBitRate && totalAverage > sourceVideoBitrate) audioBitRate = Math.max(0, totalAverage - sourceVideoBitrate);
-  if (!audioBitRate && media.audioTracks > 0) audioBitRate = 256000 * media.audioTracks;
+  const audioBitRate = estimatedSizeBudgetAudioBitrate();
   const ceilingVideoBitrate = Math.floor(((safeBudgetBytes - containerReserveBytes) * 8 / media.duration) - audioBitRate);
   if (!(ceilingVideoBitrate > 150000)) return null;
   const sourceCodec = normalizeCodec(media.videoCodec);
-  const budgetHeadroom = 1.05 + Math.max(0, Math.min(1, (multiplier - 0.75) / 1.25)) * 0.07;
+  const budgetHeadroom = 1.05 + Math.max(0, Math.min(1, (manualMultiplier - 0.75) / 1.25)) * 0.07;
   const sourceEquivalent = sourceVideoBitrate > 0
     ? sourceVideoBitrate * (codecEfficiency(sourceCodec) / codecEfficiency(codec)) * budgetHeadroom
     : ceilingVideoBitrate;
-  const targetVideoBitrate = Math.floor(Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent)));
+  const targetVideoBitrate = Math.floor(
+    directBudgetBytes > 0
+      ? ceilingVideoBitrate
+      : Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent))
+  );
   const plannedBytes = Math.round(((targetVideoBitrate + audioBitRate) * media.duration / 8) + containerReserveBytes);
+  const frontier = directBudgetBytes > 0 ? currentSizeFrontier(codec) : null;
+  const frontierEvaluation = frontier?.evaluateTargetBytes(sizeCeiling) || null;
+  const frontierPrediction = frontierEvaluation?.status === 'within-evidence'
+    ? frontierEvaluation.prediction
+    : null;
   const p = profileFor(codec, 'balanced');
-  return { mode: 'budget-rate', goal, codec, crf: p.crf, preset: p.preset, multiplier, sizeCeiling, safeBudgetBytes, plannedBytes, targetVideoBitrate, ceilingVideoBitrate, sourceVideoBitrate, audioBitRate };
+  return {
+    mode: 'budget-rate',
+    goal,
+    codec,
+    crf: p.crf,
+    preset: p.preset,
+    multiplier,
+    sizeCeiling,
+    safeBudgetBytes,
+    plannedBytes,
+    targetVideoBitrate,
+    ceilingVideoBitrate,
+    sourceVideoBitrate,
+    audioBitRate,
+    budgetSource: directBudgetBytes > 0 ? 'frontier' : 'multiplier',
+    frontierPrediction
+  };
 }
 
 function downloadBlob(blob, name) {
