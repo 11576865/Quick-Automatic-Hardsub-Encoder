@@ -12,21 +12,33 @@ windows/start_windows.bat
 
 它会：
 
-1. 隐藏启动 `native-bridge.ps1`；
+1. 打开一个 **Windows Native Bridge 状态控制台**；
 2. 只监听 `127.0.0.1`；
 3. 生成本次启动专用随机 token；
 4. 自动打开项目的现代 Web UI；
 5. Web UI 检测到 Bridge 后优先使用 Windows Native，而不是 FFmpeg WASM。
 
-正常使用时不会再出现旧 WinForms 主窗口。只有选择视频、ASS、字体或保存成品时，会按需出现 Windows 系统文件对话框。
+控制台会显示 Bridge 端口、FFmpeg 路径/版本、CPU、GPU、可用编码器以及主要任务状态。**使用 Windows Native 时请保持该窗口开启；关闭它会断开本机后端。**
+
+页面首次连接成功后，会把本次 localhost Bridge 凭据保存到当前浏览器标签页的 `sessionStorage`。因此普通刷新仍保持 Windows Native；Bridge 已退出时，过期会话会自动清除，不会长期误判为 Native。
+
+如果确实希望后台静默运行，可以改用：
+
+```text
+windows/start_windows_background.bat
+```
+
+正常使用时不会出现旧 WinForms 主窗口。只有选择视频、ASS、字体或保存成品时，会按需出现 Windows 系统文件对话框。
 
 ## 调试入口
 
-需要查看后台控制台：
+需要让 Bridge 在当前命令窗口前台运行、便于观察 PowerShell 级错误时：
 
 ```text
 windows/start_windows_debug.bat
 ```
+
+默认 `start_windows.bat` 已经会显示正常状态控制台；debug 入口主要用于让启动脚本本身保持前台并在失败时暂停。
 
 需要旧 WinForms 工具做兼容/诊断：
 
