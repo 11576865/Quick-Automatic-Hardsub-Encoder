@@ -296,6 +296,11 @@ const {spawn}=require('node:child_process');
   if((await page.inputValue('[name=start]'))!=='8:00')throw Error('Snap-to-keyframe did not align IN to the actual keyframe');
   if(!(await page.locator('#taskKeyframeDelta').textContent()).includes('已经位于关键帧'))throw Error('Aligned IN did not report keyframe alignment');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
+  await page.evaluate(()=>{
+    const width=document.querySelector('[name=width]');
+    width.value='1280';
+    width.dispatchEvent(new Event('input',{bubbles:true}));
+  });
   await page.fill('[name=start]','0');
   await page.locator('[name=start]').blur();
   await page.locator('.media-track-panel > summary').click();await page.selectOption('[name=audio]','aac');
