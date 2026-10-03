@@ -109,8 +109,17 @@ function Get-OriginalVideoPath {
 }
 
 function Clear-Bink2ImportStaging {
-    if ($script:VideoImport -and $script:VideoImport.Work -and (Test-Path -LiteralPath $script:VideoImport.Work)) {
-        Remove-Item -LiteralPath $script:VideoImport.Work -Recurse -Force -ErrorAction SilentlyContinue
+    $work = if ($script:VideoImport) { [string]$script:VideoImport.Work } else { '' }
+    if ($work -and (Test-Path -LiteralPath $work)) {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($work) {
+        foreach ($id in @($script:ImportJobs.Keys)) {
+            $job = $script:ImportJobs[$id]
+            if ($job.Work -eq $work -and $job.State -ne 'importing') {
+                $script:ImportJobs.Remove($id)
+            }
+        }
     }
     $script:VideoImport = $null
 }
@@ -385,8 +394,12 @@ function Show-NativeSaveFileDialog([string]$Filter, [string]$DefaultExt, [string
 function Show-BridgePicker([string]$Role) {
     $picked = @()
     if ($Role -eq 'video') {
-        $picked = @(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts|All files|*.*')
-        if ($picked.Count) { $script:Selections.video = @($picked[0]) }
+        if (Test-Bink2ImportBusy) { throw 'Bink 2 import is running; cancel or wait before replacing the video.' }
+        $picked = @(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts;*.bik;*.bk2|Bink video|*.bik;*.bk2|All files|*.*')
+        if ($picked.Count) {
+            Clear-Bink2ImportStaging
+            $script:Selections.video = @($picked[0])
+        }
     } elseif ($Role -eq 'ass') {
         $picked = @(Show-NativeOpenFileDialog 'ASS subtitles|*.ass|All files|*.*')
         if ($picked.Count) { $script:Selections.ass = @($picked[0]) }
@@ -463,10 +476,14 @@ function Get-BackendInfo {
         multipassFullresSupported=if($script:Capabilities){[bool]$script:Capabilities.MultipassFullresSupported}else{$false}
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
-        bridgeVersion=4
+        bridgeVersion=5
         taskSchemaVersion=3
         fpsModeSupported=[bool]$script:Capabilities.FpsModeSupported
         globalOptions=[object[]]$script:Capabilities.GlobalOptions
+        bink2ImportAvailable=[bool]$script:RadVideo
+        bink2ImportTool=if($script:RadVideo){[string]$script:RadVideo.Label}else{''}
+        bink2ImportToolSource=if($script:RadVideo){[string]$script:RadVideo.Source}else{''}
+        bink2ImportExternal=$true
     }
 }
 
@@ -504,32 +521,104 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
 }
 
 function Get-ProbeMedia {
+    $original = Get-OriginalVideoPath
     $video = Get-SelectedPath 'video'
-    if (-not $video) { throw 'No video selected.' }
+    if (-not $original -or -not $video) { throw 'No video selected.' }
+
+    $adapter = Get-Bink2ImportAdapterInfo
+    $adapterApplied = [bool]($adapter.applied -and $video -ne $original)
+    $sourceItem = Get-Item -LiteralPath $original
+    $executionItem = Get-Item -LiteralPath $video
+
     $r = Invoke-BridgeTool $script:Ffprobe ('-v error -show_format -show_streams -of json ' + (Quote-NativeArg $video))
-    if ($r.ExitCode -ne 0) { throw ($r.StdErr.Trim()) }
+    if ($r.ExitCode -ne 0) {
+        if ($adapter.isBink2 -and -not $adapterApplied) {
+            return [pscustomobject]@{
+                ok=$true; seekable=$true
+                statSize=$sourceItem.Length; executionStatSize=$sourceItem.Length
+                inputDecodeSmoke=$false; inputDecodeError=$r.StdErr.Trim()
+                format='bink'; duration=0; bitRate=0; videoCodec='bink2'; videoBitRate=0
+                width=0; height=0; fps='0/1'; pixelFormat=''; bitDepth=8
+                colorTransfer=''; colorPrimaries=''; colorSpace=''; hdr=$false; unsafeColorPipeline=$false
+                audioTracks=0; audioCodec=''; audioCodecs=@(); audioBitRate=0
+                sourceAdapter='rad-bink2'
+                sourceAdapterRequired=$true
+                sourceAdapterAvailable=[bool]$adapter.available
+                sourceAdapterApplied=$false
+                sourceAdapterTool=[string]$adapter.tool
+                sourceOriginalName=$sourceItem.Name
+                sourceOriginalSize=$sourceItem.Length
+                sourceOriginalKind='bink2'
+            }
+        }
+        throw ($r.StdErr.Trim())
+    }
+
     $json = $r.StdOut | ConvertFrom-Json
     $v = @($json.streams | Where-Object { $_.codec_type -eq 'video' }) | Select-Object -First 1
-    if (-not $v) { throw 'FFprobe found no video stream.' }
+    if (-not $v) {
+        if ($adapter.isBink2 -and -not $adapterApplied) {
+            return [pscustomobject]@{
+                ok=$true; seekable=$true
+                statSize=$sourceItem.Length; executionStatSize=$sourceItem.Length
+                inputDecodeSmoke=$false; inputDecodeError='FFprobe found no decodable video stream.'
+                format=[string]$json.format.format_name; duration=[double]($json.format.duration)
+                bitRate=0; videoCodec='bink2'; videoBitRate=0
+                width=0; height=0; fps='0/1'; pixelFormat=''; bitDepth=8
+                colorTransfer=''; colorPrimaries=''; colorSpace=''; hdr=$false; unsafeColorPipeline=$false
+                audioTracks=0; audioCodec=''; audioCodecs=@(); audioBitRate=0
+                sourceAdapter='rad-bink2'
+                sourceAdapterRequired=$true
+                sourceAdapterAvailable=[bool]$adapter.available
+                sourceAdapterApplied=$false
+                sourceAdapterTool=[string]$adapter.tool
+                sourceOriginalName=$sourceItem.Name
+                sourceOriginalSize=$sourceItem.Length
+                sourceOriginalKind='bink2'
+            }
+        }
+        throw 'FFprobe found no video stream.'
+    }
+
     $audios = @($json.streams | Where-Object { $_.codec_type -eq 'audio' })
     $pix = [string]$v.pix_fmt
     $bitDepth = if ($v.bits_per_raw_sample -as [int]) { [int]$v.bits_per_raw_sample } elseif ($pix -match '(10|12|14|16)(?:le|be)?') { [int]$Matches[1] } else { 8 }
     $transfer = [string]$v.color_transfer
     $primaries = [string]$v.color_primaries
     $hdr = ($transfer -match 'smpte2084|arib-std-b67') -or (($primaries -match 'bt2020') -and $bitDepth -gt 8)
-    $duration = [double]($json.format.duration)
+    $duration = 0.0
+    [void][double]::TryParse([string]$json.format.duration,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$duration)
     $decode = Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -ss 0 -i ' + (Quote-NativeArg $video) + ' -map 0:v:0 -frames:v 1 -f null NUL')
+    $decodeOk = $decode.ExitCode -eq 0
     $audioRate = 0L
     foreach($a in $audios){ if($a.bit_rate){ $audioRate += [long]$a.bit_rate } }
+
+    # When RAD has decoded Bink 2 into an AVI staging file, keep source size as
+    # the planning anchor. The staging AVI can be orders of magnitude larger
+    # and must not silently distort target-size recommendations.
+    $planningBitRate = if($adapterApplied){0L}elseif($json.format.bit_rate){[long]$json.format.bit_rate}else{0L}
+    $planningVideoBitRate = if($adapterApplied){0L}elseif($v.bit_rate){[long]$v.bit_rate}else{0L}
+    $planningAudioBitRate = if($adapterApplied){0L}else{$audioRate}
+
     return [pscustomobject]@{
-        ok=$true; seekable=$true; statSize=(Get-Item -LiteralPath $video).Length
-        inputDecodeSmoke=($decode.ExitCode -eq 0); inputDecodeError=$decode.StdErr.Trim()
-        format=[string]$json.format.format_name; duration=$duration; bitRate=[long]($json.format.bit_rate)
-        videoCodec=[string]$v.codec_name; videoBitRate=if($v.bit_rate){[long]$v.bit_rate}else{0}
+        ok=$true; seekable=$true
+        statSize=$sourceItem.Length; executionStatSize=$executionItem.Length
+        inputDecodeSmoke=$decodeOk; inputDecodeError=$decode.StdErr.Trim()
+        format=[string]$json.format.format_name; duration=$duration
+        bitRate=$planningBitRate
+        videoCodec=[string]$v.codec_name; videoBitRate=$planningVideoBitRate
         width=[int]$v.width; height=[int]$v.height; fps=[string]$v.avg_frame_rate
         pixelFormat=$pix; bitDepth=$bitDepth; colorTransfer=$transfer; colorPrimaries=$primaries
         colorSpace=[string]$v.color_space; hdr=$hdr; unsafeColorPipeline=($hdr -or $bitDepth -gt 8)
-        audioTracks=$audios.Count; audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}; audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$audioRate
+        audioTracks=$audios.Count; audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}; audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$planningAudioBitRate
+        sourceAdapter=if($adapter.isBink2){'rad-bink2'}else{''}
+        sourceAdapterRequired=[bool]($adapter.isBink2 -and -not $adapterApplied -and -not $decodeOk)
+        sourceAdapterAvailable=[bool]$adapter.available
+        sourceAdapterApplied=$adapterApplied
+        sourceAdapterTool=[string]$adapter.tool
+        sourceOriginalName=$sourceItem.Name
+        sourceOriginalSize=$sourceItem.Length
+        sourceOriginalKind=if($adapter.isBink2){'bink2'}else{'native'}
     }
 }
 
