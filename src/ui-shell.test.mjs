@@ -333,10 +333,12 @@ test('input identity is locked across native async work', async () => {
 });
 
 test('Bink 2 input adapter distinguishes probe, decode, and external import state', async () => {
-  const [main, client, css] = await Promise.all([
+  const [main, client, css, bink, bridge] = await Promise.all([
     readFile(new URL('./main.js', import.meta.url), 'utf8'),
     readFile(new URL('./windows-native-client.js', import.meta.url), 'utf8'),
     readFile(new URL('./style.css', import.meta.url), 'utf8'),
+    readFile(new URL('../windows/bink-import.ps1', import.meta.url), 'utf8'),
+    readFile(new URL('../windows/native-bridge.ps1', import.meta.url), 'utf8'),
   ]);
 
   assert.match(main, /id="sourceAdapterPanel"/);
@@ -363,5 +365,22 @@ test('Bink 2 input adapter distinguishes probe, decode, and external import stat
 
   assert.match(css, /\.source-adapter-panel\s*\{/);
   assert.match(css, /\.source-adapter-heading\s*\{/);
+
+  assert.match(bink, /function Test-Bink2File/);
+  assert.match(bink, /StartsWith\('KB2'/);
+  assert.match(bink, /function Find-RadVideoConverter/);
+  assert.match(bink, /RADVIDEO64/);
+  assert.match(bink, /RADVIDEO_HOME/);
+  assert.match(bink, /return 'binkconv ' \+ \$input \+ ' ' \+ \$output/);
+  assert.match(bink, /externalDependency = \$true/);
+  assert.match(bink, /bundled = \$false/);
+
+  assert.match(bridge, /\/api\/import\/bink2/);
+  assert.match(bridge, /\/api\/import-jobs\//);
+  assert.match(bridge, /sourceAdapterRequired/);
+  assert.match(bridge, /sourceAdapterApplied/);
+  assert.match(bridge, /Bink 2 must be imported through RAD Video Tools/);
+  assert.match(bridge, /Stream Copy is unavailable for a Bink 2 source/);
+  assert.match(bridge, /FFmpeg cannot decode the video stream/);
 });
 
