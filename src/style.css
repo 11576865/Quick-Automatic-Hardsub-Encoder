@@ -263,6 +263,57 @@ select:focus {
   font-size: .68rem;
 }
 
+.source-adapter-panel {
+  margin-top: 12px;
+  border: 1px solid #4d4131;
+  background: #16130f;
+  padding: 12px;
+}
+
+.source-adapter-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.source-adapter-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.source-adapter-heading span {
+  color: var(--muted);
+  font-size: .65rem;
+  letter-spacing: .06em;
+}
+
+.source-adapter-heading strong {
+  font-size: .85rem;
+}
+
+#sourceAdapterBadge {
+  border: 1px solid #5e4e37;
+  padding: 3px 6px;
+  color: #d0b887;
+  font: 600 .62rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#sourceAdapterDetail {
+  margin: 10px 0 0;
+  color: #d6c8aa;
+  font-size: .74rem;
+  line-height: 1.55;
+}
+
+.source-adapter-actions {
+  align-items: center;
+}
+
+#sourceAdapterStatus {
+  margin: 9px 0 0;
+}
+
 @media (max-width: 620px) {
   .source-video-summary .status-item {
     display: grid;
