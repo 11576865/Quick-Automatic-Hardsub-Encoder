@@ -392,6 +392,7 @@ class NativeBridge(
             allowed.forEach { key ->
                 if (input.has(key) && !input.isNull(key)) record.put(key, input.get(key))
             }
+            if (kind == "quality-sample") record.put("evidenceScope", "observation")
             NativeBenchmarkStore.appendEvidence(activity, record)
             JSONObject()
                 .put("ok", true)
