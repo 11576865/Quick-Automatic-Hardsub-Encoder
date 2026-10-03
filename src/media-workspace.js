@@ -68,18 +68,18 @@ export function mountMediaWorkspace(hooks) {
       </div>
       <div class="media-frame-preview-current">
         <div class="media-frame-preview-image-shell">
-          <img id="taskFramePreviewImage" alt="时间轴光标处源视频画面" hidden>
+          <img id="taskFramePreviewImage" alt="时间轴光标处源视频画面" data-frame-fullscreen="cursor" tabindex="0" role="button" title="点击全屏查看" hidden>
           <div id="taskFramePreviewPlaceholder">点击或拖动时间轴以预览画面。</div>
         </div>
       </div>
       <div id="taskBoundaryFrameInspector" class="media-boundary-frame-inspector media-timeline-keyframe-only" hidden>
         <article>
           <header><span>请求 IN</span><strong id="taskRequestedFrameTime">—</strong></header>
-          <div class="media-boundary-frame-image-shell"><img id="taskRequestedFrameImage" alt="请求 IN 对应画面" hidden><span id="taskRequestedFramePlaceholder">等待请求边界</span></div>
+          <div class="media-boundary-frame-image-shell"><img id="taskRequestedFrameImage" alt="请求 IN 对应画面" data-frame-fullscreen="requested" tabindex="0" role="button" title="点击全屏对比请求 IN 与实际无损 IN" hidden><span id="taskRequestedFramePlaceholder">等待请求边界</span></div>
         </article>
         <article>
           <header><span>实际无损 IN</span><strong id="taskActualFrameTime">—</strong></header>
-          <div class="media-boundary-frame-image-shell"><img id="taskActualFrameImage" alt="实际无损起点对应画面" hidden><span id="taskActualFramePlaceholder">等待关键帧分析</span></div>
+          <div class="media-boundary-frame-image-shell"><img id="taskActualFrameImage" alt="实际无损起点对应画面" data-frame-fullscreen="actual" tabindex="0" role="button" title="点击全屏对比请求 IN 与实际无损 IN" hidden><span id="taskActualFramePlaceholder">等待关键帧分析</span></div>
         </article>
       </div>
     </section>
@@ -93,6 +93,31 @@ export function mountMediaWorkspace(hooks) {
       <label class="media-waveform-zoom">缩放 <input id="taskWaveformZoom" type="range" min="1" max="12" step="1" value="1" aria-label="剪辑时间轴缩放"></label>
     </div>
   </section>
+  <div id="taskFrameFullscreen" class="media-frame-lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="taskFrameFullscreenTitle">
+    <div class="media-frame-lightbox-shell">
+      <header class="media-frame-lightbox-header">
+        <div>
+          <strong id="taskFrameFullscreenTitle">画面全屏预览</strong>
+          <span id="taskFrameFullscreenMeta">—</span>
+        </div>
+        <button type="button" id="taskFrameFullscreenClose" class="secondary" aria-label="关闭全屏画面对比">关闭</button>
+      </header>
+      <div id="taskFrameFullscreenStage" class="media-frame-lightbox-stage" tabindex="0" aria-label="全屏画面对比区域">
+        <img id="taskFrameFullscreenBase" alt="" draggable="false">
+        <img id="taskFrameFullscreenCompare" class="media-frame-lightbox-compare" alt="" draggable="false" hidden>
+        <span id="taskFrameFullscreenDivider" class="media-frame-lightbox-divider" hidden><i></i></span>
+        <span id="taskFrameFullscreenLeftLabel" class="media-frame-lightbox-label media-frame-lightbox-label-left" hidden></span>
+        <span id="taskFrameFullscreenRightLabel" class="media-frame-lightbox-label media-frame-lightbox-label-right" hidden></span>
+      </div>
+      <div id="taskFrameFullscreenControls" class="media-frame-lightbox-controls" hidden>
+        <span>请求 IN</span>
+        <input id="taskFrameFullscreenWipe" type="range" min="0" max="100" step="1" value="50" aria-label="请求帧与实际无损帧对比分割位置">
+        <span>实际无损 IN</span>
+        <button type="button" id="taskFrameFullscreenReset" class="secondary">居中</button>
+      </div>
+      <p class="media-frame-lightbox-help">边界帧：拖动画面分割线或下方滑块比较；双击画面恢复 50/50。按 Esc 退出。</p>
+    </div>
+  </div>
   <p id="taskModeHint" class="note media-mode-hint"></p>
   <div class="media-branch-map" aria-label="当前媒体任务结构">
     <span>共享入口 · 源媒体 / 探测</span><b>→</b><strong>当前任务分支</strong><b>→</b><span>共享出口 · 封装 / 执行 / 验证 / 保存</span>
@@ -274,6 +299,22 @@ export function mountMediaWorkspace(hooks) {
   const actualFramePlaceholder=section.querySelector('#taskActualFramePlaceholder');
   const requestedFrameTime=section.querySelector('#taskRequestedFrameTime');
   const actualFrameTime=section.querySelector('#taskActualFrameTime');
+  const frameFullscreen=section.querySelector('#taskFrameFullscreen');
+  const frameFullscreenShell=frameFullscreen.querySelector('.media-frame-lightbox-shell');
+  const frameFullscreenTitle=section.querySelector('#taskFrameFullscreenTitle');
+  const frameFullscreenMeta=section.querySelector('#taskFrameFullscreenMeta');
+  const frameFullscreenStage=section.querySelector('#taskFrameFullscreenStage');
+  const frameFullscreenBase=section.querySelector('#taskFrameFullscreenBase');
+  const frameFullscreenCompare=section.querySelector('#taskFrameFullscreenCompare');
+  const frameFullscreenDivider=section.querySelector('#taskFrameFullscreenDivider');
+  const frameFullscreenLeftLabel=section.querySelector('#taskFrameFullscreenLeftLabel');
+  const frameFullscreenRightLabel=section.querySelector('#taskFrameFullscreenRightLabel');
+  const frameFullscreenControls=section.querySelector('#taskFrameFullscreenControls');
+  const frameFullscreenWipe=section.querySelector('#taskFrameFullscreenWipe');
+  const frameFullscreenReset=section.querySelector('#taskFrameFullscreenReset');
+  const frameFullscreenClose=section.querySelector('#taskFrameFullscreenClose');
+  let frameFullscreenMode='single';
+  let frameFullscreenDragging=false;
   const clampWaveformTime=value=>Math.max(0,Math.min(waveformDuration||0,Number(value)||0));
   function readBoundary(name,fallback){
     try{return clampWaveformTime(parseMediaTime(get(name)?.value,{empty:fallback,label:timeLabels[name]||'时间'}));}
@@ -308,7 +349,99 @@ export function mountMediaWorkspace(hooks) {
     const time=clampWaveformTime(value);
     return timelineKeyframes.find(key=>key>time+.000001) ?? null;
   };
+  function setFrameFullscreenWipe(value){
+    const percent=Math.max(0,Math.min(100,Number(value)||0));
+    frameFullscreenWipe.value=String(Math.round(percent));
+    frameFullscreenCompare.style.clipPath='inset(0 '+(100-percent)+'% 0 0)';
+    frameFullscreenDivider.style.left=percent+'%';
+  }
+  function closeFrameFullscreen(){
+    if(frameFullscreen.hidden)return;
+    frameFullscreen.hidden=true;
+    frameFullscreenDragging=false;
+    document.body.classList.remove('media-frame-lightbox-open');
+    frameFullscreenBase.removeAttribute('src');
+    frameFullscreenCompare.removeAttribute('src');
+    delete frameFullscreenStage.dataset.mode;
+  }
+  function openFrameFullscreen(kind){
+    const compareReady=!requestedFrameImage.hidden&&!actualFrameImage.hidden&&requestedFrameImage.src&&actualFrameImage.src;
+    const boundary=kind==='requested'||kind==='actual';
+    frameFullscreenMode=boundary&&compareReady?'compare':'single';
+    frameFullscreen.hidden=false;
+    frameFullscreenStage.dataset.mode=frameFullscreenMode;
+    document.body.classList.add('media-frame-lightbox-open');
+    if(frameFullscreenMode==='compare'){
+      frameFullscreenTitle.textContent='请求 IN ↔ 实际无损 IN';
+      frameFullscreenMeta.textContent=(requestedFrameTime.textContent||'—')+' ↔ '+(actualFrameTime.textContent||'—');
+      frameFullscreenBase.src=actualFrameImage.src;
+      frameFullscreenBase.alt='实际无损 IN 全屏画面';
+      frameFullscreenCompare.src=requestedFrameImage.src;
+      frameFullscreenCompare.alt='请求 IN 全屏画面';
+      frameFullscreenCompare.hidden=false;
+      frameFullscreenDivider.hidden=false;
+      frameFullscreenLeftLabel.hidden=false;
+      frameFullscreenRightLabel.hidden=false;
+      frameFullscreenControls.hidden=false;
+      frameFullscreenLeftLabel.textContent='请求 IN · '+(requestedFrameTime.textContent||'—');
+      frameFullscreenRightLabel.textContent='实际无损 IN · '+(actualFrameTime.textContent||'—');
+      setFrameFullscreenWipe(50);
+    }else{
+      const source=kind==='cursor'?framePreviewImage:(kind==='requested'?requestedFrameImage:actualFrameImage);
+      const time=kind==='cursor'?framePreviewTime.textContent:(kind==='requested'?requestedFrameTime.textContent:actualFrameTime.textContent);
+      frameFullscreenTitle.textContent=kind==='cursor'?'时间轴画面预览':kind==='requested'?'请求 IN':'实际无损 IN';
+      frameFullscreenMeta.textContent=time||'—';
+      frameFullscreenBase.src=source.src;
+      frameFullscreenBase.alt=source.alt||'全屏画面预览';
+      frameFullscreenCompare.hidden=true;
+      frameFullscreenDivider.hidden=true;
+      frameFullscreenLeftLabel.hidden=true;
+      frameFullscreenRightLabel.hidden=true;
+      frameFullscreenControls.hidden=true;
+    }
+    requestAnimationFrame(()=>frameFullscreenStage.focus({preventScroll:true}));
+  }
+  function updateFullscreenWipeFromPointer(event){
+    if(frameFullscreenMode!=='compare')return;
+    const rect=frameFullscreenStage.getBoundingClientRect();
+    if(!(rect.width>0))return;
+    setFrameFullscreenWipe((event.clientX-rect.left)/rect.width*100);
+  }
+  for(const image of [framePreviewImage,requestedFrameImage,actualFrameImage]){
+    image.addEventListener('click',()=>{if(!image.hidden&&image.src)openFrameFullscreen(image.dataset.frameFullscreen);});
+    image.addEventListener('keydown',event=>{
+      if((event.key==='Enter'||event.key===' ')&&!image.hidden&&image.src){
+        event.preventDefault();
+        openFrameFullscreen(image.dataset.frameFullscreen);
+      }
+    });
+  }
+  frameFullscreenClose.onclick=closeFrameFullscreen;
+  frameFullscreenReset.onclick=()=>setFrameFullscreenWipe(50);
+  frameFullscreenWipe.addEventListener('input',()=>setFrameFullscreenWipe(frameFullscreenWipe.value));
+  frameFullscreenStage.addEventListener('dblclick',()=>{if(frameFullscreenMode==='compare')setFrameFullscreenWipe(50);});
+  frameFullscreenStage.addEventListener('pointerdown',event=>{
+    if(frameFullscreenMode!=='compare')return;
+    frameFullscreenDragging=true;
+    updateFullscreenWipeFromPointer(event);
+    frameFullscreenStage.setPointerCapture?.(event.pointerId);
+  });
+  frameFullscreenStage.addEventListener('pointermove',event=>{if(frameFullscreenDragging)updateFullscreenWipeFromPointer(event);});
+  const stopFullscreenDrag=event=>{
+    frameFullscreenDragging=false;
+    try{frameFullscreenStage.releasePointerCapture?.(event.pointerId);}catch{}
+  };
+  frameFullscreenStage.addEventListener('pointerup',stopFullscreenDrag);
+  frameFullscreenStage.addEventListener('pointercancel',stopFullscreenDrag);
+  frameFullscreen.addEventListener('click',event=>{if(event.target===frameFullscreen)closeFrameFullscreen();});
+  frameFullscreenShell.addEventListener('click',event=>event.stopPropagation());
+  const frameFullscreenKeyHandler=event=>{
+    if(frameFullscreen.hidden)return;
+    if(event.key==='Escape'){event.preventDefault();closeFrameFullscreen();}
+  };
+  document.addEventListener('keydown',frameFullscreenKeyHandler);
   function clearTimelineFrameCache(){
+    closeFrameFullscreen();
     clearTimeout(timelineFrameTimer);
     clearTimeout(boundaryFrameTimer);
     timelineFrameRequestSeq++;
@@ -1092,5 +1225,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
-  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{closeFrameFullscreen();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
