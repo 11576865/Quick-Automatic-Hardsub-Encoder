@@ -1465,11 +1465,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1487,11 +1482,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 )
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
@@ -1549,11 +1539,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1571,11 +1556,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/video'){
@@ -1634,11 +1614,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1656,11 +1631,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ) -or
             ($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/[A-Za-z0-9]+
@@ -1719,11 +1689,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1741,11 +1706,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 )
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
@@ -1803,11 +1763,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1825,11 +1780,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ){Send-HttpJson $Request 200 (Get-Bink2ImportJobStatus $Matches[1]);return}
         if($Request.Method -eq 'POST' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)/cancel        if($Request.Method -eq 'POST' -and $path -eq '/api/preview'){Send-HttpJson $Request 200 (Invoke-Preview $body);return}
@@ -1876,11 +1826,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1898,11 +1843,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ) -or
             ($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/[A-Za-z0-9]+
@@ -1961,11 +1901,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1983,11 +1918,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 )
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
@@ -2045,11 +1975,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2067,11 +1992,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/video'){
@@ -2130,11 +2050,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2152,11 +2067,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ) -or
             ($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/[A-Za-z0-9]+
@@ -2215,11 +2125,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2237,11 +2142,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 )
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
@@ -2299,11 +2199,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2321,11 +2216,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ){Send-HttpJson $Request 200 (Cancel-Bink2ImportJob $Matches[1]);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/preview'){Send-HttpJson $Request 200 (Invoke-Preview $body);return}
@@ -2372,11 +2262,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2394,11 +2279,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ) -or
             ($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/[A-Za-z0-9]+
@@ -2457,11 +2337,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2479,11 +2354,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 )
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
@@ -2541,11 +2411,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2563,11 +2428,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/video'){
@@ -2626,11 +2486,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2648,11 +2503,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 ) -or
             ($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/[A-Za-z0-9]+
@@ -2711,11 +2561,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2733,11 +2578,6 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
 )
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
@@ -2795,11 +2635,6 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
-if($script:RadVideo){
-    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
-}else{
-    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
-}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -2817,9 +2652,4 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-    foreach($j in $script:ImportJobs.Values){
-        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
-        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
-    }
-    Clear-Bink2ImportStaging
 }
