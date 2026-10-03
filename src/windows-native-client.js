@@ -135,6 +135,11 @@ function installWindowsBridge(config, backendInfo) {
         .then(payload => postCallback('__onNativeFrame', payload))
         .catch(error => postCallback('__onNativeFrame', { requestId, ok: false, error: error.message }));
     },
+    renderNativeOutputFrame(requestId, jobId, timeSeconds, width) {
+      void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/frame', { requestId, timeSeconds, width })
+        .then(payload => postCallback('__onNativeOutputFrame', payload))
+        .catch(error => postCallback('__onNativeOutputFrame', { requestId, ok: false, error: error.message }));
+    },
     renderNativeWaveform(requestId, optionsJson) {
       let options = {};
       try { options = JSON.parse(optionsJson || '{}'); } catch {}
