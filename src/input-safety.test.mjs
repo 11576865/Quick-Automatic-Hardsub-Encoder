@@ -21,7 +21,10 @@ const element = id => {
     disabled: false,
     classList: { add() {} },
     innerHTML: '',
-    checked: false
+    textContent: '',
+    checked: false,
+    getAttribute() { return null; },
+    setAttribute() {}
   });
   return elements.get(id);
 };
