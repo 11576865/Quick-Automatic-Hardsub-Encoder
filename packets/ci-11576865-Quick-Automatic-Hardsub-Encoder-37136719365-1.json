@@ -1,0 +1,45 @@
+{
+  "packet_version": 1,
+  "packet_id": "ci-11576865-Quick-Automatic-Hardsub-Encoder-37136719365-1",
+  "status": "pending",
+  "record_type": "ci_failure",
+  "title": "Test frontend: failure",
+  "summary": "Tracked CI workflow did not complete successfully. Source adapter captured failed job/step evidence when available.",
+  "source_repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "source_event": "workflow_run",
+  "source_ref": "feat/compression-evidence-store",
+  "source_sha": "88976a008268c9132ea8815c9c4a4f7355f31423",
+  "source_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/37136719365",
+  "created_at": "2026-10-03T16:25:45+00:00",
+  "dedupe_key": "workflow_run:11576865/Quick-Automatic-Hardsub-Encoder:37136719365:1",
+  "routing_hints": [
+    "architecture",
+    "interface-grammar",
+    "operations",
+    "red-reason",
+    "reliability"
+  ],
+  "evidence": {
+    "workflow": "Test frontend",
+    "run_id": "37136719365",
+    "run_attempt": "1",
+    "conclusion": "failure",
+    "trigger_event": "pull_request",
+    "failed_jobs": [
+      {
+        "id": 111242630855,
+        "name": "frontend",
+        "conclusion": "failure"
+      }
+    ],
+    "failed_steps": [
+      {
+        "job": "frontend",
+        "number": 11,
+        "name": "Run node src/ui-shell.test.mjs",
+        "conclusion": "failure"
+      }
+    ],
+    "capture_error": ""
+  }
+}
