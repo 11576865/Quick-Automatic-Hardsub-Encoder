@@ -322,6 +322,7 @@ test('input identity is locked across native async work', async () => {
   assert.match(main, /正在请求取消 ' \+ nativePlatformName\(\) \+ ' 压制/);
   assert.doesNotMatch(main, /正在请求取消 Android 原生压制/);
   assert.match(main, /\.font-binding-select, \.plan-interaction, \.remove-saved-font/);
+  assert.match(main, /#taskOutputPolicy \[name\]/);
   assert.match(main, /\$\('clearSavedFontsBtn'\)\.disabled = locked \|\| !state\.savedFonts\.length/);
   assert.match(main, /await deleteSavedFont\(file\);[\s\S]*?invalidateAnalysis\(\);[\s\S]*?需要重新分析与预览/);
   assert.match(main, /await clearSavedFonts\(\);[\s\S]*?invalidateAnalysis\(\);[\s\S]*?需要重新分析与预览/);
