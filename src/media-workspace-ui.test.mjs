@@ -58,6 +58,16 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /id="taskBoundaryFrameInspector"/);
   assert.match(workspace, /id="taskRequestedFrameImage"/);
   assert.match(workspace, /id="taskActualFrameImage"/);
+  assert.match(workspace, /id="taskFrameFullscreen"/);
+  assert.match(workspace, /id="taskFrameFullscreenStage"/);
+  assert.match(workspace, /id="taskFrameFullscreenWipe"/);
+  assert.match(workspace, /data-frame-fullscreen="cursor"/);
+  assert.match(workspace, /data-frame-fullscreen="requested"/);
+  assert.match(workspace, /data-frame-fullscreen="actual"/);
+  assert.match(workspace, /function openFrameFullscreen/);
+  assert.match(workspace, /setFrameFullscreenWipe/);
+  assert.match(workspace, /frameFullscreenStage\.addEventListener\('pointerdown'/);
+  assert.match(workspace, /event\.key==='Escape'/);
   assert.match(workspace, /scheduleCursorFramePreview/);
   assert.match(workspace, /scheduleBoundaryFramePreview/);
   assert.match(workspace, /autoScrollTimeline/);
@@ -109,6 +119,11 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /\.media-keyframe-mark/);
   assert.match(css, /\.media-waveform-actual-start/);
   assert.match(css, /\.media-copy-boundary-info/);
+  assert.match(css, /\.media-frame-lightbox\s*\{/);
+  assert.match(css, /\.media-frame-lightbox-stage\s*\{/);
+  assert.match(css, /\.media-frame-lightbox-divider/);
+  assert.match(css, /\.media-frame-lightbox-controls/);
+  assert.match(css, /body\.media-frame-lightbox-open/);
   assert.match(css, /#taskSave\.task-primary-action/);
   assert.match(css, /#taskRun\.task-secondary-action/);
   assert.match(css, /\.task-progress-grid/);
