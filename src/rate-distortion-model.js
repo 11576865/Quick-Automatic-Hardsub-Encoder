@@ -1,4 +1,5 @@
 function finite(value, fallback = null) {
+  if (value === null || value === undefined || value === '') return fallback;
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }
@@ -336,8 +337,12 @@ export function createSizeQualityFrontier(model, {
   if (!normalizeBudgetOptions(budget)) {
     return { ok: false, reason: 'invalid-size-budget' };
   }
+  if (model.maxBitrate < minimumVideo) {
+    return { ok: false, reason: 'evidence-below-minimum-video-bitrate' };
+  }
+  const minimumEvidenceBitrate = Math.max(model.minBitrate, minimumVideo);
   const minimumFeasibleTargetBytes = targetBytesForVideoBitrate(minimumVideo, budget);
-  const minimumEvidenceTargetBytes = targetBytesForVideoBitrate(model.minBitrate, budget);
+  const minimumEvidenceTargetBytes = targetBytesForVideoBitrate(minimumEvidenceBitrate, budget);
   const maximumEvidenceTargetBytes = targetBytesForVideoBitrate(model.maxBitrate, budget);
 
   const evaluateTargetBytes = targetBytes => {
@@ -364,10 +369,12 @@ export function createSizeQualityFrontier(model, {
   };
 
   const sampleCurve = (count = 64) =>
-    model.sampleCurve(count).map(point => ({
-      ...point,
-      targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
-    }));
+    model.sampleCurve(count)
+      .filter(point => point.bitrate >= minimumEvidenceBitrate)
+      .map(point => ({
+        ...point,
+        targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
+      }));
 
   const knee = model.estimateKnee();
   const kneeTargetBytes = knee
@@ -382,14 +389,17 @@ export function createSizeQualityFrontier(model, {
     containerReservePercent: containerReserve,
     fixedReserveBytes: fixedReserve,
     minimumVideoBitrate: minimumVideo,
+    minimumEvidenceBitrate,
     minimumFeasibleTargetBytes,
     minimumEvidenceTargetBytes,
     maximumEvidenceTargetBytes,
     knee: knee ? { ...knee, targetBytes: kneeTargetBytes } : null,
-    evidencePoints: model.points.map(point => ({
-      ...point,
-      targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
-    })),
+    evidencePoints: model.points
+      .filter(point => point.bitrate >= minimumEvidenceBitrate)
+      .map(point => ({
+        ...point,
+        targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
+      })),
     evaluateTargetBytes,
     sampleCurve
   };
