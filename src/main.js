@@ -53,6 +53,7 @@ const state = {
   nativeWaveformWaiters: new Map(),
   nativeSampleWaiters: new Map(),
   nativeJobId: null,
+  nativeImportJobId: null,
   nativeCompletedJob: null,
   localBenchmarkHistory: [],
   appRelease: null,
@@ -199,6 +200,16 @@ app.innerHTML = `
       </div>
     </div>
     <div id="sourceVideoSummary" class="status-list source-video-summary hidden" aria-live="polite"></div>
+    <div id="sourceAdapterPanel" class="source-adapter-panel hidden" aria-live="polite">
+      <div class="source-adapter-heading"><div><span>输入适配</span><strong id="sourceAdapterTitle">Bink 2</strong></div><span id="sourceAdapterBadge">EXTERNAL</span></div>
+      <p id="sourceAdapterDetail"></p>
+      <div class="button-row source-adapter-actions">
+        <button id="sourceAdapterImportBtn" type="button" class="secondary">使用 RAD Video Tools 导入</button>
+        <button id="sourceAdapterCancelBtn" type="button" class="secondary hidden">取消导入</button>
+        <a id="sourceAdapterInstallLink" class="button-link" href="https://www.radgametools.com/bnkdown.htm" target="_blank" rel="noreferrer">获取 RAD Video Tools</a>
+      </div>
+      <p id="sourceAdapterStatus" class="note"></p>
+    </div>
     <div class="button-row action-row"><button id="analyze" class="primary action-solid action-cyan" disabled>读取视频参数</button></div>
   </section>
 
@@ -774,13 +785,13 @@ function setWindowsNativePickerBusy(role, busy) {
   const config = WINDOWS_NATIVE_PICKERS[role];
   const button = config ? $(config.buttonId) : null;
   if (!button) return;
-  button.disabled = !!busy || state.operationBusy || !!state.nativeJobId;
+  button.disabled = !!busy || state.operationBusy || !!state.nativeJobId || !!state.nativeImportJobId;
   button.setAttribute('aria-busy', busy ? 'true' : 'false');
   button.textContent = busy ? '正在打开系统选择器…' : (role === 'video' ? '选择视频' : role === 'ass' ? '选择 ASS 字幕' : '选择字体文件');
 }
 
 function syncTaskInputMutationLocks() {
-  const locked = state.operationBusy || !!state.nativeJobId;
+  const locked = state.operationBusy || !!state.nativeJobId || !!state.nativeImportJobId;
   for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) {
     if ($(id)) $(id).disabled = locked;
   }
@@ -788,6 +799,11 @@ function syncTaskInputMutationLocks() {
     control.disabled = locked;
   });
   if ($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled = locked || !state.savedFonts.length;
+  if ($('sourceAdapterImportBtn')) {
+    const required = !!state.nativeInputProbe?.sourceAdapterRequired;
+    const available = !!state.nativeInputProbe?.sourceAdapterAvailable || !!state.nativeBackend?.bink2ImportAvailable;
+    $('sourceAdapterImportBtn').disabled = locked || !required || !available;
+  }
   for (const role of Object.keys(WINDOWS_NATIVE_PICKERS)) {
     const button = $(WINDOWS_NATIVE_PICKERS[role].buttonId);
     setWindowsNativePickerBusy(role, button?.getAttribute('aria-busy') === 'true');
@@ -798,7 +814,7 @@ function requestWindowsNativePicker(role) {
   const config = WINDOWS_NATIVE_PICKERS[role];
   const bridge = globalThis.NativeHardsub;
   if (!config || !bridge?.__windowsNative || !bridge?.preparePickerRole) return false;
-  if (state.operationBusy || state.nativeJobId) {
+  if (state.operationBusy || state.nativeJobId || state.nativeImportJobId) {
     log('Windows Native：任务运行期间不能更换输入素材；请先等待完成或取消当前任务。');
     return false;
   }
@@ -835,6 +851,7 @@ $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
   state.nativeInputProbe = null;
   invalidateAnalysis({ clearVideoMetadata: true });
+  renderSourceAdapterState(null);
   notifyMediaInfoChanged();
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
   if ($('videoWebPicker')) $('videoWebPicker').textContent = state.video ? '更换视频' : '选择视频';
@@ -916,6 +933,22 @@ $('acceptWarnings').addEventListener('change', e => {
 });
 
 $('analyze').addEventListener('click', () => runWebTask(analyzeCurrentInputs));
+$('sourceAdapterImportBtn')?.addEventListener('click', () => {
+  void startBink2Import().catch(error => {
+    log('Bink 2 导入启动失败：' + error.message);
+    $('sourceAdapterStatus').textContent = '无法开始导入：' + error.message;
+  });
+});
+$('sourceAdapterCancelBtn')?.addEventListener('click', () => {
+  const jobId = state.nativeImportJobId;
+  if (!jobId) return;
+  try {
+    globalThis.NativeHardsub?.cancelBink2Import?.(jobId);
+    $('sourceAdapterStatus').textContent = '正在请求取消 Bink 2 导入…';
+  } catch (error) {
+    log('取消 Bink 2 导入失败：' + error.message);
+  }
+});
 $('previewBtn').addEventListener('click', () => runWebTask(renderPreviews));
 const QUICK_PRESET_GOALS = ['speed', 'balanced', 'quality'];
 const QUICK_PRESET_LABELS = ['更快', '均衡', '更精细'];
@@ -1579,7 +1612,12 @@ async function bootstrap() {
       : '<span class="ok">Android Native 模式。</span> 正式预览、测试片段和整片压制都直接调用设备内的 FFmpegKitNext / libass；网页后备环境只保留在高级诊断中。';
     updateEnvironmentSummary(false);
     refreshAnalyze();
+    await recoverWindowsNativeVideoSelection();
+    await recoverBink2ImportJob();
     await recoverNativeJob();
+    if (state.video && !state.nativeInputProbe && !state.nativeImportJobId) {
+      try { globalThis.NativeHardsub?.probeSelectedVideo?.(); } catch {}
+    }
     return;
   }
 
@@ -1749,6 +1787,7 @@ function detectNativeBackend() {
       }
 
       const p = state.nativeInputProbe || {};
+      renderSourceAdapterState(p);
       if (p.ok) {
         state.sourceMedia = mediaFromNativeProbe(p);
         renderSourceVideoSummary();
@@ -2774,20 +2813,233 @@ function renderSourceVideoSummary(media = state.sourceMedia) {
       (audioRate > 0 ? ' · ' + formatBitrate(audioRate) : '')
     : '未检测到音轨';
   const color = [media.colorPrimaries, media.colorTransfer, media.colorSpace].filter(Boolean).join(' / ') || '未标记';
+  const decodeState = media.inputDecodeSmoke
+    ? '已通过 1 帧实测'
+    : media.sourceAdapterRequired
+      ? 'FFmpeg 不可解码 · 需要 Bink 2 输入适配'
+      : media.inputDecodeDeferred
+        ? '将在预览 / 执行时验证'
+        : '未通过';
   const rows = [
-    ['源视频编码', media.videoCodec || '未知'],
+    ['源视频编码', media.sourceOriginalKind === 'bink2' ? 'Bink 2' : (media.videoCodec || '未知')],
     ['分辨率', media.width + '×' + media.height],
     ['帧率', Number(media.fps || 0) > 0 ? Number(media.fps).toFixed(3) + ' fps' : '未知'],
     ['时长', Number(media.duration || 0) > 0 ? formatDuration(Number(media.duration)) : '未知'],
     ['源视频码率', videoRate > 0 ? formatBitrate(videoRate) : '未知'],
     ['像素格式', (media.pixelFormat || '未知') + ' · ' + Number(media.bitDepth || 8) + '-bit'],
     ['色彩 / HDR', (media.hdr || media.unsafeColorPipeline ? 'HDR / 高位深风险 · ' : '') + color],
+    ['输入解码', decodeState],
+    ...(media.sourceAdapterApplied ? [['执行输入', 'RAD Video Tools → 临时 AVI']] : []),
     ['音频', audio],
     ['文件大小', Number(media.size || state.video?.size || 0) > 0 ? formatBytes(Number(media.size || state.video?.size || 0)) : '未知']
   ];
   box.innerHTML = '<div class="source-video-summary-heading"><strong>原始视频参数</strong><span>来自 FFprobe / Native probe</span></div>' +
     rows.map(([key,value]) => '<div class="status-item"><span>' + escapeHtml(key) + '</span><span>' + escapeHtml(value) + '</span></div>').join('');
   box.classList.remove('hidden');
+}
+
+function renderSourceAdapterState(probe = state.nativeInputProbe) {
+  const panel = $('sourceAdapterPanel');
+  if (!panel) return;
+  const importing = !!state.nativeImportJobId;
+  const relevant = importing || probe?.sourceAdapter === 'rad-bink2' || probe?.sourceOriginalKind === 'bink2';
+  if (!relevant) {
+    panel.classList.add('hidden');
+    return;
+  }
+
+  const available = !!probe?.sourceAdapterAvailable || !!state.nativeBackend?.bink2ImportAvailable;
+  const applied = !!probe?.sourceAdapterApplied;
+  const required = !!probe?.sourceAdapterRequired;
+  const tool = probe?.sourceAdapterTool || state.nativeBackend?.bink2ImportTool || 'RAD Video Tools';
+
+  panel.classList.remove('hidden');
+  $('sourceAdapterImportBtn').classList.toggle('hidden', importing || applied || !required);
+  $('sourceAdapterCancelBtn').classList.toggle('hidden', !importing);
+  $('sourceAdapterInstallLink').classList.toggle('hidden', available || applied);
+  $('sourceAdapterImportBtn').disabled = importing || !available || !required;
+  $('sourceAdapterCancelBtn').disabled = !importing;
+
+  if (importing) {
+    $('sourceAdapterBadge').textContent = 'IMPORTING';
+    $('sourceAdapterTitle').textContent = '正在导入 Bink 2';
+    $('sourceAdapterDetail').textContent =
+      'RAD Video Tools 正在把 Bink 2 解码到临时 AVI。这里不伪造百分比或 ETA；完成后会用 FFmpeg 再做实际解码验证。';
+    return;
+  }
+
+  if (applied) {
+    $('sourceAdapterBadge').textContent = 'READY';
+    $('sourceAdapterTitle').textContent = 'Bink 2 已导入';
+    $('sourceAdapterDetail').textContent =
+      '当前任务使用 RAD Video Tools 生成的临时 AVI 作为执行输入；原始 .bk2 不会被修改。由于已经发生外部解码，Stream Copy 不再等价于复制原始 Bink 码流。Bink 2 的 Alpha 与多音轨语义仍需按素材实际情况核对。';
+    $('sourceAdapterStatus').textContent = '适配器：' + tool + ' · 临时文件会在更换源视频或关闭 Windows Bridge 时清理。';
+    return;
+  }
+
+  $('sourceAdapterBadge').textContent = available ? 'ADAPTER READY' : 'DECODER MISSING';
+  $('sourceAdapterTitle').textContent = '检测到 Bink 2';
+  if (required && available) {
+    $('sourceAdapterDetail').textContent =
+      'FFprobe 能识别这个 Bink 2 文件，但当前 FFmpeg 不能解码它的视频流。可以调用本机 RAD Video Tools 先解码为临时 AVI，再进入现有转码 / 硬字幕流程。';
+    $('sourceAdapterStatus').textContent = '已检测到：' + tool + '。此依赖由用户单独安装，本项目不捆绑 RAD/Bink 组件。';
+  } else if (required) {
+    $('sourceAdapterDetail').textContent =
+      'FFprobe 能识别这个 Bink 2 文件，但当前 FFmpeg 不能解码它的视频流；同时没有检测到 RAD Video Tools，因此暂时不能进入转码。';
+    $('sourceAdapterStatus').textContent =
+      '安装或解压 RAD Video Tools 后重新启动 Windows Bridge；也可设置 RADVIDEO64 或 RADVIDEO_HOME 指向本机工具。';
+  } else {
+    $('sourceAdapterDetail').textContent =
+      '该源文件带有 Bink 2 标识，但当前执行路径已经能够解码；无需外部导入。';
+    $('sourceAdapterStatus').textContent = '';
+  }
+}
+
+async function monitorBink2Import(jobId) {
+  const bridge = globalThis.NativeHardsub;
+  let statusReadFailures = 0;
+  while (state.nativeImportJobId === jobId) {
+    let result;
+    try {
+      result = JSON.parse(await Promise.resolve(bridge.getBink2ImportStatus(jobId)));
+      statusReadFailures = 0;
+    } catch (error) {
+      statusReadFailures++;
+      log('Bink 2 导入状态读取失败（' + statusReadFailures + '/5）：' + error.message);
+      if (statusReadFailures >= 5) {
+        $('sourceAdapterStatus').textContent =
+          '导入状态连接连续失败；任务 ID 已保留。保持 Windows Bridge 运行并刷新页面，可重新连接当前导入任务。';
+        syncTaskInputMutationLocks();
+        return;
+      }
+      $('sourceAdapterStatus').textContent = '导入状态读取失败，正在重试 ' + statusReadFailures + '/5…';
+      await sleepMs(1000);
+      continue;
+    }
+
+    if (!result?.ok) {
+      statusReadFailures++;
+      if (statusReadFailures >= 5) {
+        $('sourceAdapterStatus').textContent =
+          '无法确认导入任务状态；任务 ID 已保留。保持 Windows Bridge 运行并刷新页面重连。';
+        syncTaskInputMutationLocks();
+        return;
+      }
+      await sleepMs(1000);
+      continue;
+    }
+
+    if (result.state === 'importing' || result.state === 'cancelling') {
+      renderSourceAdapterState();
+      const elapsed = Number(result.elapsedSeconds || 0);
+      $('sourceAdapterStatus').textContent =
+        (result.state === 'cancelling' ? '正在取消导入' : '正在通过 RAD Video Tools 解码') +
+        (elapsed > 0 ? ' · 已用 ' + formatDuration(elapsed) : '') +
+        ' · 不显示未经证实的 ETA';
+      await sleepMs(800);
+      continue;
+    }
+
+    if (result.state === 'completed') {
+      state.nativeImportJobId = null;
+      localStorage.removeItem('nativeBink2ImportJobId');
+      syncTaskInputMutationLocks();
+      invalidateAnalysis({ clearVideoMetadata: true });
+      state.nativeInputProbe = null;
+      $('sourceAdapterPanel').classList.remove('hidden');
+      $('sourceAdapterTitle').textContent = 'Bink 2 导入完成';
+      $('sourceAdapterBadge').textContent = 'VERIFYING';
+      $('sourceAdapterDetail').textContent = '临时 AVI 已生成，正在用 FFprobe / FFmpeg 重新读取并验证可解码性。';
+      $('sourceAdapterStatus').textContent = '临时输入 ' + formatBytes(Number(result.outputBytes || 0)) + '。';
+      log('Bink 2 导入完成；正在重新探测 RAD staging 输入。');
+      bridge.probeSelectedVideo?.();
+      refreshAnalyze();
+      return;
+    }
+
+    state.nativeImportJobId = null;
+    localStorage.removeItem('nativeBink2ImportJobId');
+    syncTaskInputMutationLocks();
+    renderSourceAdapterState(state.nativeInputProbe);
+    if (result.state === 'cancelled') {
+      $('sourceAdapterStatus').textContent = 'Bink 2 导入已取消；原始文件仍保持选中。';
+      log('Bink 2 导入已取消。');
+    } else {
+      $('sourceAdapterStatus').textContent = 'Bink 2 导入失败：' + (result.error || '未知错误');
+      log('Bink 2 导入失败：' + (result.error || '未知错误'));
+    }
+    refreshAnalyze();
+    return;
+  }
+}
+
+async function startBink2Import() {
+  const bridge = globalThis.NativeHardsub;
+  const probe = state.nativeInputProbe;
+  if (!bridge?.__windowsNative || !bridge?.startBink2Import || !bridge?.getBink2ImportStatus) {
+    throw new Error('Windows Native Bink 2 导入桥不可用');
+  }
+  if (!probe?.sourceAdapterRequired) throw new Error('当前源视频不需要 Bink 2 外部导入');
+  if (!probe?.sourceAdapterAvailable && !state.nativeBackend?.bink2ImportAvailable) {
+    throw new Error('未检测到 RAD Video Tools');
+  }
+  if (state.nativeJobId || state.operationBusy || state.nativeImportJobId) {
+    throw new Error('当前已有任务占用输入素材');
+  }
+
+  const started = JSON.parse(await Promise.resolve(bridge.startBink2Import()));
+  if (!started?.ok || !started.jobId) throw new Error(started?.error || '创建 Bink 2 导入任务失败');
+  state.nativeImportJobId = started.jobId;
+  localStorage.setItem('nativeBink2ImportJobId', started.jobId);
+  syncTaskInputMutationLocks();
+  renderSourceAdapterState(probe);
+  log('Bink 2 导入任务已创建：' + started.jobId + ' · ' + (started.converter || 'RAD Video Tools'));
+  void monitorBink2Import(started.jobId);
+}
+
+async function recoverWindowsNativeVideoSelection() {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.__windowsNative || !bridge?.readSelectedVideoInfo || state.video) return;
+  try {
+    const info = JSON.parse(await Promise.resolve(bridge.readSelectedVideoInfo()));
+    if (!info?.ok || !info.name) return;
+    state.video = {
+      name: String(info.name),
+      size: Number(info.size || 0),
+      lastModified: Number(info.lastModified || 0),
+      type: 'video/x-windows-native-selection'
+    };
+    $('videoMeta').textContent = state.video.name + ' · ' + formatBytes(state.video.size) + ' · Windows Native 已恢复';
+    $('videoMeta').className = '';
+    if ($('videoWebPicker')) $('videoWebPicker').textContent = '更换视频';
+    log('Windows Native：已恢复当前视频选择 ' + state.video.name + '。');
+  } catch (error) {
+    log('Windows Native 视频选择恢复失败：' + error.message);
+  }
+}
+
+async function recoverBink2ImportJob() {
+  const bridge = globalThis.NativeHardsub;
+  const jobId = localStorage.getItem('nativeBink2ImportJobId');
+  if (!jobId || !bridge?.getBink2ImportStatus) return;
+  try {
+    const status = JSON.parse(await Promise.resolve(bridge.getBink2ImportStatus(jobId)));
+    if (!status?.ok || !['importing','cancelling','completed'].includes(status.state)) {
+      localStorage.removeItem('nativeBink2ImportJobId');
+      return;
+    }
+    state.nativeImportJobId = jobId;
+    syncTaskInputMutationLocks();
+    renderSourceAdapterState(state.nativeInputProbe);
+    log('恢复 Bink 2 导入任务监视：' + jobId);
+    if (status.state === 'completed') {
+      await monitorBink2Import(jobId);
+    } else {
+      void monitorBink2Import(jobId);
+    }
+  } catch (error) {
+    log('恢复 Bink 2 导入任务失败：' + error.message);
+  }
 }
 
 async function analyzeVideoOnly() {
@@ -2797,6 +3049,14 @@ async function analyzeVideoOnly() {
   if (state.nativeBackend?.available) {
     const p = state.nativeInputProbe;
     if (!p?.ok) throw new Error(p?.error || '原生视频参数仍在读取，请稍后重试');
+    if (p.sourceAdapterRequired) {
+      throw new Error(p.sourceAdapterAvailable
+        ? '检测到 Bink 2；请先使用“RAD Video Tools 导入”再继续。'
+        : '检测到 Bink 2，但当前 FFmpeg 无法解码且未检测到 RAD Video Tools。');
+    }
+    if (p.inputDecodeSmoke === false && !p.inputDecodeDeferred) {
+      throw new Error('视频元数据可读取，但当前 FFmpeg 无法实际解码视频流：' + (p.inputDecodeError || 'decoder unavailable'));
+    }
     state.media = mediaFromNativeProbe(p);
   } else {
     if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本');
@@ -2846,7 +3106,11 @@ function refreshAnalyze() {
   const mode = document.body.dataset.mediaOperation || 'hardsub';
   const fullHardsub = mode === 'hardsub' && !!state.ass;
   button.textContent = fullHardsub ? '分析视频与字幕' : '读取视频参数';
-  if (state.operationBusy) { button.disabled = true; return; }
+  if (state.operationBusy || state.nativeImportJobId) {
+    button.disabled = true;
+    if (state.nativeImportJobId) button.textContent = '正在导入 Bink 2…';
+    return;
+  }
   if (!state.video) { button.disabled = true; return; }
   if (state.nativeBackend?.available) {
     if (!state.nativeInputProbe) {
@@ -2857,6 +3121,16 @@ function refreshAnalyze() {
     if (!state.nativeInputProbe.ok) {
       button.disabled = false;
       button.textContent = '重试读取视频参数';
+      return;
+    }
+    if (state.nativeInputProbe.sourceAdapterRequired) {
+      button.disabled = true;
+      button.textContent = state.nativeInputProbe.sourceAdapterAvailable ? '先导入 Bink 2' : '缺少 Bink 2 解码器';
+      return;
+    }
+    if (state.nativeInputProbe.inputDecodeSmoke === false && !state.nativeInputProbe.inputDecodeDeferred) {
+      button.disabled = true;
+      button.textContent = '视频解码器不可用';
       return;
     }
     button.disabled = false;
@@ -2933,13 +3207,23 @@ async function analyzeAll() {
     } else if (state.nativeBackend?.available) {
       const p = state.nativeInputProbe;
       if (!p?.ok) throw new Error(p?.error || 'Native 输入探测尚未完成');
+      if (p.sourceAdapterRequired) {
+        throw new Error(p.sourceAdapterAvailable
+          ? '检测到 Bink 2；请先使用 RAD Video Tools 导入，再进行字幕分析。'
+          : '检测到 Bink 2；当前 FFmpeg 无法解码，且未检测到 RAD Video Tools。');
+      }
+      if (p.inputDecodeSmoke === false && !p.inputDecodeDeferred) {
+        throw new Error('视频元数据可读取，但当前 FFmpeg 无法实际解码视频流：' + (p.inputDecodeError || 'decoder unavailable'));
+      }
       state.media = mediaFromNativeProbe(p);
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       state.sourceMedia = { ...state.media };
       renderSourceVideoSummary();
       notifyMediaInfoChanged();
-      state.inputDecodeOk = false;
-      log('Native 媒体元数据已读取；首张真实字幕预览将同时完成输入解码验证。');
+      state.inputDecodeOk = p.inputDecodeSmoke === true;
+      log(state.inputDecodeOk
+        ? 'Native 媒体元数据已读取；输入视频 1 帧解码实测已通过。'
+        : 'Native 媒体元数据已读取；首张真实字幕预览将同时完成输入解码验证。');
 
       const androidNative = state.nativeBackend?.backend === 'android-native';
       if (androidNative && state.nativeSelfTest?.bundledFallbackReady && !state.effectiveFonts.length) {
@@ -2966,7 +3250,7 @@ async function analyzeAll() {
         (state.media.pixelFormat || '未知像素格式') + ' · ' +
         state.media.bitDepth + '-bit'
       );
-      log('Native 输入视频实际 1 帧解码测试通过。');
+      if (state.inputDecodeOk) log('Native 输入视频实际 1 帧解码测试通过。');
     } else {
       throw new Error('没有可用的视频处理后端');
     }
@@ -4634,7 +4918,18 @@ function mediaFromNativeProbe(p) {
     audioCodec: p.audioCodec || '',
     audioCodecs: Array.isArray(p.audioCodecs) ? p.audioCodecs : (p.audioCodec ? [p.audioCodec] : []),
     audioTracks: Number(p.audioTracks || 0),
-    audioBitRate: Number(p.audioBitRate || 0)
+    audioBitRate: Number(p.audioBitRate || 0),
+    inputDecodeSmoke: p.inputDecodeSmoke === true,
+    inputDecodeDeferred: p.inputDecodeDeferred === true,
+    inputDecodeError: p.inputDecodeError || '',
+    sourceAdapter: p.sourceAdapter || '',
+    sourceAdapterRequired: p.sourceAdapterRequired === true,
+    sourceAdapterAvailable: p.sourceAdapterAvailable === true,
+    sourceAdapterApplied: p.sourceAdapterApplied === true,
+    sourceAdapterTool: p.sourceAdapterTool || '',
+    sourceOriginalName: p.sourceOriginalName || state.video?.name || '',
+    sourceOriginalKind: p.sourceOriginalKind || '',
+    executionStatSize: Number(p.executionStatSize || 0)
   };
 }
 
@@ -5217,7 +5512,7 @@ function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&am
 // Manual tasks use the same selected files and owned native job lifecycle.
 let manualCancelRequested = false;
 mountMediaWorkspace({
-  busy: () => state.operationBusy || !!state.nativeJobId,
+  busy: () => state.operationBusy || !!state.nativeJobId || !!state.nativeImportJobId,
   onModeChange: mode => {
     if (mode !== 'hardsub') setMobileStage('prepare', { scroll: false });
     queueMicrotask(refreshAnalyze);
@@ -5250,6 +5545,17 @@ mountMediaWorkspace({
     if(state.nativeBackend?.available){
       if(state.nativeBackend.taskSchemaVersion<3)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
       if(!state.nativeInputProbe?.ok)throw new Error('视频尚未完成原生探测');
+      if(state.nativeInputProbe.sourceAdapterRequired)throw new Error(
+        state.nativeInputProbe.sourceAdapterAvailable
+          ? 'Bink 2 需要先通过 RAD Video Tools 导入，之后才能执行转码。'
+          : 'Bink 2 当前无法由 FFmpeg 解码，且未检测到 RAD Video Tools。'
+      );
+      if(state.nativeInputProbe.inputDecodeSmoke===false && !state.nativeInputProbe.inputDecodeDeferred)throw new Error(
+        '视频元数据可读取，但当前 FFmpeg 无法解码视频流：'+(state.nativeInputProbe.inputDecodeError||'decoder unavailable')
+      );
+      if(state.nativeInputProbe.sourceAdapterApplied && operation==='copy')throw new Error(
+        'Bink 2 已经过外部解码导入；“无损快速剪切”不能表示复制原始 Bink 码流，请改用纯视频转码。'
+      );
       return {
         ...mediaFromNativeProbe(state.nativeInputProbe),
         sourceName:state.video.name,
@@ -5272,6 +5578,8 @@ mountMediaWorkspace({
     const width = Math.max(320, Math.min(1280, Math.floor(Number(options?.width) || 720)));
     if (state.nativeBackend?.available) {
       if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
+      if (state.nativeInputProbe.sourceAdapterRequired) throw new Error('Bink 2 需要先通过 RAD Video Tools 导入才能生成时间轴画面');
+      if (state.nativeInputProbe.inputDecodeSmoke === false && !state.nativeInputProbe.inputDecodeDeferred) throw new Error('当前 FFmpeg 无法解码该视频流');
       return requestNativeFrame(time, width);
     }
     if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本预览时间轴画面');
@@ -5300,6 +5608,8 @@ mountMediaWorkspace({
     });
     if (state.nativeBackend?.available) {
       if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
+      if (state.nativeInputProbe.sourceAdapterRequired) throw new Error('Bink 2 需要先通过 RAD Video Tools 导入才能分析时间轴');
+      if (state.nativeInputProbe.inputDecodeSmoke === false && !state.nativeInputProbe.inputDecodeDeferred) throw new Error('当前 FFmpeg 无法解码该视频流');
       const duration = Number(state.nativeInputProbe.duration || 0);
       if (!includeKeyframes && Number(state.nativeInputProbe.audioTracks || 0) < 1) {
         if (allowNoWaveform) return emptyTimeline(duration);
