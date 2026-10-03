@@ -29,6 +29,25 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
           }
+      - name: Guard Windows launcher and console visibility contract
+        shell: powershell
+        run: |
+          $launcher = Get-Content -Raw './windows/start_windows.bat'
+          $background = Get-Content -Raw './windows/start_windows_background.bat'
+          $bridge = Get-Content -Raw './windows/native-bridge.ps1'
+          if ($launcher -match '-WindowStyle\s+Hidden') { throw 'Default Windows launcher still hides the Native Bridge console' }
+          if ($launcher -notmatch 'Quick Hardsub - Windows Native Bridge') { throw 'Default Windows launcher lost its explicit console title' }
+          if ($background -notmatch '-WindowStyle\s+Hidden') { throw 'Optional background launcher is not actually hidden' }
+          foreach ($required in @(
+            'function Write-BridgeLog',
+            'Starting local backend and detecting FFmpeg / GPU capabilities',
+            'Bridge ready:',
+            'Keep this window open while using Windows Native',
+            'Opening the Web UI and handing it this session token'
+          )) {
+            if (-not $bridge.Contains($required)) { throw "Windows Bridge console contract lost: $required" }
+          }
+
       - name: Guard completed-job export terminal state
         shell: powershell
         run: |
