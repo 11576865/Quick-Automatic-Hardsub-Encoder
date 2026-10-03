@@ -370,7 +370,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(windowsHistory, /CompressionHistoryMaxRecords = 500/);
   assert.match(windowsHistory, /LocalApplicationData/);
   assert.match(windowsHistory, /quality-sample/);
-  assert.match(windowsHistory, /sampleMeasurements','testedCrfs/);
+  assert.match(windowsHistory, /sampleMeasurements'[\s\S]*?'testedCrfs/);
   assert.match(windowsHistory, /quality-sample'\)\{'observation'\}else\{'source'\}/);
 
   assert.match(androidBridge, /fun recordCompressionEvidence\(recordJson: String\)/);
