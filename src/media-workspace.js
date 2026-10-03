@@ -202,7 +202,7 @@ export function mountMediaWorkspace(hooks) {
   let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
-  let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='';
+  let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='',timelineFrameGeneration=0;
   const timelineFrameCache=new Map();
   const timelineFramePending=new Map();
   let timelineFrameFetchQueue=Promise.resolve();
@@ -312,6 +312,7 @@ export function mountMediaWorkspace(hooks) {
     clearTimeout(boundaryFrameTimer);
     timelineFrameRequestSeq++;
     boundaryFrameRequestSeq++;
+    timelineFrameGeneration++;
     lastBoundaryPreviewKey='';
     for(const value of timelineFrameCache.values()){
       if(value?.url?.startsWith('blob:'))URL.revokeObjectURL(value.url);
@@ -339,11 +340,16 @@ export function mountMediaWorkspace(hooks) {
     const key=frameCacheKey(clamped);
     if(timelineFrameCache.has(key))return timelineFrameCache.get(key);
     if(timelineFramePending.has(key))return timelineFramePending.get(key);
+    const generation=timelineFrameGeneration;
     const request=timelineFrameFetchQueue
       .catch(()=>{})
       .then(()=>hooks.frame({time:clamped,width:720}))
       .then(result=>{
         if(!result?.url)throw Error('画面预览没有返回图像');
+        if(generation!==timelineFrameGeneration){
+          if(result.url.startsWith?.('blob:'))URL.revokeObjectURL(result.url);
+          throw Error('时间轴画面预览已过期');
+        }
         const value={url:result.url,time:Number(result.time??clamped)};
         timelineFrameCache.set(key,value);
         while(timelineFrameCache.size>24){
