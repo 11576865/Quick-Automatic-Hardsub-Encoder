@@ -305,3 +305,30 @@ test('source video metadata is independent from subtitle preflight', async () =>
   assert.match(css, /\.source-video-summary-heading\s*\{/);
 });
 
+test('input identity is locked across native async work', async () => {
+  const main = await readFile(new URL('./main.js', import.meta.url), 'utf8');
+
+  assert.match(main, /function cancelPendingNativeInputWork\(reason = '输入已变化'\)/);
+  assert.match(main, /state\.nativePreviewWaiters,[\s\S]*?state\.nativeFrameWaiters,[\s\S]*?state\.nativeWaveformWaiters,[\s\S]*?state\.nativeSampleWaiters/);
+  assert.match(main, /cancelPendingNativeInputWork\('输入已变化，旧 Native 请求已取消'\)/);
+  assert.match(main, /video:\s*\{ inputId: 'video', buttonId: 'videoNativePickerBtn'/);
+  assert.match(main, /ass:\s*\{ inputId: 'ass', buttonId: 'assNativePickerBtn'/);
+  assert.match(main, /fonts:\s*\{ inputId: 'fonts', buttonId: 'fontsNativePickerBtn'/);
+  assert.match(main, /function syncTaskInputMutationLocks\(\)/);
+  assert.match(main, /button\.disabled = !!busy \|\| state\.operationBusy \|\| !!state\.nativeJobId/);
+  assert.match(main, /if \(state\.operationBusy \|\| state\.nativeJobId\) \{[\s\S]*?任务运行期间不能更换输入素材/);
+  assert.match(main, /const hasExistingSelection = role === 'video'/);
+  assert.match(main, /if \(!hasExistingSelection && config\?\.metaId/);
+  assert.match(main, /正在请求取消 ' \+ nativePlatformName\(\) \+ ' 压制/);
+  assert.doesNotMatch(main, /正在请求取消 Android 原生压制/);
+  assert.match(main, /\.font-binding-select, \.plan-interaction, \.remove-saved-font/);
+  assert.match(main, /#taskOutputPolicy \[name\]/);
+  assert.match(main, /\$\('clearSavedFontsBtn'\)\.disabled = locked \|\| !state\.savedFonts\.length/);
+  assert.match(main, /await deleteSavedFont\(file\);[\s\S]*?invalidateAnalysis\(\);[\s\S]*?需要重新分析与预览/);
+  assert.match(main, /await clearSavedFonts\(\);[\s\S]*?invalidateAnalysis\(\);[\s\S]*?需要重新分析与预览/);
+  assert.match(main, /let statusReadFailures = 0/);
+  assert.match(main, /statusReadFailures >= 5/);
+  assert.match(main, /当前任务 ID 已保留/);
+  assert.match(main, /state\.nativeJobId = jobId;[\s\S]*?syncTaskInputMutationLocks\(\)/);
+});
+

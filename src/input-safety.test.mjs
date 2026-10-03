@@ -12,7 +12,7 @@ const gbk = new Blob([Buffer.from(ass.slice(0, -2), 'ascii'), new Uint8Array([0x
 await assert.rejects(decodeAssFile(gbk), /无效 UTF-8/);
 
 const source = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8');
-const start = source.indexOf('function invalidateAnalysis(');
+const start = source.indexOf('function cancelPendingNativeInputWork(');
 const end = source.indexOf("for (const [inputId, role]", start);
 assert(start > 0 && end > start);
 const elements = new Map();
@@ -21,13 +21,16 @@ const element = id => {
     disabled: false,
     classList: { add() {} },
     innerHTML: '',
-    checked: false
+    textContent: '',
+    checked: false,
+    getAttribute() { return null; },
+    setAttribute() {}
   });
   return elements.get(id);
 };
 const revoked = [];
 const state = {
-  video: { name: 'new.mp4' }, ass: { name: 'new.ass' }, fonts: [],
+  video: { name: 'new.mp4' }, ass: { name: 'new.ass' }, fonts: [], savedFonts: [],
   analyzedVideo: { name: 'old.mp4' }, analyzedAss: { name: 'old.ass' },
   analyzedFontKey: 'old.ttf', inputDecodeOk: true, media: { duration: 10 },
   assInfo: { previewTimes: [1] }, selectedCodec: 'h264', acceptedWarnings: true,
@@ -39,12 +42,22 @@ const state = {
   },
   latestNativeSampleId: 'sample-id',
   benchmarks: { h264: {} },
+  nativePreviewWaiters: new Map(),
+  nativeFrameWaiters: new Map(),
+  nativeWaveformWaiters: new Map(),
+  nativeSampleWaiters: new Map(),
   operationBusy: false
 };
 let runs = 0;
+const cancelledNativeRequests = [];
+state.nativePreviewWaiters.set('preview-old', { timer: 1, reject: error => cancelledNativeRequests.push(error.message) });
+state.nativeFrameWaiters.set('frame-old', { timer: 2, reject: error => cancelledNativeRequests.push(error.message) });
+state.nativeWaveformWaiters.set('wave-old', { timer: 3, reject: error => cancelledNativeRequests.push(error.message) });
+state.nativeSampleWaiters.set('sample-old', { timer: 4, reject: error => cancelledNativeRequests.push(error.message) });
 const context = vm.createContext({
   state, $: element, document: { querySelectorAll: () => [] },
   URL: { revokeObjectURL: url => revoked.push(url) },
+  clearTimeout() {},
   invalidateQualityCalibration() {}, refreshBenchmarkEnabled() {}, refreshAnalyze() {},
   updateQualityCalibrationControls() {}, setMobileStage() {}, syncMobileStageNav() {}, log() {}, alert() {}
 });
@@ -58,6 +71,16 @@ assert.deepEqual(revoked, ['blob:old', 'blob:base', 'blob:sample-a', 'blob:sampl
 assert.equal(Object.keys(state.selectedTests).length, 0);
 assert.equal(state.latestNativeSampleId, null);
 assert.equal(element('previewBtn').disabled, true);
+assert.deepEqual(cancelledNativeRequests, [
+  '输入已变化，旧 Native 请求已取消',
+  '输入已变化，旧 Native 请求已取消',
+  '输入已变化，旧 Native 请求已取消',
+  '输入已变化，旧 Native 请求已取消'
+]);
+assert.equal(state.nativePreviewWaiters.size, 0);
+assert.equal(state.nativeFrameWaiters.size, 0);
+assert.equal(state.nativeWaveformWaiters.size, 0);
+assert.equal(state.nativeSampleWaiters.size, 0);
 
 let release;
 const pending = context.runWebTask(async () => {
