@@ -108,6 +108,8 @@ const {spawn}=require('node:child_process');
     document.body.innerHTML='<section id="inputCard"></section>';
     const {mountMediaWorkspace}=await import('/src/media-workspace.js');
     window.taskRuns=[];
+    window.taskBehavior='normal';
+    window.taskCancelRequested=false;
     mountMediaWorkspace({
       isWindows:()=>false,
       hasNvenc:()=>false,
@@ -115,13 +117,18 @@ const {spawn}=require('node:child_process');
       busy:()=>false,
       setBusy:()=>{},
       log:()=>{},
-      cancel:()=>{},
+      cancel:()=>{window.taskCancelRequested=true;},
       save:()=>({pending:true}),
       prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
       waveform:async()=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',duration:2181.384,audioTrack:0,width:2400,height:160}),
       run:async(task,media,progress)=>{
         window.taskRuns.push(task);
         progress?.(.42,'正在处理 · 90.0 秒',{state:'encoding',timeSec:90,duration:task.expectedDuration,speed:2.5});
+        if(window.taskBehavior==='cancel'){
+          while(!window.taskCancelRequested)await new Promise(resolve=>setTimeout(resolve,10));
+          throw new Error('cancelled');
+        }
+        if(window.taskBehavior==='fail')throw new Error('simulated encode failure');
         return {
           outputBytes:530000000,
           outputDuration:task.expectedDuration,
@@ -193,6 +200,28 @@ const {spawn}=require('node:child_process');
   if(await page.locator('.task-sample').count()!==3)throw Error('Three sample results missing');
   const runs=await page.evaluate(()=>window.taskRuns);
   if(runs.length!==4 || runs.slice(1).some(t=>t.expectedDuration!==15))throw Error('Sample duration or run count is wrong');
+
+  await page.evaluate(()=>{window.taskBehavior='cancel';window.taskCancelRequested=false;});
+  await page.click('#taskRun');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='encoding');
+  await page.click('#taskCancel');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='idle');
+  if(!(await page.locator('#taskStatus').textContent()).includes('任务已取消'))throw Error('English Native cancellation was misclassified as failure');
+  if((await page.locator('#taskEta').textContent()).trim()!=='已取消')throw Error('Cancelled task did not expose terminal cancellation state');
+  if(await page.locator('#taskRun').isDisabled())throw Error('Run action stayed disabled after cancellation');
+
+  await page.evaluate(()=>{window.taskBehavior='fail';window.taskCancelRequested=false;});
+  await page.click('#taskRun');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='failed');
+  if(!(await page.locator('#taskStatus').textContent()).includes('simulated encode failure'))throw Error('Failure reason was not surfaced');
+  if((await page.locator('#taskEta').textContent()).trim()!=='处理失败')throw Error('Failed task did not expose terminal failure state');
+  if(await page.locator('#taskRun').isDisabled())throw Error('Run action stayed disabled after failure');
+
+  await page.evaluate(()=>{window.taskBehavior='normal';window.taskCancelRequested=false;});
+  await page.click('#taskRun');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='verified');
+  if(await page.locator('#taskSave').isDisabled())throw Error('Successful rerun after failure did not restore save handoff');
+
   if(errors.length)throw Error(errors.join('\n'));
   console.log('Desktop/mobile UI, mode gating, preset preservation: passed');
  }finally{await browser?.close();server.kill();}
