@@ -139,9 +139,11 @@ function logSpaced(min, max, count) {
   if (count <= 1 || min === max) return [min];
   const lo = Math.log(min);
   const hi = Math.log(max);
-  return Array.from({ length: count }, (_, index) =>
-    Math.exp(lo + (hi - lo) * index / (count - 1))
-  );
+  return Array.from({ length: count }, (_, index) => {
+    if (index === 0) return min;
+    if (index === count - 1) return max;
+    return Math.exp(lo + (hi - lo) * index / (count - 1));
+  });
 }
 
 export function fitRateDistortionModel(rawPoints, options = {}) {
