@@ -41,15 +41,45 @@ test('keep requires a supported source container and output naming follows resol
 });
 
 
-test('audio copy warns about playback compatibility without pretending mux failure',()=>{
-  const warning=audioCopyPlaybackWarning(
+test('audio copy guidance is codec-aware without pretending target-player verification',()=>{
+  const dts=audioCopyPlaybackWarning(
     {...base,audio:'copy'},
-    {...media,audioTracks:1,audioCodecs:['dts']}
+    {...media,audioTracks:1,audioCodecs:['dts'],audioBitRate:1536000}
   );
-  assert.equal(warning.code,'audio-copy-playback-unverified');
-  assert.deepEqual(warning.codecs,['dts']);
-  assert.match(warning.message,/成品中存在音轨/);
-  assert.match(warning.message,/转为 AAC/);
+  assert.equal(dts.code,'audio-copy-playback-unverified');
+  assert.equal(dts.severity,'warning');
+  assert.equal(dts.confidence,'player-dependent');
+  assert.deepEqual(dts.codecs,['dts']);
+  assert.match(dts.message,/DTS · 1 轨 · 1536 kb\/s/);
+  assert.match(dts.message,/程序内部最多只能证明音轨存在或当前后端能够解码/);
+  assert.match(dts.message,/转为 AAC/);
+
+  const aac=audioCopyPlaybackWarning(
+    {...base,audio:'copy'},
+    {...media,audioTracks:2,audioCodecs:['aac','aac']}
+  );
+  assert.equal(aac.code,'audio-copy-playback-common');
+  assert.equal(aac.severity,'info');
+  assert.equal(aac.confidence,'common-playback');
+  assert.match(aac.message,/AAC · 2 轨/);
+  assert.match(aac.message,/常见播放环境中通常具有较广支持/);
+  assert.match(aac.message,/外部播放器/);
+
+  const mixed=audioCopyPlaybackWarning(
+    {...base,audio:'copy'},
+    {...media,audioTracks:2,audioCodecs:['aac','dts']}
+  );
+  assert.equal(mixed.severity,'warning');
+  assert.match(mixed.message,/AAC \/ DTS/);
+
+  const unknown=audioCopyPlaybackWarning(
+    {...base,audio:'copy'},
+    {...media,audioTracks:1,audioCodec:'',audioCodecs:[]}
+  );
+  assert.equal(unknown.code,'audio-copy-playback-codec-unknown');
+  assert.equal(unknown.severity,'warning');
+  assert.match(unknown.message,/未能确认/);
+
   assert.equal(audioCopyPlaybackWarning({...base,audio:'aac'},{...media,audioTracks:1}),null);
   assert.equal(audioCopyPlaybackWarning({...base,audio:'copy'},{...media,audioTracks:0}),null);
 });
