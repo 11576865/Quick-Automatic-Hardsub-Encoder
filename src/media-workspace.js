@@ -202,7 +202,7 @@ export function mountMediaWorkspace(hooks) {
   let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
-  let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null;
+  let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0;
   const timelineFrameCache=new Map();
   const storageKey='media-workspace-configs-v2';
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
@@ -309,6 +309,7 @@ export function mountMediaWorkspace(hooks) {
     clearTimeout(timelineFrameTimer);
     clearTimeout(boundaryFrameTimer);
     timelineFrameRequestSeq++;
+    boundaryFrameRequestSeq++;
     for(const value of timelineFrameCache.values()){
       if(value?.url?.startsWith('blob:'))URL.revokeObjectURL(value.url);
     }
@@ -378,23 +379,23 @@ export function mountMediaWorkspace(hooks) {
     requestedFramePlaceholder.hidden=false;requestedFrameImage.hidden=true;
     actualFramePlaceholder.textContent=actual==null?'尚未取得实际无损起点':'正在读取实际无损 IN…';
     actualFramePlaceholder.hidden=false;actualFrameImage.hidden=true;
-    const seq=timelineFrameRequestSeq;
+    const seq=++boundaryFrameRequestSeq;
     boundaryFrameTimer=setTimeout(async()=>{
       try{
         const requestedResult=await getTimelineFrame(requested);
-        if(seq!==timelineFrameRequestSeq)return;
+        if(seq!==boundaryFrameRequestSeq)return;
         requestedFrameImage.src=requestedResult.url;
         requestedFrameImage.hidden=false;
         requestedFramePlaceholder.hidden=true;
         if(actual!=null){
           const actualResult=Math.abs(actual-requested)<.0005?requestedResult:await getTimelineFrame(actual);
-          if(seq!==timelineFrameRequestSeq)return;
+          if(seq!==boundaryFrameRequestSeq)return;
           actualFrameImage.src=actualResult.url;
           actualFrameImage.hidden=false;
           actualFramePlaceholder.hidden=true;
         }
       }catch(error){
-        if(seq!==timelineFrameRequestSeq)return;
+        if(seq!==boundaryFrameRequestSeq)return;
         requestedFramePlaceholder.textContent='边界画面读取失败：'+error.message;
         actualFramePlaceholder.textContent='边界画面读取失败';
       }
