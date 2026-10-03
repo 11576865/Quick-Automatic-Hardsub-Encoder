@@ -108,6 +108,9 @@ function installWindowsBridge(config, backendInfo) {
       if (!lastAssSelection?.base64) return JSON.stringify({ ok: false, error: 'No ASS selected.' });
       return JSON.stringify({ ok: true, ...lastAssSelection });
     },
+    async readSelectedVideoInfo() {
+      return JSON.stringify(await makeRequest(config, 'GET', '/api/selection/video'));
+    },
     probeSelectedVideo() {
       const generation = ++inputProbeGeneration;
       void makeRequest(config, 'POST', '/api/probe')
