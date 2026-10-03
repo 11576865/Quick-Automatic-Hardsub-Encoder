@@ -186,7 +186,8 @@ const {spawn}=require('node:child_process');
       prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
       frame:async options=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',time:Number(options?.time||0),width:Number(options?.width||720)}),
       waveform:async options=>({
-        url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',
+        url:Number(window.mockAudioMedia.audioTracks||0)>0?'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=':null,
+        waveformError:Number(window.mockAudioMedia.audioTracks||0)>0?null:'当前视频没有音频轨',
         duration:2181.384,audioTrack:0,width:2400,height:160,
         keyframes:options?.includeKeyframes?[0,120,240,360,480,600,720,840,960,1080,1200,1320,1440,1560,1680,1800,1920,2040,2160]:[],
         keyframesTruncated:false
@@ -242,6 +243,19 @@ const {spawn}=require('node:child_process');
   if(!/^[0-9]+:[0-5][0-9]/.test(await page.inputValue('[name=start]')))throw Error('Waveform cursor did not write a clock-form start time');
   await page.fill('[name=start]','0');
   await page.locator('[name=start]').blur();
+
+  await page.evaluate(()=>{
+    window.mockAudioMedia={...window.mockAudioMedia,audioTracks:0,audioCodec:'',audioCodecs:[],audioBitRate:0};
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
+  await page.click('#taskWaveformLoad');
+  await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('无音频波形 · 时间范围仍可用'));
+  if((await page.locator('#taskWaveformStatus').textContent()).includes('失败'))throw Error('No-audio transcode timeline still reports analysis failure');
+  if(await page.locator('#taskFramePreviewImage').isHidden())throw Error('No-audio transcode timeline lost source-frame preview');
+  await page.evaluate(()=>{
+    window.mockAudioMedia={...window.mockAudioMedia,audioTracks:1,audioCodec:'aac',audioCodecs:['aac'],audioBitRate:192000};
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
 
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
   await page.click('#taskWaveformLoad');
