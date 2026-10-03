@@ -332,3 +332,37 @@ test('input identity is locked across native async work', async () => {
   assert.match(main, /state\.nativeJobId = jobId;[\s\S]*?syncTaskInputMutationLocks\(\)/);
 });
 
+
+
+test('compression evidence store is wired across Android and Windows', async () => {
+  const [main, windowsClient, windowsBridge, windowsHistory, androidBridge, androidStore, encodeService] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url), 'utf8'),
+    readFile(new URL('./windows-native-client.js', import.meta.url), 'utf8'),
+    readFile(new URL('../windows/native-bridge.ps1', import.meta.url), 'utf8'),
+    readFile(new URL('../windows/compression-history.ps1', import.meta.url), 'utf8'),
+    readFile(new URL('../android-native/app/src/main/java/io/github/quickhardsub/NativeBridge.kt', import.meta.url), 'utf8'),
+    readFile(new URL('../android-native/app/src/main/java/io/github/quickhardsub/NativeBenchmarkStore.kt', import.meta.url), 'utf8'),
+    readFile(new URL('../android-native/app/src/main/java/io/github/quickhardsub/EncodeService.kt', import.meta.url), 'utf8')
+  ]);
+
+  assert.match(main, /qualityEvidenceRecord/);
+  assert.match(main, /persistCompressionEvidence/);
+  assert.match(main, /currentSourceEvidenceKey/);
+  assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
+  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null\)/);
+
+  assert.match(windowsClient, /recordCompressionEvidence\(recordJson\)/);
+  assert.match(windowsClient, /\/api\/history/);
+  assert.match(windowsBridge, /compression-history\.ps1/);
+  assert.match(windowsBridge, /Ensure-CompletedJobHistory/);
+  assert.match(windowsBridge, /Add-ClientCompressionEvidence \$body\.record/);
+  assert.match(windowsHistory, /CompressionHistoryMaxRecords = 500/);
+  assert.match(windowsHistory, /LocalApplicationData/);
+  assert.match(windowsHistory, /quality-sample/);
+
+  assert.match(androidBridge, /fun recordCompressionEvidence\(recordJson: String\)/);
+  assert.match(androidStore, /MAX_RECORDS = 500/);
+  assert.match(androidStore, /fun appendEvidence/);
+  assert.match(encodeService, /"evidenceKind", "full-encode"/);
+  assert.match(encodeService, /"sourceIdentity", request\.optString\("sourceIdentity", ""\)/);
+});
