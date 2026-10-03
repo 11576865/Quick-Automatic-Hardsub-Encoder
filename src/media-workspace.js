@@ -547,8 +547,15 @@ export function mountMediaWorkspace(hooks) {
     verifyOutputImage.alt=hardsub?'硬字幕成品验证帧':'转码成品验证帧';
     const duration=verificationDuration(activeTask,completed);
     const midpoint=Math.max(0,Math.min(Math.max(0,duration-.001),duration/2));
-    verifyTransformWarning.hidden=hardsub||!verificationHasSpatialTransforms(activeTask);
-    verifyTransformWarning.textContent='当前转码任务包含缩放、裁切、旋转或画面滤镜；比较结果会同时包含这些有意处理，不应全部归因于编码损失。';
+    const cadenceChanged=!!activeTask.expectedFps;
+    const spatialChanged=verificationHasSpatialTransforms(activeTask);
+    verifyTransformWarning.hidden=hardsub?!cadenceChanged:!(spatialChanged||cadenceChanged);
+    verifyTransformWarning.textContent=hardsub
+      ? '当前硬压任务指定了目标帧率；参考侧按时间戳重新取源帧，成品侧可能因 CFR 采样 / 丢帧 / 复制帧选择到相邻画面。不要把这种时序采样差异当成编码损失。'
+      : [
+          spatialChanged?'当前转码任务包含缩放、裁切、旋转或画面滤镜；比较结果会同时包含这些有意处理，不应全部归因于编码损失。':'',
+          cadenceChanged?'任务指定了目标帧率；时间点附近可能出现 CFR 帧采样差异。':''
+        ].filter(Boolean).join(' ');
     verifyStatus.textContent=hardsub
       ? '任务完成后可提取“预编码权威字幕参考帧”和硬压成品帧；参考侧包含任务画面滤镜与 libass 字幕，但不包含最终有损编码。'
       : '任务完成后可从任意时间点提取源帧与成品帧；点击任一图进入全屏中线滑块比较。';
