@@ -8,6 +8,43 @@ const {spawn}=require('node:child_process');
   let ready=false;for(let attempt=0;attempt<100;attempt++){try{if((await fetch('http://127.0.0.1:4179/')).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,200));}
   if(!ready)throw Error('Vite startup timeout: '+startupLog);
   browser=await chromium.launch({headless:true});
+
+  // Exercise the real browser refresh boundary for Windows Native. The launch
+  // URL is intentionally one-shot; the second load must reconnect from
+  // tab-scoped sessionStorage after the query credentials have been stripped.
+  const windowsPage=await browser.newPage({viewport:{width:1280,height:900}});
+  let windowsHealthRequests=0;
+  await windowsPage.route('http://127.0.0.1:9347/**',async route=>{
+    const url=new URL(route.request().url());
+    if(url.pathname==='/api/health'){
+      windowsHealthRequests++;
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
+        backend:'windows-native',platform:'windows',available:true,
+        cpu:'CI CPU',gpus:['CI GPU'],ffmpeg:'C:\\ffmpeg.exe',ffprobe:'C:\\ffprobe.exe',
+        ffmpegVersion:'ci',ffmpegSource:'ci',encoders:[],bridgeVersion:4,taskSchemaVersion:3,
+        fpsModeSupported:true,globalOptions:[],multipassSupported:false,multipassFullresSupported:false,hasAss:true
+      })});
+      return;
+    }
+    if(url.pathname==='/api/history'){
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({records:[]})});
+      return;
+    }
+    if(url.pathname==='/api/self-test'){
+      await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,x264EncodeSmoke:true,x265EncodeSmoke:true,svtAv1EncodeSmoke:true,dav1d:true,ssim:true})});
+      return;
+    }
+    await route.fulfill({status:404,contentType:'application/json',body:JSON.stringify({ok:false,error:'not mocked'})});
+  });
+  await windowsPage.goto('http://127.0.0.1:4179/?windowsNative=http%3A%2F%2F127.0.0.1%3A9347&token=ui-smoke-token');
+  await windowsPage.waitForFunction(()=>document.querySelector('#runtimeModeBadge')?.textContent.trim()==='WINDOWS NATIVE');
+  if(new URL(windowsPage.url()).searchParams.has('token'))throw Error('Windows launch token remained in the visible URL after connection');
+  if((await windowsPage.locator('#runtimeModeTitle').textContent()).trim()!=='Windows 本机后端已连接')throw Error('Windows runtime identity is not persistent in the main chrome');
+  await windowsPage.reload();
+  await windowsPage.waitForFunction(()=>document.querySelector('#runtimeModeBadge')?.textContent.trim()==='WINDOWS NATIVE');
+  if(windowsHealthRequests<2)throw Error('Windows page refresh did not reconnect to the localhost Bridge');
+  await windowsPage.close();
+
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:4179/');
