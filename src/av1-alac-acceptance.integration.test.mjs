@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { compileTask, taskInputArgs, taskDurationArgs } from './media-task.js';
 
 const enabled = process.env.FFMPEG_INTEGRATION === '1';
-const run = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 });
+const run = (cmd, args, options = {}) => execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, ...options });
 
 function av1SourceEncoder() {
   const encoders = run('ffmpeg', ['-hide_banner', '-encoders']);
@@ -91,9 +91,13 @@ test('real AV1+ALAC MKV acceptance matrix covers copy and hardsub AAC paths', { 
       outputContainer: 'auto'
     };
 
-    const execute = (task, name, ass = '') => {
+    const execute = (task, name) => {
       const output = join(dir, name + '.' + task.outputExtension);
-      const args = task.outputArgs.map(arg => arg.replace('__ASS__', ass).replace('__FONTS__', dir));
+      // Match the real Native executors: ASS/font assets are staged into a
+      // per-job working directory and the filter graph receives relative
+      // names. This avoids inventing a different escaping contract for raw
+      // absolute Windows filter paths.
+      const args = task.outputArgs.map(arg => arg.replace('__ASS__', 'subtitle.ass').replace('__FONTS__', 'fonts'));
       run('ffmpeg', [
         '-v', 'error', '-y',
         ...taskInputArgs(task),
@@ -102,7 +106,7 @@ test('real AV1+ALAC MKV acceptance matrix covers copy and hardsub AAC paths', { 
         ...args,
         '-f', task.outputFormat,
         output
-      ]);
+      ], { cwd: dir });
       const info = JSON.parse(run('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', output]));
       return { output, info };
     };
@@ -137,6 +141,7 @@ test('real AV1+ALAC MKV acceptance matrix covers copy and hardsub AAC paths', { 
     assertCopiedPayloadPrefix(explicitMkv.output);
 
     const ass = join(dir, 'subtitle.ass');
+    mkdirSync(join(dir, 'fonts'), { recursive: true });
     writeFileSync(ass, [
       '[Script Info]',
       'ScriptType: v4.00+',
@@ -161,7 +166,7 @@ test('real AV1+ALAC MKV acceptance matrix covers copy and hardsub AAC paths', { 
       outputContainer: 'mkv'
     }, media);
     assert.equal(hardMkvTask.outputContainer, 'mkv');
-    const hardMkv = execute(hardMkvTask, 'hardsub-aac-mkv', ass);
+    const hardMkv = execute(hardMkvTask, 'hardsub-aac-mkv');
     assert.equal(hardMkv.info.streams.find(stream => stream.codec_type === 'video')?.codec_name, 'h264');
     assert.equal(hardMkv.info.streams.find(stream => stream.codec_type === 'audio')?.codec_name, 'aac');
     assert.match(String(hardMkv.info.format?.format_name || ''), /matroska/);
@@ -176,7 +181,7 @@ test('real AV1+ALAC MKV acceptance matrix covers copy and hardsub AAC paths', { 
       outputContainer: 'auto'
     }, media);
     assert.equal(autoAacTask.outputContainer, 'mp4');
-    const autoAac = execute(autoAacTask, 'hardsub-aac-auto', ass);
+    const autoAac = execute(autoAacTask, 'hardsub-aac-auto');
     assert.equal(autoAac.info.streams.find(stream => stream.codec_type === 'video')?.codec_name, 'h264');
     assert.equal(autoAac.info.streams.find(stream => stream.codec_type === 'audio')?.codec_name, 'aac');
     assert.match(String(autoAac.info.format?.format_name || ''), /mp4|mov/);
