@@ -85,13 +85,13 @@ app.innerHTML = `
       <div class="app-brand">
         <div class="app-mark" aria-hidden="true"><span>Q</span></div>
         <div class="app-brand-copy">
-          <div class="hero-kicker">MEDIA PROCESSING WORKBENCH</div>
-          <h1>本地媒体处理工作台</h1>
+          <div id="runtimeKicker" class="hero-kicker">WEB MEDIA WORKBENCH</div>
+          <h1 id="runtimeWorkbenchTitle">浏览器媒体处理工作台</h1>
         </div>
       </div>
-      <div class="hero-state" aria-label="处理状态">
+      <div class="hero-state" aria-label="当前运行后端">
         <span class="hero-state-dot"></span>
-        <div><strong>本地处理</strong><small>默认不上传</small></div>
+        <div><strong id="heroRuntimeTitle">浏览器 / WASM</strong><small id="heroRuntimeDetail">文件留在当前浏览器</small></div>
       </div>
     </div>
     <p id="heroSubtitle" class="hero-subtitle">预检 · 真实预览 · 选方案 · 开始压制</p>
@@ -104,6 +104,14 @@ app.innerHTML = `
     </nav>
     <div id="nativeStatusBar" class="native-status-bar hidden" aria-live="polite"></div>
   </header>
+
+  <section id="runtimeModeBanner" class="runtime-mode-banner" data-runtime="web" aria-live="polite">
+    <span id="runtimeModeBadge" class="runtime-mode-badge">WEB / WASM</span>
+    <div class="runtime-mode-copy">
+      <strong id="runtimeModeTitle">浏览器后端</strong>
+      <span id="runtimeModeDetail">由当前浏览器读取文件并运行 FFmpeg WebAssembly；单个视频建议不超过 1 GB。</span>
+    </div>
+  </section>
 
   <nav id="mobileStageNav" class="mobile-stage-nav" aria-label="移动端任务阶段">
     <button type="button" data-mobile-stage-target="prepare" aria-current="step">
@@ -488,16 +496,28 @@ function mobileStageAvailable(stage) {
   return false;
 }
 
+function runtimeWorkbenchTitle(stage = document.body.dataset.mobileStage || 'prepare') {
+  if (state.nativeBackend?.backend === 'windows-native') {
+    return document.body.classList.contains('ui-phone')
+      ? (stage === 'produce' ? 'Windows · 预览与处理' : 'Windows Native')
+      : 'Windows Native 媒体工作台';
+  }
+  if (state.nativeBackend?.backend === 'android-native') {
+    return document.body.classList.contains('ui-phone')
+      ? (stage === 'produce' ? 'Android · 预览与处理' : 'Android Native')
+      : 'Android Native 媒体工作台';
+  }
+  return document.body.classList.contains('ui-phone')
+    ? (stage === 'produce' ? '预览与处理' : '浏览器处理')
+    : '浏览器媒体处理工作台';
+}
+
 function syncMobileStageNav() {
   const nav = $('mobileStageNav');
   if (!nav) return;
   const current = document.body.dataset.mobileStage || 'prepare';
-  const mobileTitle = document.querySelector('.app-brand-copy h1');
-  if (mobileTitle && document.body.classList.contains('ui-phone')) {
-    mobileTitle.textContent = current === 'produce' ? '预览与压制' : '硬字幕压制';
-  } else if (mobileTitle) {
-    mobileTitle.textContent = '快速自动硬字幕压制器';
-  }
+  const mobileTitle = $('runtimeWorkbenchTitle');
+  if (mobileTitle) mobileTitle.textContent = runtimeWorkbenchTitle(current);
   for (const button of nav.querySelectorAll('[data-mobile-stage-target]')) {
     const stage = button.dataset.mobileStageTarget;
     button.disabled = !mobileStageAvailable(stage);
@@ -1684,6 +1704,48 @@ function nativeGpuLabel() {
   return nvencAvailable ? 'NVIDIA GPU · NVENC 可用' : '未检测到 NVIDIA GPU';
 }
 
+function renderRuntimeIdentity() {
+  const backend = state.nativeBackend?.backend || 'web';
+  const windowsNative = backend === 'windows-native' && state.nativeBackend?.available;
+  const androidNative = backend === 'android-native' && state.nativeBackend?.available;
+  const badge = $('runtimeModeBadge');
+  const title = $('runtimeModeTitle');
+  const detail = $('runtimeModeDetail');
+  const banner = $('runtimeModeBanner');
+  const kicker = $('runtimeKicker');
+  const heroTitle = $('heroRuntimeTitle');
+  const heroDetail = $('heroRuntimeDetail');
+
+  document.body.dataset.runtimeBackend = windowsNative ? 'windows-native' : androidNative ? 'android-native' : 'web';
+  if (banner) banner.dataset.runtime = document.body.dataset.runtimeBackend;
+
+  if (windowsNative) {
+    if (badge) badge.textContent = 'WINDOWS NATIVE';
+    if (title) title.textContent = 'Windows 本机后端已连接';
+    if (detail) detail.textContent = '系统 FFmpeg / FFprobe 直接读取本机文件；可使用 CPU 与通过运行探测的 NVIDIA NVENC。刷新页面会继续连接本次 Bridge 会话。';
+    if (kicker) kicker.textContent = 'WINDOWS NATIVE WORKBENCH';
+    if (heroTitle) heroTitle.textContent = 'Windows Native';
+    if (heroDetail) heroDetail.textContent = 'localhost Bridge 已连接';
+  } else if (androidNative) {
+    if (badge) badge.textContent = 'ANDROID NATIVE';
+    if (title) title.textContent = 'Android 原生后端';
+    if (detail) detail.textContent = '通过 SAF 与 FFmpegKitNext 在设备本地处理；正式任务由原生服务持有。';
+    if (kicker) kicker.textContent = 'ANDROID NATIVE WORKBENCH';
+    if (heroTitle) heroTitle.textContent = 'Android Native';
+    if (heroDetail) heroDetail.textContent = '原生 FFmpegKitNext';
+  } else {
+    if (badge) badge.textContent = 'WEB / WASM';
+    if (title) title.textContent = '浏览器后端';
+    if (detail) detail.textContent = '由当前浏览器读取文件并运行 FFmpeg WebAssembly；单个视频建议不超过 1 GB。';
+    if (kicker) kicker.textContent = 'WEB MEDIA WORKBENCH';
+    if (heroTitle) heroTitle.textContent = '浏览器 / WASM';
+    if (heroDetail) heroDetail.textContent = '文件留在当前浏览器';
+  }
+
+  const workbenchTitle = $('runtimeWorkbenchTitle');
+  if (workbenchTitle) workbenchTitle.textContent = runtimeWorkbenchTitle();
+}
+
 function renderNativeStatusBar() {
   const bar = $('nativeStatusBar');
   if (!bar) return;
@@ -1728,6 +1790,7 @@ function applyPlatformPresentation() {
   document.body.classList.toggle('native-app', nativeMode);
   document.body.classList.toggle('windows-native-connected', windowsNative);
   document.body.classList.toggle('android-native-connected', androidNative);
+  renderRuntimeIdentity();
 
   const hero = $('heroSubtitle');
   const appTitle = $('appCardTitle');
