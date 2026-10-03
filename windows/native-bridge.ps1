@@ -126,6 +126,176 @@ function Get-SelectedPath([string]$Role) {
     return [string]$items[0]
 }
 
+function Test-Bink2ImportBusy {
+    foreach ($job in $script:ImportJobs.Values) {
+        if ($job.State -eq 'importing') {
+            try {
+                if (-not $job.Started.Process.HasExited) { return $true }
+            } catch {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Get-Bink2ImportAdapterInfo {
+    $original = Get-OriginalVideoPath
+    $isBink2 = [bool]($original -and (Test-Bink2File $original))
+    if ($isBink2 -and -not $script:RadVideo) {
+        $script:RadVideo = Find-RadVideoConverter $PSScriptRoot
+    }
+    return [pscustomobject]@{
+        kind = if ($isBink2) { 'rad-bink2' } else { '' }
+        isBink2 = $isBink2
+        available = [bool]$script:RadVideo
+        applied = [bool]($script:VideoImport -and $script:VideoImport.Source -eq $original)
+        tool = if ($script:RadVideo) { $script:RadVideo.Label } else { '' }
+        toolSource = if ($script:RadVideo) { $script:RadVideo.Source } else { '' }
+        externalDependency = $true
+        bundled = $false
+    }
+}
+
+function Start-Bink2ImportJob {
+    if (Test-Bink2ImportBusy) { throw 'A Bink 2 import is already running.' }
+    foreach ($existing in $script:Jobs.Values) {
+        if ($existing.State -eq 'encoding') {
+            try {
+                if (-not $existing.Started.Process.HasExited) { throw 'A Native encode job is already running.' }
+            } catch {
+                throw 'A Native encode job is already running.'
+            }
+        }
+    }
+
+    $source = Get-OriginalVideoPath
+    if (-not $source) { throw 'No video selected.' }
+    if (-not (Test-Bink2File $source)) { throw 'Selected source is not a Bink 2 file.' }
+
+    if (-not $script:RadVideo) { $script:RadVideo = Find-RadVideoConverter $PSScriptRoot }
+    if (-not $script:RadVideo) {
+        throw 'RAD Video Tools was not found. Install or extract RAD Video Tools and set RADVIDEO64 or RADVIDEO_HOME.'
+    }
+
+    Clear-Bink2ImportStaging
+    $work = New-BridgeWorkDir 'quick-bink2-import-'
+    $output = Join-Path $work 'decoded.avi'
+    $args = Get-RadBinkConvertArguments $script:RadVideo $source $output
+    $started = Start-BridgeTool $script:RadVideo.Path $args $work
+    $jobId = [guid]::NewGuid().ToString('N')
+    $job = [pscustomobject]@{
+        Id = $jobId
+        Kind = 'bink2-import'
+        State = 'importing'
+        Source = $source
+        Work = $work
+        Output = $output
+        Started = $started
+        StartedAt = [DateTime]::UtcNow
+        Finalized = $false
+        Cancelled = $false
+        Error = ''
+        Converter = $script:RadVideo.Label
+    }
+    $script:ImportJobs[$jobId] = $job
+    Write-BridgeLog ("Bink 2 import "+$jobId+" started via "+$script:RadVideo.Label)
+    return [pscustomobject]@{
+        ok = $true
+        jobId = $jobId
+        state = 'importing'
+        kind = 'rad-bink2'
+        converter = $script:RadVideo.Label
+    }
+}
+
+function Get-Bink2ImportJobStatus([string]$JobId) {
+    if (-not $script:ImportJobs.ContainsKey($JobId)) {
+        return [pscustomobject]@{ ok=$false; error='Unknown Bink 2 import job.' }
+    }
+    $j = $script:ImportJobs[$JobId]
+
+    if ($j.State -eq 'completed') {
+        return [pscustomobject]@{
+            ok=$true; state='completed'; jobId=$JobId; kind='rad-bink2'
+            outputBytes=(Get-Item -LiteralPath $j.Output).Length
+            elapsedSeconds=[Math]::Max(0,([DateTime]::UtcNow-$j.StartedAt).TotalSeconds)
+            sourceAdapterApplied=$true
+        }
+    }
+    if ($j.State -eq 'cancelled') {
+        return [pscustomobject]@{ ok=$true; state='cancelled'; jobId=$JobId; kind='rad-bink2' }
+    }
+    if ($j.State -eq 'failed') {
+        return [pscustomobject]@{ ok=$true; state='failed'; jobId=$JobId; kind='rad-bink2'; error=$j.Error }
+    }
+
+    $p = $j.Started.Process
+    if (-not $p.HasExited) {
+        return [pscustomobject]@{
+            ok=$true; state='importing'; jobId=$JobId; kind='rad-bink2'
+            elapsedSeconds=[Math]::Max(0,([DateTime]::UtcNow-$j.StartedAt).TotalSeconds)
+            converter=$j.Converter
+        }
+    }
+
+    if (-not $j.Finalized) {
+        $j.Finalized = $true
+        $stderr = ''
+        try { $stderr = [string]$j.Started.StdErrTask.Result } catch {}
+        if ($j.Cancelled) {
+            $j.State = 'cancelled'
+            Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+        } elseif ($p.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $j.Output -PathType Leaf) -or (Get-Item -LiteralPath $j.Output).Length -le 0) {
+            $j.State = 'failed'
+            $j.Error = $(if ($stderr.Trim()) { $stderr.Trim() } else { 'RAD Video Tools did not produce a usable AVI staging file.' })
+            Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+        } else {
+            $probe = Invoke-BridgeTool $script:Ffprobe ('-v error -show_streams -show_format -of json ' + (Quote-NativeArg $j.Output))
+            $decode = Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -ss 0 -i ' + (Quote-NativeArg $j.Output) + ' -map 0:v:0 -frames:v 1 -f null NUL')
+            if ($probe.ExitCode -ne 0 -or $decode.ExitCode -ne 0) {
+                $j.State = 'failed'
+                $j.Error = 'RAD import completed, but FFmpeg could not validate/decode the staging AVI. ' + ($probe.StdErr.Trim() + ' ' + $decode.StdErr.Trim()).Trim()
+                Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+            } else {
+                $json = $probe.StdOut | ConvertFrom-Json
+                $videos = @($json.streams | Where-Object { $_.codec_type -eq 'video' })
+                if (-not $videos.Count) {
+                    $j.State = 'failed'
+                    $j.Error = 'RAD import produced no video stream.'
+                    Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+                } else {
+                    $script:VideoImport = [pscustomobject]@{
+                        Source = $j.Source
+                        Path = $j.Output
+                        Work = $j.Work
+                        Kind = 'rad-bink2'
+                        Converter = $j.Converter
+                    }
+                    $j.State = 'completed'
+                    Write-BridgeLog ("Bink 2 import "+$JobId+" completed · "+(Get-Item -LiteralPath $j.Output).Length+" bytes")
+                }
+            }
+        }
+        try { $p.Dispose() } catch {}
+    }
+
+    return Get-Bink2ImportJobStatus $JobId
+}
+
+function Cancel-Bink2ImportJob([string]$JobId) {
+    if (-not $script:ImportJobs.ContainsKey($JobId)) {
+        return [pscustomobject]@{ ok=$false; error='Unknown Bink 2 import job.' }
+    }
+    $j = $script:ImportJobs[$JobId]
+    if ($j.State -ne 'importing') { return [pscustomobject]@{ ok=$true; state=$j.State; jobId=$JobId } }
+    $j.Cancelled = $true
+    try {
+        if (-not $j.Started.Process.HasExited) { $j.Started.Process.Kill() }
+    } catch {}
+    return [pscustomobject]@{ ok=$true; state='cancelling'; jobId=$JobId }
+}
+
 function Show-NativeOpenFileDialog([string]$Filter, [bool]$Multiselect = $false) {
     # The hidden Bridge process still needs a real on-screen owner for modal
     # dialogs. An owner placed at (-32000,-32000) can cause OpenFileDialog to
