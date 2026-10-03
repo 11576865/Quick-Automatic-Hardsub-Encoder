@@ -7,7 +7,7 @@ import java.io.File
 
 object NativeBenchmarkStore {
     private const val SCHEMA_VERSION = 1
-    private const val MAX_RECORDS = 200
+    private const val MAX_RECORDS = 500
     private val lock = Any()
 
     private fun historyFile(context: Context): File =
@@ -48,7 +48,7 @@ object NativeBenchmarkStore {
         }
     }
 
-    fun appendSuccess(context: Context, record: JSONObject) {
+    private fun appendRecord(context: Context, record: JSONObject) {
         synchronized(lock) {
             val root = readRootLocked(context)
             val old = root.optJSONArray("records") ?: JSONArray()
@@ -60,6 +60,7 @@ object NativeBenchmarkStore {
 
             record
                 .put("schemaVersion", SCHEMA_VERSION)
+                .put("evidenceVersion", record.optInt("evidenceVersion", 1))
                 .put("recordedAt", System.currentTimeMillis())
             trimmed.put(record)
 
@@ -70,6 +71,16 @@ object NativeBenchmarkStore {
                     .put("records", trimmed)
             )
         }
+    }
+
+    fun appendSuccess(context: Context, record: JSONObject) {
+        if (!record.has("evidenceKind")) record.put("evidenceKind", "full-encode")
+        if (!record.has("evidenceScope")) record.put("evidenceScope", "device")
+        appendRecord(context, record)
+    }
+
+    fun appendEvidence(context: Context, record: JSONObject) {
+        appendRecord(context, record)
     }
 
     fun snapshot(context: Context): JSONObject =
