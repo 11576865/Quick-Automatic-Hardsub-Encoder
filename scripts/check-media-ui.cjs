@@ -115,6 +115,7 @@ const {spawn}=require('node:child_process');
       cancel:()=>{},
       save:()=>({pending:true}),
       prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
+      frame:async options=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',time:Number(options?.time||0),width:Number(options?.width||720)}),
       waveform:async options=>({
         url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',
         duration:2181.384,audioTrack:0,width:2400,height:160,
@@ -137,9 +138,12 @@ const {spawn}=require('node:child_process');
   await page.click('#taskWaveformLoad');
   await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('第 1 条音轨'));
   if(await page.locator('#taskWaveformImage').isHidden())throw Error('Waveform image did not become visible');
+  await page.waitForFunction(()=>!document.querySelector('#taskFramePreviewImage').hidden);
+  if(!(await page.locator('#taskFramePreviewStatus').textContent()).includes('源视频画面'))throw Error('Timeline cursor frame preview did not become authoritative source-frame preview');
   const waveformBox=await page.locator('#taskWaveformTrack').boundingBox();
   if(!waveformBox)throw Error('Waveform track has no layout box');
   await page.mouse.click(waveformBox.x+waveformBox.width*0.25,waveformBox.y+waveformBox.height*0.5);
+  await page.waitForFunction(()=>document.querySelector('#taskFramePreviewTime').textContent!=='—');
   await page.click('#taskWaveformSetStart');
   if(!/^[0-9]+:[0-5][0-9]/.test(await page.inputValue('[name=start]')))throw Error('Waveform cursor did not write a clock-form start time');
   await page.fill('[name=start]','0');
@@ -153,6 +157,9 @@ const {spawn}=require('node:child_process');
   await page.locator('[name=start]').blur();
   if(!(await page.locator('#taskActualStartTime').textContent()).includes('8:00'))throw Error('Copy timeline did not preview the previous keyframe as actual start: '+await page.locator('#taskActualStartTime').textContent());
   if(!(await page.locator('#taskKeyframeDelta').textContent()).includes('20.000'))throw Error('Copy timeline did not expose requested-vs-actual start delta');
+  await page.waitForFunction(()=>!document.querySelector('#taskRequestedFrameImage').hidden && !document.querySelector('#taskActualFrameImage').hidden);
+  if((await page.locator('#taskRequestedFrameTime').textContent()).trim()!=='8:20')throw Error('Requested boundary frame time is wrong');
+  if((await page.locator('#taskActualFrameTime').textContent()).trim()!=='8:00')throw Error('Actual boundary frame time is wrong');
   await page.screenshot({path:'media-workspace-copy-keyframes-mobile.png',fullPage:true});
   await page.click('#taskKeyframeSnapStart');
   if((await page.inputValue('[name=start]'))!=='8:00')throw Error('Snap-to-keyframe did not align IN to the actual keyframe');
