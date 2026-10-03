@@ -26,7 +26,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -193,7 +193,9 @@ jobs:
       - name: Smoke Windows localhost bridge
         shell: powershell
         run: |
-          $bridge = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @(
+          $stdout = Join-Path $env:RUNNER_TEMP 'native-bridge.stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'native-bridge.stderr.log'
+          $bridge = Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -ArgumentList @(
             '-NoProfile',
             '-ExecutionPolicy','Bypass',
             '-File',(Resolve-Path './windows/native-bridge.ps1'),
@@ -216,7 +218,14 @@ jobs:
                 }
               } catch {}
             }
-            if (-not $ready) { throw 'Windows Native Bridge did not become ready' }
+            if (-not $ready) {
+              Write-Host '--- Native Bridge stdout ---'
+              if (Test-Path $stdout) { Get-Content -Raw $stdout | Write-Host }
+              Write-Host '--- Native Bridge stderr ---'
+              if (Test-Path $stderr) { Get-Content -Raw $stderr | Write-Host }
+              if ($bridge.HasExited) { Write-Host ("Bridge process exit code: " + $bridge.ExitCode) }
+              throw 'Windows Native Bridge did not become ready'
+            }
             if (-not $health.ffmpeg -or -not $health.ffprobe) { throw 'Bridge did not expose FFmpeg/FFprobe' }
             if (-not $health.encoders) { throw 'Bridge did not expose encoder capabilities' }
 
