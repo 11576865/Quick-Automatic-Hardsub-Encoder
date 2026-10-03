@@ -1334,6 +1334,35 @@ $('qualityTargetRange').addEventListener('change', commitQualityTarget);
 $('sizeBudgetRange').addEventListener('input', updateSizeBudgetPreview);
 $('sizeBudgetRange').addEventListener('change', commitSizeBudget);
 
+$('sizeFrontierChart').addEventListener('pointerdown', event => {
+  const targetBytes = sizeFrontierTargetFromPointer(event);
+  if (!(targetBytes > 0)) return;
+  event.preventDefault();
+  state.sizeFrontierPointerId = event.pointerId;
+  $('sizeFrontierChart').setPointerCapture?.(event.pointerId);
+  setSizeFrontierTargetBytes(targetBytes);
+});
+
+$('sizeFrontierChart').addEventListener('pointermove', event => {
+  if (state.sizeFrontierPointerId !== event.pointerId) return;
+  const targetBytes = sizeFrontierTargetFromPointer(event);
+  if (!(targetBytes > 0)) return;
+  event.preventDefault();
+  setSizeFrontierTargetBytes(targetBytes);
+});
+
+const finishSizeFrontierPointer = event => {
+  if (state.sizeFrontierPointerId !== event.pointerId) return;
+  const targetBytes = sizeFrontierTargetFromPointer(event);
+  state.sizeFrontierPointerId = null;
+  try { $('sizeFrontierChart').releasePointerCapture?.(event.pointerId); } catch {}
+  if (targetBytes > 0) setSizeFrontierTargetBytes(targetBytes, { commit: true });
+};
+
+$('sizeFrontierChart').addEventListener('pointerup', finishSizeFrontierPointer);
+$('sizeFrontierChart').addEventListener('pointercancel', finishSizeFrontierPointer);
+$('sizeFrontierChart').addEventListener('keydown', commitSizeFrontierKeyboard);
+
 $('qualityAutoCodec').addEventListener('change', () => {
   commitEncodeGoal($('qualityAutoCodec').checked ? 'efficiency' : 'targetQuality');
 });
@@ -1385,6 +1414,7 @@ document.addEventListener('change', event => {
   }
 });
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
+$('calibrateSizeFrontierBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
 $('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
 $('encodeBtn').addEventListener('click', () => runWebTask(runEncode));
@@ -3727,7 +3757,11 @@ function renderPlanOptions() {
     } else if (plan?.mode === 'crf') {
       param = 'CRF ' + plan.crf + ' · preset ' + plan.preset;
     } else if (plan?.mode === 'budget-rate') {
-      param = '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
+      param = plan.frontierPrediction
+        ? '实测曲线 · ' + formatBytes(plan.sizeCeiling) +
+          ' · ' + formatBitrate(plan.targetVideoBitrate) +
+          ' · SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
+        : '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
     } else if (
       available &&
       (goal === 'targetQuality' || goal === 'efficiency') &&
@@ -3801,9 +3835,15 @@ function updateChosenSummary() {
         '。质量模式不提前给出伪精确的成品体积；正式编码开始后会用实时速度修正 ETA。' + historyHtml;
     }
   } else {
+    const frontierHtml = plan.frontierPrediction
+      ? ' · 实测模型 SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5) +
+        '（样本范围 ' + Number(plan.frontierPrediction.lowerQuality).toFixed(5) +
+        '–' + Number(plan.frontierPrediction.upperQuality).toFixed(5) + '）'
+      : '';
     $('chosenSummary').innerHTML =
       '<strong>' + state.selectedCodec.toUpperCase() + '</strong>' +
       ' · 单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate) +
+      frontierHtml +
       '。规划体积约 ' + formatBytes(plan.plannedBytes) +
       '，预算边界 ' + formatBytes(plan.sizeCeiling) +
       '。这是参数规划值，不承诺最终字节数严格命中。' + historyHtml;
