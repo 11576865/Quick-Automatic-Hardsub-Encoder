@@ -10,7 +10,7 @@ import { EncoderEngine } from './engine.js';
 import { decodeAssFile } from './ass-decoding.js';
 import { detectWindowsNativeBridge } from './windows-native-client.js';
 import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics.js';
-import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, reusableSourceQualityByCrf, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
+import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -3689,44 +3689,9 @@ async function calibrateCodecQuality(codec, target) {
   let best = null;
   let bestQuality = null;
   const tested = new Map();
-  const reusable = reusableSourceQualityByCrf(
-    state.localBenchmarkHistory,
-    currentSourceEvidenceKey(),
-    codec,
-    preset,
-    currentRuntimeEvidenceKey()
-  );
-  for (const record of reusable) {
-    const cachedCrf = Math.round(Number(record.crf));
-    if (cachedCrf < range.min || cachedCrf > range.max) continue;
-    tested.set(cachedCrf, {
-      codec,
-      crf: cachedCrf,
-      preset,
-      ssim: Number(record.ssim),
-      averageSsim: Number(record.averageSsim ?? record.ssim),
-      sampleBitrate: Number(record.sampleBitrate || 0),
-      encodeSpeed: Number(record.averageSpeed || 0),
-      sampleCount: Number(record.sampleCount || 0),
-      reusedEvidence: true
-    });
-  }
 
   const test = async crf => {
-    if (tested.has(crf)) {
-      const cached = tested.get(crf);
-      $('qualityCalibrationResult').textContent =
-        '复用当前源视频的历史质量证据 · ' + codec.toUpperCase() +
-        ' · CRF ' + crf +
-        ' · SSIM ' + Number(cached.ssim).toFixed(5) + '。';
-      log(
-        '复用质量证据 ' + codec.toUpperCase() +
-        ' · CRF ' + crf +
-        ' · SSIM ' + Number(cached.ssim).toFixed(5) +
-        ' · ' + formatBitrate(Number(cached.sampleBitrate || 0))
-      );
-      return cached;
-    }
+    if (tested.has(crf)) return tested.get(crf);
     $('qualityCalibrationResult').textContent =
       '正在校准 ' + codec.toUpperCase() +
       ' · CRF ' + crf +
