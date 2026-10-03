@@ -191,3 +191,36 @@ test('size frontier exposes measured evidence points in target-byte coordinates'
   assert.ok(frontier.evidencePoints[0].targetBytes < frontier.evidencePoints[1].targetBytes);
   assert.ok(frontier.evidencePoints.every(point => point.targetBytes > 0));
 });
+
+
+test('minimum executable bitrate clips the plotted evidence domain', () => {
+  const model = fitRateDistortionModel([
+    { sampleBitrate: 80000, averageSsim: 0.70, ssim: 0.66 },
+    { sampleBitrate: 200000, averageSsim: 0.84, ssim: 0.81 },
+    { sampleBitrate: 500000, averageSsim: 0.94, ssim: 0.92 }
+  ]);
+  const frontier = createSizeQualityFrontier(model, {
+    durationSeconds: 1800,
+    audioBitrate: 64000,
+    reservePercent: 4,
+    containerReservePercent: 1,
+    fixedReserveBytes: 256 * 1024,
+    minimumVideoBitrate: 150000
+  });
+
+  assert.equal(frontier.ok, true);
+  assert.equal(frontier.minimumEvidenceBitrate, 150000);
+  assert.ok(frontier.minimumEvidenceTargetBytes >= frontier.minimumFeasibleTargetBytes);
+  assert.ok(frontier.sampleCurve(64).every(point => point.bitrate >= 150000));
+  assert.ok(frontier.evidencePoints.every(point => point.bitrate >= 150000));
+});
+
+test('null quality fields do not silently become zero-quality evidence', () => {
+  const model = fitRateDistortionModel([
+    { sampleBitrate: 100000, averageSsim: null, ssim: null },
+    { sampleBitrate: 200000, averageSsim: 0.9, ssim: 0.88 }
+  ]);
+
+  assert.equal(model.ok, false);
+  assert.equal(model.points.length, 1);
+});
