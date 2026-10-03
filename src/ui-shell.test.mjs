@@ -346,6 +346,9 @@ test('compression evidence store is wired across Android and Windows', async () 
   ]);
 
   assert.match(main, /qualityEvidenceRecord/);
+  const evidenceModel = await readFile(new URL('./compression-evidence.js', import.meta.url), 'utf8');
+  assert.match(evidenceModel, /evidenceScope: 'observation'/);
+  assert.match(evidenceModel, /record\.evidenceScope === 'source'/);
   assert.match(main, /record\?\.evidenceKind !== 'full-encode'/);
   assert.match(main, /persistCompressionEvidence/);
   assert.match(main, /currentSourceEvidenceKey/);
@@ -358,6 +361,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(windowsBridge, /compression-history\.ps1/);
   assert.match(windowsBridge, /Ensure-CompletedJobHistory/);
   assert.match(windowsBridge, /EncodeSeconds=0\.0;TimedProcessKey=''/);
+  assert.equal((windowsBridge.match(/EncodeSeconds=0\.0;TimedProcessKey=''/g) || []).length, 2);
   assert.match(windowsBridge, /\$j\.EncodeSeconds \+= \[Math\]::Max\(\.001,\(\$p\.ExitTime-\$p\.StartTime\)\.TotalSeconds\)/);
   assert.match(windowsBridge, /\$elapsed=\[Math\]::Max\(\.001,\[double\]\$Job\.EncodeSeconds\)/);
   assert.doesNotMatch(windowsBridge, /\(\(Get-Date\)-\$Job\.StartedAt\)\.TotalSeconds/);
