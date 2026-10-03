@@ -4,6 +4,7 @@ import {
   normalizeCompressionEvidence,
   normalizeCompressionEvidenceList,
   qualityEvidenceRecord,
+  reusableSourceQualityByCrf,
   sourceEvidenceKey,
   sourceQualityEvidence
 } from './compression-evidence.js';
@@ -98,4 +99,37 @@ test('quality evidence is source-scoped and can be recovered as ordered curve po
   assert.equal(points.length, 2);
   assert.deepEqual(points.map(x => x.sampleBitrate), [500000, 900000]);
   assert.ok(points.every(x => x.evidenceScope === 'source'));
+});
+
+
+test('latest reusable CRF evidence wins for the same source and preset', () => {
+  const sourceIdentity = sourceEvidenceKey(media, 'movie.mkv', media.size);
+  const base = qualityEvidenceRecord({
+    media,
+    sourceName: 'movie.mkv',
+    sourceSize: media.size,
+    backend: 'android-native',
+    codec: 'av1',
+    preset: '6',
+    crf: 30,
+    ssim: 0.98,
+    averageSsim: 0.981,
+    sampleBitrate: 800000,
+    encodeSpeed: 0.8,
+    sampleCount: 2
+  });
+  const older = { ...base, recordedAt: 100 };
+  const newer = { ...base, recordedAt: 200, ssim: 0.99, sampleBitrate: 900000 };
+  const otherPreset = { ...base, recordedAt: 300, preset: '8', ssim: 0.995 };
+
+  const reusable = reusableSourceQualityByCrf(
+    [older, newer, otherPreset],
+    sourceIdentity,
+    'av1',
+    '6'
+  );
+
+  assert.equal(reusable.length, 1);
+  assert.equal(reusable[0].ssim, 0.99);
+  assert.equal(reusable[0].sampleBitrate, 900000);
 });
