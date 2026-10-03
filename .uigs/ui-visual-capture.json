@@ -165,6 +165,51 @@
       "limitations": [
         "Mobile production surface only; no encoder job is executed."
       ]
+    },
+    {
+      "id": "QHE.WINDOWS_NATIVE.RUNTIME_DESKTOP_DARK",
+      "surface_ids": [
+        "QHE.SHELL.WORKFLOW_HEADER",
+        "QHE.HELP.RUNTIME",
+        "QHE.DIAGNOSTICS.ENVIRONMENT",
+        "QHE.STATUS.TASK_OVERVIEW"
+      ],
+      "adapter": "windows-runtime-web",
+      "evidence_level": "runtime-backed",
+      "route": "/",
+      "selector": "body",
+      "capture_region": "viewport",
+      "viewport": {
+        "width": 1365,
+        "height": 900,
+        "device_scale_factor": 1
+      },
+      "color_scheme": "dark",
+      "locale": "zh-CN",
+      "ready": {
+        "selector": "#runtimeModeBadge",
+        "state": "visible",
+        "settle_ms": 1000
+      },
+      "fixture": {
+        "state": "windows-native-connected",
+        "bridge": "real localhost Windows Native Bridge",
+        "bridge_port": 9347,
+        "token_source": "workflow ephemeral token"
+      },
+      "source_dependencies": [
+        "src/main.js",
+        "src/style.css",
+        "src/media-workspace.js",
+        "src/media-workspace-ui.css",
+        "windows/native-bridge.ps1",
+        "windows/native-backend.ps1"
+      ],
+      "output_name": "QHE.WINDOWS_NATIVE.RUNTIME_DESKTOP_DARK.png",
+      "limitations": [
+        "Hosted Windows runner uses its installed software FFmpeg toolchain; hardware/NVENC availability reflects the runner and is not fabricated.",
+        "This capture proves a real localhost Bridge health/session connection and product runtime identity; it does not run a full encoding job."
+      ]
     }
   ]
 }
