@@ -27,7 +27,7 @@ const element = id => {
 };
 const revoked = [];
 const state = {
-  video: { name: 'new.mp4' }, ass: { name: 'new.ass' }, fonts: [],
+  video: { name: 'new.mp4' }, ass: { name: 'new.ass' }, fonts: [], savedFonts: [],
   analyzedVideo: { name: 'old.mp4' }, analyzedAss: { name: 'old.ass' },
   analyzedFontKey: 'old.ttf', inputDecodeOk: true, media: { duration: 10 },
   assInfo: { previewTimes: [1] }, selectedCodec: 'h264', acceptedWarnings: true,
