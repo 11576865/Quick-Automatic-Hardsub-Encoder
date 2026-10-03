@@ -385,7 +385,7 @@ class NativeBridge(
             val allowed = listOf(
                 "evidenceVersion", "evidenceKind", "evidenceScope", "sourceIdentity", "runtimeIdentity",
                 "backend", "codec", "preset", "crf", "targetSsim", "ssim",
-                "averageSsim", "sampleBitrate", "averageSpeed", "sampleCount",
+                "averageSsim", "sampleBitrate", "averageSpeed", "sampleCount", "sampleMeasurements",
                 "testedCrfs", "width", "height", "fps", "sourceCodec",
                 "sourcePixelFormat", "sourceVideoBitrate", "duration"
             )
