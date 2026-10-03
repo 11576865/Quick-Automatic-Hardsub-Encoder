@@ -5,6 +5,7 @@ import {
   normalizeCompressionEvidenceList,
   qualityEvidenceRecord,
   reusableSourceQualityByCrf,
+  runtimeEvidenceKey,
   sourceEvidenceKey,
   sourceQualityEvidence
 } from './compression-evidence.js';
@@ -132,4 +133,61 @@ test('latest reusable CRF evidence wins for the same source and preset', () => {
   assert.equal(reusable.length, 1);
   assert.equal(reusable[0].ssim, 0.99);
   assert.equal(reusable[0].sampleBitrate, 900000);
+});
+
+
+test('runtime evidence key changes when encoder runtime changes', () => {
+  const a = runtimeEvidenceKey({
+    backend: 'windows-native',
+    ffmpegVersion: '8.0',
+    bridgeVersion: 5,
+    platform: 'windows',
+    cpu: 'CPU',
+    gpus: ['GPU']
+  });
+  const b = runtimeEvidenceKey({
+    backend: 'windows-native',
+    ffmpegVersion: '8.1',
+    bridgeVersion: 5,
+    platform: 'windows',
+    cpu: 'CPU',
+    gpus: ['GPU']
+  });
+  assert.match(a, /^runtime-[0-9a-f]{8}$/);
+  assert.notEqual(a, b);
+});
+
+test('reusable quality evidence can be restricted to the current runtime', () => {
+  const sourceIdentity = sourceEvidenceKey(media, 'movie.mkv', media.size);
+  const runtimeA = runtimeEvidenceKey({ backend: 'windows-native', ffmpegVersion: '8.0', bridgeVersion: 5 });
+  const runtimeB = runtimeEvidenceKey({ backend: 'windows-native', ffmpegVersion: '8.1', bridgeVersion: 5 });
+  const base = qualityEvidenceRecord({
+    media,
+    sourceName: 'movie.mkv',
+    sourceSize: media.size,
+    backend: 'windows-native',
+    runtimeIdentity: runtimeA,
+    codec: 'av1',
+    preset: '6',
+    crf: 30,
+    ssim: 0.98,
+    averageSsim: 0.981,
+    sampleBitrate: 800000,
+    encodeSpeed: 0.8,
+    sampleCount: 2
+  });
+  const current = { ...base, recordedAt: 100 };
+  const staleRuntime = { ...base, recordedAt: 200, runtimeIdentity: runtimeB, ssim: 0.99 };
+
+  const reusable = reusableSourceQualityByCrf(
+    [current, staleRuntime],
+    sourceIdentity,
+    'av1',
+    '6',
+    runtimeA
+  );
+
+  assert.equal(reusable.length, 1);
+  assert.equal(reusable[0].runtimeIdentity, runtimeA);
+  assert.equal(reusable[0].ssim, 0.98);
 });
