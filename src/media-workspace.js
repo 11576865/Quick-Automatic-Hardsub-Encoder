@@ -247,7 +247,11 @@ export function mountMediaWorkspace(hooks) {
     qualityRange.value = String(value);
     qualityRange.style.setProperty('--media-range-progress', ((value - Number(qualityRange.min)) / (Number(qualityRange.max) - Number(qualityRange.min)) * 100) + '%');
   };
-  qualityRange.addEventListener('input', () => { get('quality').value = qualityRange.value; syncQualityRange(); });
+  qualityRange.addEventListener('input', () => {
+    get('quality').value = qualityRange.value;
+    syncQualityRange();
+    get('quality').dispatchEvent(new Event('input',{bubbles:true}));
+  });
   get('quality').addEventListener('input', syncQualityRange);
   let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
@@ -1386,7 +1390,9 @@ export function mountMediaWorkspace(hooks) {
     finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
   };
   const invalidateCompiledPlan = event => {
-    markCompletedAsPrevious(event?.target?.name||'');
+    const sourceName=event?.target?.name||'';
+    if(!sourceName)return;
+    markCompletedAsPrevious(sourceName);
     activeTask=null;
     renderContainerDecision(null);
     syncAudioPlaybackWarning();
