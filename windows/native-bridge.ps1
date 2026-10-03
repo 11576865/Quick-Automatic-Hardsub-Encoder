@@ -665,7 +665,7 @@ function Start-EncodeJob($Body) {
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
         Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware;ActualStart=0;Task=$null;Request=$request;SourceProbe=$null
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
-        StartedAt=(Get-Date);HistoryRecorded=$false
+        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;encoder=$job.Encoder;hardware=$job.Hardware}
