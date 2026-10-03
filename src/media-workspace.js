@@ -204,6 +204,8 @@ export function mountMediaWorkspace(hooks) {
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
   let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='';
   const timelineFrameCache=new Map();
+  const timelineFramePending=new Map();
+  let timelineFrameFetchQueue=Promise.resolve();
   const storageKey='media-workspace-configs-v2';
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
@@ -336,17 +338,26 @@ export function mountMediaWorkspace(hooks) {
     const clamped=clampWaveformTime(time);
     const key=frameCacheKey(clamped);
     if(timelineFrameCache.has(key))return timelineFrameCache.get(key);
-    const result=await hooks.frame({time:clamped,width:720});
-    if(!result?.url)throw Error('画面预览没有返回图像');
-    const value={url:result.url,time:Number(result.time??clamped)};
-    timelineFrameCache.set(key,value);
-    while(timelineFrameCache.size>24){
-      const oldest=timelineFrameCache.keys().next().value;
-      const removed=timelineFrameCache.get(oldest);
-      if(removed?.url?.startsWith('blob:'))URL.revokeObjectURL(removed.url);
-      timelineFrameCache.delete(oldest);
-    }
-    return value;
+    if(timelineFramePending.has(key))return timelineFramePending.get(key);
+    const request=timelineFrameFetchQueue
+      .catch(()=>{})
+      .then(()=>hooks.frame({time:clamped,width:720}))
+      .then(result=>{
+        if(!result?.url)throw Error('画面预览没有返回图像');
+        const value={url:result.url,time:Number(result.time??clamped)};
+        timelineFrameCache.set(key,value);
+        while(timelineFrameCache.size>24){
+          const oldest=timelineFrameCache.keys().next().value;
+          const removed=timelineFrameCache.get(oldest);
+          if(removed?.url?.startsWith('blob:'))URL.revokeObjectURL(removed.url);
+          timelineFrameCache.delete(oldest);
+        }
+        return value;
+      })
+      .finally(()=>timelineFramePending.delete(key));
+    timelineFramePending.set(key,request);
+    timelineFrameFetchQueue=request.then(()=>undefined,()=>undefined);
+    return request;
   }
   function scheduleCursorFramePreview(time,delay=150){
     if(!hooks.frame||!(waveformDuration>0))return;
