@@ -968,15 +968,20 @@ function updateQualityTargetPreview() {
 function estimatedSizeBudgetAudioBitrate() {
   const media = state.media;
   if (!media?.duration || !state.video) return 0;
+  const audioSettings = guidedHardsubAudioSettings();
+  const tracks = Math.max(0, Number(media.audioTracks || 0));
+  if (audioSettings.audio === 'none') return 0;
+  if (audioSettings.audio === 'aac' || audioSettings.audio === 'libopus') {
+    return Math.max(0, Number(audioSettings.audioBitrate || 128000)) * tracks;
+  }
+
   const totalAverage = Number(state.video.size || 0) * 8 / media.duration;
   const sourceVideoBitrate = getSourceVideoBitrate();
   let audioBitRate = Number(media.audioBitRate || 0);
   if (!audioBitRate && totalAverage > sourceVideoBitrate) {
     audioBitRate = Math.max(0, totalAverage - sourceVideoBitrate);
   }
-  if (!audioBitRate && Number(media.audioTracks || 0) > 0) {
-    audioBitRate = 256000 * Number(media.audioTracks || 0);
-  }
+  if (!audioBitRate && tracks > 0) audioBitRate = 256000 * tracks;
   return Math.max(0, audioBitRate);
 }
 
@@ -1409,8 +1414,11 @@ document.querySelectorAll('[data-size-multiplier]').forEach(button => {
   });
 });
 document.addEventListener('change', event => {
-  if (['outputContainer','audio'].includes(event.target?.name)) {
-    queueMicrotask(refreshGuidedContainerDecision);
+  if (['outputContainer','audio','audioBitrate','audioChannels','audioSampleRate'].includes(event.target?.name)) {
+    queueMicrotask(() => {
+      refreshGuidedContainerDecision();
+      if (($('encodeGoal')?.value || '') === 'sizeBudget') renderPlanOptions();
+    });
   }
 });
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
