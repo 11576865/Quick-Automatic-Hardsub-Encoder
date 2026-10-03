@@ -200,7 +200,7 @@ export function mountMediaWorkspace(hooks) {
   };
   qualityRange.addEventListener('input', () => { get('quality').value = qualityRange.value; syncQualityRange(); });
   get('quality').addEventListener('input', syncQualityRange);
-  let busy = false, completed = null, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
+  let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
   let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='',timelineFrameGeneration=0;
@@ -211,7 +211,7 @@ export function mountMediaWorkspace(hooks) {
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
   const refreshConfigs=()=>{get('savedConfig').innerHTML=Object.keys(configs()).map(n=>`<option value="${escape(n)}">${escape(n)}</option>`).join('');};
-  const applyConfig=raw=>{for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=String(value??'');}updateMode();updateRate();};
+  const applyConfig=raw=>{markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=String(value??'');}updateMode();updateRate();syncQualityRange();};
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
@@ -694,12 +694,18 @@ export function mountMediaWorkspace(hooks) {
   const syncTaskActions = () => {
     const stateName=section.dataset.taskState||'idle',run=section.querySelector('#taskRun'),save=section.querySelector('#taskSave');
     const finished=['verified','save_failed','saved'].includes(stateName);
-    run.textContent=finished?'重新压制':runButtonLabel();
-    run.classList.toggle('task-secondary-action',finished);
-    save.textContent=stateName==='saving'?'正在保存…':stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
+    const previousResult=finished&&completedStale;
+    run.textContent=finished&&!previousResult?'重新压制':runButtonLabel();
+    run.classList.toggle('task-secondary-action',finished&&!previousResult);
+    save.textContent=stateName==='saving'
+      ? '正在保存…'
+      : previousResult
+        ? (stateName==='save_failed'?'重试保存上一成品':stateName==='saved'?'再次保存上一成品':'保存上一成品')
+        : stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
     save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
     save.disabled=busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
     run.disabled=busy||stateName==='saving';
+    section.dataset.completedStale=previousResult?'true':'false';
   };
   const setTaskState = next => {
     section.dataset.taskState=next;
@@ -711,6 +717,28 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#taskStage').textContent=labels[next]||next;
     section.querySelector('#taskRunState').dataset.state=next;
     syncTaskActions();
+  };
+  const nonOutputFields=new Set(['configName','savedConfig','sampleStart','sampleLength']);
+  const markCompletedAsPrevious = sourceName => {
+    const stateName=section.dataset.taskState||'idle';
+    if(!completed||!['verified','save_failed','saved'].includes(stateName))return;
+    if(sourceName&&nonOutputFields.has(sourceName))return;
+    if(completedStale)return;
+    completedStale=true;
+    section.dataset.completedStale='true';
+    section.querySelector('#taskStage').textContent=stateName==='saved'?'上一任务成品已保存':'上一任务成品仍可保存';
+    if(stateName==='save_failed'){
+      status('当前设置已改变；上一任务成品上次保存失败，但仍可直接重试保存。下次执行将使用当前新设置。');
+    }else if(stateName==='verified'){
+      status('当前设置已改变；上一任务成品仍已验证，可先保存。下次执行将使用当前新设置。');
+    }else{
+      status('当前设置已改变；下次执行将使用当前新设置。上一任务成品仍可再次保存。');
+    }
+    syncTaskActions();
+  };
+  const isCancellationError = error => {
+    const text=String(error?.message||error||'').toLowerCase();
+    return text.includes('取消')||text.includes('cancelled')||text.includes('canceled');
   };
   const updateTaskProgress = (p,message,meta={}) => {
     const fraction=Math.max(0,Math.min(1,Number(p)||0));
@@ -875,7 +903,9 @@ export function mountMediaWorkspace(hooks) {
 
   for (const button of modeButtons) {
     button.addEventListener('click', () => {
-      get('operation').value = button.dataset.mediaMode;
+      const nextMode=button.dataset.mediaMode;
+      if(get('operation').value!==nextMode)markCompletedAsPrevious('operation');
+      get('operation').value = nextMode;
       updateMode();
       updateRate();
     });
@@ -937,7 +967,7 @@ export function mountMediaWorkspace(hooks) {
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   get('rateMode').onchange=updateRate;
-  section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();status('配置已保存');}catch(e){status(e.message);}};
+  section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();get('savedConfig').value=name;status('配置已保存');}catch(e){status(e.message);}};
   section.querySelector('#taskRestore').onclick=()=>{try{const raw=configs()[get('savedConfig').value];if(raw){applyConfig(raw);renderPlanSummary(activeTask);}}catch(e){status(e.message);}};
   section.querySelector('#taskDelete').onclick=()=>{const c=configs();delete c[get('savedConfig').value];localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();};
   section.querySelector('#taskExportConfig').onclick=()=>download({version:2,settings:read()},'media-config.json');
@@ -946,7 +976,7 @@ export function mountMediaWorkspace(hooks) {
   get('codec').onchange=()=>{updateEncoder();get('quality').value=get('codec').value==='av1'?'32':'23';syncQualityRange();};
   get('encoder').onchange=()=>{updatePreset();updateRate();};
   get('operation').onchange=()=>{updateMode();updateRate();};
-  section.querySelector('#taskLoadPreset').onclick=()=>{updatePreset(true);get('quality').value=get('codec').value==='av1'?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
+  section.querySelector('#taskLoadPreset').onclick=()=>{markCompletedAsPrevious('preset');updatePreset(true);get('quality').value=get('codec').value==='av1'?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
   let platformKey='';
   const platformTimer=setInterval(()=>{const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
   const prepare=async()=>{
@@ -983,7 +1013,7 @@ export function mountMediaWorkspace(hooks) {
   };
   form.onsubmit=async e=>{
     e.preventDefault();if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
-    busy=true;completed=null;lastReport=null;activeTask=null;taskStartedAt=performance.now();
+    busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;taskStartedAt=performance.now();
     section.querySelector('#taskReport').disabled=true;
     section.querySelector('#taskProgress').value=0;
     section.querySelector('#taskPercent').textContent='0%';
@@ -1013,12 +1043,14 @@ export function mountMediaWorkspace(hooks) {
       setTaskState('verified');
       status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 尚未保存到你的文件夹。下一步：保存成品。');
     }catch(e){
-      if(String(e.message||'').includes('取消')){
+      if(isCancellationError(e)){
         setTaskState('idle');
         status('任务已取消。');
+        section.querySelector('#taskEta').textContent='已取消';
       }else{
         setTaskState('failed');
         status('处理失败：'+e.message);
+        section.querySelector('#taskEta').textContent='处理失败';
       }
       hooks.log(e.stack||e.message);
     }
@@ -1044,13 +1076,14 @@ export function mountMediaWorkspace(hooks) {
         row.innerHTML=`<p>${escape(raw.rateMode==='quality'?'CRF / CQ '+options.quality:'视频码率 '+options.bitrate+' bit/s')} · ${escape(formatSize(report.outputBytes))} · ${report.elapsedSeconds.toFixed(1)} 秒；整片外推 ${escape(formatSize(sampleProjection(report.outputBytes,task.expectedDuration,full.expectedDuration)))}</p>`;
         if(result.blob){const video=document.createElement('video');video.controls=true;video.preload='metadata';const url=URL.createObjectURL(result.blob);sampleUrls.push(url);video.src=url;row.append(video);}
         const save=document.createElement('button');save.type='button';save.textContent='保存此短片';save.onclick=()=>hooks.save(result);row.append(save);
-        const use=document.createElement('button');use.type='button';use.textContent='采用此参数';use.onclick=()=>{if(raw.rateMode==='quality')get('quality').value=options.quality;else{get('rateMode').value='bitrate';get('bitrate').value=options.bitrate;}updateRate();status('已采用此短片参数；请重新检查整片体积预算。');};row.append(use);results.append(row);
+        const use=document.createElement('button');use.type='button';use.textContent='采用此参数';use.onclick=()=>{markCompletedAsPrevious('sample');if(raw.rateMode==='quality')get('quality').value=options.quality;else{get('rateMode').value='bitrate';get('bitrate').value=options.bitrate;}updateRate();status('已采用此短片参数；请重新检查整片体积预算。');};row.append(use);results.append(row);
       }
       status('三组试压完成；浏览器播放受 AV1 / MKV 支持限制，可保存短片比较。');
     }catch(e){status('试压失败：'+e.message);}
     finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
   };
-  const invalidateCompiledPlan = () => {
+  const invalidateCompiledPlan = event => {
+    markCompletedAsPrevious(event?.target?.name||'');
     activeTask=null;
     renderContainerDecision(null);
     syncAudioPlaybackWarning();
