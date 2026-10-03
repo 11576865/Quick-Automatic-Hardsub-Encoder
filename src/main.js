@@ -45,6 +45,7 @@ const state = {
   nativeInputProbe: null,
   nativePreviewWaiters: new Map(),
   nativeFrameWaiters: new Map(),
+  nativeOutputFrameWaiters: new Map(),
   nativeWaveformWaiters: new Map(),
   nativeSampleWaiters: new Map(),
   nativeJobId: null,
@@ -1506,6 +1507,21 @@ function detectNativeBackend() {
       clearTimeout(waiter.timer);
       if (data.ok) waiter.resolve(data);
       else waiter.reject(new Error(data.error || 'Native 时间轴画面预览失败'));
+    };
+
+    globalThis.__onNativeOutputFrame = payload => {
+      let data;
+      try {
+        data = typeof payload === 'string' ? JSON.parse(payload) : payload;
+      } catch {
+        data = { ok: false, error: 'Native 成品验证帧结果解析失败' };
+      }
+      const waiter = state.nativeOutputFrameWaiters.get(data.requestId);
+      if (!waiter) return;
+      state.nativeOutputFrameWaiters.delete(data.requestId);
+      clearTimeout(waiter.timer);
+      if (data.ok) waiter.resolve(data);
+      else waiter.reject(new Error(data.error || 'Native 成品验证帧生成失败'));
     };
 
     globalThis.__onNativeWaveform = payload => {
@@ -4216,6 +4232,22 @@ function requestNativeFrame(timeSeconds, width = 720) {
   });
 }
 
+function requestNativeOutputFrame(jobId, timeSeconds, width = 960) {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.renderNativeOutputFrame) {
+    return Promise.reject(new Error('Native 成品验证帧桥不可用'));
+  }
+  const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      state.nativeOutputFrameWaiters.delete(requestId);
+      reject(new Error('Native 成品验证帧生成超时'));
+    }, 60000);
+    state.nativeOutputFrameWaiters.set(requestId, { resolve, reject, timer });
+    bridge.renderNativeOutputFrame(requestId, String(jobId || ''), Number(timeSeconds || 0), Number(width || 960));
+  });
+}
+
 function requestNativeWaveform(options = {}) {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.renderNativeWaveform) {
@@ -4812,6 +4844,39 @@ mountMediaWorkspace({
       if (allowNoWaveform && !includeKeyframes) return emptyTimeline(duration, error.message || '音频波形生成失败');
       throw error;
     }
+  },
+  verifyFramePair: async options => {
+    if (!state.video) throw new Error('请先选择视频');
+    const completed = options?.completed || {};
+    const sourceTime = Math.max(0, Number(options?.sourceTime) || 0);
+    const outputTime = Math.max(0, Number(options?.outputTime) || 0);
+    const width = Math.max(480, Math.min(1600, Math.floor(Number(options?.width) || 1200)));
+
+    let sourceFrame;
+    let outputFrame;
+    if (state.nativeBackend?.available) {
+      if (!completed.jobId) throw new Error('Native 成品验证缺少 job id');
+      sourceFrame = await requestNativeFrame(sourceTime, width);
+      outputFrame = await requestNativeOutputFrame(completed.jobId, outputTime, width);
+    } else {
+      if (!completed.blob) throw new Error('浏览器成品验证缺少成品数据');
+      if (!await ensureWebEngineReady()) throw new Error('浏览器 FFmpeg 核心不可用');
+      if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
+      if (!state.engine.mediaInfo) await state.engine.probe();
+      sourceFrame = await state.engine.renderTimelineFrame(sourceTime, { width });
+      outputFrame = await state.engine.renderVerifiedOutputFrame(
+        completed.blob,
+        outputTime,
+        { width, extension: options?.outputExtension }
+      );
+    }
+    return {
+      source: sourceFrame,
+      output: outputFrame,
+      sourceTime,
+      outputTime,
+      width
+    };
   },
   validate: async task => {
     if(task.operation==='copy')return;

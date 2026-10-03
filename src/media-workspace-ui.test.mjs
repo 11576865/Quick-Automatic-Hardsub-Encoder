@@ -82,6 +82,15 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /allowNoWaveform:true/);
   assert.match(workspace, /时间范围与画面预览仍可使用/);
   assert.match(workspace, /不是转码前后质量对比/);
+  assert.match(workspace, /id="taskOutputVerification"/);
+  assert.match(workspace, /id="taskVerifyFrames"/);
+  assert.match(workspace, /id="taskVerifyOutputSlider"/);
+  assert.match(workspace, /id="taskVerifySourceImage"/);
+  assert.match(workspace, /id="taskVerifyOutputImage"/);
+  assert.match(workspace, /源帧 ↔ 转码成品/);
+  assert.match(workspace, /openOutputVerificationFullscreen/);
+  assert.match(workspace, /hooks\.verifyFramePair/);
+  assert.match(workspace, /verificationHasSpatialTransforms/);
 
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-hardsub"/);
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-transcode"/);
@@ -127,6 +136,9 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /\.media-frame-lightbox-divider/);
   assert.match(css, /\.media-frame-lightbox-controls/);
   assert.match(css, /body\.media-frame-lightbox-open/);
+  assert.match(css, /\.media-output-verification\s*\{/);
+  assert.match(css, /\.media-output-verification-grid\s*\{/);
+  assert.match(css, /\.media-output-verification-image-shell/);
   assert.match(css, /#taskSave\.task-primary-action/);
   assert.match(css, /#taskRun\.task-secondary-action/);
   assert.match(css, /\.task-progress-grid/);
