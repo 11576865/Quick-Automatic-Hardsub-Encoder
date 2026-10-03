@@ -1158,6 +1158,12 @@ function Handle-Request($Request) {
         if($Request.Method -eq 'GET' -and $path -eq '/api/self-test'){Send-HttpJson $Request 200 (Get-SelfTest);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/history'){Send-HttpJson $Request 200 @{records=@()};return}
         if($Request.Method -eq 'POST' -and $path -match '^/api/pick/(video|ass|fonts)$'){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
+        if($Request.Method -eq 'GET' -and $path -eq '/api/selection/video'){
+            $p=Get-OriginalVideoPath
+            if(-not $p -or -not(Test-Path -LiteralPath $p -PathType Leaf)){Send-HttpJson $Request 200 @{ok=$false;error='No video selected.'};return}
+            $item=Get-Item -LiteralPath $p
+            Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;lastModified=[DateTimeOffset]$item.LastWriteTimeUtc | ForEach-Object {$_.ToUnixTimeMilliseconds()}};return
+        }
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/ass'){
             $p=Get-SelectedPath 'ass';if(-not $p){throw 'No ASS selected.'};$item=Get-Item -LiteralPath $p
             Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($p))};return
