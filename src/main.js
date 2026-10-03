@@ -11,6 +11,7 @@ import { decodeAssFile } from './ass-decoding.js';
 import { detectWindowsNativeBridge } from './windows-native-client.js';
 import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics.js';
 import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
+import { fitRateDistortionModel } from './rate-distortion-model.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -65,6 +66,7 @@ const state = {
   previewRiskTimes: [],
   benchmarks: {},
   qualityCalibration: {},
+  rateDistortionModels: {},
   qualityCalibrationTarget: null,
   qualityCalibrationBusy: false,
   selectedCodec: null,
@@ -3743,7 +3745,8 @@ async function calibrateCodecQuality(codec, target) {
       ...strongest,
       targetSsim: target,
       meetsTarget: strongest.ssim >= target,
-      testedCrfs: [...tested.keys()].sort((a, b) => a - b)
+      testedCrfs: [...tested.keys()].sort((a, b) => a - b),
+      testedPoints: [...tested.values()].sort((a, b) => Number(a.sampleBitrate) - Number(b.sampleBitrate))
     };
   }
 
@@ -3751,7 +3754,8 @@ async function calibrateCodecQuality(codec, target) {
     ...best,
     targetSsim: target,
     meetsTarget: true,
-    testedCrfs: [...tested.keys()].sort((a, b) => a - b)
+    testedCrfs: [...tested.keys()].sort((a, b) => a - b),
+    testedPoints: [...tested.values()].sort((a, b) => Number(a.sampleBitrate) - Number(b.sampleBitrate))
   };
 }
 
@@ -3801,8 +3805,10 @@ async function runQualityCalibration() {
   state.qualityCalibrationBusy = true;
   if (goal === 'efficiency') {
     state.qualityCalibration = {};
+    state.rateDistortionModels = {};
   } else {
     delete state.qualityCalibration[state.selectedCodec];
+    delete state.rateDistortionModels[state.selectedCodec];
   }
   state.qualityCalibrationTarget = target;
   updateQualityCalibrationControls();
@@ -3812,6 +3818,17 @@ async function runQualityCalibration() {
     for (const codec of codecs) {
       try {
         state.qualityCalibration[codec] = await calibrateCodecQuality(codec, target);
+        const rdModel = fitRateDistortionModel(state.qualityCalibration[codec].testedPoints || []);
+        state.rateDistortionModels[codec] = rdModel.ok ? rdModel : null;
+        if (rdModel.ok) {
+          const knee = rdModel.estimateKnee();
+          log(
+            'R-D 模型 ' + codec.toUpperCase() +
+            ' · ' + rdModel.points.length + ' 个实测码率点' +
+            ' · ' + formatBitrate(rdModel.minBitrate) + '–' + formatBitrate(rdModel.maxBitrate) +
+            (knee ? ' · 局部效率拐点≈' + formatBitrate(knee.bitrate) : '')
+          );
+        }
       } catch (error) {
         state.qualityCalibration[codec] = {
           codec,
@@ -3819,6 +3836,7 @@ async function runQualityCalibration() {
           meetsTarget: false,
           error: error.message
         };
+        delete state.rateDistortionModels[codec];
         log('目标质量校准 ' + codec.toUpperCase() + ' 失败：' + error.message);
       }
       renderPlanOptions();
