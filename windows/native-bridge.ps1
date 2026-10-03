@@ -427,6 +427,36 @@ function Invoke-Frame($Body) {
     }
 }
 
+function Invoke-OutputFrame([string]$JobId,$Body) {
+    if(-not $script:Jobs.ContainsKey($JobId)){throw 'Unknown job.'}
+    $job=$script:Jobs[$JobId]
+    $status=Get-JobStatus $JobId
+    if(-not $status.ok -or $status.state -ne 'completed'){throw 'Verified output is not ready.'}
+    if(-not(Test-Path -LiteralPath $job.Output)){throw 'Verified output staging file is missing.'}
+    $time=[Math]::Max(0.0,[double]$Body.timeSeconds)
+    $width=[Math]::Max(320,[Math]::Min(1600,$(if($Body.width){[int]$Body.width}else{960})))
+    $work=New-BridgeWorkDir 'quick-hardsub-output-frame-'
+    try {
+        $output=Join-Path $work 'frame.png'
+        $timeText=$time.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
+        $args='-hide_banner -loglevel error -y -ss '+$timeText+
+            ' -i '+(Quote-NativeArg $job.Output)+
+            ' -map 0:v:0 -an -sn -frames:v 1 -vf scale='+$width+':-2:force_original_aspect_ratio=decrease -c:v png '+
+            (Quote-NativeArg $output)
+        $result=Invoke-BridgeTool $script:Ffmpeg $args $work
+        if($result.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $output)){throw ($result.StdErr.Trim())}
+        $bytes=[IO.File]::ReadAllBytes($output)
+        if(-not $bytes.Length){throw 'Output verification frame is empty.'}
+        return [pscustomobject]@{
+            requestId=[string]$Body.requestId;ok=$true
+            url=('data:image/png;base64,'+[Convert]::ToBase64String($bytes))
+            time=$time;width=$width
+        }
+    } finally {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Invoke-Waveform($Body) {
     $video = Get-SelectedPath 'video'
     if (-not $video) { throw 'No video selected.' }
@@ -886,7 +916,102 @@ function Handle-Request($Request) {
             if($script:Jobs.ContainsKey($id)){$j=$script:Jobs[$id];$j.Cancelled=$true;try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
             Send-HttpJson $Request 200 @{ok=$true};return
         }
-        if($path -match '^/api/jobs/([A-Za-z0-9]+)/export$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Export-Job $Matches[1] ([string]$body.suggestedName));return}
+        if($path -match '^/api/jobs/([A-Za-z0-9]+)/frame        Send-HttpJson $Request 404 @{ok=$false;error='Unknown bridge endpoint.'}
+    }catch{
+        Write-BridgeLog ($Request.Method+' '+$Request.Path+' failed: '+$_.Exception.Message) 'ERROR'
+        Send-HttpJson $Request 500 @{ok=$false;error=$_.Exception.Message}
+    }
+}
+
+if(-not $script:Ffmpeg -or -not $script:Ffprobe){
+    Write-BridgeLog 'FFmpeg / FFprobe was not found. Install Gyan.FFmpeg or place the toolchain under tools\ffmpeg\bin.' 'ERROR'
+    [Windows.Forms.MessageBox]::Show('Windows Native Bridge requires ffmpeg.exe and ffprobe.exe. Install Gyan.FFmpeg with winget or place them in tools\ffmpeg\bin.','Quick Hardsub - FFmpeg missing')|Out-Null
+    exit 2
+}
+
+$listener=$null
+for($candidate=$Port;$candidate -lt ($Port+20);$candidate++){
+    try{$listener=New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback,$candidate);$listener.Start();$Port=$candidate;break}catch{$listener=$null}
+}
+if(-not $listener){throw 'Could not bind a localhost port for Windows Native Bridge.'}
+
+Write-BridgeLog ("Bridge ready: http://127.0.0.1:"+$Port)
+Write-BridgeLog ("FFmpeg: "+$script:Ffmpeg)
+if($script:Capabilities){
+    Write-BridgeLog ("FFmpeg version: "+$script:Capabilities.FfmpegVersion+" · source: "+$script:Capabilities.FfmpegSource)
+    Write-BridgeLog ("CPU: "+$script:Capabilities.Cpu)
+    $gpus=@($script:Capabilities.Gpus | Where-Object { $_ })
+    Write-BridgeLog ("GPU: "+$(if($gpus.Count){$gpus -join ' / '}else{'not detected'}))
+    $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
+    Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
+}
+Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
+Write-Host ''
+
+$launch='https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/?windowsNative='+[uri]::EscapeDataString("http://127.0.0.1:$Port")+'&token='+[uri]::EscapeDataString($script:Token)
+if(-not $NoBrowser){
+    Write-BridgeLog 'Opening the Web UI and handing it this session token.'
+    Start-Process $launch|Out-Null
+}
+
+try{
+    while($true){
+        $client=$listener.AcceptTcpClient()
+        try{$request=Read-HttpRequest $client;if($request){Handle-Request $request}}catch{}finally{$client.Close()}
+    }
+}finally{
+    try{$listener.Stop()}catch{}
+    foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
+}
+ -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-OutputFrame $Matches[1] $body);return}
+        if($path -match '^/api/jobs/([A-Za-z0-9]+)/export        Send-HttpJson $Request 404 @{ok=$false;error='Unknown bridge endpoint.'}
+    }catch{
+        Write-BridgeLog ($Request.Method+' '+$Request.Path+' failed: '+$_.Exception.Message) 'ERROR'
+        Send-HttpJson $Request 500 @{ok=$false;error=$_.Exception.Message}
+    }
+}
+
+if(-not $script:Ffmpeg -or -not $script:Ffprobe){
+    Write-BridgeLog 'FFmpeg / FFprobe was not found. Install Gyan.FFmpeg or place the toolchain under tools\ffmpeg\bin.' 'ERROR'
+    [Windows.Forms.MessageBox]::Show('Windows Native Bridge requires ffmpeg.exe and ffprobe.exe. Install Gyan.FFmpeg with winget or place them in tools\ffmpeg\bin.','Quick Hardsub - FFmpeg missing')|Out-Null
+    exit 2
+}
+
+$listener=$null
+for($candidate=$Port;$candidate -lt ($Port+20);$candidate++){
+    try{$listener=New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback,$candidate);$listener.Start();$Port=$candidate;break}catch{$listener=$null}
+}
+if(-not $listener){throw 'Could not bind a localhost port for Windows Native Bridge.'}
+
+Write-BridgeLog ("Bridge ready: http://127.0.0.1:"+$Port)
+Write-BridgeLog ("FFmpeg: "+$script:Ffmpeg)
+if($script:Capabilities){
+    Write-BridgeLog ("FFmpeg version: "+$script:Capabilities.FfmpegVersion+" · source: "+$script:Capabilities.FfmpegSource)
+    Write-BridgeLog ("CPU: "+$script:Capabilities.Cpu)
+    $gpus=@($script:Capabilities.Gpus | Where-Object { $_ })
+    Write-BridgeLog ("GPU: "+$(if($gpus.Count){$gpus -join ' / '}else{'not detected'}))
+    $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
+    Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
+}
+Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
+Write-Host ''
+
+$launch='https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/?windowsNative='+[uri]::EscapeDataString("http://127.0.0.1:$Port")+'&token='+[uri]::EscapeDataString($script:Token)
+if(-not $NoBrowser){
+    Write-BridgeLog 'Opening the Web UI and handing it this session token.'
+    Start-Process $launch|Out-Null
+}
+
+try{
+    while($true){
+        $client=$listener.AcceptTcpClient()
+        try{$request=Read-HttpRequest $client;if($request){Handle-Request $request}}catch{}finally{$client.Close()}
+    }
+}finally{
+    try{$listener.Stop()}catch{}
+    foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
+}
+ -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Export-Job $Matches[1] ([string]$body.suggestedName));return}
         Send-HttpJson $Request 404 @{ok=$false;error='Unknown bridge endpoint.'}
     }catch{
         Write-BridgeLog ($Request.Method+' '+$Request.Path+' failed: '+$_.Exception.Message) 'ERROR'
