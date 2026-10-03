@@ -126,7 +126,30 @@ jobs:
               throw 'RADVIDEO64 override was not resolved'
             }
             $args = Get-RadBinkConvertArguments $tool 'C:\input file.bk2' 'C:\output file.avi'
-            if ($args -notmatch '^binkconv ' -or $args -notmatch '/#
+            $hashSwitch = '/' + [char]35
+            if ($args -notmatch '^binkconv ' -or -not $args.EndsWith($hashSwitch) -or $args -notmatch '"C:\\input file\.bk2"') {
+              throw "Unexpected RAD converter arguments: $args"
+            }
+            $cap = Get-Bink2ImportCapability $bk2 (Resolve-Path ./windows)
+            if (-not $cap.isBink2 -or -not $cap.available -or $cap.bundled) {
+              throw 'Bink 2 capability contract is wrong'
+            }
+          } finally {
+            $env:RADVIDEO64 = $old
+          }
+
+          $bridgeSource = Get-Content -Raw './windows/native-bridge.ps1'
+          foreach ($required in @(
+            '/api/import/bink2',
+            '/api/import-jobs/',
+            'sourceAdapterRequired',
+            'sourceAdapterApplied',
+            'Bink 2 must be imported through RAD Video Tools',
+            'Stream Copy is unavailable for a Bink 2 source'
+          )) {
+            if (-not $bridgeSource.Contains($required)) { throw "Bink 2 bridge contract lost: $required" }
+          }
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
