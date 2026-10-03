@@ -916,7 +916,9 @@ function Handle-Request($Request) {
             if($script:Jobs.ContainsKey($id)){$j=$script:Jobs[$id];$j.Cancelled=$true;try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
             Send-HttpJson $Request 200 @{ok=$true};return
         }
-        if($path -match '^/api/jobs/([A-Za-z0-9]+)/frame        Send-HttpJson $Request 404 @{ok=$false;error='Unknown bridge endpoint.'}
+        if($path -match '^/api/jobs/([A-Za-z0-9]+)/frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-OutputFrame $Matches[1] $body);return}
+        if($path -match '^/api/jobs/([A-Za-z0-9]+)/export$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Export-Job $Matches[1] ([string]$body.suggestedName));return}
+        Send-HttpJson $Request 404 @{ok=$false;error='Unknown bridge endpoint.'}
     }catch{
         Write-BridgeLog ($Request.Method+' '+$Request.Path+' failed: '+$_.Exception.Message) 'ERROR'
         Send-HttpJson $Request 500 @{ok=$false;error=$_.Exception.Message}
