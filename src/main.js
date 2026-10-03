@@ -10,7 +10,7 @@ import { EncoderEngine } from './engine.js';
 import { decodeAssFile } from './ass-decoding.js';
 import { detectWindowsNativeBridge } from './windows-native-client.js';
 import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics.js';
-import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, reusableSourceQualityByCrf, sourceEvidenceKey } from './compression-evidence.js';
+import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, reusableSourceQualityByCrf, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -1664,6 +1664,10 @@ function currentSourceEvidenceKey() {
     state.video?.name || state.media?.sourceName || '',
     Number(state.video?.size || state.media?.size || 0)
   );
+}
+
+function currentRuntimeEvidenceKey() {
+  return runtimeEvidenceKey(state.nativeBackend || { backend: 'web' });
 }
 
 function medianNumber(values) {
@@ -3662,6 +3666,7 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
     sourceName: state.video?.name || state.media?.sourceName || '',
     sourceSize: Number(state.video?.size || state.media?.size || 0),
     backend: state.nativeBackend?.backend || 'web',
+    runtimeIdentity: currentRuntimeEvidenceKey(),
     codec,
     preset,
     crf,
@@ -3688,7 +3693,8 @@ async function calibrateCodecQuality(codec, target) {
     state.localBenchmarkHistory,
     currentSourceEvidenceKey(),
     codec,
-    preset
+    preset,
+    currentRuntimeEvidenceKey()
   );
   for (const record of reusable) {
     const cachedCrf = Math.round(Number(record.crf));
