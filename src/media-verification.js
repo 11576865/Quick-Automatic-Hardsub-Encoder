@@ -29,7 +29,7 @@ export function verificationHasSpatialTransforms(task) {
 
 const trimNumeric = value => {
   const text = Number(value || 0).toFixed(6);
-  return text.replace(/(?:\.0+|(?<=\.[0-9]*?)0+)$/, '').replace(/\.$/, '') || '0';
+  return text.replace(/0+$/, '').replace(/\.$/, '') || '0';
 };
 
 export function hardsubReferenceFilter(task, sourceTime, assPath = '__ASS__', fontsDir = '__FONTS__', displayWidth = 0) {
