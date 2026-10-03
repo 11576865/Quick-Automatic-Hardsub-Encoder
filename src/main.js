@@ -625,7 +625,24 @@ function notifyMediaInfoChanged() {
   document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
 }
 
+function cancelPendingNativeInputWork(reason = '输入已变化') {
+  const error = new Error(reason);
+  for (const map of [
+    state.nativePreviewWaiters,
+    state.nativeFrameWaiters,
+    state.nativeWaveformWaiters,
+    state.nativeSampleWaiters
+  ]) {
+    for (const waiter of map.values()) {
+      clearTimeout(waiter.timer);
+      try { waiter.reject(error); } catch {}
+    }
+    map.clear();
+  }
+}
+
 function invalidateAnalysis({ clearVideoMetadata = false } = {}) {
+  cancelPendingNativeInputWork('输入已变化，旧 Native 请求已取消');
   if (clearVideoMetadata) {
     state.sourceMedia = null;
     const sourceSummary = $('sourceVideoSummary');
@@ -692,7 +709,7 @@ function clearSelectedTestCache() {
 async function runWebTask(task) {
   if (state.operationBusy) return;
   state.operationBusy = true;
-  for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) $(id).disabled = true;
+  for (const id of ['video', 'ass', 'fonts', 'videoNativePickerBtn', 'assNativePickerBtn', 'fontsNativePickerBtn', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) if($(id)) $(id).disabled = true;
   document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control => { control.disabled = true; });
   refreshAnalyze();
   refreshBenchmarkEnabled();
@@ -705,7 +722,11 @@ async function runWebTask(task) {
     alert('任务失败：' + (error?.message || error));
   } finally {
     state.operationBusy = false;
-    for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) $(id).disabled = false;
+    for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) if($(id)) $(id).disabled = false;
+    for (const role of Object.keys(WINDOWS_NATIVE_PICKERS)) {
+      const button = $(WINDOWS_NATIVE_PICKERS[role].buttonId);
+      setWindowsNativePickerBusy(role, button?.getAttribute('aria-busy') === 'true');
+    }
     document.querySelectorAll('.font-binding-select, .plan-interaction').forEach(control => { control.disabled = false; });
     refreshAnalyze();
     refreshBenchmarkEnabled();
@@ -726,7 +747,7 @@ function setWindowsNativePickerBusy(role, busy) {
   const config = WINDOWS_NATIVE_PICKERS[role];
   const button = config ? $(config.buttonId) : null;
   if (!button) return;
-  button.disabled = !!busy;
+  button.disabled = !!busy || state.operationBusy || !!state.nativeJobId;
   button.setAttribute('aria-busy', busy ? 'true' : 'false');
   button.textContent = busy ? '正在打开系统选择器…' : (role === 'video' ? '选择视频' : role === 'ass' ? '选择 ASS 字幕' : '选择字体文件');
 }
@@ -735,6 +756,10 @@ function requestWindowsNativePicker(role) {
   const config = WINDOWS_NATIVE_PICKERS[role];
   const bridge = globalThis.NativeHardsub;
   if (!config || !bridge?.__windowsNative || !bridge?.preparePickerRole) return false;
+  if (state.operationBusy || state.nativeJobId) {
+    log('Windows Native：任务运行期间不能更换输入素材；请先等待完成或取消当前任务。');
+    return false;
+  }
   try {
     setWindowsNativePickerBusy(role, true);
     bridge.preparePickerRole(role);
@@ -1078,7 +1103,7 @@ $('cancelEncodeBtn').addEventListener('click', () => {
   try {
     globalThis.NativeHardsub?.cancelNativeEncode?.(state.nativeJobId);
     $('cancelEncodeBtn').disabled = true;
-    $('liveEta').textContent = '正在请求取消 Android 原生压制…';
+    $('liveEta').textContent = '正在请求取消 ' + nativePlatformName() + ' 压制…';
   } catch (error) {
     log('取消 Native 压制失败：' + error.message);
   }
@@ -1290,7 +1315,14 @@ function detectNativeBackend() {
         const config = WINDOWS_NATIVE_PICKERS[role];
         const message = nativePlatformName() + ' 文件选择失败：' + data.error;
         log(message);
-        if (config?.metaId && $(config.metaId)) {
+        const hasExistingSelection = role === 'video'
+          ? !!state.video
+          : role === 'ass'
+            ? !!state.ass
+            : role === 'fonts'
+              ? state.fonts.length > 0
+              : false;
+        if (!hasExistingSelection && config?.metaId && $(config.metaId)) {
           $(config.metaId).textContent = '选择失败：' + data.error;
           $(config.metaId).className = 'warn';
         }
