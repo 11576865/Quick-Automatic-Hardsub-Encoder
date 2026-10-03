@@ -965,19 +965,266 @@ function updateQualityTargetPreview() {
   setSliderProgress(range);
 }
 
+function estimatedSizeBudgetAudioBitrate() {
+  const media = state.media;
+  if (!media?.duration || !state.video) return 0;
+  const totalAverage = Number(state.video.size || 0) * 8 / media.duration;
+  const sourceVideoBitrate = getSourceVideoBitrate();
+  let audioBitRate = Number(media.audioBitRate || 0);
+  if (!audioBitRate && totalAverage > sourceVideoBitrate) {
+    audioBitRate = Math.max(0, totalAverage - sourceVideoBitrate);
+  }
+  if (!audioBitRate && Number(media.audioTracks || 0) > 0) {
+    audioBitRate = 256000 * Number(media.audioTracks || 0);
+  }
+  return Math.max(0, audioBitRate);
+}
+
+function currentSizeFrontier(codec = state.selectedCodec || chooseDefaultCodec('sizeBudget')) {
+  const model = codec ? state.rateDistortionModels?.[codec] : null;
+  if (!model?.ok || !state.media?.duration) return null;
+  const frontier = createSizeQualityFrontier(model, {
+    durationSeconds: Number(state.media.duration),
+    audioBitrate: estimatedSizeBudgetAudioBitrate(),
+    reservePercent: 4,
+    containerReservePercent: 1,
+    fixedReserveBytes: 256 * 1024,
+    minimumVideoBitrate: 150000
+  });
+  return frontier?.ok ? frontier : null;
+}
+
+function currentSizeBudgetBytes() {
+  const direct = Number(state.sizeBudgetTargetBytes || 0);
+  if (direct > 0) return Math.round(direct);
+  if (!state.video?.size) return 0;
+  const multiplier = Math.max(0.75, Math.min(2, Number($('sizeBudgetMultiplier')?.value || 1.6)));
+  return Math.floor(Number(state.video.size) * multiplier);
+}
+
+function setSizeFrontierTargetBytes(targetBytes, { commit = false } = {}) {
+  const frontier = currentSizeFrontier();
+  const bytes = Number(targetBytes);
+  if (!frontier || !(bytes > 0)) return false;
+  const clamped = Math.max(
+    frontier.minimumEvidenceTargetBytes,
+    Math.min(frontier.maximumEvidenceTargetBytes, bytes)
+  );
+  state.sizeBudgetTargetBytes = Math.round(clamped);
+  if ($('sizeBudgetBytes')) $('sizeBudgetBytes').value = String(state.sizeBudgetTargetBytes);
+  if (state.video?.size) {
+    $('sizeBudgetMultiplier').value = (state.sizeBudgetTargetBytes / state.video.size).toFixed(6);
+  }
+  updateSizeBudgetPreview();
+  if (commit) {
+    renderPlanOptions();
+    refreshBenchmarkEnabled();
+  }
+  return true;
+}
+
+function renderSizeFrontier() {
+  const panel = $('sizeFrontierPanel');
+  const svg = $('sizeFrontierChart');
+  const wrap = $('sizeFrontierChartWrap');
+  const empty = $('sizeFrontierEmpty');
+  const readout = $('sizeFrontierReadout');
+  const button = $('calibrateSizeFrontierBtn');
+  if (!panel || !svg || !wrap || !empty || !readout || !button) return;
+
+  const goal = $('encodeGoal')?.value || 'balanced';
+  const codec = state.selectedCodec || chooseDefaultCodec(goal);
+  const model = codec ? state.rateDistortionModels?.[codec] : null;
+  const nativeOnly = !state.nativeBackend?.available;
+  const inputNotReady = !state.inputDecodeOk || !state.assInfo;
+  const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
+  button.disabled =
+    goal !== 'sizeBudget' ||
+    state.operationBusy ||
+    state.qualityCalibrationBusy ||
+    !!state.nativeJobId ||
+    nativeOnly ||
+    inputNotReady ||
+    ssimUnavailable ||
+    !codec;
+  button.textContent = state.qualityCalibrationBusy
+    ? '正在实测曲线…'
+    : model?.ok
+      ? '刷新当前编码器曲线'
+      : '生成当前编码器曲线';
+
+  const label = codec ? codec.toUpperCase() : '当前编码器';
+  if (!model?.ok) {
+    wrap.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.textContent = nativeOnly
+      ? '实测效率曲线需要 Native 后端；当前仍可按源文件倍率设置体积预算。'
+      : ssimUnavailable
+        ? '当前 Native 核心没有通过 SSIM 能力检查；暂时无法生成效率曲线。'
+        : inputNotReady
+          ? '完成字幕预检与真实输入准备后，可生成 ' + label + ' 的实测效率曲线。'
+          : '尚无 ' + label + ' 的 R-D 模型。点击“生成当前编码器曲线”进行短片段实测。';
+    $('sizeFrontierSubtitle').textContent =
+      '曲线只使用当前会话实测点；没有证据的区间不会伪造质量预测。';
+    readout.textContent = state.sizeBudgetTargetBytes
+      ? '当前直接体积预算仍保留，但没有当前编码器的质量曲线可解释它。'
+      : '当前仍按手动倍率规划；生成曲线后可直接沿曲线选择体积。';
+    svg.innerHTML = '';
+    return;
+  }
+
+  const frontier = currentSizeFrontier(codec);
+  if (!frontier) {
+    wrap.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.textContent = '当前 R-D 模型无法映射到体积预算。';
+    svg.innerHTML = '';
+    return;
+  }
+
+  const directBytes = Number(state.sizeBudgetTargetBytes || 0);
+  const plot = buildSizeFrontierPlot(frontier, {
+    width: 720,
+    height: 220,
+    selectedTargetBytes: directBytes > 0 ? directBytes : null
+  });
+  if (!plot.ok) {
+    wrap.classList.add('hidden');
+    empty.classList.remove('hidden');
+    empty.textContent = '当前实测点不足以形成可交互曲线。';
+    svg.innerHTML = '';
+    return;
+  }
+
+  empty.classList.add('hidden');
+  wrap.classList.remove('hidden');
+  $('sizeFrontierSubtitle').textContent =
+    label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。';
+  $('sizeFrontierMin').textContent = formatBytes(frontier.minimumEvidenceTargetBytes);
+  $('sizeFrontierMax').textContent = formatBytes(frontier.maximumEvidenceTargetBytes);
+  $('sizeFrontierKnee').textContent = frontier.knee
+    ? '效率拐点约 ' + formatBytes(frontier.knee.targetBytes)
+    : '当前实测范围';
+
+  const evidenceDots = plot.evidencePoints.map(point =>
+    '<circle class="size-frontier-evidence" cx="' + point.x.toFixed(2) +
+    '" cy="' + point.y.toFixed(2) + '" r="4"><title>实测 · ' +
+    escapeHtml(formatBytes(point.targetBytes)) + ' · SSIM ' +
+    Number(point.quality).toFixed(5) + '</title></circle>'
+  ).join('');
+  const kneeDot = plot.knee
+    ? '<circle class="size-frontier-knee" cx="' + plot.knee.x.toFixed(2) +
+      '" cy="' + plot.knee.y.toFixed(2) + '" r="5"><title>效率拐点 · ' +
+      escapeHtml(formatBytes(plot.knee.targetBytes)) + '</title></circle>'
+    : '';
+  const selectedDot = plot.selected
+    ? '<circle class="size-frontier-thumb-halo" cx="' + plot.selected.x.toFixed(2) +
+      '" cy="' + plot.selected.y.toFixed(2) + '" r="11"></circle>' +
+      '<circle class="size-frontier-thumb" cx="' + plot.selected.x.toFixed(2) +
+      '" cy="' + plot.selected.y.toFixed(2) + '" r="6"></circle>'
+    : '';
+
+  svg.innerHTML =
+    '<rect class="size-frontier-bg" x="0" y="0" width="720" height="220" rx="8"></rect>' +
+    '<line class="size-frontier-grid" x1="34" y1="196" x2="686" y2="196"></line>' +
+    '<path class="size-frontier-band" d="' + plot.bandPath + '"></path>' +
+    '<path class="size-frontier-line" d="' + plot.curvePath + '"></path>' +
+    evidenceDots + kneeDot + selectedDot;
+
+  const ariaBytes = directBytes > 0
+    ? Math.max(frontier.minimumEvidenceTargetBytes, Math.min(frontier.maximumEvidenceTargetBytes, directBytes))
+    : (frontier.knee?.targetBytes || frontier.minimumEvidenceTargetBytes);
+  svg.setAttribute('aria-valuemin', String(Math.round(frontier.minimumEvidenceTargetBytes)));
+  svg.setAttribute('aria-valuemax', String(Math.round(frontier.maximumEvidenceTargetBytes)));
+  svg.setAttribute('aria-valuenow', String(Math.round(ariaBytes)));
+  svg.setAttribute('aria-valuetext', formatBytes(ariaBytes));
+
+  if (directBytes > 0 && plot.selected) {
+    const marginal = model.marginalQualityPerDoubling(plot.selected.videoBitrate);
+    readout.innerHTML =
+      '<strong>' + escapeHtml(formatBytes(plot.selected.targetBytes)) + '</strong>' +
+      ' · 视频 ' + escapeHtml(formatBitrate(plot.selected.videoBitrate)) +
+      ' · 预计 SSIM ' + Number(plot.selected.quality).toFixed(5) +
+      ' <span class="size-frontier-band-copy">样本范围 ' +
+      Number(plot.selected.lowerQuality).toFixed(5) + '–' +
+      Number(plot.selected.upperQuality).toFixed(5) + '</span>' +
+      (Number.isFinite(marginal)
+        ? ' · 每翻倍视频码率约 +' + Number(marginal).toFixed(4) + ' SSIM'
+        : '');
+  } else if (directBytes > 0) {
+    const evaluation = frontier.evaluateTargetBytes(directBytes);
+    const statusText = evaluation.status === 'below-evidence'
+      ? '当前直接预算低于实测曲线范围，质量未知。'
+      : evaluation.status === 'above-evidence'
+        ? '当前直接预算高于实测曲线范围，继续增加体积的质量收益尚无实测证据。'
+        : '当前直接预算不在可解释的实测范围。';
+    readout.textContent = statusText + ' 拖动曲线会把目标切回有证据的区间。';
+  } else {
+    readout.textContent =
+      '当前仍按手动倍率规划。直接按住并拖动曲线，即可切换为 ' +
+      label + ' 的实测体积预算。';
+  }
+}
+
+function sizeFrontierTargetFromPointer(event) {
+  const svg = $('sizeFrontierChart');
+  const frontier = currentSizeFrontier();
+  if (!svg || !frontier) return null;
+  const rect = svg.getBoundingClientRect();
+  if (!(rect.width > 0)) return null;
+  const svgX = (Number(event.clientX) - rect.left) / rect.width * 720;
+  const fraction = Math.max(0, Math.min(1, (svgX - 34) / (720 - 68)));
+  return targetBytesAtEvidenceFraction(frontier, fraction);
+}
+
+function commitSizeFrontierKeyboard(event) {
+  const frontier = currentSizeFrontier();
+  if (!frontier) return;
+  let fraction = evidenceFractionForTargetBytes(frontier, Number(state.sizeBudgetTargetBytes || 0));
+  if (fraction === null) {
+    fraction = frontier.knee
+      ? evidenceFractionForTargetBytes(frontier, frontier.knee.targetBytes)
+      : 0.5;
+  }
+  let next = fraction ?? 0.5;
+  if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') next -= 0.02;
+  else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') next += 0.02;
+  else if (event.key === 'PageDown') next -= 0.10;
+  else if (event.key === 'PageUp') next += 0.10;
+  else if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = 1;
+  else return;
+  event.preventDefault();
+  setSizeFrontierTargetBytes(targetBytesAtEvidenceFraction(frontier, next), { commit: true });
+}
+
 function updateSizeBudgetPreview() {
   const range = $('sizeBudgetRange');
   if (!range) return;
   const multiplier = Number(range.value || 1.6);
-  $('sizeBudgetValue').textContent = '×' + multiplier.toFixed(2);
-  $('sizeBudgetDetail').textContent = state.video
-    ? '预览上限 ' + formatBytes(Math.floor(state.video.size * multiplier)) +
-      ' · 源文件 ' + formatBytes(state.video.size) + ' · 松手后提交。'
-    : '相对源文件 ×' + multiplier.toFixed(2) + '；选择视频后显示实际字节上限。';
+  const directBytes = Number(state.sizeBudgetTargetBytes || 0);
+  if (directBytes > 0 && state.video?.size) {
+    const directMultiplier = directBytes / state.video.size;
+    $('sizeBudgetValue').textContent =
+      formatBytes(directBytes) + ' · ×' + directMultiplier.toFixed(2);
+    $('sizeBudgetDetail').textContent =
+      '当前由实测曲线直接控制目标上限 ' + formatBytes(directBytes) +
+      '；切换下方手动倍率会退出曲线预算。';
+  } else {
+    $('sizeBudgetValue').textContent = '×' + multiplier.toFixed(2);
+    $('sizeBudgetDetail').textContent = state.video
+      ? '手动上限 ' + formatBytes(Math.floor(state.video.size * multiplier)) +
+        ' · 源文件 ' + formatBytes(state.video.size) + ' · 松手后提交。'
+      : '相对源文件 ×' + multiplier.toFixed(2) + '；选择视频后显示实际字节上限。';
+  }
   document.querySelectorAll('[data-size-multiplier]').forEach(button => {
-    button.classList.toggle('selected', Math.abs(Number(button.dataset.sizeMultiplier) - multiplier) < 0.001);
+    button.classList.toggle(
+      'selected',
+      directBytes <= 0 && Math.abs(Number(button.dataset.sizeMultiplier) - multiplier) < 0.001
+    );
   });
   setSliderProgress(range);
+  renderSizeFrontier();
 }
 
 function syncPlanModeUI() {
@@ -1034,6 +1281,8 @@ function commitQualityTarget() {
 
 function commitSizeBudget() {
   const value = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetRange').value || 1.6)));
+  state.sizeBudgetTargetBytes = null;
+  if ($('sizeBudgetBytes')) $('sizeBudgetBytes').value = '';
   $('sizeBudgetRange').value = value.toFixed(2);
   $('sizeBudgetMultiplier').value = value.toFixed(2);
   updateSizeBudgetPreview();
