@@ -37,6 +37,7 @@ jobs:
       - run: node src/input-safety.test.mjs
       - run: node --test src/native-input-probe.test.mjs
       - run: node --test src/compression-evidence.test.mjs
+      - run: node --test src/rate-distortion-model.test.mjs
       - run: node --test src/native-job-monitor.test.mjs
       - run: node src/ui-shell.test.mjs
       - run: node src/uigs-visual-capture.test.mjs

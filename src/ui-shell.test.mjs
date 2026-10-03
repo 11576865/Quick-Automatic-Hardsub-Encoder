@@ -381,3 +381,23 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(encodeService, /"evidenceKind", "full-encode"/);
   assert.match(encodeService, /"sourceIdentity", request\.optString\("sourceIdentity", ""\)/);
 });
+
+
+test('rate-distortion model is fed by in-session calibration evidence', async () => {
+  const main = await readFile(new URL('./main.js', import.meta.url), 'utf8');
+  const model = await readFile(new URL('./rate-distortion-model.js', import.meta.url), 'utf8');
+
+  assert.match(main, /fitRateDistortionModel/);
+  assert.match(main, /rateDistortionModels:\s*\{\}/);
+  assert.match(main, /testedPoints:\s*\[\.\.\.tested\.values\(\)\]/);
+  assert.match(main, /state\.rateDistortionModels\[codec\] = rdModel\.ok \? rdModel : null/);
+  assert.match(main, /R-D 模型/);
+
+  assert.match(model, /function isotonicNonDecreasing/);
+  assert.match(model, /predictAtBitrate/);
+  assert.match(model, /estimateKnee/);
+  assert.match(model, /createSizeQualityFrontier/);
+  assert.match(model, /status: 'impossible'/);
+  assert.match(model, /status: 'below-evidence'/);
+  assert.match(model, /status: 'above-evidence'/);
+});
