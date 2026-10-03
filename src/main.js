@@ -1400,7 +1400,7 @@ function detectNativeBackend() {
         );
       } else {
         notifyMediaInfoChanged();
-        log('Android SAF 输入探测失败：' + (p.error || '未知错误'));
+        log(nativePlatformName() + ' 输入探测失败：' + (p.error || '未知错误'));
       }
       renderBackendSummary();
       refreshAnalyze();
@@ -2388,6 +2388,19 @@ async function analyzeVideoOnly() {
 }
 
 async function analyzeCurrentInputs() {
+  if (state.nativeBackend?.available && state.video && !state.nativeInputProbe?.ok) {
+    try {
+      state.nativeInputProbe = null;
+      globalThis.NativeHardsub?.probeSelectedVideo?.();
+      log(nativePlatformName() + '：正在重新读取原始视频参数…');
+      refreshAnalyze();
+      return;
+    } catch (error) {
+      state.nativeInputProbe = { ok: false, error: error.message };
+      refreshAnalyze();
+      throw error;
+    }
+  }
   const mode = document.body.dataset.mediaOperation || 'hardsub';
   if (mode === 'hardsub' && state.ass) return analyzeAll();
   return analyzeVideoOnly();
@@ -2401,9 +2414,14 @@ function refreshAnalyze() {
   if (state.operationBusy) { button.disabled = true; return; }
   if (!state.video) { button.disabled = true; return; }
   if (state.nativeBackend?.available) {
-    if (!state.nativeInputProbe?.ok) {
+    if (!state.nativeInputProbe) {
       button.disabled = true;
       button.textContent = '正在读取视频参数…';
+      return;
+    }
+    if (!state.nativeInputProbe.ok) {
+      button.disabled = false;
+      button.textContent = '重试读取视频参数';
       return;
     }
     button.disabled = false;
@@ -2479,7 +2497,7 @@ async function analyzeAll() {
       log('媒体元数据已读取；首张真实字幕预览将同时完成输入解码验证。');
     } else if (state.nativeBackend?.available) {
       const p = state.nativeInputProbe;
-      if (!p?.ok) throw new Error(p?.error || 'Android Native 输入探测尚未完成');
+      if (!p?.ok) throw new Error(p?.error || 'Native 输入探测尚未完成');
       state.media = mediaFromNativeProbe(p);
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       state.sourceMedia = { ...state.media };
@@ -3271,10 +3289,10 @@ function updateQualityCalibrationControls() {
 
   if (nativeOnly) {
     $('qualityCalibrationResult').textContent =
-      '当前版本的目标质量校准先在 Android Native 开启；网页模式仍使用固定 CRF / 体积预算方案。';
+      '当前版本的目标质量校准需要 Native 后端；网页模式仍使用固定 CRF / 体积预算方案。';
   } else if (ssimUnavailable) {
     $('qualityCalibrationResult').textContent =
-      '当前 Android Native 核心没有通过 SSIM 能力检查，目标质量暂时不可用。';
+      '当前 Native 核心没有通过 SSIM 能力检查，目标质量暂时不可用。';
   }
 }
 
@@ -3640,7 +3658,7 @@ function chooseEfficiencyCalibration(calibrations) {
 
 async function runQualityCalibration() {
   if (!state.nativeBackend?.available) {
-    alert('目标质量校准当前只在 Android Native 模式可用。');
+    alert('目标质量校准当前只在 Native 模式可用。');
     return;
   }
   if (state.nativeJobId || state.qualityCalibrationBusy) return;
@@ -4126,7 +4144,7 @@ function parseFpsText(value) {
 function requestNativePreview(timeSeconds, assText) {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.renderNativePreview) {
-    return Promise.reject(new Error('Android Native 预览桥不可用'));
+    return Promise.reject(new Error('Native 字幕预览桥不可用'));
   }
   const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
   return new Promise((resolve, reject) => {
@@ -4295,10 +4313,10 @@ async function runNativeEncode() {
   $('progressBar').style.width = '1%';
   const localPrediction = localPredictionForPlan(plan);
   $('liveEta').textContent = localPrediction
-    ? 'Android Native 任务已创建 · 本机历史预计编码约 ' +
+    ? nativePlatformName() + ' 任务已创建 · 本机历史预计编码约 ' +
       formatDuration(localPrediction.etaSeconds) +
       '（' + localPrediction.samples + ' 次记录），开始后会用实时速度修正。'
-    : 'Android Native 任务已创建，正在准备输入与字体…';
+    : nativePlatformName() + ' 任务已创建，正在准备输入与字体…';
   log(
     'Native 正式压制：' + state.selectedCodec.toUpperCase() +
     ' · ' + container.key.toUpperCase() +
@@ -4345,7 +4363,7 @@ async function monitorNativeJob(jobId) {
         ? Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec) / predictionSpeed
         : null;
       $('liveEta').textContent =
-        'Android Native · ' + (progress * 100).toFixed(1) + '%' +
+        nativePlatformName() + ' · ' + (progress * 100).toFixed(1) + '%' +
         (liveSpeed > 0 ? ' · 当前 ' + liveSpeed.toFixed(2) + '× realtime' : '') +
         (historySpeed > 0 && liveWeight < 1 ? ' · 本机历史参与预测' : '') +
         (remain != null ? ' · 预计剩余 ' + formatDuration(remain) : '');
@@ -4370,7 +4388,7 @@ async function monitorNativeJob(jobId) {
       $('encodeBtn').textContent = '保存成品';
       loadLocalBenchmarkHistory();
       log(
-        'Android Native 成品验证通过：输出时长 ' +
+        nativePlatformName() + ' 成品验证通过：输出时长 ' +
         Number(status.outputDuration || 0).toFixed(3) +
         ' s · 与输入差 ' + Number(status.durationDelta || 0).toFixed(3) +
         ' s · 视频完整解码 ' + Number(status.videoDecodeSeconds || 0).toFixed(2) +
@@ -4440,7 +4458,7 @@ async function recoverNativeJob() {
       state.nativeJobId = jobId;
       $('cancelEncodeBtn').classList.remove('hidden');
       $('encodeBtn').disabled = true;
-      log('恢复 Android Native 任务监视：' + jobId);
+      log('恢复 ' + nativePlatformName() + ' 任务监视：' + jobId);
       monitorNativeJob(jobId);
       return;
     }
