@@ -144,6 +144,61 @@ test('Windows native input probe publishes only the newest selection result', as
   }
 });
 
+
+test('Windows Bink 2 adapter client uses owned localhost import endpoints', async () => {
+  const old = snapshotGlobals();
+  const storage = memoryStorage();
+  const requests = [];
+  globalThis.window = {
+    location: {
+      href: 'http://localhost/?windowsNative=http://127.0.0.1:9347&token=test-token'
+    },
+    sessionStorage: storage
+  };
+  globalThis.history = { replaceState() {} };
+  globalThis.fetch = async (url, options = {}) => {
+    const text = String(url);
+    requests.push({ url: text, method: options.method || 'GET' });
+    if (text.endsWith('/api/health')) {
+      return response({ backend: 'windows-native', available: true, bink2ImportAvailable: true });
+    }
+    if (text.endsWith('/api/selection/video')) {
+      return response({ ok: true, name: 'intro.bk2', size: 1234, lastModified: 77 });
+    }
+    if (text.endsWith('/api/import/bink2')) {
+      return response({ ok: true, jobId: 'import-1', state: 'importing' });
+    }
+    if (text.endsWith('/api/import-jobs/import-1/cancel')) {
+      return response({ ok: true, state: 'cancelling' });
+    }
+    if (text.endsWith('/api/import-jobs/import-1')) {
+      return response({ ok: true, jobId: 'import-1', state: 'importing', elapsedSeconds: 1.25 });
+    }
+    throw new Error('Unexpected request: ' + text);
+  };
+
+  try {
+    assert.equal(await detectWindowsNativeBridge(), true);
+    const selected = JSON.parse(await globalThis.NativeHardsub.readSelectedVideoInfo());
+    assert.equal(selected.name, 'intro.bk2');
+
+    const started = JSON.parse(await globalThis.NativeHardsub.startBink2Import());
+    assert.equal(started.jobId, 'import-1');
+
+    const status = JSON.parse(await globalThis.NativeHardsub.getBink2ImportStatus('import-1'));
+    assert.equal(status.state, 'importing');
+
+    globalThis.NativeHardsub.cancelBink2Import('import-1');
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    assert.ok(requests.some(x => x.url.endsWith('/api/import/bink2') && x.method === 'POST'));
+    assert.ok(requests.some(x => x.url.endsWith('/api/import-jobs/import-1') && x.method === 'GET'));
+    assert.ok(requests.some(x => x.url.endsWith('/api/import-jobs/import-1/cancel') && x.method === 'POST'));
+  } finally {
+    restoreGlobals(old);
+  }
+});
+
 test('Android native input probe suppresses stale generations before callback', async () => {
   const kotlin = await readFile(
     new URL('../android-native/app/src/main/java/io/github/quickhardsub/NativeBridge.kt', import.meta.url),
