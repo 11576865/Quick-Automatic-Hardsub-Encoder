@@ -34,7 +34,7 @@ export function mountMediaWorkspace(hooks) {
   <p class="note media-time-format-note">时间支持秒、小数秒、MM:SS.mmm、HH:MM:SS.mmm；中文全角冒号会自动识别。</p>
   <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="媒体剪辑时间轴">
     <div class="media-waveform-heading">
-      <div><strong>剪辑时间轴</strong><span id="taskWaveformStatus">尚未分析 · 可显示波形；无损剪切还会显示关键帧</span></div>
+      <div><strong>剪辑时间轴</strong><span id="taskWaveformStatus">尚未分析 · 用于选择源素材时间范围；有音频时显示波形，无损剪切额外显示关键帧</span></div>
       <button type="button" id="taskWaveformLoad" class="secondary">分析时间轴</button>
     </div>
     <div class="media-timeline-legend" aria-label="时间轴图例">
@@ -707,11 +707,11 @@ export function mountMediaWorkspace(hooks) {
     framePreviewPanel.hidden=!hooks.frame;
     boundaryFrameInspector.hidden=true;
     const copy=get('operation').value==='copy';
-    waveformStatus.textContent=copy?'正在分析波形与视频关键帧…':'正在由 FFmpeg 生成波形…';
+    waveformStatus.textContent=copy?'正在分析时间范围、波形与视频关键帧…':'正在分析时间范围与音频波形…';
     try{
       const audioValue=String(get('audioTrack')?.value||'all');
       const audioTrack=audioValue==='all'?0:Math.max(0,Number(audioValue)||0);
-      const result=await hooks.waveform({audioTrack,width:2400,height:160,includeKeyframes:copy,maxKeyframes:12000});
+      const result=await hooks.waveform({audioTrack,width:2400,height:160,includeKeyframes:copy,maxKeyframes:12000,allowNoWaveform:true});
       if(!(Number(result?.duration)>0))throw Error('时间轴结果缺少有效时长');
       if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
       waveformUrl=result.url||null;
@@ -728,9 +728,9 @@ export function mountMediaWorkspace(hooks) {
         waveformImage.removeAttribute('src');
         waveformImage.hidden=true;
         waveformPlaceholder.hidden=false;
-        waveformPlaceholder.textContent=result.waveformError
-          ? '没有可显示的音频波形；关键帧时间轴仍可使用。'
-          : '当前素材没有音频波形；关键帧时间轴仍可使用。';
+        waveformPlaceholder.textContent=copy
+          ? '没有可显示的音频波形；关键帧与剪切范围仍可使用。'
+          : '没有可显示的音频波形；时间范围与画面预览仍可使用。';
       }
       waveformStartEl.hidden=false;
       waveformEndEl.hidden=false;
@@ -739,7 +739,9 @@ export function mountMediaWorkspace(hooks) {
       renderTimelineRuler();
       renderKeyframeLane();
       if(hooks.frame)scheduleCursorFramePreview(waveformCursor,0);
-      const waveText=waveformUrl?'第 '+(Number(result.audioTrack??audioTrack)+1)+' 条音轨':'无音频波形';
+      const waveText=waveformUrl
+        ? '第 '+(Number(result.audioTrack??audioTrack)+1)+' 条音轨'
+        : (copy?'无音频波形':'无音频波形 · 时间范围仍可用');
       const keyText=copy
         ? ' · 关键帧 '+timelineKeyframes.length+(timelineKeyframesTruncated?'（已截断显示）':'')
         : '';
@@ -1056,7 +1058,7 @@ export function mountMediaWorkspace(hooks) {
       ? '无损快速剪切：IN 是请求起点，实际切入会向前定位到关键帧。时间轴会同时显示请求 IN 与实际无损起点；OUT 不强制吸附关键帧。'
       : mode==='hardsub'
         ? '硬字幕分支：字幕、字体与真实 libass 预览属于这一分支；编码完成后与其他任务共享封装、验证和保存出口。'
-        : '纯视频转码分支：只处理媒体编码参数；不会要求 ASS，也不会静默替换你选择的编码器。';
+        : '纯视频转码分支：时间轴用于选择源素材的转码范围与定位源帧；不是转码前后质量对比。不会要求 ASS，也不会静默替换你选择的编码器。';
     renderContainerDecision(null);
     renderKeyframeLane();
     if(copy&&waveformDuration>0)syncWaveformMarkers();
