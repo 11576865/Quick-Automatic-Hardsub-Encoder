@@ -4916,7 +4916,29 @@ mountMediaWorkspace({
     const name=outputFileName(base,task);
     log('媒体任务：'+task.operation+' · '+task.outputContainer.toUpperCase()+' · '+task.outputArgs.join(' '));
     if(state.nativeBackend?.available){
-      const request={codec:task.codec||'h264',mode:task.rateMode!=='quality'?'budget-rate':'crf',preset:task.preset||'medium',crf:Number(task.quality||23),targetVideoBitrate:Number(task.bitrate||0),task,expectedDuration:media.duration,expectedAudioTracks:task.expectedAudioTracks,estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),suggestedName:name};
+      const request={
+        codec:task.codec||'h264',
+        mode:task.rateMode!=='quality'?'budget-rate':'crf',
+        goal:'manual',
+        preset:task.preset||'medium',
+        crf:Number(task.quality||23),
+        targetVideoBitrate:Number(task.bitrate||0),
+        task,
+        expectedDuration:media.duration,
+        expectedAudioTracks:task.expectedAudioTracks,
+        estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),
+        sourceIdentity:currentSourceEvidenceKey(),
+        sourceCodec:media.videoCodec||'',
+        sourcePixelFormat:media.pixelFormat||'',
+        sourceVideoBitrate:Number(media.videoBitRate||0),
+        sourceWidth:Number(media.width||0),
+        sourceHeight:Number(media.height||0),
+        sourceFps:Number(media.fps||0),
+        sourceSize:Number(state.video.size||media.size||0),
+        subtitleEventCount:Number(state.assInfo?.events?.filter?.(x=>x.kind?.toLowerCase()==='dialogue')?.length||0),
+        selectedFontCount:Number(state.fonts?.length||0),
+        suggestedName:name
+      };
       const bridge=globalThis.NativeHardsub;
       const started=JSON.parse(await Promise.resolve(bridge.startNativeEncode(JSON.stringify(request),task.operation==='hardsub'?(state.activeAssText||state.assText):'')));
       if(!started.ok||!started.jobId)throw new Error(started.error||'创建任务失败');
