@@ -139,7 +139,7 @@ const {spawn}=require('node:child_process');
   await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('第 1 条音轨'));
   if(await page.locator('#taskWaveformImage').isHidden())throw Error('Waveform image did not become visible');
   await page.waitForFunction(()=>!document.querySelector('#taskFramePreviewImage').hidden);
-  if(!(await page.locator('#taskFramePreviewStatus').textContent()).includes('源视频画面'))throw Error('Timeline cursor frame preview did not become authoritative source-frame preview');
+  if(!(await page.locator('#taskFramePreviewStatus').textContent()).includes('源视频解码帧'))throw Error('Timeline cursor source-frame preview did not become ready');
   const waveformBox=await page.locator('#taskWaveformTrack').boundingBox();
   if(!waveformBox)throw Error('Waveform track has no layout box');
   await page.mouse.click(waveformBox.x+waveformBox.width*0.25,waveformBox.y+waveformBox.height*0.5);
