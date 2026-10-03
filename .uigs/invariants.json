@@ -655,6 +655,65 @@
           "pattern": "name: Windows local smoke"
         }
       ]
+    },
+    {
+      "id": "MEDIA.REAL_MATERIAL.AV1_ALAC_MKV_ACCEPTANCE",
+      "title": "代表性 AV1+ALAC MKV 必须通过真实 FFmpeg 端到端验收",
+      "status": "active",
+      "criticality": "required",
+      "claim": "对真实生成的 AV1 视频 + ALAC 音频 MKV，Auto/显式 MKV 无损剪切必须保持 AV1/ALAC packet payload；硬字幕显式 AAC+MKV 必须产出 H.264/AAC MKV，Auto AAC 必须解析并产出可用 MP4。该矩阵必须同时在 Linux 前端 CI 与 Windows CI 运行。",
+      "boundaries": [
+        "container-resolver",
+        "task-compiler",
+        "ffmpeg-execution",
+        "stream-copy",
+        "audio-transcode",
+        "hardsub-filter",
+        "linux-ci",
+        "windows-ci"
+      ],
+      "required_levels": [
+        "source",
+        "test",
+        "workflow"
+      ],
+      "evidence": [
+        {
+          "id": "mkv-and-alac-container-policy",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-container.js",
+          "pattern": "alac:'ALAC'"
+        },
+        {
+          "id": "shared-explicit-aac-policy",
+          "level": "source",
+          "kind": "pattern",
+          "path": "src/media-workspace.js",
+          "pattern": "\\['aac','转为 AAC'\\]"
+        },
+        {
+          "id": "real-av1-alac-acceptance-test",
+          "level": "test",
+          "kind": "pattern",
+          "path": "src/av1-alac-acceptance.integration.test.mjs",
+          "pattern": "real AV1\\+ALAC MKV acceptance matrix covers copy and hardsub AAC paths"
+        },
+        {
+          "id": "linux-real-material-workflow",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/test-frontend.yml",
+          "pattern": "FFMPEG_INTEGRATION=1 node --test src/av1-alac-acceptance\\.integration\\.test\\.mjs"
+        },
+        {
+          "id": "windows-real-material-workflow",
+          "level": "workflow",
+          "kind": "pattern",
+          "path": ".github/workflows/windows-local-smoke.yml",
+          "pattern": "Real AV1 ALAC MKV acceptance"
+        }
+      ]
     }
   ]
 }
