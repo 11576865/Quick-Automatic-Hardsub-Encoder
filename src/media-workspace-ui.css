@@ -1317,7 +1317,7 @@ body.media-frame-lightbox-open {
   cursor: default;
 }
 
-.media-frame-lightbox-stage:has(.media-frame-lightbox-compare:not([hidden])) {
+.media-frame-lightbox-stage[data-mode="compare"] {
   cursor: ew-resize;
 }
 
