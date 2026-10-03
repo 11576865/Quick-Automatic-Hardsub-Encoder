@@ -48,6 +48,7 @@ const state = {
   nativeWaveformWaiters: new Map(),
   nativeSampleWaiters: new Map(),
   nativeJobId: null,
+  nativeImportJobId: null,
   nativeCompletedJob: null,
   localBenchmarkHistory: [],
   appRelease: null,
@@ -191,6 +192,16 @@ app.innerHTML = `
       </div>
     </div>
     <div id="sourceVideoSummary" class="status-list source-video-summary hidden" aria-live="polite"></div>
+    <div id="sourceAdapterPanel" class="source-adapter-panel hidden" aria-live="polite">
+      <div class="source-adapter-heading"><div><span>输入适配</span><strong id="sourceAdapterTitle">Bink 2</strong></div><span id="sourceAdapterBadge">EXTERNAL</span></div>
+      <p id="sourceAdapterDetail"></p>
+      <div class="button-row source-adapter-actions">
+        <button id="sourceAdapterImportBtn" type="button" class="secondary">使用 RAD Video Tools 导入</button>
+        <button id="sourceAdapterCancelBtn" type="button" class="secondary hidden">取消导入</button>
+        <a id="sourceAdapterInstallLink" class="button-link" href="https://www.radgametools.com/bnkdown.htm" target="_blank" rel="noreferrer">获取 RAD Video Tools</a>
+      </div>
+      <p id="sourceAdapterStatus" class="note"></p>
+    </div>
     <div class="button-row action-row"><button id="analyze" class="primary action-solid action-cyan" disabled>读取视频参数</button></div>
   </section>
 
