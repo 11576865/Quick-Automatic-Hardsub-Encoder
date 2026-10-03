@@ -120,6 +120,15 @@ function installWindowsBridge(config, backendInfo) {
           postCallback('__onNativeInputProbe', { ok: false, probeGeneration: generation, error: error.message });
         });
     },
+    async startBink2Import() {
+      return JSON.stringify(await makeRequest(config, 'POST', '/api/import/bink2'));
+    },
+    async getBink2ImportStatus(jobId) {
+      return JSON.stringify(await makeRequest(config, 'GET', '/api/import-jobs/' + encodeURIComponent(jobId)));
+    },
+    cancelBink2Import(jobId) {
+      void makeRequest(config, 'POST', '/api/import-jobs/' + encodeURIComponent(jobId) + '/cancel').catch(() => {});
+    },
     runSelfTest() {
       void makeRequest(config, 'GET', '/api/self-test')
         .then(payload => postCallback('__onNativeSelfTest', payload))
