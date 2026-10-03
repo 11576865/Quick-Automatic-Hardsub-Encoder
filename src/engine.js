@@ -21,6 +21,7 @@ export class EncoderEngine {
     this.bundledFallbackFont = null;
     this.hasBundledFallbackFont = false;
     this.fallbackFontFamily = FALLBACK_FONT_FAMILY;
+    this.lastVerifiedOutput = null;
   }
 
   async init() {
@@ -295,6 +296,35 @@ export class EncoderEngine {
       .catch(()=>{})
       .then(run);
     return this.timelineFrameQueue;
+  }
+
+  async renderVerifiedOutputFrame(blob, timeSeconds, options = {}) {
+    this.assertReady();
+    if (!blob || !(blob.size > 0)) throw new Error('没有可供画质验证的成品');
+    const time = Math.max(0, Number(timeSeconds) || 0);
+    const width = Math.max(320, Math.min(1600, Math.floor(Number(options.width) || 960)));
+    let verified = this.lastVerifiedOutput;
+    if (!verified || verified.blob !== blob || !verified.path) {
+      const extension = options.extension || (blob.type === 'video/mp4' ? 'mp4' : 'mkv');
+      const stamp = Date.now();
+      const mountPoint = `/verify_compare_${stamp}`;
+      const fileName = 'encoded_output.' + extension;
+      const path = `${mountPoint}/${fileName}`;
+      await this.api.mount(mountPoint, { blobs: [{ name: fileName, data: blob }] });
+      verified = { blob, path, extension };
+      this.lastVerifiedOutput = verified;
+    }
+    const output = '/verified_output_frame.png';
+    const filter = `scale=${width}:-2:force_original_aspect_ratio=decrease`;
+    const cmd = `-y -ss ${time.toFixed(3)} -i ${q(verified.path)} -map 0:v:0 -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
+    await this.execute(cmd, false, 60000);
+    const bytes = await this.api.readFile(output);
+    if (!bytes || !bytes.length) throw new Error('成品画面验证帧没有生成');
+    return {
+      url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+      time,
+      width
+    };
   }
 
   async renderWaveform(options = {}) {
@@ -734,6 +764,8 @@ export class EncoderEngine {
       );
     const audioOk = audioTrackCountOk && audioDurationsOk;
 
+    this.lastVerifiedOutput = { blob, path, extension };
+
     return {
       // Kept for UI/backward compatibility. The full scan now intentionally
       // avoids ffprobe -show_packets to prevent huge textual packet dumps.
@@ -775,6 +807,7 @@ export class EncoderEngine {
     const mediaInfo = this.mediaInfo;
     const activeAssText = this.activeAssText;
     const activeFontMappings = { ...this.activeFontMappings };
+    this.lastVerifiedOutput = null;
 
     this.onLog(`重启 FFmpeg WASM runtime：${reason}`);
     try { await this.api.FFmpegKit?.cancel(); } catch {}
