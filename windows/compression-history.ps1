@@ -102,7 +102,7 @@ function Add-ClientCompressionEvidence($InputRecord) {
     $allowed = @(
         'evidenceVersion','evidenceKind','evidenceScope','sourceIdentity','runtimeIdentity',
         'backend','codec','preset','crf','targetSsim','ssim','averageSsim',
-        'sampleBitrate','averageSpeed','sampleCount','testedCrfs','width',
+        'sampleBitrate','averageSpeed','sampleCount','sampleMeasurements','testedCrfs','width',
         'height','fps','sourceCodec','sourcePixelFormat','sourceVideoBitrate',
         'duration'
     )
