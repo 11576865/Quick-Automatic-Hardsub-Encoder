@@ -5,6 +5,12 @@ function finite(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function optionalFinite(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 function cleanText(value) {
   return String(value ?? '').trim();
 }
@@ -51,8 +57,8 @@ export function normalizeCompressionEvidence(record) {
     outputBytes: finite(record.outputBytes),
     outputVideoBitrate: finite(record.outputVideoBitrate),
     sampleBitrate: finite(record.sampleBitrate || record.calibrationSampleBitrate),
-    ssim: Number.isFinite(Number(record.ssim)) ? Number(record.ssim) : null,
-    averageSsim: Number.isFinite(Number(record.averageSsim)) ? Number(record.averageSsim) : null
+    ssim: optionalFinite(record.ssim),
+    averageSsim: optionalFinite(record.averageSsim)
   };
 }
 
@@ -87,9 +93,9 @@ export function qualityEvidenceRecord({
     codec: cleanText(codec),
     preset: cleanText(preset),
     crf: finite(crf),
-    targetSsim: Number.isFinite(Number(targetSsim)) ? Number(targetSsim) : null,
-    ssim: Number.isFinite(Number(ssim)) ? Number(ssim) : null,
-    averageSsim: Number.isFinite(Number(averageSsim)) ? Number(averageSsim) : null,
+    targetSsim: optionalFinite(targetSsim),
+    ssim: optionalFinite(ssim),
+    averageSsim: optionalFinite(averageSsim),
     sampleBitrate: finite(sampleBitrate),
     averageSpeed: finite(encodeSpeed),
     sampleCount: Math.max(0, Math.round(finite(sampleCount))),
