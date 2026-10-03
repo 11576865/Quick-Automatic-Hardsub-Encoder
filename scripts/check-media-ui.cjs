@@ -43,6 +43,8 @@ const {spawn}=require('node:child_process');
   await windowsPage.reload();
   await windowsPage.waitForFunction(()=>document.querySelector('#runtimeModeBadge')?.textContent.trim()==='WINDOWS NATIVE');
   if(windowsHealthRequests<2)throw Error('Windows page refresh did not reconnect to the localhost Bridge');
+  if(await windowsPage.locator('body').getAttribute('data-runtime-backend')!=='windows-native')throw Error('Windows runtime identity was not reflected in semantic body state after refresh');
+  await windowsPage.screenshot({path:'media-workspace-windows-native-desktop.png',fullPage:true});
   await windowsPage.close();
 
   const page=await browser.newPage({viewport:{width:1280,height:900}});
