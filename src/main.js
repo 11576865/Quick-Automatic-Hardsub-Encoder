@@ -3644,43 +3644,54 @@ function invalidateQualityCalibration() {
 
 function updateQualityCalibrationControls() {
   const goal = $('encodeGoal')?.value || 'balanced';
-  const active = goal === 'targetQuality' || goal === 'efficiency';
-  $('qualityCalibrationControls')?.classList.toggle('hidden', !active);
+  const qualityActive = goal === 'targetQuality' || goal === 'efficiency';
+  const sizeActive = goal === 'sizeBudget';
+  $('qualityCalibrationControls')?.classList.toggle('hidden', !qualityActive);
 
-  if (!active) return;
   const nativeOnly = !state.nativeBackend?.available;
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
   const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
-  $('calibrateQualityBtn').disabled =
-    state.operationBusy || nativeOnly || inputNotReady || ssimUnavailable || state.qualityCalibrationBusy || !!state.nativeJobId;
+  const calibrationBlocked =
+    state.operationBusy || nativeOnly || inputNotReady || ssimUnavailable ||
+    state.qualityCalibrationBusy || !!state.nativeJobId;
   const controlsLocked = state.operationBusy || state.qualityCalibrationBusy;
+
+  if ($('calibrateQualityBtn')) {
+    $('calibrateQualityBtn').disabled = !qualityActive || calibrationBlocked;
+  }
+  if ($('calibrateSizeFrontierBtn')) {
+    $('calibrateSizeFrontierBtn').disabled = !sizeActive || calibrationBlocked;
+  }
   $('qualityTarget').disabled = controlsLocked;
   $('encodeGoal').disabled = controlsLocked;
   if ($('qualityTargetRange')) $('qualityTargetRange').disabled = controlsLocked;
   if ($('qualityAutoCodec')) $('qualityAutoCodec').disabled = controlsLocked;
   document.querySelectorAll('.plan-mode-tab').forEach(button => { button.disabled = controlsLocked; });
 
-  if (!state.qualityCalibrationBusy) {
-    if (goal === 'efficiency') {
-      $('calibrateQualityBtn').textContent = '比较三编码器等质量效率';
+  if (qualityActive) {
+    if (!state.qualityCalibrationBusy) {
+      if (goal === 'efficiency') {
+        $('calibrateQualityBtn').textContent = '比较三编码器等质量效率';
+      } else {
+        const codec = state.selectedCodec || chooseDefaultCodec(goal);
+        const label = codec === 'h264' ? 'H.264' : codec === 'h265' ? 'H.265' : codec === 'av1' ? 'AV1' : '所选编码器';
+        $('calibrateQualityBtn').textContent = '校准 ' + label + ' 目标质量';
+      }
     } else {
-      const codec = state.selectedCodec || chooseDefaultCodec(goal);
-      const label = codec === 'h264' ? 'H.264' : codec === 'h265' ? 'H.265' : codec === 'av1' ? 'AV1' : '所选编码器';
-      $('calibrateQualityBtn').textContent = '校准 ' + label + ' 目标质量';
+      $('calibrateQualityBtn').textContent = '正在实测校准…';
     }
-  } else {
-    $('calibrateQualityBtn').textContent = '正在实测校准…';
+
+    if (nativeOnly) {
+      $('qualityCalibrationResult').textContent =
+        '当前版本的目标质量校准需要 Native 后端；网页模式仍使用固定 CRF / 体积预算方案。';
+    } else if (ssimUnavailable) {
+      $('qualityCalibrationResult').textContent =
+        '当前 Native 核心没有通过 SSIM 能力检查，目标质量暂时不可用。';
+    }
   }
 
-  if (nativeOnly) {
-    $('qualityCalibrationResult').textContent =
-      '当前版本的目标质量校准需要 Native 后端；网页模式仍使用固定 CRF / 体积预算方案。';
-  } else if (ssimUnavailable) {
-    $('qualityCalibrationResult').textContent =
-      '当前 Native 核心没有通过 SSIM 能力检查，目标质量暂时不可用。';
-  }
+  renderSizeFrontier();
 }
-
 function renderPlanOptions() {
   if (!state.media) {
     syncPlanModeUI();
