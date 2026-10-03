@@ -1684,6 +1684,7 @@ function predictLocalEncode(codec, preset) {
   const fps = Number(m.fps || 0);
 
   const candidates = state.localBenchmarkHistory.filter(record => {
+    if (record?.evidenceKind !== 'full-encode') return false;
     if (record?.codec !== codec || String(record?.preset) !== String(preset)) return false;
     if (!(Number(record?.averageSpeed) > 0)) return false;
     if (Number(record?.width || 0) !== width || Number(record?.height || 0) !== height) return false;
