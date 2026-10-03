@@ -162,6 +162,7 @@ const {spawn}=require('node:child_process');
     window.taskRuns=[];
     window.taskBehavior='normal';
     window.taskCancelRequested=false;
+    window.verifyFrameRequests=[];
     window.mockAudioMedia={
       duration:2181.384,
       fps:60,
@@ -192,6 +193,14 @@ const {spawn}=require('node:child_process');
         keyframes:options?.includeKeyframes?[0,120,240,360,480,600,720,840,960,1080,1200,1320,1440,1560,1680,1800,1920,2040,2160]:[],
         keyframesTruncated:false
       }),
+      verifyFramePair:async options=>{
+        window.verifyFrameRequests.push(options);
+        const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=';
+        return {
+          source:{url:png,time:Number(options.sourceTime||0),width:Number(options.width||1200)},
+          output:{url:png,time:Number(options.outputTime||0),width:Number(options.width||1200)}
+        };
+      },
       run:async(task,media,progress)=>{
         window.taskRuns.push(task);
         progress?.(.42,'正在处理 · 90.0 秒',{state:'encoding',timeSec:90,duration:task.expectedDuration,speed:2.5});
@@ -312,6 +321,26 @@ const {spawn}=require('node:child_process');
   if((await page.locator('#taskRun').textContent()).trim()!=='重新压制')throw Error('Encode action did not demote after verification');
   if((await page.locator('#taskPercent').textContent()).trim()!=='100%')throw Error('Completed task did not expose 100% progress');
   if(await page.locator('#taskReport').isDisabled())throw Error('Report unavailable');
+  if(await page.locator('#taskOutputVerification').isHidden())throw Error('Verified transcode did not expose output verification');
+  await page.fill('#taskVerifyOutputTime','0:10');
+  await page.locator('#taskVerifyOutputTime').blur();
+  if(!(await page.locator('#taskVerifyMapping').textContent()).includes('源 0:10'))throw Error('Output verification did not map output time to source time');
+  await page.click('#taskVerifyFrames');
+  await page.waitForFunction(()=>!document.querySelector('#taskVerifySourceImage').hidden && !document.querySelector('#taskVerifyOutputImage').hidden);
+  const verifyRequests=await page.evaluate(()=>window.verifyFrameRequests);
+  if(verifyRequests.length!==1 || Math.abs(verifyRequests[0].sourceTime-10)>.001 || Math.abs(verifyRequests[0].outputTime-10)>.001)throw Error('Output verification requested wrong time pair: '+JSON.stringify(verifyRequests));
+  if(await page.locator('#taskVerifyTransformWarning').isHidden())throw Error('Spatial-transform verification warning did not appear for resized output');
+  await page.click('#taskVerifySourceImage');
+  if((await page.locator('#taskFrameFullscreenTitle').textContent()).trim()!=='源帧 ↔ 转码成品')throw Error('Output verification did not reuse fullscreen wipe comparison');
+  if((await page.locator('#taskFrameFullscreenLeftLabel').textContent()).includes('源素材')===false)throw Error('Fullscreen output verification lacks source label');
+  await page.keyboard.press('Escape');
+  if(!await page.locator('#taskFrameFullscreen').evaluate(el=>el.hidden))throw Error('Escape did not close output verification fullscreen');
+  await page.evaluate(()=>{
+    const slider=document.querySelector('#taskVerifyOutputSlider');
+    slider.value='12';
+    slider.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  if(!await page.locator('#taskVerifySourceImage').isHidden())throw Error('Changing verification time left stale frame evidence visible');
 
   await page.selectOption('[name=rateMode]','quality');
   if(await page.locator('#mediaWorkspace').getAttribute('data-completed-stale')!=='true')throw Error('Changing task settings did not mark the verified artifact as belonging to the previous task');
