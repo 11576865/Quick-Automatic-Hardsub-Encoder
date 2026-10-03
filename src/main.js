@@ -1270,7 +1270,12 @@ async function bootstrap() {
       : '<span class="ok">Android Native 模式。</span> 正式预览、测试片段和整片压制都直接调用设备内的 FFmpegKitNext / libass；网页后备环境只保留在高级诊断中。';
     updateEnvironmentSummary(false);
     refreshAnalyze();
+    await recoverWindowsNativeVideoSelection();
+    await recoverBink2ImportJob();
     await recoverNativeJob();
+    if (state.video && !state.nativeInputProbe && !state.nativeImportJobId) {
+      try { globalThis.NativeHardsub?.probeSelectedVideo?.(); } catch {}
+    }
     return;
   }
 
@@ -2566,6 +2571,27 @@ async function startBink2Import() {
   renderSourceAdapterState(probe);
   log('Bink 2 导入任务已创建：' + started.jobId + ' · ' + (started.converter || 'RAD Video Tools'));
   void monitorBink2Import(started.jobId);
+}
+
+async function recoverWindowsNativeVideoSelection() {
+  const bridge = globalThis.NativeHardsub;
+  if (!bridge?.__windowsNative || !bridge?.readSelectedVideoInfo || state.video) return;
+  try {
+    const info = JSON.parse(await Promise.resolve(bridge.readSelectedVideoInfo()));
+    if (!info?.ok || !info.name) return;
+    state.video = {
+      name: String(info.name),
+      size: Number(info.size || 0),
+      lastModified: Number(info.lastModified || 0),
+      type: 'video/x-windows-native-selection'
+    };
+    $('videoMeta').textContent = state.video.name + ' · ' + formatBytes(state.video.size) + ' · Windows Native 已恢复';
+    $('videoMeta').className = '';
+    if ($('videoWebPicker')) $('videoWebPicker').textContent = '更换视频';
+    log('Windows Native：已恢复当前视频选择 ' + state.video.name + '。');
+  } catch (error) {
+    log('Windows Native 视频选择恢复失败：' + error.message);
+  }
 }
 
 async function recoverBink2ImportJob() {
