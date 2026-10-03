@@ -26,7 +26,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/bink-import.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -101,6 +101,347 @@ jobs:
             $block = $source.Substring($start, $next - $start)
             if ($block -notmatch 'Show-NativeSaveFileDialog') { throw "$name bypasses the owned save dialog helper" }
             if ($block -match 'New-Object System\.Windows\.Forms\.SaveFileDialog') { throw "$name creates an unowned SaveFileDialog" }
+          }
+
+      - name: Validate optional Bink 2 import adapter contract
+        shell: powershell
+        run: |
+          . ./windows/bink-import.ps1
+          $work = Join-Path $env:RUNNER_TEMP 'bink2 adapter smoke'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $bk2 = Join-Path $work 'sample.bk2'
+          [IO.File]::WriteAllBytes($bk2, [byte[]](0x4B,0x42,0x32,0x61,0,0,0,0))
+          if (-not (Test-Bink2File $bk2)) { throw 'KB2 Bink 2 signature was not detected' }
+          $other = Join-Path $work 'sample.bin'
+          [IO.File]::WriteAllBytes($other, [byte[]](0x42,0x49,0x4B,0x69,0,0,0,0))
+          if (Test-Bink2File $other) { throw 'Bink 1 signature was misclassified as Bink 2' }
+
+          $fake = Join-Path $work 'radvideo64.exe'
+          [IO.File]::WriteAllBytes($fake, [byte[]](0x4D,0x5A))
+          $old = $env:RADVIDEO64
+          try {
+            $env:RADVIDEO64 = $fake
+            $tool = Find-RadVideoConverter (Resolve-Path ./windows)
+            if (-not $tool -or $tool.Mode -ne 'radvideo64' -or $tool.Source -ne 'RADVIDEO64') {
+              throw 'RADVIDEO64 override was not resolved'
+            }
+            $args = Get-RadBinkConvertArguments $tool 'C:\input file.bk2' 'C:\output file.avi'
+            if ($args -notmatch '^binkconv ' -or $args -notmatch '/#
+      - name: Real AV1 ALAC MKV acceptance
+        shell: powershell
+        run: |
+          $env:FFMPEG_INTEGRATION='1'
+          node --test src/av1-alac-acceptance.integration.test.mjs
+
+      - name: Validate native encoder catalog and software fallback
+        shell: powershell
+        run: |
+          . ./windows/native-backend.ps1
+          $resolvedFfmpeg = Find-NativeTool 'ffmpeg' (Resolve-Path ./windows)
+          $resolvedFfprobe = Find-NativeTool 'ffprobe' (Resolve-Path ./windows)
+          if (-not $resolvedFfmpeg -or -not $resolvedFfprobe) { throw 'Find-NativeTool failed to return the resolved FFmpeg toolchain' }
+          $catalog = @(Get-NativeEncoderCatalog)
+          foreach ($name in @('h264_nvenc','hevc_nvenc','av1_nvenc','libx264','libx265','libsvtav1')) {
+            if (-not ($catalog | Where-Object Key -eq $name)) { throw "Missing encoder profile: $name" }
+          }
+          $ffmpeg = (Get-Command ffmpeg.exe).Source
+          $ffprobe = (Get-Command ffprobe.exe).Source
+          $caps = Get-NativeCapabilities $ffmpeg $ffprobe (Resolve-Path ./windows)
+          if (-not $caps.Ffmpeg -or -not $caps.Ffprobe) { throw 'Native FFmpeg/FFprobe detection failed' }
+          if (-not $caps.HasAss) { throw 'Runner FFmpeg does not expose the ass filter' }
+          foreach ($software in @('libx264','libx265','libsvtav1')) {
+            $profile = $catalog | Where-Object Key -eq $software | Select-Object -First 1
+            $args = Get-NativeEncoderArguments $profile
+            if ($args -notmatch [regex]::Escape($software)) { throw "Wrong encoder args for $software" }
+          }
+          $actualSoftware = @($caps.Encoders | Where-Object { -not $_.Hardware -and $_.Available })
+          if (-not $actualSoftware.Count) { throw 'Installed runner FFmpeg exposes no supported software fallback' }
+          if (-not (Get-NativeEncoderProfile $caps 'libx264').Available) { throw 'Expected libx264 fallback is unavailable' }
+          # Hosted runners normally have no NVIDIA device. NVENC may be listed by FFmpeg,
+          # but Available must stay false unless the one-frame runtime probe succeeds.
+          foreach ($hardware in @($caps.Encoders | Where-Object Hardware)) {
+            if ($hardware.Available -and -not $hardware.Runtime) { throw "False-positive NVENC availability: $($hardware.Key)" }
+          }
+          $gpuNames = @(Get-WindowsGpuNames (Resolve-Path ./windows))
+          if ($null -eq $gpuNames) { throw 'GPU name detector returned null instead of an array' }
+          if (@($caps.Encoders | Where-Object { $_.Hardware -and $_.Available }).Count -and -not @($caps.Gpus).Count) {
+            throw 'NVENC runtime is available but capability summary still exposes no NVIDIA GPU fallback label'
+          }
+      - name: Normalize UTF-16 ASS and validate libass input
+        shell: powershell
+        run: |
+          . ./windows/native-backend.ps1
+          $work = Join-Path $env:RUNNER_TEMP 'utf16 ass smoke'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          $source = Join-Path $work 'source.ass'
+          $normalized = Join-Path $work 'subtitle.ass'
+          $text = @'
+          [Script Info]
+          ScriptType: v4.00+
+          PlayResX: 320
+          PlayResY: 240
+          [V4+ Styles]
+          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+          Style: Default,Arial,24,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,10,1
+          [Events]
+          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+          Dialogue: 0,0:00:00.00,0:00:01.50,Default,,0,0,0,,测试字幕
+          '@
+          [IO.File]::WriteAllText($source, $text, [Text.Encoding]::Unicode)
+          $info = Convert-AssToUtf8Normalized $source $normalized
+          if ($info.Encoding -notmatch 'UTF-16 LE') { throw "Unexpected ASS encoding detection: $($info.Encoding)" }
+          $bytes = [IO.File]::ReadAllBytes($normalized)
+          if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { throw 'Normalized ASS unexpectedly contains UTF-8 BOM' }
+          Push-Location $work
+          try {
+            & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'color=c=black:s=320x240:r=15:d=2' -vf 'ass=subtitle.ass' -c:v libx264 -t 1 'normalized.mkv'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            if (-not (Test-Path 'normalized.mkv')) { throw 'Normalized ASS encode output missing' }
+          } finally { Pop-Location }
+
+      - name: Validate NVENC runtime probe diagnostics contract
+        shell: powershell
+        run: |
+          . ./windows/native-backend.ps1
+          $ffmpeg = (Get-Command ffmpeg.exe).Source
+          $result = Test-NvencRuntime $ffmpeg 'h264_nvenc'
+          foreach ($name in @('Available','ExitCode','Error','Bytes')) {
+            if ($result.PSObject.Properties.Name -notcontains $name) { throw "NVENC probe missing field: $name" }
+          }
+          if ($result.Available -and $result.Bytes -le 0) { throw 'Successful NVENC probe did not produce encoded bytes' }
+          if (-not $result.Available -and $null -eq $result.Error) { throw 'Failed NVENC probe did not preserve diagnostics' }
+
+      - name: Smoke Windows localhost bridge
+        shell: powershell
+        run: |
+          $bridge = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile',
+            '-ExecutionPolicy','Bypass',
+            '-File',(Resolve-Path './windows/native-bridge.ps1'),
+            '-NoBrowser',
+            '-Port','8877',
+            '-Token','ci-test-token'
+          )
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 30; $i++) {
+              Start-Sleep -Milliseconds 500
+              try {
+                $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8877/api/health' -Headers @{
+                  'X-Quick-Hardsub-Token'='ci-test-token'
+                  'Origin'='http://127.0.0.1:8877'
+                } -TimeoutSec 3
+                if ($health.backend -eq 'windows-native' -and $health.available) {
+                  $ready = $true
+                  break
+                }
+              } catch {}
+            }
+            if (-not $ready) { throw 'Windows Native Bridge did not become ready' }
+            if (-not $health.ffmpeg -or -not $health.ffprobe) { throw 'Bridge did not expose FFmpeg/FFprobe' }
+            if (-not $health.encoders) { throw 'Bridge did not expose encoder capabilities' }
+
+            $preflight = Invoke-WebRequest -Method Options -Uri 'http://127.0.0.1:8877/api/health' -Headers @{
+              'Origin'='https://11576865.github.io'
+              'Access-Control-Request-Method'='GET'
+              'Access-Control-Request-Headers'='x-quick-hardsub-token'
+              'Access-Control-Request-Private-Network'='true'
+            } -UseBasicParsing
+            if ($preflight.Headers['Access-Control-Allow-Origin'] -ne 'https://11576865.github.io') { throw 'Bridge CORS origin is wrong' }
+            if ($preflight.Headers['Access-Control-Allow-Private-Network'] -ne 'true') { throw 'Bridge private-network opt-in is missing' }
+
+            $utf8Body = '{"requestId":"ci","timeSeconds":0.5,"assText":"中文"}'
+            $bytes = [Text.Encoding]::UTF8.GetByteCount($utf8Body)
+            if ($bytes -le $utf8Body.Length) { throw 'UTF-8 smoke body is not multibyte as expected' }
+          } finally {
+            if ($bridge -and -not $bridge.HasExited) { Stop-Process -Id $bridge.Id -Force }
+          }
+
+      - name: Preserve old output until replacement succeeds
+        shell: powershell
+        run: |
+          . ./windows/output-safety.ps1
+          $work = Join-Path $env:RUNNER_TEMP 'output safety'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          $target = Join-Path $work 'finished.mkv'
+          $temporary = Join-Path $work 'new.tmp.mkv'
+          [IO.File]::WriteAllText($target, 'old')
+          [IO.File]::WriteAllBytes($temporary, [byte[]]@())
+          try { Publish-VerifiedOutput $temporary $target; throw 'Expected empty-file rejection' }
+          catch { if ($_.Exception.Message -eq 'Expected empty-file rejection') { throw } }
+          if ([IO.File]::ReadAllText($target) -ne 'old') { throw 'Old output was lost' }
+          [IO.File]::WriteAllText($temporary, 'new')
+          Publish-VerifiedOutput $temporary $target
+          if ([IO.File]::ReadAllText($target) -ne 'new') { throw 'Replacement failed' }
+      - name: Encode bounded CPU codec matrix with real ASS
+        shell: powershell
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP 'hard sub codec matrix'
+          New-Item -ItemType Directory -Path $work | Out-Null
+          Set-Content -Path (Join-Path $work 'subtitle.ass') -Encoding UTF8 -Value @'
+          [Script Info]
+          ScriptType: v4.00+
+          PlayResX: 320
+          PlayResY: 180
+          [V4+ Styles]
+          Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+          Style: Default,Arial,22,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,1,0,2,10,10,12,1
+          Style: Top,Arial,18,&H0000FFFF,&H000000FF,&H00000000,&H00000000,0,1,0,0,100,100,0,0,1,1,0,8,10,10,10,1
+          [Events]
+          Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+          Dialogue: 0,0:00:00.05,0:00:01.35,Default,,0,0,0,,{\fad(80,80)}CPU codec smoke
+          Dialogue: 1,0:00:00.20,0:00:01.20,Top,,0,0,0,,{\pos(160,28)}libass
+          '@
+
+          Push-Location $work
+          try {
+            $sourceArgs = @(
+              '-hide_banner','-loglevel','error','-y',
+              '-f','lavfi','-i','testsrc2=size=320x180:rate=12:duration=1.5',
+              '-f','lavfi','-i','sine=frequency=880:sample_rate=48000:duration=1.5',
+              '-c:v','libx264','-preset','ultrafast','-crf','35','-threads','1',
+              '-c:a','aac','-b:a','64k','-shortest','input.mkv'
+            )
+            & ffmpeg @sourceArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+            $encoderList = (& ffmpeg -hide_banner -encoders 2>&1) -join "`n"
+            $matrix = @(
+              @{ Encoder='libx264'; Expected='h264'; Args=@('-preset','ultrafast','-crf','28') },
+              @{ Encoder='libx265'; Expected='hevc'; Args=@('-preset','ultrafast','-crf','30') },
+              @{ Encoder='libsvtav1'; Expected='av1'; Args=@('-preset','13','-crf','40') }
+            )
+            $tested = 0
+
+            foreach ($case in $matrix) {
+              if ($encoderList -notmatch ('\b' + [regex]::Escape($case.Encoder) + '\b')) {
+                Write-Host "::notice::Skipping $($case.Encoder): not exposed by the hosted runner FFmpeg build."
+                continue
+              }
+
+              $out = "output-$($case.Encoder).mkv"
+              $progress = "progress-$($case.Encoder).txt"
+              $args = @(
+                '-hide_banner','-loglevel','error','-y',
+                '-progress',$progress,
+                '-i','input.mkv',
+                '-map','0:v:0','-map','0:a?',
+                '-sn',
+                '-vf','ass=subtitle.ass',
+                '-c:v',$case.Encoder
+              ) + $case.Args + @(
+                '-threads','1',
+                '-c:a','copy',
+                '-t','1.25',
+                $out
+              )
+
+              & ffmpeg @args
+              if ($LASTEXITCODE -ne 0) { throw "$($case.Encoder) hard-sub smoke failed with exit code $LASTEXITCODE" }
+              if (-not (Test-Path $out) -or (Get-Item $out).Length -le 0) { throw "$($case.Encoder) output missing or empty" }
+              if (-not (Test-Path $progress)) { throw "$($case.Encoder) progress file missing" }
+
+              $videoCodec = (& ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 $out).Trim()
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              if ($videoCodec -ne $case.Expected) { throw "$($case.Encoder) produced unexpected video codec: $videoCodec" }
+
+              $audioCodec = (& ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 $out).Trim()
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              if ($audioCodec -ne 'aac') { throw "$($case.Encoder) did not preserve copied AAC audio: $audioCodec" }
+
+              Write-Host "$($case.Encoder) smoke passed: $videoCodec + copied $audioCodec"
+              $tested++
+            }
+
+            if ($tested -lt 1) { throw 'Hosted runner exposed none of the supported CPU encoders.' }
+            Write-Host "Bounded hard-sub matrix completed: $tested encoder(s) tested."
+          } finally {
+            Pop-Location
+          }
+      - name: Validate structured media task arguments
+        shell: powershell
+        run: |
+          . ./windows/media-task.ps1
+          $valid = [pscustomobject]@{version=3;operation='copy';start=0;end=1;outputArgs=@('-ss','0','-map','0:v:0','-c:v','copy','-sn')}
+          $args = Get-MediaTaskArgs $valid
+          if($args.Count -ne 7){throw 'Task args did not round-trip.'}
+
+          $av1AlacCopy = [pscustomobject]@{
+            version=3;operation='copy';start=0;end=1.5;twoPass=$false
+            outputArgs=@('-map','0:v:0','-map','0:a?','-c:v','copy','-c:a','copy','-sn')
+          }
+          $copyArgs = Get-MediaTaskArgs $av1AlacCopy
+          if($copyArgs -notcontains 'copy' -or $copyArgs -notcontains '0:a?'){throw 'AV1+ALAC copy task did not survive Windows parser.'}
+
+          $av1AlacHardsubAac = [pscustomobject]@{
+            version=3;operation='hardsub';start=0;end=1.5;twoPass=$false
+            outputArgs=@(
+              '-map','0:v:0','-map','0:a?','-sn',
+              '-vf','ass=__ASS__:fontsdir=__FONTS__,pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0',
+              '-c:v','libx264','-preset','ultrafast','-crf','28','-pix_fmt','yuv420p',
+              '-c:a','aac','-b:a','96000','-ac','2','-ar','48000'
+            )
+          }
+          $aacArgs = Get-MediaTaskArgs $av1AlacHardsubAac
+          if($aacArgs -notcontains 'aac' -or $aacArgs -notcontains 'ass=__ASS__:fontsdir=__FONTS__,pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0'){
+            throw 'AV1+ALAC hard-sub AAC task did not survive Windows parser.'
+          }
+
+          foreach($bad in @(@('-i','C:\private.txt'),@('-vf','movie=C:\private.txt','-c:v','libx264'),@('-c:v','libx264'))){
+            $valid.outputArgs=$bad
+            $rejected=$false
+            try { Get-MediaTaskArgs $valid | Out-Null } catch { $rejected=$true }
+            if(-not $rejected){throw 'Unsafe/incompatible task accepted.'}
+          }
+
+      - name: Validate budget task and real x264 two-pass output
+        shell: powershell
+        run: |
+          . ./windows/media-task.ps1
+          . ./windows/native-backend.ps1
+          $options=@('-ss','0','-map','0:v:0','-map','0:a?','-sn','-c:v','libx264','-preset','medium','-b:v','500000','-r','60','-fps_mode','cfr','-pix_fmt','yuv420p','-vf','scale=128:72:flags=lanczos,pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0','-c:a','aac','-b:a','96000','-ac','2')
+          $task=[pscustomobject]@{version=3;operation='transcode';start=0;end=2;twoPass=$true;outputArgs=$options;expectedWidth=128;expectedHeight=72;expectedFps=60;expectedBitDepth=8}
+          $valid=Get-MediaTaskArgs $task
+          $first=Get-MediaFirstPassArgs $valid
+          if($first -contains '-c:a' -or $first -contains '0:a?' -or $first -notcontains '-an'){throw 'First pass maps audio.'}
+          $work=Join-Path $env:RUNNER_TEMP 'media-two-pass'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          Push-Location $work
+          try {
+            ffmpeg -v error -y -f lavfi -i 'testsrc2=size=160x90:rate=60' -f lavfi -i 'sine=sample_rate=48000' -t 2 -c:v libx264 -c:a aac source.mkv
+            if($LASTEXITCODE -ne 0){throw 'Source generation failed.'}
+            & ffmpeg -v error -y -i source.mkv -t 2 @first -pass 1 -passlogfile task-pass -f null NUL
+            if($LASTEXITCODE -ne 0){throw 'First pass failed.'}
+            & ffmpeg -v error -y -i source.mkv -t 2 @valid -pass 2 -passlogfile task-pass -f matroska output.mkv
+            if($LASTEXITCODE -ne 0){throw 'Second pass failed.'}
+            $info=(ffprobe -v error -show_streams -show_format -of json output.mkv) | ConvertFrom-Json
+            Test-MediaOutput $task @($info.streams | Where-Object codec_type -eq 'video')[0]
+            $rejected=$false
+            $task.expectedFps=30
+            try { Test-MediaOutput $task @($info.streams | Where-Object codec_type -eq 'video')[0] } catch {$rejected=$true}
+            if(-not $rejected){throw 'Wrong output frame rate accepted.'}
+          } finally { Pop-Location }
+ -or $args -notmatch '"C:\\input file\.bk2"') {
+              throw "Unexpected RAD converter arguments: $args"
+            }
+            $cap = Get-Bink2ImportCapability $bk2 (Resolve-Path ./windows)
+            if (-not $cap.isBink2 -or -not $cap.available -or $cap.bundled) {
+              throw 'Bink 2 capability contract is wrong'
+            }
+          } finally {
+            $env:RADVIDEO64 = $old
+          }
+
+          $bridgeSource = Get-Content -Raw './windows/native-bridge.ps1'
+          foreach ($required in @(
+            '/api/import/bink2',
+            '/api/import-jobs/',
+            'sourceAdapterRequired',
+            'sourceAdapterApplied',
+            'Bink 2 must be imported through RAD Video Tools',
+            'Stream Copy is unavailable for a Bink 2 source'
+          )) {
+            if (-not $bridgeSource.Contains($required)) { throw "Bink 2 bridge contract lost: $required" }
           }
 
       - name: Install FFmpeg for encoding smoke
