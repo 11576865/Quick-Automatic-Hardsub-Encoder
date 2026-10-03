@@ -106,6 +106,12 @@ jobs:
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
+      - name: Real AV1 ALAC MKV acceptance
+        shell: powershell
+        run: |
+          $env:FFMPEG_INTEGRATION='1'
+          node --test src/av1-alac-acceptance.integration.test.mjs
+
       - name: Validate native encoder catalog and software fallback
         shell: powershell
         run: |
