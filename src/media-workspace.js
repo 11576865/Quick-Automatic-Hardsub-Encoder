@@ -1,5 +1,6 @@
 import { formatSize, outputReport, sampleSettings, sampleProjection } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
+import { audioCopyPlaybackWarning } from './media-container.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import './media-workspace-ui.css';
 
@@ -124,7 +125,7 @@ export function mountMediaWorkspace(hooks) {
   <section id="taskOutputPolicy" class="media-output-policy">
     <div class="media-output-policy-heading"><span>共享出口</span><strong>音频与封装</strong><p>三条任务在这里重新汇合。音频转换必须由用户显式选择；容器不兼容时明确要求调整，不会静默转码。</p></div>
     <div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${select('outputContainer','成品容器',[['auto','Auto · 自动选择安全容器'],['keep','保持源容器（可用时）'],['mkv','MKV · Matroska'],['mp4','MP4 · MPEG-4']])}</div>
-    <p id="taskAudioPlaybackWarning" class="media-audio-playback-warning" role="status" data-state="warning">注意：复制原音频只保留现有码流。封装成功、成品中存在音轨，不等于目标播放器一定能解码；如果成品无声，请改为“转为 AAC”。</p>
+    <p id="taskAudioPlaybackWarning" class="media-audio-playback-warning" role="status" data-state="warning">注意：复制原音频只保留现有码流。尚未取得源音频 codec；读取视频参数后会显示更具体的播放兼容性提示。如果成品无声，可改为“转为 AAC”。</p>
     <p id="taskContainerDecision" class="note">执行检查后显示实际容器选择及原因。</p>
   </section>
   <details class="media-sample-panel"><summary>配置保存与短片试压比较</summary><div class="task-grid">${input('configName','配置名称','我的配置')}${select('savedConfig','已保存配置',[])}${input('sampleStart','试压起点','例如 3:57.250','0')}${input('sampleLength','试压长度（秒）','2–60','15')}</div><div class="button-row"><button type="button" id="taskStore" class="secondary">保存当前配置</button><button type="button" id="taskRestore" class="secondary">加载配置</button><button type="button" id="taskDelete" class="secondary">删除配置</button><button type="button" id="taskExportConfig" class="secondary">导出配置 JSON</button><label>导入配置 JSON<input type="file" id="taskImportConfig" accept="application/json,.json"></label><button type="button" id="taskSamples" class="secondary">比较三组短片</button></div><p class="note">质量模式比较质量值 ±2；码率模式比较码率 ±20%。片段体积外推不保证整片大小，建议选择运动或细节复杂的片段。原生短片可保存到设备后比较。</p><div id="taskSampleResults" aria-live="polite"></div></details>
@@ -486,7 +487,7 @@ export function mountMediaWorkspace(hooks) {
     el.textContent='实际输出：'+task.outputContainer.toUpperCase()+' · '+task.containerReason+(task.sourceContainer?' · 源容器 '+task.sourceContainer.toUpperCase():'');
     el.dataset.state='resolved';
   };
-  const syncAudioPlaybackWarning = task => {
+  const syncAudioPlaybackWarning = (task=null, media=null) => {
     const el=outputPolicy?.querySelector('#taskAudioPlaybackWarning');
     if(!el)return;
     const audioControl=outputPolicy?.querySelector('[name="audio"]');
@@ -497,12 +498,16 @@ export function mountMediaWorkspace(hooks) {
       el.removeAttribute('data-state');
       return;
     }
-    const detailed=Array.isArray(task?.compatibilityWarnings)
-      ? task.compatibilityWarnings.find(message=>String(message).includes('复制原音频'))
-      : '';
+
+    const currentMedia = media || hooks.mediaSnapshot?.() || null;
+    const assessment = currentMedia
+      ? audioCopyPlaybackWarning(task || {audio:'copy'}, currentMedia)
+      : null;
+
     el.hidden=false;
-    el.dataset.state='warning';
-    el.textContent=detailed || '注意：复制原音频只保留现有码流。封装成功、成品中存在音轨，不等于目标播放器一定能解码；如果成品无声，请改为“转为 AAC”。';
+    el.dataset.state=assessment?.severity || 'warning';
+    el.textContent=assessment?.message ||
+      '注意：复制原音频只保留现有码流。尚未取得源音频 codec；封装成功、成品中存在音轨，也不等于目标播放器一定能解码。读取视频参数后会显示更具体的兼容性提示。如果成品无声，可改为“转为 AAC”。';
   };
   const syncTaskActions = () => {
     const stateName=section.dataset.taskState||'idle',run=section.querySelector('#taskRun'),save=section.querySelector('#taskSave');
@@ -745,7 +750,9 @@ export function mountMediaWorkspace(hooks) {
     updateRate();
     syncAudioPlaybackWarning();
   };
+  const mediaInfoListener = () => syncAudioPlaybackWarning();
   document.addEventListener('change',handleSharedAudioChange);
+  document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   get('rateMode').onchange=updateRate;
   section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();status('配置已保存');}catch(e){status(e.message);}};
   section.querySelector('#taskRestore').onclick=()=>{try{const raw=configs()[get('savedConfig').value];if(raw){applyConfig(raw);renderPlanSummary(activeTask);}}catch(e){status(e.message);}};
@@ -764,7 +771,7 @@ export function mountMediaWorkspace(hooks) {
     const task=compileTask(raw,media);
     await hooks.validate?.(task);
     renderContainerDecision(task);
-    syncAudioPlaybackWarning(task);
+    syncAudioPlaybackWarning(task,media);
     const compat = Array.isArray(task.compatibilityWarnings) && task.compatibilityWarnings.length
       ? ' 兼容性：'+task.compatibilityWarnings.join(' ')
       : '';
@@ -869,5 +876,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
-  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }

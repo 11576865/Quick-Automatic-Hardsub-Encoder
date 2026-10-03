@@ -105,10 +105,22 @@ const {spawn}=require('node:child_process');
     document.body.innerHTML='<section id="inputCard"></section>';
     const {mountMediaWorkspace}=await import('/src/media-workspace.js');
     window.taskRuns=[];
+    window.mockAudioMedia={
+      duration:2181.384,
+      fps:60,
+      audioTracks:1,
+      audioCodec:'aac',
+      audioCodecs:['aac'],
+      audioBitRate:192000,
+      formatName:'mov,mp4,m4a,3gp,3g2,mj2',
+      sourceName:'ui.mp4',
+      videoCodec:'h264'
+    };
     mountMediaWorkspace({
       isWindows:()=>false,
       hasNvenc:()=>false,
       platformKey:()=>({}),
+      mediaSnapshot:()=>window.mockAudioMedia,
       busy:()=>false,
       setBusy:()=>{},
       log:()=>{},
@@ -133,6 +145,26 @@ const {spawn}=require('node:child_process');
       }
     });
   });
+
+  if((await page.locator('#taskAudioPlaybackWarning').getAttribute('data-state'))!=='info')throw Error('AAC copy guidance is not rendered as informational');
+  if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('AAC · 1 轨 · 192 kb/s'))throw Error('AAC codec-aware guidance does not expose probed audio facts');
+  await page.evaluate(()=>{
+    window.mockAudioMedia={...window.mockAudioMedia,audioCodec:'dts',audioCodecs:['dts'],audioBitRate:1536000};
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
+  if((await page.locator('#taskAudioPlaybackWarning').getAttribute('data-state'))!=='warning')throw Error('DTS copy guidance is not rendered as a warning');
+  if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('DTS · 1 轨 · 1536 kb/s'))throw Error('DTS codec-aware guidance does not expose probed audio facts');
+  if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('转为 AAC'))throw Error('DTS copy guidance lacks AAC recovery action');
+  await page.evaluate(()=>{
+    window.mockAudioMedia={...window.mockAudioMedia,audioCodec:'aac',audioCodecs:['aac'],audioBitRate:192000};
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
+  await page.evaluate(value=>{const control=document.querySelector('[name=audio]');control.value=value;control.dispatchEvent(new Event('change',{bubbles:true}));},'aac');
+  if(!await page.locator('#taskAudioPlaybackWarning').evaluate(el=>el.hidden))throw Error('Codec-aware copy guidance remains active after explicit AAC transcode');
+  await page.evaluate(value=>{const control=document.querySelector('[name=audio]');control.value=value;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
+  if(await page.locator('#taskAudioPlaybackWarning').evaluate(el=>el.hidden))throw Error('Codec-aware copy guidance does not return after selecting copy');
+  if((await page.locator('#taskAudioPlaybackWarning').getAttribute('data-state'))!=='info')throw Error('Restored AAC copy guidance lost informational state');
+
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
   await page.click('#taskWaveformLoad');
   await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('第 1 条音轨'));

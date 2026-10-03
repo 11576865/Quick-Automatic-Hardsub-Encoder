@@ -748,6 +748,12 @@ body[data-media-operation="copy"] .media-operation-branch-copy {
   line-height: 1.55;
 }
 
+.media-audio-playback-warning[data-state="info"] {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--border));
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+}
+
 .media-audio-playback-warning[hidden] {
   display: none;
 }

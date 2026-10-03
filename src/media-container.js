@@ -28,14 +28,56 @@ function copiedAudioCodecs(media={}) {
   return one?[one]:[];
 }
 
+const BROAD_PLAYBACK_AUDIO = new Set(['aac','mp3']);
+const AUDIO_CODEC_LABELS = Object.freeze({
+  aac:'AAC',
+  mp3:'MP3',
+  ac3:'AC-3',
+  eac3:'E-AC-3',
+  dts:'DTS',
+  truehd:'TrueHD',
+  flac:'FLAC',
+  opus:'Opus',
+  vorbis:'Vorbis',
+  alac:'ALAC',
+  pcm_s16le:'PCM S16LE',
+  pcm_s24le:'PCM S24LE',
+  pcm_s32le:'PCM S32LE',
+  pcm_f32le:'PCM F32LE',
+});
+
+function audioCodecLabel(codec='') {
+  const key=cleanCodec(codec);
+  return AUDIO_CODEC_LABELS[key] || key.toUpperCase();
+}
+
 export function audioCopyPlaybackWarning(task={}, media={}) {
   if(task.audio!=='copy' || Number(media.audioTracks||0)<=0)return null;
   const codecs=[...new Set(copiedAudioCodecs(media))];
-  const detected=codecs.length ? codecs.join(' / ') : '未能确认';
+  const tracks=Math.max(1,Number(media.audioTracks||0));
+  const detected=codecs.length ? codecs.map(audioCodecLabel).join(' / ') : '未能确认';
+  const broad=codecs.length>0 && codecs.every(codec=>BROAD_PLAYBACK_AUDIO.has(codec));
+  const bitrate=Number(media.audioBitRate||0);
+  const facts=`${detected} · ${tracks} 轨${bitrate>0 ? ' · '+Math.round(bitrate/1000)+' kb/s' : ''}`;
+
+  if(broad){
+    return {
+      code:'audio-copy-playback-common',
+      severity:'info',
+      confidence:'common-playback',
+      codecs,
+      tracks,
+      message:`检测到源音频：${facts}。复制原音频会保留现有码流，不重新编码。AAC / MP3 在常见播放环境中通常具有较广支持，但当前项目无法验证你实际使用的外部播放器；程序内部验证通过也不等于目标播放器一定有声。`
+    };
+  }
+
   return {
-    code:'audio-copy-playback-unverified',
+    code:codecs.length ? 'audio-copy-playback-unverified' : 'audio-copy-playback-codec-unknown',
+    severity:'warning',
+    confidence:codecs.length ? 'player-dependent' : 'unknown-codec',
     codecs,
-    message:`复制原音频只保留现有码流，不会提升播放器兼容性。检测到源音频：${detected}。即使封装成功且成品中存在音轨，也不代表目标播放器一定能解码；如果成品无声，请改为“转为 AAC”。`
+    tracks,
+    message:`检测到源音频：${facts}。复制原音频会原样保留这些码流，不会提升播放器兼容性。程序内部最多只能证明音轨存在或当前后端能够解码，不能证明你实际使用的外部播放器支持；如果成品无声，请改为“转为 AAC”。`
   };
 }
 

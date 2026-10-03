@@ -61,9 +61,16 @@ test('track selection and mute change expected output count',()=>{
   assert.equal(build({audioTrack:'1'}).expectedAudioTracks,1);
   assert.throws(()=>build({audioTrack:'2'}));
 });
-test('copied audio carries playback warning while AAC does not',()=>{
+test('copied audio carries codec-aware playback guidance while explicit AAC transcode does not',()=>{
   const copied=build({audio:'copy'});
-  assert.ok(copied.compatibilityWarnings.some(message=>message.includes('成品中存在音轨') && message.includes('转为 AAC')));
+  assert.ok(copied.compatibilityWarnings.some(message=>message.includes('AAC · 2 轨') && message.includes('外部播放器')));
+
+  const dts=compileTask(
+    {...defaults,audio:'copy'},
+    {...media,audioTracks:1,audioCodec:'dts',audioCodecs:['dts']}
+  );
+  assert.ok(dts.compatibilityWarnings.some(message=>message.includes('DTS · 1 轨') && message.includes('转为 AAC')));
+
   const aac=build({audio:'aac'});
   assert.equal(aac.compatibilityWarnings.some(message=>message.includes('复制原音频')),false);
 });

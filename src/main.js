@@ -600,6 +600,10 @@ function currentFontKey() {
   return state.fonts.map(file => `${file.name}:${file.size}:${file.lastModified}`).join('|');
 }
 
+function notifyMediaInfoChanged() {
+  document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+}
+
 function invalidateAnalysis({ clearVideoMetadata = false } = {}) {
   if (clearVideoMetadata) {
     state.sourceMedia = null;
@@ -743,6 +747,7 @@ $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
   state.nativeInputProbe = null;
   invalidateAnalysis({ clearVideoMetadata: true });
+  notifyMediaInfoChanged();
   $('videoMeta').textContent = state.video ? `${state.video.name} · ${formatBytes(state.video.size)}` : '未选择';
   if ($('videoWebPicker')) $('videoWebPicker').textContent = state.video ? '更换视频' : '选择视频';
   const browserTooLarge = !state.nativeBackend?.available && state.video?.size > MAX_BYTES;
@@ -1364,6 +1369,7 @@ function detectNativeBackend() {
       if (p.ok) {
         state.sourceMedia = mediaFromNativeProbe(p);
         renderSourceVideoSummary();
+        notifyMediaInfoChanged();
         log(
           (state.nativeBackend?.backend === 'windows-native' ? 'Windows Native 输入探测：' : 'Android SAF 输入探测：') +
           (p.seekable ? '可 seek' : '不可 seek，将需要本地 staging') +
@@ -1372,6 +1378,7 @@ function detectNativeBackend() {
           ' · ' + Number(p.duration || 0).toFixed(3) + ' s'
         );
       } else {
+        notifyMediaInfoChanged();
         log('Android SAF 输入探测失败：' + (p.error || '未知错误'));
       }
       renderBackendSummary();
@@ -2238,9 +2245,20 @@ function renderSourceVideoSummary(media = state.sourceMedia) {
     return;
   }
   const videoRate = Number(media.videoBitRate || media.bitRate || 0);
-  const audio = media.audioCodec
-    ? media.audioCodec + (Number(media.audioTracks || 0) > 1 ? ' · ' + Number(media.audioTracks) + ' 轨' : '')
-    : '未检测到';
+  const audioTracks = Number(media.audioTracks || 0);
+  const audioCodecs = [...new Set(
+    (Array.isArray(media.audioCodecs) && media.audioCodecs.length
+      ? media.audioCodecs
+      : media.audioCodec ? [media.audioCodec] : [])
+      .map(codec => String(codec || '').trim())
+      .filter(Boolean)
+  )];
+  const audioRate = Number(media.audioBitRate || 0);
+  const audio = audioTracks > 0
+    ? (audioCodecs.length ? audioCodecs.map(codec => codec.toUpperCase()).join(' / ') : 'CODEC 未知') +
+      ' · ' + audioTracks + ' 轨' +
+      (audioRate > 0 ? ' · ' + formatBitrate(audioRate) : '')
+    : '未检测到音轨';
   const color = [media.colorPrimaries, media.colorTransfer, media.colorSpace].filter(Boolean).join(' / ') || '未标记';
   const rows = [
     ['源视频编码', media.videoCodec || '未知'],
@@ -2277,6 +2295,7 @@ async function analyzeVideoOnly() {
   if (!state.media?.width || !state.media?.height) throw new Error('所选文件没有可识别的视频流');
   state.sourceMedia = { ...state.media };
   renderSourceVideoSummary();
+  notifyMediaInfoChanged();
   log(
     '源视频参数：' +
     state.media.videoCodec + ' · ' +
@@ -2371,6 +2390,7 @@ async function analyzeAll() {
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       state.sourceMedia = { ...state.media };
       renderSourceVideoSummary();
+      notifyMediaInfoChanged();
       log(`FFprobe：${state.media.videoCodec} ${state.media.width}x${state.media.height} ${state.media.fps.toFixed(2)} fps · ${state.media.pixelFormat || '未知像素格式'} · ${state.media.bitDepth}-bit`);
 
       if (state.media.videoCodec === 'av1' && state.softwareDecoders.av1Dav1d === false) {
@@ -2385,6 +2405,7 @@ async function analyzeAll() {
       if (!state.media.width || !state.media.height) throw new Error('所选文件没有可识别的视频流');
       state.sourceMedia = { ...state.media };
       renderSourceVideoSummary();
+      notifyMediaInfoChanged();
       state.inputDecodeOk = false;
       log('Native 媒体元数据已读取；首张真实字幕预览将同时完成输入解码验证。');
 
@@ -4507,6 +4528,12 @@ mountMediaWorkspace({
     return !!state.nativeBackend?.encoders?.some(e => (e.key || e.Key) === key && (e.available || e.Available));
   },
   platformKey: () => state.nativeBackend || {},
+  mediaSnapshot: () => {
+    if (state.sourceMedia) return state.sourceMedia;
+    if (state.media) return state.media;
+    if (state.nativeInputProbe?.ok) return mediaFromNativeProbe(state.nativeInputProbe);
+    return null;
+  },
   setBusy: value => {
     state.operationBusy=value;
     for (const id of ['video','ass','fonts','videoNativePickerBtn','assNativePickerBtn','fontsNativePickerBtn','analyze','encodeBtn','previewBtn','benchmarkBtn','calibrateQualityBtn']) if($(id)) $(id).disabled=value;
