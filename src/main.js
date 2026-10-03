@@ -4757,32 +4757,61 @@ mountMediaWorkspace({
     const width = Math.max(512, Math.min(4096, Math.floor(Number(options?.width) || 2048)));
     const height = Math.max(96, Math.min(320, Math.floor(Number(options?.height) || 160)));
     const includeKeyframes = !!options?.includeKeyframes;
+    const allowNoWaveform = !!options?.allowNoWaveform;
     const maxKeyframes = Math.max(256, Math.min(50000, Math.floor(Number(options?.maxKeyframes) || 12000)));
+    const emptyTimeline = (duration, error = '当前视频没有音频轨') => ({
+      url: null,
+      waveformError: error,
+      duration: Number(duration || 0),
+      width,
+      height,
+      audioTrack,
+      keyframes: [],
+      keyframesTruncated: false
+    });
     if (state.nativeBackend?.available) {
       if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
-      if (!includeKeyframes && Number(state.nativeInputProbe.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
-      return requestNativeWaveform({
-        audioTrack,
-        width,
-        height,
-        includeKeyframes,
-        maxKeyframes,
-        duration: Number(state.nativeInputProbe.duration || 0)
-      });
+      const duration = Number(state.nativeInputProbe.duration || 0);
+      if (!includeKeyframes && Number(state.nativeInputProbe.audioTracks || 0) < 1) {
+        if (allowNoWaveform) return emptyTimeline(duration);
+        throw new Error('当前视频没有可用于波形显示的音轨');
+      }
+      try {
+        return await requestNativeWaveform({
+          audioTrack,
+          width,
+          height,
+          includeKeyframes,
+          maxKeyframes,
+          duration
+        });
+      } catch (error) {
+        if (allowNoWaveform && !includeKeyframes) return emptyTimeline(duration, error.message || '音频波形生成失败');
+        throw error;
+      }
     }
     if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本分析时间轴');
     if (!await ensureWebEngineReady()) throw new Error('浏览器 FFmpeg 核心不可用');
     if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
     const media = state.engine.mediaInfo || await state.engine.probe();
-    if (!includeKeyframes && Number(media.audioTracks || 0) < 1) throw new Error('当前视频没有可用于波形显示的音轨');
-    return state.engine.renderWaveform({
-      audioTrack,
-      width,
-      height,
-      includeKeyframes,
-      maxKeyframes,
-      duration: Number(media.duration || 0)
-    });
+    const duration = Number(media.duration || 0);
+    if (!includeKeyframes && Number(media.audioTracks || 0) < 1) {
+      if (allowNoWaveform) return emptyTimeline(duration);
+      throw new Error('当前视频没有可用于波形显示的音轨');
+    }
+    try {
+      return await state.engine.renderWaveform({
+        audioTrack,
+        width,
+        height,
+        includeKeyframes,
+        maxKeyframes,
+        duration
+      });
+    } catch (error) {
+      if (allowNoWaveform && !includeKeyframes) return emptyTimeline(duration, error.message || '音频波形生成失败');
+      throw error;
+    }
   },
   validate: async task => {
     if(task.operation==='copy')return;
