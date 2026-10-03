@@ -79,6 +79,9 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /parseMediaTime/);
   assert.match(workspace, /formatMediaTimeInput/);
   assert.match(workspace, /hooks\.waveform/);
+  assert.match(workspace, /allowNoWaveform:true/);
+  assert.match(workspace, /时间范围与画面预览仍可使用/);
+  assert.match(workspace, /不是转码前后质量对比/);
 
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-hardsub"/);
   assert.match(workspace, /class="media-mode-explainer media-mode-explainer-transcode"/);
