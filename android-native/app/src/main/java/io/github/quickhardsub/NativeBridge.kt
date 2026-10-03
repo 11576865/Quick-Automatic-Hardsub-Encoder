@@ -366,6 +366,47 @@ class NativeBridge(
         NativeBenchmarkStore.snapshot(activity).toString()
 
     @JavascriptInterface
+    fun recordCompressionEvidence(recordJson: String): String {
+        return try {
+            if (recordJson.length > 16 * 1024) {
+                throw IllegalArgumentException("Compression evidence record is too large")
+            }
+            val input = JSONObject(recordJson)
+            val kind = input.optString("evidenceKind", "")
+            if (kind !in setOf("quality-sample", "manual-sample")) {
+                throw IllegalArgumentException("Unsupported compression evidence kind")
+            }
+            val sourceIdentity = input.optString("sourceIdentity", "")
+            if (!Regex("^src-[0-9a-f]{8}$").matches(sourceIdentity)) {
+                throw IllegalArgumentException("Invalid source evidence identity")
+            }
+
+            val record = JSONObject()
+            val allowed = listOf(
+                "evidenceVersion", "evidenceKind", "evidenceScope", "sourceIdentity", "runtimeIdentity",
+                "backend", "codec", "preset", "crf", "targetSsim", "ssim",
+                "averageSsim", "sampleBitrate", "averageSpeed", "sampleCount", "sampleMeasurements",
+                "testedCrfs", "width", "height", "fps", "sourceCodec",
+                "sourcePixelFormat", "sourceVideoBitrate", "duration"
+            )
+            allowed.forEach { key ->
+                if (input.has(key) && !input.isNull(key)) record.put(key, input.get(key))
+            }
+            if (kind == "quality-sample") record.put("evidenceScope", "observation")
+            NativeBenchmarkStore.appendEvidence(activity, record)
+            JSONObject()
+                .put("ok", true)
+                .put("recordedAt", System.currentTimeMillis())
+                .toString()
+        } catch (e: Throwable) {
+            JSONObject()
+                .put("ok", false)
+                .put("error", e.message ?: e.javaClass.simpleName)
+                .toString()
+        }
+    }
+
+    @JavascriptInterface
     fun clearLocalBenchmarkHistory(): String {
         return try {
             NativeBenchmarkStore.clear(activity)

@@ -58,6 +58,9 @@ test('Windows native bridge survives a page refresh through tab-scoped session s
     if (String(url).endsWith('/api/health')) {
       return response({ backend: 'windows-native', available: true });
     }
+    if (String(url).endsWith('/api/history')) {
+      return response({ schemaVersion: 1, count: 1, records: [{ codec: 'av1', averageSpeed: 2 }] });
+    }
     throw new Error('Unexpected request: ' + url);
   };
 
@@ -67,12 +70,13 @@ test('Windows native bridge survives a page refresh through tab-scoped session s
     assert.deepEqual(saved, { base: 'http://127.0.0.1:9347', token: 'test-token' });
     assert.equal(replaced.at(-1), '/Quick-Automatic-Hardsub-Encoder/');
     assert.equal(requests.at(-1).token, 'test-token');
+    assert.equal(JSON.parse(globalThis.NativeHardsub.getLocalBenchmarkHistory()).records.length, 1);
 
     delete globalThis.NativeHardsub;
     globalThis.window.location.href = 'https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/';
     assert.equal(await detectWindowsNativeBridge(), true);
     assert.equal(globalThis.NativeHardsub.__windowsNative, true);
-    assert.equal(requests.at(-1).url, 'http://127.0.0.1:9347/api/health');
+    assert.equal(requests.at(-1).url, 'http://127.0.0.1:9347/api/history');
     assert.equal(requests.at(-1).token, 'test-token');
   } finally {
     restoreGlobals(old);
@@ -118,6 +122,9 @@ test('Windows native input probe publishes only the newest selection result', as
     if (text.endsWith('/api/health')) {
       return response({ backend: 'windows-native', available: true });
     }
+    if (text.endsWith('/api/history')) {
+      return response({ schemaVersion: 1, count: 0, records: [] });
+    }
     if (text.endsWith('/api/probe')) {
       return await new Promise(resolve => pendingProbes.push(resolve));
     }
@@ -139,6 +146,52 @@ test('Windows native input probe publishes only the newest selection result', as
     assert.equal(callbacks.length, 1);
     assert.equal(callbacks[0].width, 1920);
     assert.equal(callbacks[0].probeGeneration, 2);
+  } finally {
+    restoreGlobals(old);
+  }
+});
+
+test('Windows native bridge persists compression evidence into its cached history', async () => {
+  const old = snapshotGlobals();
+  const storage = memoryStorage();
+  let records = [];
+  globalThis.window = {
+    location: {
+      href: 'http://localhost/?windowsNative=http://127.0.0.1:9347&token=test-token'
+    },
+    sessionStorage: storage
+  };
+  globalThis.history = { replaceState() {} };
+  globalThis.fetch = async (url, options = {}) => {
+    const text = String(url);
+    if (text.endsWith('/api/health')) {
+      return response({ backend: 'windows-native', available: true });
+    }
+    if (text.endsWith('/api/history') && (options.method || 'GET') === 'GET') {
+      return response({ schemaVersion: 1, count: records.length, records });
+    }
+    if (text.endsWith('/api/history') && options.method === 'POST') {
+      const body = JSON.parse(options.body);
+      records = [...records, { ...body.record, recordedAt: 123 }];
+      return response({ ok: true, schemaVersion: 1, count: records.length, records, recordedAt: 123 });
+    }
+    throw new Error('Unexpected request: ' + text);
+  };
+
+  try {
+    assert.equal(await detectWindowsNativeBridge(), true);
+    const payload = JSON.parse(await globalThis.NativeHardsub.recordCompressionEvidence(JSON.stringify({
+      evidenceKind: 'quality-sample',
+      sourceIdentity: 'src-1234abcd',
+      codec: 'av1',
+      preset: '6',
+      ssim: 0.99,
+      sampleBitrate: 800000
+    })));
+    assert.equal(payload.ok, true);
+    const snapshot = JSON.parse(globalThis.NativeHardsub.getLocalBenchmarkHistory());
+    assert.equal(snapshot.records.length, 1);
+    assert.equal(snapshot.records[0].sourceIdentity, 'src-1234abcd');
   } finally {
     restoreGlobals(old);
   }

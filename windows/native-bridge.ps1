@@ -9,6 +9,7 @@ Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
+. (Join-Path $PSScriptRoot 'compression-history.ps1')
 
 $ErrorActionPreference = 'Stop'
 
@@ -271,7 +272,7 @@ function Get-BackendInfo {
         multipassFullresSupported=if($script:Capabilities){[bool]$script:Capabilities.MultipassFullresSupported}else{$false}
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
-        bridgeVersion=4
+        bridgeVersion=5
         taskSchemaVersion=3
         fpsModeSupported=[bool]$script:Capabilities.FpsModeSupported
         globalOptions=[object[]]$script:Capabilities.GlobalOptions
@@ -637,8 +638,9 @@ function Start-MediaTaskJob($Body) {
     $duration=if($task.operation -eq 'copy'){[double]$task.end-$actualStart}else{[double]$task.expectedDuration}
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
-        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
+        Duration=$duration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
+        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
@@ -691,11 +693,90 @@ function Start-EncodeJob($Body) {
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
-        Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware;ActualStart=0;Task=$null
+        Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware;ActualStart=0;Task=$null;Request=$request;SourceProbe=$null
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
+        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;encoder=$job.Encoder;hardware=$job.Hardware}
+}
+
+function Get-CodecKeyForEncoder([string]$Encoder) {
+    if($Encoder -match '^(?:libx264|h264_nvenc)$'){return 'h264'}
+    if($Encoder -match '^(?:libx265|hevc_nvenc)$'){return 'h265'}
+    if($Encoder -match '^(?:libsvtav1|av1_nvenc)$'){return 'av1'}
+    return ''
+}
+
+function Ensure-CompletedJobHistory($Job) {
+    if(-not $Job -or $Job.HistoryRecorded -or $Job.State -ne 'completed' -or $Job.Encoder -eq 'copy'){return}
+    try {
+        $codec=Get-CodecKeyForEncoder ([string]$Job.Encoder)
+        if(-not $codec){return}
+
+        $request=$Job.Request
+        $task=$Job.Task
+        $source=$Job.SourceProbe
+        $outputBytes=(Get-Item -LiteralPath $Job.Output).Length
+        $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=bit_rate,width,height,avg_frame_rate,codec_name -show_entries format=duration -of json '+(Quote-NativeArg $Job.Output))
+        $outputDuration=[double]$Job.Duration
+        $outputVideoBitrate=0L
+        if($probe.ExitCode -eq 0){
+            $info=$probe.StdOut | ConvertFrom-Json
+            if($info.format.duration){[void][double]::TryParse([string]$info.format.duration,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$outputDuration)}
+            $outVideo=@($info.streams | Select-Object -First 1)
+            if($outVideo.Count -and $outVideo[0].bit_rate){[void][long]::TryParse([string]$outVideo[0].bit_rate,[ref]$outputVideoBitrate)}
+        }
+
+        $elapsed=[Math]::Max(.001,[double]$Job.EncodeSeconds)
+        $sourceIdentity=if($request -and $request.sourceIdentity){[string]$request.sourceIdentity}else{''}
+        $mode=if($request -and $request.mode){[string]$request.mode}elseif($task){[string]$task.rateMode}else{''}
+        $preset=if($request -and $request.preset){[string]$request.preset}elseif($task){[string]$task.preset}else{''}
+        $crf=if($request -and $null -ne $request.crf){$request.crf}elseif($task -and $task.rateMode -eq 'quality'){$task.quality}else{$null}
+        $targetVideoBitrate=if($request -and $request.targetVideoBitrate){[long]$request.targetVideoBitrate}elseif($task -and $task.rateMode -ne 'quality'){[long]$task.bitrate}else{0L}
+        $width=if($request -and $request.sourceWidth){[int]$request.sourceWidth}elseif($source){[int]$source.width}else{0}
+        $height=if($request -and $request.sourceHeight){[int]$request.sourceHeight}elseif($source){[int]$source.height}else{0}
+        $fps=if($request -and $request.sourceFps){[double]$request.sourceFps}elseif($source){[double]$source.fps}else{0.0}
+        $sourceCodec=if($request -and $request.sourceCodec){[string]$request.sourceCodec}elseif($source){[string]$source.videoCodec}else{''}
+        $sourcePixelFormat=if($request -and $request.sourcePixelFormat){[string]$request.sourcePixelFormat}elseif($source){[string]$source.pixelFormat}else{''}
+        $sourceVideoBitrate=if($request -and $request.sourceVideoBitrate){[long]$request.sourceVideoBitrate}elseif($source){[long]$source.videoBitRate}else{0L}
+        $audioTracks=if($request -and $null -ne $request.expectedAudioTracks){[int]$request.expectedAudioTracks}elseif($task){[int]$task.expectedAudioTracks}else{0}
+
+        $record=[ordered]@{
+            evidenceVersion=1
+            evidenceKind='full-encode'
+            evidenceScope=if($sourceIdentity){'source'}else{'device'}
+            backend='windows-native'
+            sourceIdentity=$sourceIdentity
+            codec=$codec
+            mode=$mode
+            goal=if($request){[string]$request.goal}else{''}
+            preset=$preset
+            crf=$crf
+            targetVideoBitrate=$targetVideoBitrate
+            sourceCodec=$sourceCodec
+            sourcePixelFormat=$sourcePixelFormat
+            sourceVideoBitrate=$sourceVideoBitrate
+            width=$width
+            height=$height
+            fps=$fps
+            duration=[double]$Job.Duration
+            audioTracks=$audioTracks
+            subtitleEventCount=if($request){[int]$request.subtitleEventCount}else{0}
+            selectedFontCount=if($request){[int]$request.selectedFontCount}else{0}
+            sampleEncodeSpeed=if($request){[double]$request.sampleEncodeSpeed}else{0.0}
+            calibrationSampleBitrate=if($request){[long]$request.calibrationSampleBitrate}else{0L}
+            encodeSeconds=$elapsed
+            averageSpeed=([double]$Job.Duration/$elapsed)
+            outputBytes=[long]$outputBytes
+            outputVideoBitrate=[long]$outputVideoBitrate
+            validation='ffprobe+packet-scan'
+        }
+        [void](Add-CompressionHistoryRecord $record)
+        $Job.HistoryRecorded=$true
+    } catch {
+        Write-BridgeLog ('Compression history write failed: '+$_.Exception.Message) 'WARN'
+    }
 }
 
 function Get-JobStatus([string]$JobId) {
@@ -706,6 +787,7 @@ function Get-JobStatus([string]$JobId) {
     # disposed Process handle. Export-Job intentionally re-reads status after
     # encoding has finished, so terminal snapshots are resolved first.
     if($j.State -eq 'completed'){
+        Ensure-CompletedJobHistory $j
         if(-not(Test-Path -LiteralPath $j.Output -PathType Leaf) -or (Get-Item -LiteralPath $j.Output).Length -le 0){
             $j.State='failed';$j.Error='Verified output staging file is missing.'
             return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
@@ -730,6 +812,11 @@ function Get-JobStatus([string]$JobId) {
         $elapsed=((Get-Date)-$p.StartTime).TotalSeconds
         $speed=if($elapsed -gt 0){($timeMs/1000)/$elapsed}else{0}
         return [pscustomobject]@{ok=$true;state=if($j.Cancelled){'cancelling'}else{'encoding'};progress=$progress;timeMs=$timeMs;duration=$j.Duration;speed=$speed;encoder=$j.Encoder;hardware=$j.Hardware;actualStart=$j.ActualStart}
+    }
+    $processKey=([string]$p.Id)+':'+([string]$p.StartTime.Ticks)
+    if([string]$j.TimedProcessKey -ne $processKey){
+        $j.EncodeSeconds += [Math]::Max(.001,($p.ExitTime-$p.StartTime).TotalSeconds)
+        $j.TimedProcessKey=$processKey
     }
     if($j.Task -and $j.Task.twoPass -and $j.Phase -eq 1 -and -not $j.Cancelled -and $p.ExitCode -eq 0){
         $p.Dispose();Remove-Item -LiteralPath $j.Progress -Force -ErrorAction SilentlyContinue
@@ -765,6 +852,7 @@ function Get-JobStatus([string]$JobId) {
             }
         }
         $p.Dispose()
+        if($j.State -eq 'completed'){Ensure-CompletedJobHistory $j}
         if($j.State -eq 'completed'){Write-BridgeLog ("Job "+$JobId+" completed · "+$j.Encoder)}
         elseif($j.State -eq 'cancelled'){Write-BridgeLog ("Job "+$JobId+" cancelled") 'WARN'}
         elseif($j.State -eq 'failed'){Write-BridgeLog ("Job "+$JobId+" failed: "+$j.Error) 'ERROR'}
@@ -897,7 +985,8 @@ function Handle-Request($Request) {
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
         if($Request.Method -eq 'GET' -and $path -eq '/api/health'){Send-HttpJson $Request 200 (Get-BackendInfo);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/self-test'){Send-HttpJson $Request 200 (Get-SelfTest);return}
-        if($Request.Method -eq 'GET' -and $path -eq '/api/history'){Send-HttpJson $Request 200 @{records=@()};return}
+        if($Request.Method -eq 'GET' -and $path -eq '/api/history'){Send-HttpJson $Request 200 (Get-CompressionHistorySnapshot);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/history'){Send-HttpJson $Request 200 (Add-ClientCompressionEvidence $body.record);return}
         if($Request.Method -eq 'POST' -and $path -match '^/api/pick/(video|ass|fonts)$'){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/ass'){
             $p=Get-SelectedPath 'ass';if(-not $p){throw 'No ASS selected.'};$item=Get-Item -LiteralPath $p

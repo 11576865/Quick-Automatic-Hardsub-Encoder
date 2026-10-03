@@ -715,6 +715,11 @@ class EncodeService : Service() {
                 if (!copyTask) NativeBenchmarkStore.appendSuccess(
                     this,
                     JSONObject()
+                        .put("evidenceVersion", 1)
+                        .put("evidenceKind", "full-encode")
+                        .put("evidenceScope", if (request.optString("sourceIdentity", "").isNotBlank()) "source" else "device")
+                        .put("backend", "android-native")
+                        .put("sourceIdentity", request.optString("sourceIdentity", ""))
                         .put("appVersionName", BuildConfig.VERSION_NAME)
                         .put("appVersionCode", BuildConfig.VERSION_CODE)
                         .put("ffmpegKitVersion", FFmpegKitConfig.getVersion())

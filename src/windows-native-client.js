@@ -84,8 +84,10 @@ function postCallback(name, payload) {
   });
 }
 
-function installWindowsBridge(config, backendInfo) {
+function installWindowsBridge(config, backendInfo, initialHistory = { records: [] }) {
   let lastAssSelection = null;
+  let historySnapshot = initialHistory && Array.isArray(initialHistory.records) ? initialHistory : { records: [] };
+  let lastHistoryRefreshJobId = '';
   let inputProbeGeneration = 0;
   const bridge = {
     __windowsNative: true,
@@ -93,7 +95,20 @@ function installWindowsBridge(config, backendInfo) {
       return JSON.stringify(backendInfo);
     },
     getLocalBenchmarkHistory() {
-      return JSON.stringify({ records: [] });
+      return JSON.stringify(historySnapshot);
+    },
+    async recordCompressionEvidence(recordJson) {
+      let record = {};
+      try { record = JSON.parse(recordJson || '{}'); } catch {
+        return JSON.stringify({ ok: false, error: 'Invalid compression evidence JSON.' });
+      }
+      try {
+        const payload = await makeRequest(config, 'POST', '/api/history', { record });
+        if (Array.isArray(payload?.records)) historySnapshot = payload;
+        return JSON.stringify(payload);
+      } catch (error) {
+        return JSON.stringify({ ok: false, error: error.message });
+      }
     },
     preparePickerRole(role) {
       if (!['video', 'ass', 'fonts'].includes(role)) return;
@@ -165,7 +180,15 @@ function installWindowsBridge(config, backendInfo) {
       return JSON.stringify(await makeRequest(config, 'POST', '/api/encode', { request, assText }));
     },
     async getNativeJobStatus(jobId) {
-      return JSON.stringify(await makeRequest(config, 'GET', '/api/jobs/' + encodeURIComponent(jobId)));
+      const status = await makeRequest(config, 'GET', '/api/jobs/' + encodeURIComponent(jobId));
+      if (status?.state === 'completed' && lastHistoryRefreshJobId !== jobId) {
+        lastHistoryRefreshJobId = jobId;
+        try {
+          const history = await makeRequest(config, 'GET', '/api/history');
+          if (Array.isArray(history?.records)) historySnapshot = history;
+        } catch {}
+      }
+      return JSON.stringify(status);
     },
     cancelNativeEncode(jobId) {
       void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/cancel').catch(() => {});
@@ -209,7 +232,11 @@ export async function detectWindowsNativeBridge() {
     if (!response.ok) return failStoredSession();
     const backendInfo = await response.json();
     if (backendInfo?.backend !== 'windows-native' || backendInfo?.available !== true) return failStoredSession();
-    installWindowsBridge(config, backendInfo);
+    let historySnapshot = { records: [] };
+    try {
+      historySnapshot = await makeRequest(config, 'GET', '/api/history');
+    } catch {}
+    installWindowsBridge(config, backendInfo, historySnapshot);
     persistBridgeConfig(config);
     if (config.source === 'url') stripLaunchSecrets();
     return true;
