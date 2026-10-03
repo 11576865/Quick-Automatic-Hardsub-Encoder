@@ -709,9 +709,7 @@ function clearSelectedTestCache() {
 async function runWebTask(task) {
   if (state.operationBusy) return;
   state.operationBusy = true;
-  for (const id of ['video', 'ass', 'fonts', 'videoNativePickerBtn', 'assNativePickerBtn', 'fontsNativePickerBtn', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) if($(id)) $(id).disabled = true;
-  document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font').forEach(control => { control.disabled = true; });
-  if ($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled = true;
+  syncTaskInputMutationLocks();
   refreshAnalyze();
   refreshBenchmarkEnabled();
   $('previewBtn').disabled = true;
@@ -723,13 +721,7 @@ async function runWebTask(task) {
     alert('任务失败：' + (error?.message || error));
   } finally {
     state.operationBusy = false;
-    for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) if($(id)) $(id).disabled = false;
-    for (const role of Object.keys(WINDOWS_NATIVE_PICKERS)) {
-      const button = $(WINDOWS_NATIVE_PICKERS[role].buttonId);
-      setWindowsNativePickerBusy(role, button?.getAttribute('aria-busy') === 'true');
-    }
-    document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font').forEach(control => { control.disabled = false; });
-    if ($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled = !state.savedFonts.length;
+    syncTaskInputMutationLocks();
     refreshAnalyze();
     refreshBenchmarkEnabled();
     $('previewBtn').disabled =
@@ -752,6 +744,21 @@ function setWindowsNativePickerBusy(role, busy) {
   button.disabled = !!busy || state.operationBusy || !!state.nativeJobId;
   button.setAttribute('aria-busy', busy ? 'true' : 'false');
   button.textContent = busy ? '正在打开系统选择器…' : (role === 'video' ? '选择视频' : role === 'ass' ? '选择 ASS 字幕' : '选择字体文件');
+}
+
+function syncTaskInputMutationLocks() {
+  const locked = state.operationBusy || !!state.nativeJobId;
+  for (const id of ['video', 'ass', 'fonts', 'encodeGoal', 'qualityTarget', 'sizeBudgetMultiplier']) {
+    if ($(id)) $(id).disabled = locked;
+  }
+  document.querySelectorAll('.font-binding-select, .plan-interaction, .remove-saved-font').forEach(control => {
+    control.disabled = locked;
+  });
+  if ($('clearSavedFontsBtn')) $('clearSavedFontsBtn').disabled = locked || !state.savedFonts.length;
+  for (const role of Object.keys(WINDOWS_NATIVE_PICKERS)) {
+    const button = $(WINDOWS_NATIVE_PICKERS[role].buttonId);
+    setWindowsNativePickerBusy(role, button?.getAttribute('aria-busy') === 'true');
+  }
 }
 
 function requestWindowsNativePicker(role) {
@@ -4366,6 +4373,7 @@ async function runNativeEncode() {
 
 async function monitorNativeJob(jobId) {
   const bridge = globalThis.NativeHardsub;
+  let statusReadFailures = 0;
   while (state.nativeJobId === jobId) {
     let status;
     try {
@@ -4375,10 +4383,20 @@ async function monitorNativeJob(jobId) {
     }
 
     if (!status?.ok) {
-      log('Native 状态读取失败：' + (status?.error || '未知错误'));
+      statusReadFailures++;
+      const detail = status?.error || '未知错误';
+      log('Native 状态读取失败（' + statusReadFailures + '/5）：' + detail);
+      if (statusReadFailures >= 5) {
+        $('liveEta').textContent =
+          'Native 状态连续读取失败；当前任务 ID 已保留。请保持 Native Bridge 运行并刷新页面重新连接。';
+        syncTaskInputMutationLocks();
+        return;
+      }
+      $('liveEta').textContent = 'Native 状态读取失败，正在重试 ' + statusReadFailures + '/5…';
       await sleepMs(1000);
       continue;
     }
+    statusReadFailures = 0;
 
     const progress = Math.max(0, Math.min(1, Number(status.progress || 0)));
     $('progressBar').style.width = Math.max(1, progress * 100).toFixed(1) + '%';
@@ -4415,6 +4433,7 @@ async function monitorNativeJob(jobId) {
         suggestedName: status.suggestedName || 'hardsub.mkv'
       };
       state.nativeJobId = null;
+      syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '100%';
       $('liveEta').textContent =
@@ -4438,6 +4457,7 @@ async function monitorNativeJob(jobId) {
     } else if (status.state === 'failed') {
       state.nativeJobId = null;
       localStorage.removeItem('nativeEncodeJobId');
+      syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '0%';
       $('liveEta').textContent = 'Native 压制失败。';
@@ -4449,6 +4469,7 @@ async function monitorNativeJob(jobId) {
     } else if (status.state === 'cancelled') {
       state.nativeJobId = null;
       localStorage.removeItem('nativeEncodeJobId');
+      syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '0%';
       $('liveEta').textContent = 'Native 压制已取消。';
@@ -4492,6 +4513,7 @@ async function recoverNativeJob() {
 
     if (['queued', 'staging', 'encoding', 'validating', 'cancelling'].includes(status.state)) {
       state.nativeJobId = jobId;
+      syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.remove('hidden');
       $('encodeBtn').disabled = true;
       log('恢复 ' + nativePlatformName() + ' 任务监视：' + jobId);
