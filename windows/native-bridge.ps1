@@ -9,6 +9,7 @@ Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
+. (Join-Path $PSScriptRoot 'bink-import.ps1')
 
 $ErrorActionPreference = 'Stop'
 
@@ -27,8 +28,11 @@ $script:Token = if($Token){$Token}else{[Convert]::ToBase64String((1..32 | ForEac
 $script:Selections = @{ video=@(); ass=@(); fonts=@() }
 $script:Jobs = @{}
 $script:Samples = @{}
+$script:ImportJobs = @{}
+$script:VideoImport = $null
 $script:Ffmpeg = Find-NativeTool 'ffmpeg' $PSScriptRoot
 $script:Ffprobe = Find-NativeTool 'ffprobe' $PSScriptRoot
+$script:RadVideo = Find-RadVideoConverter $PSScriptRoot
 $script:Capabilities = if ($script:Ffmpeg) { Get-NativeCapabilities $script:Ffmpeg $script:Ffprobe $PSScriptRoot } else { $null }
 
 function ConvertTo-JsonUtf8($Object) {
@@ -98,7 +102,25 @@ function Stage-BridgeAssets([string]$WorkDir, [string]$AssText) {
     }
 }
 
+function Get-OriginalVideoPath {
+    $items = @($script:Selections.video)
+    if (-not $items.Count) { return $null }
+    return [string]$items[0]
+}
+
+function Clear-Bink2ImportStaging {
+    if ($script:VideoImport -and $script:VideoImport.Work -and (Test-Path -LiteralPath $script:VideoImport.Work)) {
+        Remove-Item -LiteralPath $script:VideoImport.Work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $script:VideoImport = $null
+}
+
 function Get-SelectedPath([string]$Role) {
+    if ($Role -eq 'video' -and $script:VideoImport -and
+        $script:VideoImport.Source -eq (Get-OriginalVideoPath) -and
+        (Test-Path -LiteralPath $script:VideoImport.Path -PathType Leaf)) {
+        return [string]$script:VideoImport.Path
+    }
     $items = @($script:Selections[$Role])
     if (-not $items.Count) { return $null }
     return [string]$items[0]
