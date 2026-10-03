@@ -2421,14 +2421,23 @@ function renderSourceVideoSummary(media = state.sourceMedia) {
       (audioRate > 0 ? ' · ' + formatBitrate(audioRate) : '')
     : '未检测到音轨';
   const color = [media.colorPrimaries, media.colorTransfer, media.colorSpace].filter(Boolean).join(' / ') || '未标记';
+  const decodeState = media.inputDecodeSmoke
+    ? '已通过 1 帧实测'
+    : media.sourceAdapterRequired
+      ? 'FFmpeg 不可解码 · 需要 Bink 2 输入适配'
+      : media.inputDecodeDeferred
+        ? '将在预览 / 执行时验证'
+        : '未通过';
   const rows = [
-    ['源视频编码', media.videoCodec || '未知'],
+    ['源视频编码', media.sourceOriginalKind === 'bink2' ? 'Bink 2' : (media.videoCodec || '未知')],
     ['分辨率', media.width + '×' + media.height],
     ['帧率', Number(media.fps || 0) > 0 ? Number(media.fps).toFixed(3) + ' fps' : '未知'],
     ['时长', Number(media.duration || 0) > 0 ? formatDuration(Number(media.duration)) : '未知'],
     ['源视频码率', videoRate > 0 ? formatBitrate(videoRate) : '未知'],
     ['像素格式', (media.pixelFormat || '未知') + ' · ' + Number(media.bitDepth || 8) + '-bit'],
     ['色彩 / HDR', (media.hdr || media.unsafeColorPipeline ? 'HDR / 高位深风险 · ' : '') + color],
+    ['输入解码', decodeState],
+    ...(media.sourceAdapterApplied ? [['执行输入', 'RAD Video Tools → 临时 AVI']] : []),
     ['音频', audio],
     ['文件大小', Number(media.size || state.video?.size || 0) > 0 ? formatBytes(Number(media.size || state.video?.size || 0)) : '未知']
   ];
@@ -4448,7 +4457,18 @@ function mediaFromNativeProbe(p) {
     audioCodec: p.audioCodec || '',
     audioCodecs: Array.isArray(p.audioCodecs) ? p.audioCodecs : (p.audioCodec ? [p.audioCodec] : []),
     audioTracks: Number(p.audioTracks || 0),
-    audioBitRate: Number(p.audioBitRate || 0)
+    audioBitRate: Number(p.audioBitRate || 0),
+    inputDecodeSmoke: p.inputDecodeSmoke === true,
+    inputDecodeDeferred: p.inputDecodeDeferred === true,
+    inputDecodeError: p.inputDecodeError || '',
+    sourceAdapter: p.sourceAdapter || '',
+    sourceAdapterRequired: p.sourceAdapterRequired === true,
+    sourceAdapterAvailable: p.sourceAdapterAvailable === true,
+    sourceAdapterApplied: p.sourceAdapterApplied === true,
+    sourceAdapterTool: p.sourceAdapterTool || '',
+    sourceOriginalName: p.sourceOriginalName || state.video?.name || '',
+    sourceOriginalKind: p.sourceOriginalKind || '',
+    executionStatSize: Number(p.executionStatSize || 0)
   };
 }
 
