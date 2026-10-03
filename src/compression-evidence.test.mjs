@@ -46,7 +46,7 @@ test('legacy benchmark records normalize as full-encode evidence', () => {
   assert.equal(normalized.averageSpeed, 1.5);
 });
 
-test('quality evidence is source-scoped and can be recovered as ordered curve points', () => {
+test('unkeyed quality samples are persisted as observation-only evidence', () => {
   const sourceIdentity = sourceEvidenceKey(media, 'movie.mkv', media.size);
   const records = [
     qualityEvidenceRecord({
@@ -96,10 +96,9 @@ test('quality evidence is source-scoped and can be recovered as ordered curve po
   ];
 
   const normalized = normalizeCompressionEvidenceList(records);
+  assert.ok(normalized.every(x => x.evidenceScope === 'observation'));
   const points = sourceQualityEvidence(normalized, sourceIdentity, 'av1');
-  assert.equal(points.length, 2);
-  assert.deepEqual(points.map(x => x.sampleBitrate), [500000, 900000]);
-  assert.ok(points.every(x => x.evidenceScope === 'source'));
+  assert.equal(points.length, 0);
 });
 
 
@@ -119,9 +118,9 @@ test('latest reusable CRF evidence wins for the same source and preset', () => {
     encodeSpeed: 0.8,
     sampleCount: 2
   });
-  const older = { ...base, recordedAt: 100 };
-  const newer = { ...base, recordedAt: 200, ssim: 0.99, sampleBitrate: 900000 };
-  const otherPreset = { ...base, recordedAt: 300, preset: '8', ssim: 0.995 };
+  const older = { ...base, evidenceScope: 'source', recordedAt: 100 };
+  const newer = { ...base, evidenceScope: 'source', recordedAt: 200, ssim: 0.99, sampleBitrate: 900000 };
+  const otherPreset = { ...base, evidenceScope: 'source', recordedAt: 300, preset: '8', ssim: 0.995 };
 
   const reusable = reusableSourceQualityByCrf(
     [older, newer, otherPreset],
@@ -176,8 +175,8 @@ test('reusable quality evidence can be restricted to the current runtime', () =>
     encodeSpeed: 0.8,
     sampleCount: 2
   });
-  const current = { ...base, recordedAt: 100 };
-  const staleRuntime = { ...base, recordedAt: 200, runtimeIdentity: runtimeB, ssim: 0.99 };
+  const current = { ...base, evidenceScope: 'source', recordedAt: 100 };
+  const staleRuntime = { ...base, evidenceScope: 'source', recordedAt: 200, runtimeIdentity: runtimeB, ssim: 0.99 };
 
   const reusable = reusableSourceQualityByCrf(
     [current, staleRuntime],
