@@ -74,7 +74,7 @@ function Find-RadVideoConverter([string]$Root = '') {
     foreach ($commandName in @('radvideo64.exe', 'binkconv.exe')) {
         try {
             $command = Get-Command $commandName -ErrorAction Stop | Select-Object -First 1
-            if ($command?.Source) { & $add $command.Source 'PATH' }
+            if ($command -and $command.Source) { & $add $command.Source 'PATH' }
         } catch {}
     }
 
@@ -82,7 +82,7 @@ function Find-RadVideoConverter([string]$Root = '') {
 }
 
 function Get-RadBinkConvertArguments($Converter, [string]$InputPath, [string]$OutputPath) {
-    if (-not $Converter?.Path) { throw 'RAD Video Tools converter is unavailable.' }
+    if (-not $Converter -or -not $Converter.Path) { throw 'RAD Video Tools converter is unavailable.' }
     if (-not $InputPath -or -not $OutputPath) { throw 'Bink import paths are incomplete.' }
 
     $input = Quote-BinkImportArg $InputPath
