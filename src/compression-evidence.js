@@ -104,15 +104,30 @@ export function qualityEvidenceRecord({
   };
 }
 
-export function sourceQualityEvidence(records, sourceIdentity, codec = '') {
+export function sourceQualityEvidence(records, sourceIdentity, codec = '', preset = '') {
   const normalized = normalizeCompressionEvidenceList(records);
   return normalized
     .filter(record =>
       record.evidenceKind === 'quality-sample' &&
       record.sourceIdentity === sourceIdentity &&
       (!codec || record.codec === codec) &&
+      (!preset || record.preset === preset) &&
       record.sampleBitrate > 0 &&
       Number.isFinite(record.ssim)
     )
     .sort((a, b) => a.sampleBitrate - b.sampleBitrate || a.recordedAt - b.recordedAt);
+}
+
+
+export function reusableSourceQualityByCrf(records, sourceIdentity, codec, preset = '') {
+  const latest = new Map();
+  for (const record of sourceQualityEvidence(records, sourceIdentity, codec, preset)) {
+    const crf = Number(record.crf);
+    if (!Number.isFinite(crf)) continue;
+    const previous = latest.get(crf);
+    if (!previous || Number(record.recordedAt || 0) >= Number(previous.recordedAt || 0)) {
+      latest.set(crf, record);
+    }
+  }
+  return [...latest.values()].sort((a, b) => Number(a.crf) - Number(b.crf));
 }
