@@ -97,6 +97,39 @@ object MediaTaskArguments {
         return result
     }
 
+    fun hardsubReferenceFilter(
+        task: JSONObject,
+        sourceTime: Double,
+        assPath: String,
+        fontsDir: String,
+        displayWidth: Int
+    ): String {
+        require(task.optString("operation") == "hardsub") { "Reference frame requires hardsub task" }
+        require(sourceTime.isFinite() && sourceTime >= 0.0) { "Invalid reference timestamp" }
+        val validated = validate(task)
+        val vfIndex = validated.indexOf("-vf")
+        require(vfIndex >= 0 && vfIndex + 1 < validated.size) { "Hardsub task has no video filter chain" }
+        val absolute = String.format(java.util.Locale.US, "%.6f", sourceTime).trimEnd('0').trimEnd('.')
+        val out = mutableListOf<String>()
+        var foundAss = false
+        validated[vfIndex + 1].split(',').forEach { raw ->
+            val part = raw.trim()
+            if (Regex("^setpts=PTS[+-]\\d+(?:\\.\\d+)?/TB$").matches(part)) return@forEach
+            if (part == "ass=__ASS__:fontsdir=__FONTS__") {
+                foundAss = true
+                out.add("setpts=PTS-STARTPTS+$absolute/TB")
+                out.add("ass=$assPath:fontsdir=$fontsDir")
+                out.add("setpts=PTS-STARTPTS")
+            } else {
+                out.add(part)
+            }
+        }
+        require(foundAss) { "Hardsub task filter chain has no ASS step" }
+        val width = displayWidth.coerceIn(320, 1600)
+        out.add("scale=$width:-2:force_original_aspect_ratio=decrease")
+        return out.joinToString(",")
+    }
+
     fun firstPassArgs(args: List<String>): List<String> {
         val out = mutableListOf<String>()
         var i = 0
