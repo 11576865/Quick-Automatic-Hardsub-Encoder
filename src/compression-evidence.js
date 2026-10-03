@@ -36,31 +36,6 @@ export function runtimeEvidenceKey(backend = {}) {
   return 'runtime-' + stableFNV1a(identity);
 }
 
-export function renderEvidenceKey({ assText = '', fonts = [], fontBindings = {}, autoFontFallbacks = {} } = {}) {
-  const fontSignature = (Array.isArray(fonts) ? fonts : [])
-    .map(file => [
-      cleanText(file?.name),
-      Math.round(finite(file?.size)),
-      Math.round(finite(file?.lastModified))
-    ].join(':'))
-    .sort()
-    .join(',');
-  const bindingSignature = Object.entries(fontBindings || {})
-    .map(([key, value]) => cleanText(key) + '=' + cleanText(value))
-    .sort()
-    .join(',');
-  const fallbackSignature = Object.entries(autoFontFallbacks || {})
-    .map(([key, value]) => cleanText(key) + '=' + cleanText(value))
-    .sort()
-    .join(',');
-  return 'render-' + stableFNV1a([
-    cleanText(assText),
-    fontSignature,
-    bindingSignature,
-    fallbackSignature
-  ].join('|'));
-}
-
 export function sourceEvidenceKey(media = {}, sourceName = '', sourceSize = 0) {
   const identity = [
     cleanText(sourceName || media.sourceName).toLowerCase(),
@@ -73,14 +48,6 @@ export function sourceEvidenceKey(media = {}, sourceName = '', sourceSize = 0) {
     cleanText(media.pixelFormat).toLowerCase()
   ].join('|');
   return 'src-' + stableFNV1a(identity);
-}
-
-export function qualitySourceEvidenceKey(media = {}, sourceName = '', sourceSize = 0, renderIdentity = '') {
-  return sourceEvidenceKey(
-    media,
-    cleanText(sourceName || media.sourceName) + '|' + cleanText(renderIdentity),
-    sourceSize
-  );
 }
 
 export function normalizeCompressionEvidence(record) {
@@ -135,7 +102,7 @@ export function qualityEvidenceRecord({
     evidenceVersion: COMPRESSION_EVIDENCE_VERSION,
     evidenceKind: 'quality-sample',
     evidenceScope: 'source',
-    sourceIdentity: qualitySourceEvidenceKey(media, sourceName, sourceSize, renderIdentity),
+    sourceIdentity: sourceEvidenceKey(media, sourceName, sourceSize),
     backend: cleanText(backend),
     runtimeIdentity: cleanText(runtimeIdentity),
     codec: cleanText(codec),
