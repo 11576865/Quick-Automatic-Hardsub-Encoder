@@ -211,7 +211,9 @@ test('minimum executable bitrate clips the plotted evidence domain', () => {
   assert.equal(frontier.ok, true);
   assert.equal(frontier.minimumEvidenceBitrate, 150000);
   assert.ok(frontier.minimumEvidenceTargetBytes >= frontier.minimumFeasibleTargetBytes);
-  assert.ok(frontier.sampleCurve(64).every(point => point.bitrate >= 150000));
+  const sampled = frontier.sampleCurve(64);
+  assert.ok(Math.abs(sampled[0].bitrate - 150000) < 1e-8);
+  assert.ok(sampled.every(point => point.bitrate >= 150000));
   assert.ok(frontier.evidencePoints.every(point => point.bitrate >= 150000));
 });
 
