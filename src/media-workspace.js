@@ -565,7 +565,7 @@ export function mountMediaWorkspace(hooks) {
     const hardsub=activeTask?.operation==='hardsub';
     const leftLabel=hardsub?'权威字幕参考':'源素材';
     const rightLabel=hardsub?'硬压成品':'转码成品';
-    frameFullscreenTitle.textContent=leftLabel+' ↔ '+rightLabel;
+    frameFullscreenTitle.textContent=hardsub?'权威字幕参考 ↔ 硬压成品':'源帧 ↔ 转码成品';
     frameFullscreenMeta.textContent=formatMediaTimeInput(times.sourceTime,3)+' ↔ '+formatMediaTimeInput(times.outputTime,3);
     frameFullscreenBase.src=verificationOutputUrl;
     frameFullscreenBase.alt=rightLabel+'全屏验证帧';
