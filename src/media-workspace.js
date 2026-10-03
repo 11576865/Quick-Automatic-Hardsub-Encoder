@@ -350,7 +350,7 @@ export function mountMediaWorkspace(hooks) {
   const verifySourceTime=section.querySelector('#taskVerifySourceTime');
   const verifyOutputFrameTime=section.querySelector('#taskVerifyOutputFrameTime');
   const verifyStatus=section.querySelector('#taskVerifyStatus');
-  let verificationSourceUrl=null,verificationOutputUrl=null;
+  let verificationSourceUrl=null,verificationOutputUrl=null,verificationFrameSourceTime=null,verificationFrameOutputTime=null;
   let frameFullscreenMode='single';
   let frameFullscreenDragging=false;
   const clampWaveformTime=value=>Math.max(0,Math.min(waveformDuration||0,Number(value)||0));
@@ -486,6 +486,8 @@ export function mountMediaWorkspace(hooks) {
     }
     verificationSourceUrl=null;
     verificationOutputUrl=null;
+    verificationFrameSourceTime=null;
+    verificationFrameOutputTime=null;
     for(const [img,placeholder] of [[verifySourceImage,verifySourcePlaceholder],[verifyOutputImage,verifyOutputPlaceholder]]){
       img.removeAttribute('src');img.hidden=true;placeholder.hidden=false;
     }
@@ -506,6 +508,12 @@ export function mountMediaWorkspace(hooks) {
     const duration=verificationDuration(activeTask,completed);
     const max=Math.max(0,duration-.001);
     const outputTime=Math.max(0,Math.min(max,Number(value)||0));
+    const hadFrames=verificationFrameOutputTime!=null;
+    const changed=hadFrames&&Math.abs(outputTime-verificationFrameOutputTime)>.0005;
+    if(changed){
+      revokeVerificationFrames();
+      verifyStatus.textContent='验证时间已改变；请重新提取这一位置的源帧与成品帧。';
+    }
     verifyOutputSlider.max=String(max||1);
     verifyOutputSlider.value=String(outputTime);
     if(fromSlider||document.activeElement!==verifyOutputTime)verifyOutputTime.value=formatMediaTimeInput(outputTime,3);
@@ -513,7 +521,7 @@ export function mountMediaWorkspace(hooks) {
     verifyMapping.textContent='源 '+formatMediaTimeInput(sourceTime,3)+' ↔ 成品 '+formatMediaTimeInput(outputTime,3);
   }
   function syncOutputVerificationAvailability(){
-    const available=!!completed&&!!activeTask&&activeTask.operation==='transcode'&&!!hooks.verifyFramePair;
+    const available=!!completed&&!!activeTask&&activeTask.operation==='transcode'&&get('operation').value==='transcode'&&!!hooks.verifyFramePair;
     outputVerification.hidden=!available;
     if(!available){
       revokeVerificationFrames();
@@ -526,7 +534,8 @@ export function mountMediaWorkspace(hooks) {
   }
   function openOutputVerificationFullscreen(){
     if(!verificationSourceUrl||!verificationOutputUrl)return;
-    const times=outputVerificationTimes();
+    if(verificationFrameSourceTime==null||verificationFrameOutputTime==null)return;
+    const times={sourceTime:verificationFrameSourceTime,outputTime:verificationFrameOutputTime};
     frameFullscreenMode='compare';
     frameFullscreen.hidden=false;
     frameFullscreenStage.dataset.mode='compare';
@@ -586,10 +595,12 @@ export function mountMediaWorkspace(hooks) {
       verificationSourceUrl=result.source?.url||null;
       verificationOutputUrl=result.output?.url||null;
       if(!verificationSourceUrl||!verificationOutputUrl)throw Error('画质验证没有返回完整帧对');
+      verificationFrameSourceTime=Number(result.source?.time??sourceTime);
+      verificationFrameOutputTime=Number(result.output?.time??outputTime);
       verifySourceImage.src=verificationSourceUrl;verifySourceImage.hidden=false;verifySourcePlaceholder.hidden=true;
       verifyOutputImage.src=verificationOutputUrl;verifyOutputImage.hidden=false;verifyOutputPlaceholder.hidden=true;
-      verifySourceTime.textContent=formatMediaTimeInput(Number(result.source?.time??sourceTime),3);
-      verifyOutputFrameTime.textContent=formatMediaTimeInput(Number(result.output?.time??outputTime),3);
+      verifySourceTime.textContent=formatMediaTimeInput(verificationFrameSourceTime,3);
+      verifyOutputFrameTime.textContent=formatMediaTimeInput(verificationFrameOutputTime,3);
       verifyStatus.textContent='帧对已提取。点击任一图进入全屏中线滑块比较；这是一种视觉检查，不等同于 SSIM / VMAF 分数。';
     }catch(error){
       verifyStatus.textContent='成品画质验证失败：'+error.message;
