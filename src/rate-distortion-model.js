@@ -369,8 +369,13 @@ export function createSizeQualityFrontier(model, {
   };
 
   const sampleCurve = (count = 64) =>
-    model.sampleCurve(count)
-      .filter(point => point.bitrate >= minimumEvidenceBitrate)
+    logSpaced(
+      minimumEvidenceBitrate,
+      model.maxBitrate,
+      Math.max(2, Math.round(count))
+    )
+      .map(model.predictAtBitrate)
+      .filter(Boolean)
       .map(point => ({
         ...point,
         targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
