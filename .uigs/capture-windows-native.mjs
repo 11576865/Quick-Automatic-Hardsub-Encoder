@@ -67,7 +67,6 @@ try {
     throw new Error("Real Bridge health did not report available windows-native backend");
   }
 
-  document;
   const envDetails = page.locator("#envDetails");
   if (await envDetails.count()) await envDetails.evaluate((node) => node.setAttribute("open", ""));
   const runtimeHelp = page.locator(".mobile-runtime-option");
