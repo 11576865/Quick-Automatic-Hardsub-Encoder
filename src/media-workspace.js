@@ -1,5 +1,6 @@
 import { formatSize, outputReport, sampleSettings, sampleProjection } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
+import { audioCopyPlaybackWarning } from './media-container.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import './media-workspace-ui.css';
 
@@ -486,7 +487,7 @@ export function mountMediaWorkspace(hooks) {
     el.textContent='实际输出：'+task.outputContainer.toUpperCase()+' · '+task.containerReason+(task.sourceContainer?' · 源容器 '+task.sourceContainer.toUpperCase():'');
     el.dataset.state='resolved';
   };
-  const syncAudioPlaybackWarning = task => {
+  const syncAudioPlaybackWarning = (task=null, media=null) => {
     const el=outputPolicy?.querySelector('#taskAudioPlaybackWarning');
     if(!el)return;
     const audioControl=outputPolicy?.querySelector('[name="audio"]');
@@ -497,12 +498,16 @@ export function mountMediaWorkspace(hooks) {
       el.removeAttribute('data-state');
       return;
     }
-    const detailed=Array.isArray(task?.compatibilityWarnings)
-      ? task.compatibilityWarnings.find(message=>String(message).includes('复制原音频'))
-      : '';
+
+    const currentMedia = media || hooks.mediaSnapshot?.() || null;
+    const assessment = currentMedia
+      ? audioCopyPlaybackWarning(task || {audio:'copy'}, currentMedia)
+      : null;
+
     el.hidden=false;
-    el.dataset.state='warning';
-    el.textContent=detailed || '注意：复制原音频只保留现有码流。封装成功、成品中存在音轨，不等于目标播放器一定能解码；如果成品无声，请改为“转为 AAC”。';
+    el.dataset.state=assessment?.severity || 'warning';
+    el.textContent=assessment?.message ||
+      '注意：复制原音频只保留现有码流。尚未取得源音频 codec；封装成功、成品中存在音轨，也不等于目标播放器一定能解码。读取视频参数后会显示更具体的兼容性提示。';
   };
   const syncTaskActions = () => {
     const stateName=section.dataset.taskState||'idle',run=section.querySelector('#taskRun'),save=section.querySelector('#taskSave');
@@ -745,7 +750,9 @@ export function mountMediaWorkspace(hooks) {
     updateRate();
     syncAudioPlaybackWarning();
   };
+  const mediaInfoListener = () => syncAudioPlaybackWarning();
   document.addEventListener('change',handleSharedAudioChange);
+  document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   get('rateMode').onchange=updateRate;
   section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();status('配置已保存');}catch(e){status(e.message);}};
   section.querySelector('#taskRestore').onclick=()=>{try{const raw=configs()[get('savedConfig').value];if(raw){applyConfig(raw);renderPlanSummary(activeTask);}}catch(e){status(e.message);}};
@@ -764,7 +771,7 @@ export function mountMediaWorkspace(hooks) {
     const task=compileTask(raw,media);
     await hooks.validate?.(task);
     renderContainerDecision(task);
-    syncAudioPlaybackWarning(task);
+    syncAudioPlaybackWarning(task,media);
     const compat = Array.isArray(task.compatibilityWarnings) && task.compatibilityWarnings.length
       ? ' 兼容性：'+task.compatibilityWarnings.join(' ')
       : '';
@@ -869,5 +876,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
-  return {section,dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
