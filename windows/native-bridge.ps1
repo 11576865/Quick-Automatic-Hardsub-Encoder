@@ -20,6 +20,11 @@ $script:Ffmpeg = Find-NativeTool 'ffmpeg' $PSScriptRoot
 $script:Ffprobe = Find-NativeTool 'ffprobe' $PSScriptRoot
 $script:Capabilities = if ($script:Ffmpeg) { Get-NativeCapabilities $script:Ffmpeg $script:Ffprobe $PSScriptRoot } else { $null }
 
+function Write-BridgeLog([string]$Message,[string]$Level='INFO') {
+    $stamp=(Get-Date).ToString('HH:mm:ss')
+    Write-Host "[$stamp][$Level] $Message"
+}
+
 function ConvertTo-JsonUtf8($Object) {
     return ($Object | ConvertTo-Json -Depth 12 -Compress)
 }
@@ -724,6 +729,9 @@ function Get-JobStatus([string]$JobId) {
             }
         }
         $p.Dispose()
+        if($j.State -eq 'completed'){Write-BridgeLog ("Job "+$JobId+" completed · "+$j.Encoder)}
+        elseif($j.State -eq 'cancelled'){Write-BridgeLog ("Job "+$JobId+" cancelled") 'WARN'}
+        elseif($j.State -eq 'failed'){Write-BridgeLog ("Job "+$JobId+" failed: "+$j.Error) 'ERROR'}
     }
     if($j.State -eq 'completed'){
         $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
@@ -847,6 +855,10 @@ function Handle-Request($Request) {
     try{
         $body=if($Request.Body){$Request.Body|ConvertFrom-Json}else{$null}
         $path=$Request.Path
+        $quietRequest = $path -eq '/api/health' -or $path -eq '/api/history' -or
+            $path -eq '/api/preview' -or $path -eq '/api/frame' -or
+            ($Request.Method -eq 'GET' -and $path -match '^/api/jobs/[A-Za-z0-9]+$')
+        if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
         if($Request.Method -eq 'GET' -and $path -eq '/api/health'){Send-HttpJson $Request 200 (Get-BackendInfo);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/self-test'){Send-HttpJson $Request 200 (Get-SelfTest);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/history'){Send-HttpJson $Request 200 @{records=@()};return}
@@ -870,10 +882,14 @@ function Handle-Request($Request) {
         }
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/export$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Export-Job $Matches[1] ([string]$body.suggestedName));return}
         Send-HttpJson $Request 404 @{ok=$false;error='Unknown bridge endpoint.'}
-    }catch{Send-HttpJson $Request 500 @{ok=$false;error=$_.Exception.Message}}
+    }catch{
+        Write-BridgeLog ($Request.Method+' '+$Request.Path+' failed: '+$_.Exception.Message) 'ERROR'
+        Send-HttpJson $Request 500 @{ok=$false;error=$_.Exception.Message}
+    }
 }
 
 if(-not $script:Ffmpeg -or -not $script:Ffprobe){
+    Write-BridgeLog 'FFmpeg / FFprobe was not found. Install Gyan.FFmpeg or place the toolchain under tools\ffmpeg\bin.' 'ERROR'
     [Windows.Forms.MessageBox]::Show('Windows Native Bridge requires ffmpeg.exe and ffprobe.exe. Install Gyan.FFmpeg with winget or place them in tools\ffmpeg\bin.','Quick Hardsub - FFmpeg missing')|Out-Null
     exit 2
 }
@@ -884,8 +900,27 @@ for($candidate=$Port;$candidate -lt ($Port+20);$candidate++){
 }
 if(-not $listener){throw 'Could not bind a localhost port for Windows Native Bridge.'}
 
+Write-Host ''
+Write-Host 'Quick Automatic Hardsub Encoder · Windows Native Bridge'
+Write-Host '-------------------------------------------------------'
+Write-BridgeLog ("Bridge ready: http://127.0.0.1:"+$Port)
+Write-BridgeLog ("FFmpeg: "+$script:Ffmpeg)
+if($script:Capabilities){
+    Write-BridgeLog ("FFmpeg version: "+$script:Capabilities.FfmpegVersion+" · source: "+$script:Capabilities.FfmpegSource)
+    Write-BridgeLog ("CPU: "+$script:Capabilities.Cpu)
+    $gpus=@($script:Capabilities.Gpus | Where-Object { $_ })
+    Write-BridgeLog ("GPU: "+$(if($gpus.Count){$gpus -join ' / '}else{'not detected'}))
+    $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
+    Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
+}
+Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
+Write-Host ''
+
 $launch='https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/?windowsNative='+[uri]::EscapeDataString("http://127.0.0.1:$Port")+'&token='+[uri]::EscapeDataString($script:Token)
-if(-not $NoBrowser){Start-Process $launch|Out-Null}
+if(-not $NoBrowser){
+    Write-BridgeLog 'Opening the Web UI and handing it this session token.'
+    Start-Process $launch|Out-Null
+}
 
 try{
     while($true){
