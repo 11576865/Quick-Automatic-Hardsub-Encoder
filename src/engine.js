@@ -277,18 +277,24 @@ export class EncoderEngine {
     this.assertReady();
     const time = Math.max(0, Number(timeSeconds) || 0);
     const width = Math.max(320, Math.min(1280, Math.floor(Number(options.width) || 720)));
-    const output = `/timeline_frame_${Date.now()}_${Math.random().toString(36).slice(2)}.png`;
-    const decoder = this.inputDecoderArgs();
-    const filter = `scale=${width}:-2:force_original_aspect_ratio=decrease`;
-    const cmd = `-y -ss ${time.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
-    await this.execute(cmd, false, 60000);
-    const bytes = await this.api.readFile(output);
-    if (!bytes || !bytes.length) throw new Error('时间轴画面预览没有生成');
-    return {
-      url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
-      time,
-      width
+    const run = async () => {
+      const output = '/timeline_frame.png';
+      const decoder = this.inputDecoderArgs();
+      const filter = `scale=${width}:-2:force_original_aspect_ratio=decrease`;
+      const cmd = `-y -ss ${time.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
+      await this.execute(cmd, false, 60000);
+      const bytes = await this.api.readFile(output);
+      if (!bytes || !bytes.length) throw new Error('时间轴画面预览没有生成');
+      return {
+        url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+        time,
+        width
+      };
     };
+    this.timelineFrameQueue = (this.timelineFrameQueue || Promise.resolve())
+      .catch(()=>{})
+      .then(run);
+    return this.timelineFrameQueue;
   }
 
   async renderWaveform(options = {}) {
