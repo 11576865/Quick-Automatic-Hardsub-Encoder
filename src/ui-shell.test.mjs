@@ -291,6 +291,10 @@ test('source video metadata is independent from subtitle preflight', async () =>
   assert.doesNotMatch(main, /const hasFiles = !!\(state\.video && state\.ass\)/);
   assert.match(main, /state\.sourceMedia = mediaFromNativeProbe\(p\);[\s\S]*?renderSourceVideoSummary\(\)/);
   assert.match(main, /invalidateAnalysis\(\{ clearVideoMetadata: true \}\)/);
+  assert.match(main, /button\.textContent = '重试读取视频参数'/);
+  assert.match(main, /state\.nativeInputProbe = null;[\s\S]*?probeSelectedVideo/);
+  assert.match(main, /nativePlatformName\(\) \+ ' 输入探测失败：'/);
+  assert.doesNotMatch(main, /Android SAF 输入探测失败：/);
   assert.match(css, /\.source-video-summary\s*\{/);
   assert.match(css, /\.source-video-summary-heading\s*\{/);
 });
