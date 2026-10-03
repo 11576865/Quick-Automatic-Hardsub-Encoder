@@ -101,7 +101,7 @@ export function qualityEvidenceRecord({
   return {
     evidenceVersion: COMPRESSION_EVIDENCE_VERSION,
     evidenceKind: 'quality-sample',
-    evidenceScope: 'source',
+    evidenceScope: 'observation',
     sourceIdentity: sourceEvidenceKey(media, sourceName, sourceSize),
     backend: cleanText(backend),
     runtimeIdentity: cleanText(runtimeIdentity),
@@ -130,6 +130,7 @@ export function sourceQualityEvidence(records, sourceIdentity, codec = '', prese
   return normalized
     .filter(record =>
       record.evidenceKind === 'quality-sample' &&
+      record.evidenceScope === 'source' &&
       record.sourceIdentity === sourceIdentity &&
       (!codec || record.codec === codec) &&
       (!preset || record.preset === preset) &&
