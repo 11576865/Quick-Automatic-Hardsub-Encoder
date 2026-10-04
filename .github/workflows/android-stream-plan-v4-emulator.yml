@@ -108,17 +108,9 @@ jobs:
             set -eu
             gradle -p android-native :app:connectedDebugAndroidTest --stacktrace
 
-            pack="$RUNNER_TEMP/stream-plan-v4-pack"
-            outputs="$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs"
-            mkdir -p "$outputs"
-
-            jq -r '.cases[].output' "$pack/device-acceptance-cases.json" | while IFS= read -r name; do
-              adb exec-out run-as io.github.quickhardsub cat "files/device-acceptance-outputs/$name" > "$outputs/$name"
-              test -s "$outputs/$name"
-            done
-
-            node scripts/verify-stream-plan-v4-device-outputs.mjs "$pack" "$outputs" |
-              tee "$RUNNER_TEMP/android-stream-plan-v4-verification.json"
+            mkdir -p "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs"
+            jq -r '.cases[].output' "$RUNNER_TEMP/stream-plan-v4-pack/device-acceptance-cases.json" | while IFS= read -r name; do adb exec-out run-as io.github.quickhardsub cat "files/device-acceptance-outputs/$name" > "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs/$name"; test -s "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs/$name"; done
+            node scripts/verify-stream-plan-v4-device-outputs.mjs "$RUNNER_TEMP/stream-plan-v4-pack" "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs" | tee "$RUNNER_TEMP/android-stream-plan-v4-verification.json"
 
       - name: Upload Android emulator runtime evidence
         uses: actions/upload-artifact@v4
