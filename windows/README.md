@@ -89,6 +89,41 @@ windows\start_windows.bat
 winget install --id Gyan.FFmpeg -e --source winget
 ```
 
+## Bink 2 / .bk2 输入
+
+Windows Native 可以识别 `.bk2` / Bink 2 输入，但当前 FFmpeg 不能直接解码 Bink 2 视频。项目因此提供一个**可选外部输入适配器**：
+
+```text
+原始 .bk2
+  → RAD Video Tools（外部依赖）
+  → 临时 AVI staging
+  → FFprobe / FFmpeg 实际解码验证
+  → 现有纯转码 / 硬字幕流程
+```
+
+RAD Video Tools **不随本项目分发或捆绑**。Bridge 会按以下顺序寻找本机工具：
+
+1. `RADVIDEO64` 环境变量；
+2. `RADVIDEO_HOME`；
+3. 项目附近的 `tools/radvideo/`；
+4. 常见 Program Files 安装目录；
+5. 系统 `PATH`。
+
+检测到 Bink 2 且 FFmpeg 无法解码时，Web UI 会明确区分“元数据可读取”和“视频不可解码”，并在 RAD 可用时提供 **使用 RAD Video Tools 导入**。导入是一个独立长任务，可以取消；未知进度时只显示阶段和已用时间，不伪造百分比或 ETA。
+
+外部导入不会修改原始 `.bk2`。临时 AVI 只用于本次 Bridge 会话，并在更换源视频或关闭 Bridge 时清理。由于视频已经经过 RAD 解码，导入后不会提供“无损快速剪切 / Stream Copy”作为原始 Bink 码流复制语义；应选择纯视频转码或硬字幕压制。
+
+Bink 2 素材可能包含多音轨或 Alpha 等额外语义。当前适配器只保证“RAD staging 可以被 FFmpeg 实际解码”这一执行前提，不声称这些高级语义一定被无损保留；重要游戏素材应在实际输出后核对轨道与透明信息。
+
+如果 RAD 没有被自动找到，可以显式指定：
+
+```powershell
+$env:RADVIDEO64 = 'D:\Tools\RADVideo\radvideo64.exe'
+# 或
+$env:RADVIDEO_HOME = 'D:\Tools\RADVideo'
+windows\start_windows.bat
+```
+
 ## Bridge 安全边界
 
 - 只绑定 `127.0.0.1`，不对局域网开放。
