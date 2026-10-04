@@ -668,18 +668,28 @@ class EncodeService : Service() {
                 }
             }
             updateStatus(jobId, "validating", "正在完整扫描视频 packet", 0.990)
-            val videoScan = fullDemuxScan(output.absolutePath, "0:v")
+            fullDemuxScan(output.absolutePath, "0:v")
             checkCancelled()
 
-            val audioScan = if (audioTracks > 0) {
+            if (audioTracks > 0) {
                 updateStatus(jobId, "validating", "正在完整扫描音频 packet", 0.992)
                 fullDemuxScan(output.absolutePath, "0:a")
-            } else {
-                null
             }
 
-            val videoEnd = videoScan.first
-            val audioEnd = audioScan?.first
+            // FFmpegKit Statistics.time is useful for progress, but it is not a
+            // stable stream-tail authority on every Android FFmpeg build. In
+            // particular, mixed full/trim source views can report a timestamp
+            // relative to an internal seek origin. Keep the full demux scan for
+            // integrity, then derive the actual stream tail from packet PTS +
+            // duration, matching the independent host verifier.
+            val videoEnds = outputVideoStreams.indices.map { index ->
+                probePacketEnd(output.absolutePath, "v:" + index, expectedVideoDuration)
+            }
+            val audioEnds = (0 until outputAudioCount).map { index ->
+                probePacketEnd(output.absolutePath, "a:" + index, expectedAudioDuration)
+            }
+            val videoEnd = videoEnds.maxOrNull() ?: 0.0
+            val audioEnd = audioEnds.maxOrNull()
             val videoDelta = videoEnd - expectedVideoDuration
             val audioDelta = audioEnd?.minus(expectedAudioDuration)
             val audioTolerance = if (copyTask) 2.0 else 1.0
@@ -690,27 +700,26 @@ class EncodeService : Service() {
                         " s，输出 " + String.format("%.3f", outputDuration) + " s"
                 )
             }
-            if (!(videoEnd > 0.0) || abs(videoDelta) > tolerance) {
+            val invalidVideoEnd = videoEnds.withIndex().firstOrNull { (_, end) ->
+                !(end > 0.0) || abs(end - expectedVideoDuration) > tolerance
+            }
+            if (invalidVideoEnd != null) {
                 throw IllegalStateException(
-                    "成品视频 packet 末端异常：输入视频约 " +
-                        String.format("%.3f", expectedVideoDuration) +
-                        " s，扫描末端 " + String.format("%.3f", videoEnd) + " s"
+                    "成品视频 packet 末端异常：流 #" + invalidVideoEnd.index +
+                        "，输入视频约 " + String.format("%.3f", expectedVideoDuration) +
+                        " s，扫描末端 " + String.format("%.3f", invalidVideoEnd.value) + " s"
                 )
             }
-            if (
-                audioTracks > 0 &&
-                (
-                    audioEnd == null ||
-                    !(audioEnd > 0.0) ||
-                    audioDelta == null ||
-                    (if (task != null) audioDelta > audioTolerance else abs(audioDelta) > audioTolerance)
-                )
-            ) {
+            val invalidAudioEnd = audioEnds.withIndex().firstOrNull { (_, end) ->
+                !(end > 0.0) ||
+                    (if (task != null) end - expectedAudioDuration > audioTolerance
+                    else abs(end - expectedAudioDuration) > audioTolerance)
+            }
+            if (audioTracks > 0 && invalidAudioEnd != null) {
                 throw IllegalStateException(
-                    "成品音频 packet 末端异常：输入音频约 " +
-                        String.format("%.3f", expectedAudioDuration) +
-                        " s，扫描末端 " +
-                        (audioEnd?.let { String.format("%.3f", it) } ?: "N/A") + " s"
+                    "成品音频 packet 末端异常：流 #" + invalidAudioEnd.index +
+                        "，输入音频约 " + String.format("%.3f", expectedAudioDuration) +
+                        " s，扫描末端 " + String.format("%.3f", invalidAudioEnd.value) + " s"
                 )
             }
 
@@ -902,6 +911,46 @@ class EncodeService : Service() {
             )
         }
         return Pair(lastTimeMs / 1000.0, output)
+    }
+
+    private fun probePacketEnd(
+        path: String,
+        streamSpec: String,
+        expectedEnd: Double
+    ): Double {
+        val windowStart = (expectedEnd - 8.0).coerceAtLeast(0.0)
+        val session = FFprobeKit.executeWithArguments(
+            arrayOf(
+                "-v", "error",
+                "-select_streams", streamSpec,
+                "-read_intervals", windowStart.toString() + "%",
+                "-show_packets",
+                "-show_entries", "packet=pts_time,duration_time",
+                "-of", "csv=p=0",
+                path
+            )
+        )
+        if (!ReturnCode.isSuccess(session.getReturnCode())) {
+            throw IllegalStateException(
+                session.getOutput().takeLast(1600).ifBlank {
+                    "成品 " + streamSpec + " packet 末端读取失败"
+                }
+            )
+        }
+
+        var end = 0.0
+        session.getOutput().lineSequence().forEach { line ->
+            val columns = line.trim().split(',')
+            val pts = columns.getOrNull(0)?.toDoubleOrNull()
+            val duration = columns.getOrNull(1)?.toDoubleOrNull() ?: 0.0
+            if (pts != null && pts.isFinite() && duration.isFinite()) {
+                end = max(end, pts + duration.coerceAtLeast(0.0))
+            }
+        }
+        if (!(end > 0.0)) {
+            throw IllegalStateException("成品 " + streamSpec + " 未找到有效 packet 时间戳")
+        }
+        return end
     }
 
     private fun fullDecodeScan(
