@@ -312,8 +312,16 @@ class EncodeService : Service() {
                 )
 
             val sourceStreams = sourceInfo.getStreams()
-            val video = sourceStreams.firstOrNull { it.getType() == "video" }
-                ?: throw IllegalStateException("输入没有可识别的视频流")
+            val sourceVideoStreams = sourceStreams.filter { it.getType() == "video" }
+            if (sourceVideoStreams.isEmpty()) throw IllegalStateException("输入没有可识别的视频流")
+            val selectedVideoOrdinals = if (task != null && task.has("videoStreams")) {
+                val array = task.getJSONArray("videoStreams")
+                (0 until array.length()).map { array.getInt(it) }
+            } else listOf(0)
+            if (selectedVideoOrdinals.isEmpty() || selectedVideoOrdinals.any { it !in sourceVideoStreams.indices }) {
+                throw IllegalStateException("任务选择的视频流不存在")
+            }
+            val video = sourceVideoStreams[selectedVideoOrdinals.first()]
             val audioStreams = sourceStreams.filter { it.getType() == "audio" }
             val sourceAudioTracks = audioStreams.size
             val audioMode = if (task == null) request.optString("audio", "copy") else task.optString("audio", "copy")
@@ -336,10 +344,23 @@ class EncodeService : Service() {
             val hdr = transfer.contains("smpte2084", true) ||
                 transfer.contains("arib-std-b67", true) ||
                 (primaries.contains("bt2020", true) && bitDepth > 8)
-            if (!copyTask && (bitDepth > 8 || hdr)) {
-                throw IllegalStateException(
-                    "检测到 " + bitDepth + "-bit/HDR 输入；当前 Native 正式压制仍禁止静默转换为 8-bit SDR"
-                )
+            if (!copyTask) {
+                selectedVideoOrdinals.forEach { ordinal ->
+                    val selected = sourceVideoStreams[ordinal]
+                    val selectedProps = selected.getAllProperties()
+                    val selectedFormat = selected.getFormat().orEmpty()
+                    val selectedDepth = inferBitDepth(selectedProps?.optString("bits_per_raw_sample", "").orEmpty(), selectedFormat)
+                    val selectedTransfer = selectedProps?.optString("color_transfer", "").orEmpty()
+                    val selectedPrimaries = selectedProps?.optString("color_primaries", "").orEmpty()
+                    val selectedHdr = selectedTransfer.contains("smpte2084", true) ||
+                        selectedTransfer.contains("arib-std-b67", true) ||
+                        (selectedPrimaries.contains("bt2020", true) && selectedDepth > 8)
+                    if (selectedDepth > 8 || selectedHdr) {
+                        throw IllegalStateException(
+                            "所选视频流 #" + ordinal + " 为 " + selectedDepth + "-bit/HDR；当前 Native 正式压制仍禁止静默转换为 8-bit SDR"
+                        )
+                    }
+                }
             }
 
             val sourceDuration = sourceInfo.getDuration()?.toDoubleOrNull()
@@ -351,28 +372,32 @@ class EncodeService : Service() {
             var actualStart = task?.optDouble("start", 0.0) ?: 0.0
             val requestedEnd = task?.optDouble("end", sourceDuration) ?: sourceDuration
             if (actualStart < 0 || requestedEnd > sourceDuration + 0.1 || requestedEnd <= actualStart) throw IllegalStateException("剪切范围超出视频时长")
-            if (copyTask && actualStart > 0.0) {
-                updateStatus(jobId, "staging", "正在定位切入关键帧", 0.0)
-                val scan = FFprobeKit.executeWithArguments(arrayOf("-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey", "-read_intervals", "0%" + (actualStart + 1.0), "-show_frames", "-show_entries", "frame=best_effort_timestamp_time", "-of", "csv=p=0", inputPath))
+            if (copyTask && task?.optString("videoRange", "trim") != "full" && actualStart > 0.0) {
+                updateStatus(jobId, "staging", "正在按主选视频流定位切入关键帧", 0.0)
+                val primaryVideo = selectedVideoOrdinals.first()
+                val scan = FFprobeKit.executeWithArguments(arrayOf("-v", "error", "-select_streams", "v:" + primaryVideo, "-skip_frame", "nokey", "-read_intervals", "0%" + (actualStart + 1.0), "-show_frames", "-show_entries", "frame=best_effort_timestamp_time", "-of", "csv=p=0", inputPath))
                 if (!ReturnCode.isSuccess(scan.getReturnCode())) throw IllegalStateException("关键帧定位失败")
                 val times = scan.getOutput().lineSequence().mapNotNull { it.substringBefore(',').toDoubleOrNull() }.filter { it >= 0 && it <= actualStart }.toList()
                 actualStart = times.maxOrNull() ?: throw IllegalStateException("未找到可用关键帧")
             }
-            val duration = if (task == null) sourceDuration else if (copyTask) requestedEnd - actualStart else task.getDouble("expectedDuration")
-
-            val expectedVideoDuration = if (task != null) duration else
+            val trimDuration = (requestedEnd - actualStart).coerceAtLeast(0.0)
+            val expectedVideoDuration = if (task != null) {
+                if (task.optString("videoRange", "trim") == "full") sourceDuration else trimDuration
+            } else {
                 props?.optString("duration", "")?.toDoubleOrNull()
-                    ?.takeIf { it > 0.0 }
-                    ?: duration
-            val expectedAudioDuration = if (task != null) duration else audioStreams
-                .mapNotNull { stream ->
-                    stream.getAllProperties()
-                        ?.optString("duration", "")
-                        ?.toDoubleOrNull()
-                        ?.takeIf { it > 0.0 }
-                }
-                .maxOrNull()
-                ?: duration
+                    ?.takeIf { it > 0.0 } ?: sourceDuration
+            }
+            val expectedAudioDuration = if (task != null) {
+                if (audioTracks <= 0) 0.0 else if (task.optString("audioRange", "trim") == "full") sourceDuration else trimDuration
+            } else {
+                audioStreams.mapNotNull { stream ->
+                    stream.getAllProperties()?.optString("duration", "")?.toDoubleOrNull()?.takeIf { it > 0.0 }
+                }.maxOrNull() ?: sourceDuration
+            }
+            val expectedSubtitleDuration = if (task != null && task.optBoolean("keepSubtitles", false)) {
+                if (task.optString("subtitleRange", "trim") == "full") sourceDuration else trimDuration
+            } else 0.0
+            val duration = if (task == null) sourceDuration else max(expectedVideoDuration, max(expectedAudioDuration, expectedSubtitleDuration))
 
             val codec = request.getString("codec")
             val mode = request.getString("mode")
@@ -469,21 +494,27 @@ class EncodeService : Service() {
                 )
             )
 
+            var manualSourceArgs: List<String>? = null
             if (task != null && manualArgs != null) {
                 MediaTaskArguments.validateSupport(manualArgs)
                 args.clear()
                 args.addAll(listOf("-y", "-hide_banner", "-loglevel", "warning"))
-                if (actualStart > 0.0) args.addAll(listOf("-ss", actualStart.toString()))
-                args.addAll(listOf("-i", inputPath, "-t", (requestedEnd - actualStart).toString()))
+                val sourceArgs = mutableListOf("-i", inputPath)
+                if (task.optBoolean("usesTrimInput", false)) {
+                    sourceArgs.addAll(listOf("-ss", actualStart.toString(), "-t", trimDuration.toString(), "-i", inputPath))
+                }
+                manualSourceArgs = sourceArgs.toList()
+                args.addAll(sourceArgs)
                 args.addAll(manualArgs.map { it.replace("__ASS__", NativeJobStore.escapeFilterPath(assFile.absolutePath)).replace("__FONTS__", NativeJobStore.escapeFilterPath(fontsDir.absolutePath)) })
                 args.addAll(listOf("-f", outputFormat, output.absolutePath))
-                NativeJobStore.writeStatus(this, jobId, JSONObject().put("state", "staging").put("actualStart", actualStart).put("message", "实际切入点 " + actualStart + " 秒"))
+                NativeJobStore.writeStatus(this, jobId, JSONObject().put("state", "staging").put("actualStart", actualStart).put("message", "流计划已解析；实际视频切入点 " + actualStart + " 秒"))
             }
 
             val manualTwoPass = task?.optBoolean("twoPass") == true
             if (manualTwoPass && manualArgs != null) {
                 val passLog = File(jobDir, "task-pass").absolutePath
-                val firstArgs = args.take(args.indexOf("-i") + 2) + listOf("-t", (requestedEnd - actualStart).toString()) +
+                val firstArgs = listOf("-y", "-hide_banner", "-loglevel", "warning") +
+                    (manualSourceArgs ?: listOf("-i", inputPath)) +
                     MediaTaskArguments.firstPassArgs(manualArgs).map { it.replace("__ASS__", NativeJobStore.escapeFilterPath(assFile.absolutePath)).replace("__FONTS__", NativeJobStore.escapeFilterPath(fontsDir.absolutePath)) } +
                     listOf("-pass", "1", "-passlogfile", passLog, "-f", "null", "-")
                 runManualFirstPass(jobId, firstArgs, duration)
@@ -616,8 +647,9 @@ class EncodeService : Service() {
             val durationDelta = outputDuration - duration
             val tolerance = if (copyTask) 2.0 else max(0.75, if (fps > 0.0) 2.0 / fps else 0.0)
 
-            if (outputVideoCount != 1) {
-                throw IllegalStateException("成品视频流数量异常：" + outputVideoCount)
+            val expectedVideoCount = task?.optInt("expectedVideoTracks", 1) ?: 1
+            if (outputVideoCount != expectedVideoCount) {
+                throw IllegalStateException("成品视频流数量异常：" + outputVideoCount + "，预期 " + expectedVideoCount)
             }
             if (outputAudioCount != audioTracks) {
                 throw IllegalStateException(
@@ -626,16 +658,17 @@ class EncodeService : Service() {
             }
 
             if (task != null && !copyTask) {
-                val outVideo = outputVideoStreams.first()
-                if (task.optInt("expectedWidth", 0) > 0 && (outVideo.getWidth()?.toInt() != task.getInt("expectedWidth") || outVideo.getHeight()?.toInt() != task.getInt("expectedHeight"))) throw IllegalStateException("成品分辨率与设置不符")
-                val wantedFps = task.optDouble("expectedFps", 0.0)
-                val parts = outVideo.getAverageFrameRate().orEmpty().split('/')
-                val outputFps = if (parts.size == 2) (parts[0].toDoubleOrNull() ?: 0.0) / (parts[1].toDoubleOrNull() ?: 1.0) else parts[0].toDoubleOrNull() ?: 0.0
-                if (wantedFps > 0 && (!outputFps.isFinite() || abs(outputFps - wantedFps) > 0.01)) throw IllegalStateException("成品帧率与设置不符")
-                if (task.optInt("expectedBitDepth", 0) > 0 && inferBitDepth("", outVideo.getFormat().orEmpty()) != task.getInt("expectedBitDepth")) throw IllegalStateException("成品位深与设置不符")
+                outputVideoStreams.forEach { outVideo ->
+                    if (task.optInt("expectedWidth", 0) > 0 && (outVideo.getWidth()?.toInt() != task.getInt("expectedWidth") || outVideo.getHeight()?.toInt() != task.getInt("expectedHeight"))) throw IllegalStateException("成品分辨率与设置不符")
+                    val wantedFps = task.optDouble("expectedFps", 0.0)
+                    val parts = outVideo.getAverageFrameRate().orEmpty().split('/')
+                    val outputFps = if (parts.size == 2) (parts[0].toDoubleOrNull() ?: 0.0) / (parts[1].toDoubleOrNull() ?: 1.0) else parts[0].toDoubleOrNull() ?: 0.0
+                    if (wantedFps > 0 && (!outputFps.isFinite() || abs(outputFps - wantedFps) > 0.01)) throw IllegalStateException("成品帧率与设置不符")
+                    if (task.optInt("expectedBitDepth", 0) > 0 && inferBitDepth("", outVideo.getFormat().orEmpty()) != task.getInt("expectedBitDepth")) throw IllegalStateException("成品位深与设置不符")
+                }
             }
             updateStatus(jobId, "validating", "正在完整扫描视频 packet", 0.990)
-            val videoScan = fullDemuxScan(output.absolutePath, "0:v:0")
+            val videoScan = fullDemuxScan(output.absolutePath, "0:v")
             checkCancelled()
 
             val audioScan = if (audioTracks > 0) {
@@ -712,7 +745,7 @@ class EncodeService : Service() {
             val thermalEnd = currentThermalStatus(powerManager)
             val powerSaveEnd = powerManager.isPowerSaveMode
             try {
-                if (!copyTask) NativeBenchmarkStore.appendSuccess(
+                if (!copyTask && selectedVideoOrdinals.size == 1) NativeBenchmarkStore.appendSuccess(
                     this,
                     JSONObject()
                         .put("evidenceVersion", 1)
@@ -894,7 +927,7 @@ class EncodeService : Service() {
             "video" -> {
                 args.addAll(
                     listOf(
-                        "-map", "0:v:0",
+                        "-map", "0:v",
                         "-an",
                         "-sn",
                         "-dn",

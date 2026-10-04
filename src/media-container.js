@@ -22,8 +22,40 @@ export function sourceContainer(media={}) {
   return '';
 }
 
-function copiedAudioCodecs(media={}) {
-  if(Array.isArray(media.audioCodecs) && media.audioCodecs.length)return media.audioCodecs.map(cleanCodec).filter(Boolean);
+function selectedVideoCodecs(task={}, media={}) {
+  const streams = Array.isArray(media.videoStreams) ? media.videoStreams : [];
+  const selected = Array.isArray(task.videoStreams) && task.videoStreams.length ? task.videoStreams : [0];
+  if (streams.length) {
+    return selected
+      .map(index => streams[index])
+      .map(stream => cleanCodec(stream?.codec || stream?.codec_name || ''))
+      .filter(Boolean);
+  }
+  const one = cleanCodec(media.videoCodec);
+  return one ? [one] : [];
+}
+
+function selectedAudioStreams(task={}, media={}) {
+  const streams = Array.isArray(media.audioStreams) ? media.audioStreams : [];
+  if (!streams.length) return [];
+  if (task.audioTrack === 'all' || task.audioTrack == null || task.audioTrack === '') return streams;
+  const index = Number(task.audioTrack);
+  return Number.isInteger(index) && index >= 0 && index < streams.length ? [streams[index]] : [];
+}
+
+function copiedAudioCodecs(task={}, media={}) {
+  const selected = selectedAudioStreams(task, media);
+  if (selected.length) {
+    return selected.map(stream => cleanCodec(stream?.codec || stream?.codec_name || '')).filter(Boolean);
+  }
+  if(Array.isArray(media.audioCodecs) && media.audioCodecs.length) {
+    const codecs=media.audioCodecs.map(cleanCodec).filter(Boolean);
+    if(task.audioTrack !== 'all' && task.audioTrack != null && /^\d+$/.test(String(task.audioTrack))) {
+      const one=codecs[Number(task.audioTrack)];
+      return one?[one]:[];
+    }
+    return codecs;
+  }
   const one=cleanCodec(media.audioCodec);
   return one?[one]:[];
 }
@@ -53,11 +85,15 @@ function audioCodecLabel(codec='') {
 
 export function audioCopyPlaybackWarning(task={}, media={}) {
   if(task.audio!=='copy' || Number(media.audioTracks||0)<=0)return null;
-  const codecs=[...new Set(copiedAudioCodecs(media))];
-  const tracks=Math.max(1,Number(media.audioTracks||0));
+  const codecs=[...new Set(copiedAudioCodecs(task,media))];
+  const tracks=task.audioTrack==='all' || task.audioTrack == null
+    ? Math.max(1,Number(media.audioTracks||0))
+    : 1;
   const detected=codecs.length ? codecs.map(audioCodecLabel).join(' / ') : '未能确认';
+  const selectedStreams=selectedAudioStreams(task,media);
+  const selectedBitrate=selectedStreams.reduce((sum,stream)=>sum+Number(stream?.bitRate||stream?.bit_rate||0),0);
+  const bitrate=selectedBitrate>0 ? selectedBitrate : Number(media.audioBitRate||0);
   const broad=codecs.length>0 && codecs.every(codec=>BROAD_PLAYBACK_AUDIO.has(codec));
-  const bitrate=Number(media.audioBitRate||0);
   const facts=`${detected} · ${tracks} 轨${bitrate>0 ? ' · '+Math.round(bitrate/1000)+' kb/s' : ''}`;
 
   if(broad){
@@ -67,7 +103,7 @@ export function audioCopyPlaybackWarning(task={}, media={}) {
       confidence:'common-playback',
       codecs,
       tracks,
-      message:`检测到源音频：${facts}。复制原音频会保留现有码流，不重新编码。AAC / MP3 在常见播放环境中通常具有较广支持，但当前项目无法验证你实际使用的外部播放器；程序内部验证通过也不等于目标播放器一定有声。`
+      message:`检测到将复制的源音频：${facts}。Stream Copy 会保留现有码流，不重新编码。AAC / MP3 在常见播放环境中通常具有较广支持，但当前项目无法验证你实际使用的外部播放器；程序内部验证通过也不等于目标播放器一定有声。`
     };
   }
 
@@ -77,7 +113,7 @@ export function audioCopyPlaybackWarning(task={}, media={}) {
     confidence:codecs.length ? 'player-dependent' : 'unknown-codec',
     codecs,
     tracks,
-    message:`检测到源音频：${facts}。复制原音频会原样保留这些码流，不会提升播放器兼容性。程序内部最多只能证明音轨存在或当前后端能够解码，不能证明你实际使用的外部播放器支持；如果成品无声，请改为“转为 AAC”。`
+    message:`检测到将复制的源音频：${facts}。Stream Copy 会原样保留这些码流，不会提升播放器兼容性。程序内部最多只能证明音轨存在或当前后端能够解码，不能证明你实际使用的外部播放器支持；如果成品无声，请改为“转为 AAC”。`
   };
 }
 
@@ -88,13 +124,14 @@ export function checkContainerCompatibility(key, task={}, media={}) {
   if(task.keepAttachments)return {ok:false,reason:'当前 MP4 输出不复制附件；请关闭附件保留或改用 MKV'};
   if(task.keepSubtitles)return {ok:false,reason:'当前 MP4 输出不复制任意软字幕轨；请关闭软字幕保留或改用 MKV'};
 
-  const video=task.operation==='copy' ? cleanCodec(media.videoCodec) : cleanCodec(task.codec);
-  if(video && !MP4_VIDEO.has(video))return {ok:false,reason:`当前视频编码 ${video} 未列入 MP4 安全组合`};
+  const videoCodecs=task.operation==='copy' ? selectedVideoCodecs(task,media) : [cleanCodec(task.codec)].filter(Boolean);
+  const badVideo=videoCodecs.find(codec=>!MP4_VIDEO.has(codec));
+  if(badVideo)return {ok:false,reason:`所选视频流编码 ${badVideo} 未列入 MP4 安全组合`};
 
   if(task.audio==='libopus')return {ok:false,reason:'当前策略不把 Opus 作为 MP4 安全默认；请改用 AAC、关闭音频或选择 MKV'};
   if(task.audio==='copy'){
-    const codecs=copiedAudioCodecs(media);
-    if(Number(media.audioTracks||0)>0 && !codecs.length)return {ok:false,reason:'无法确认复制音轨是否适合 MP4；请选择 MKV 或显式转为 AAC'};
+    const codecs=copiedAudioCodecs(task,media);
+    if(Number(media.audioTracks||0)>0 && !codecs.length)return {ok:false,reason:'无法确认所选复制音轨是否适合 MP4；请选择 MKV 或显式转为 AAC'};
     const bad=codecs.find(codec=>!MP4_AUDIO.has(codec));
     if(bad)return {ok:false,reason:`复制的音频编码 ${bad} 未列入 MP4 安全组合；请选择 MKV 或显式转为 AAC`};
   }
@@ -118,7 +155,7 @@ export function resolveOutputContainer(requested='auto', task={}, media={}) {
       const keep=checkContainerCompatibility(source,task,media);
       if(keep.ok){
         key=source;
-        reason='无损剪切优先保持源容器';
+        reason='视频 Stream Copy 优先保持源容器';
       }
     }
     if(key==='auto'){

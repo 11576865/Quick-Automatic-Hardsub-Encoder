@@ -11,7 +11,7 @@ test('keyframe-aware trim timeline is wired across Web, Windows Native and Andro
     readFile(new URL('../android-native/app/src/main/java/io/github/quickhardsub/NativeBridge.kt', import.meta.url), 'utf8'),
   ]);
 
-  assert.match(workspace, /includeKeyframes:copy/);
+  assert.match(workspace, /includeKeyframes:videoTrim/);
   assert.match(workspace, /id="taskWaveformActualStart"/);
   assert.match(workspace, /将 IN 对齐关键帧/);
   assert.match(workspace, /实际无损起点/);

@@ -21,7 +21,7 @@ export function mountMediaWorkspace(hooks) {
   modeNav.innerHTML =
     '<button type="button" data-media-mode="hardsub" aria-pressed="true"><span class="media-mode-index">ASS</span><span><strong>硬字幕压制</strong><small>预检 / 真实预览 / 方案 / 重编码</small></span></button>' +
     '<button type="button" data-media-mode="transcode" aria-pressed="false"><span class="media-mode-index">VIDEO</span><span><strong>纯视频转码</strong><small>编码 / 画面 / 帧率 / 音频 / 封装</small></span></button>' +
-    '<button type="button" data-media-mode="copy" aria-pressed="false"><span class="media-mode-index">COPY</span><span><strong>无损快速剪切</strong><small>时间范围 / 关键帧边界 / 直接复制</small></span></button>';
+    '<button type="button" data-media-mode="copy" aria-pressed="false"><span class="media-mode-index">COPY</span><span><strong>视频流复制 / 快速剪辑</strong><small>视频 Stream Copy / 独立时间范围 / 音频可单独转码</small></span></button>';
   section.innerHTML = `<div class="media-workspace-heading">
     <div>
       <span id="mediaWorkspaceEyebrow" class="media-workspace-eyebrow">HARDSUB</span>
@@ -31,7 +31,7 @@ export function mountMediaWorkspace(hooks) {
     <div class="media-workspace-badges"><span>同一任务格式</span><span>Native / Web</span></div>
   </div>
   <form id="mediaTaskForm">
-  <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','无损快速剪切']])}${input('start','开始时间','例如 3:57.250','0')}${input('end','结束时间','留空表示片尾；例如 5:12.800')}</div>
+  <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','视频流复制 / 快速剪辑']])}${input('start','开始时间','例如 3:57.250','0')}${input('end','结束时间','留空表示片尾；例如 5:12.800')}</div>
   <p class="note media-time-format-note">时间支持秒、小数秒、MM:SS.mmm、HH:MM:SS.mmm；中文全角冒号会自动识别。</p>
   <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="媒体剪辑时间轴">
     <div class="media-waveform-heading">
@@ -130,7 +130,7 @@ export function mountMediaWorkspace(hooks) {
     <strong>纯视频转码分支</strong><span>编码器 / 质量或码率 → 帧率 / 尺寸 / 像素格式 / 画面处理 → 音频策略。不会要求 ASS。</span>
   </section>
   <section class="media-operation-branch media-operation-branch-copy" data-operation-branch="copy">
-    <strong>无损快速剪切分支</strong><span>请求时间范围 → 关键帧边界 → 流复制。禁止视频重编码与音频转码。</span>
+    <strong>视频流复制 / 快速剪辑分支</strong><span>所选视频保持 Stream Copy；视频、音频、软字幕可独立选择完整时间轴或 IN/OUT 范围，音频仍可显式转码。</span>
   </section>
   <div class="media-mode-explainer media-mode-explainer-hardsub">
     <strong>硬字幕链路</strong><span>视频 + ASS + 字体 → 预检 → libass 真实预览 → 视频重编码 → 输出验证</span>
@@ -139,7 +139,7 @@ export function mountMediaWorkspace(hooks) {
     <strong>纯视频转码</strong><span>不要求 ASS。直接配置编码、尺寸、帧率、画面处理、音频与封装；不会静默更换你选择的编码器。</span>
   </div>
   <div class="media-mode-explainer media-mode-explainer-copy">
-    <strong>无损快速剪切</strong><span>视频与音频压缩数据直接复制，不重新编码。起点受关键帧约束，输出边界以实际数据包为准。</span>
+    <strong>视频 Stream Copy</strong><span>所选视频码流不重新编码；若视频使用 IN/OUT，主选视频流决定关键帧切入。音频可保持完整、独立剪辑、复制、转码或关闭。</span>
   </div>
   <section id="taskPlanSummary" class="task-plan-summary" aria-live="polite">
     <div class="task-plan-heading"><span>当前方案</span><strong id="taskPlanTitle">等待选择参数</strong></div>
@@ -169,7 +169,13 @@ export function mountMediaWorkspace(hooks) {
   ${check('squarePixels','设为方形像素')}${check('denoise','降噪 hqdn3d')}${check('deband','去色带 deband')}${check('sharpen','锐化 unsharp')}
   </div><p>处理顺序：裁切 → 去隔行 → 缩放 → 旋转 → 画面滤镜 → 字幕 → 补齐偶数尺寸。编码器不支持的组合会明确报错。</p></details>
   <details id="taskNvencDetails" class="media-advanced-panel" hidden><summary>NVENC 详细设置</summary><fieldset id="taskNvenc"><div class="task-grid">${select('multipass','多阶段分析',[['fullres','全分辨率'],['qres','低分辨率'],['disabled','关闭']])}${input('lookahead','前瞻帧数 0–32','编码器默认')}${input('aqStrength','空间 AQ 强度 1–15','编码器默认')}${check('spatialAq','空间自适应量化')}${check('temporalAq','时间自适应量化')}</div></fieldset><p class="note">NVENC 多阶段分析属于逐帧码率控制，与整片两遍编码不同；空间 AQ 与时间 AQ 选择一种。目标体积不会通过截断视频来满足。</p></details></fieldset>
-  <details class="media-advanced-panel media-track-panel"><summary>轨道保留</summary><div class="task-grid">${input('audioTrack','保留音轨','all 或音频轨序号，从 0 开始','all')}${check('keepSubtitles','保留内封软字幕')}${check('keepAttachments','保留附件 / 字体')}${check('keepMetadata','保留元数据',true)}${check('keepChapters','保留章节')}</div><p>剪切默认移除旧章节，避免章节时间与成品不一致。软字幕复制后的边界与显示效果需自行核对。</p></details>
+  <details class="media-advanced-panel media-track-panel"><summary>流选择与时间策略</summary><div class="task-grid">
+  ${input('videoStreams','视频流','0、0,1 或 all','0')}${select('videoRange','视频时间轴',[['trim','按 IN / OUT 剪辑'],['full','保持完整视频']])}
+  ${input('audioTrack','音频轨','all 或音频轨序号，从 0 开始','all')}${select('audioRange','音频时间轴',[['trim','按 IN / OUT 剪辑'],['full','保持完整音频']])}
+  ${select('subtitleRange','软字幕时间轴',[['trim','按 IN / OUT 剪辑'],['full','保持完整软字幕']])}
+  ${check('keepSubtitles','保留内封软字幕')}${check('keepAttachments','保留附件 / 字体')}${check('keepMetadata','保留元数据',true)}${check('keepChapters','保留章节')}</div>
+  <p id="taskVideoStreamInfo">读取容器后显示可用视频流。视频流序号按 FFmpeg 的 v:N 顺序，从 0 开始。</p>
+  <p>时间策略彼此独立：例如“视频按 IN/OUT、音频保持完整”会只剪视频。主动制造不同时长的流可能改变音画对应关系，这是显式任务语义，不会被自动修正。</p></details>
   <section id="taskOutputPolicy" class="media-output-policy">
     <div class="media-output-policy-heading"><span>共享出口</span><strong>音频与封装</strong><p>三条任务在这里重新汇合。音频转换必须由用户显式选择；容器不兼容时明确要求调整，不会静默转码。</p></div>
     <div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${select('outputContainer','成品容器',[['auto','Auto · 自动选择安全容器'],['keep','保持源容器（可用时）'],['mkv','MKV · Matroska'],['mp4','MP4 · MPEG-4']])}</div>
@@ -669,17 +675,24 @@ export function mountMediaWorkspace(hooks) {
     requestedFrameTime.textContent='—';
     actualFrameTime.textContent='—';
   }
-  const frameCacheKey=time=>Math.max(0,Number(time)||0).toFixed(3);
+  const primaryVideoStream=()=>{
+    const raw=String(get('videoStreams')?.value||'0').trim().toLowerCase();
+    if(raw==='all')return 0;
+    const first=raw.split(',').map(x=>x.trim()).find(x=>/^\d+$/.test(x));
+    return Math.max(0,Number(first||0));
+  };
+  const frameCacheKey=(time,stream=primaryVideoStream())=>stream+'@'+Math.max(0,Number(time)||0).toFixed(3);
   async function getTimelineFrame(time){
     if(!hooks.frame)throw Error('当前后端未提供时间轴画面预览');
     const clamped=clampWaveformTime(time);
-    const key=frameCacheKey(clamped);
+    const videoStream=primaryVideoStream();
+    const key=frameCacheKey(clamped,videoStream);
     if(timelineFrameCache.has(key))return timelineFrameCache.get(key);
     if(timelineFramePending.has(key))return timelineFramePending.get(key);
     const generation=timelineFrameGeneration;
     const request=timelineFrameFetchQueue
       .catch(()=>{})
-      .then(()=>hooks.frame({time:clamped,width:720}))
+      .then(()=>hooks.frame({time:clamped,width:720,videoStream}))
       .then(result=>{
         if(!result?.url)throw Error('画面预览没有返回图像');
         if(generation!==timelineFrameGeneration){
@@ -716,7 +729,7 @@ export function mountMediaWorkspace(hooks) {
         framePreviewImage.hidden=false;
         framePreviewPlaceholder.hidden=true;
         framePreviewTime.textContent=formatMediaTimeInput(result.time,3);
-        framePreviewStatus.textContent='源视频解码帧 · 用于定位，不作为 HDR 色彩判定';
+        framePreviewStatus.textContent='源视频解码帧 #'+primaryVideoStream()+' · 用于定位，不作为 HDR 色彩判定';
       }catch(error){
         if(seq!==timelineFrameRequestSeq)return;
         framePreviewStatus.textContent='画面预览失败：'+error.message;
@@ -908,16 +921,17 @@ export function mountMediaWorkspace(hooks) {
     framePreviewPanel.hidden=!hooks.frame;
     boundaryFrameInspector.hidden=true;
     const copy=get('operation').value==='copy';
-    waveformStatus.textContent=copy?'正在分析时间范围、波形与视频关键帧…':'正在分析时间范围与音频波形…';
+    const videoTrim=copy&&get('videoRange').value==='trim';
+    waveformStatus.textContent=videoTrim?'正在分析时间范围、波形与主选视频关键帧…':'正在分析时间范围与音频波形…';
     try{
       const audioValue=String(get('audioTrack')?.value||'all');
       const audioTrack=audioValue==='all'?0:Math.max(0,Number(audioValue)||0);
-      const result=await hooks.waveform({audioTrack,width:2400,height:160,includeKeyframes:copy,maxKeyframes:12000,allowNoWaveform:true});
+      const result=await hooks.waveform({audioTrack,videoStream:primaryVideoStream(),width:2400,height:160,includeKeyframes:videoTrim,maxKeyframes:12000,allowNoWaveform:true});
       if(!(Number(result?.duration)>0))throw Error('时间轴结果缺少有效时长');
       if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
       waveformUrl=result.url||null;
       waveformDuration=Number(result.duration);
-      timelineKeyframes=copy&&Array.isArray(result.keyframes)
+      timelineKeyframes=videoTrim&&Array.isArray(result.keyframes)
         ? result.keyframes.map(Number).filter(Number.isFinite).filter(value=>value>=0&&value<=waveformDuration).sort((a,b)=>a-b)
         : [];
       timelineKeyframesTruncated=!!result.keyframesTruncated;
@@ -929,8 +943,8 @@ export function mountMediaWorkspace(hooks) {
         waveformImage.removeAttribute('src');
         waveformImage.hidden=true;
         waveformPlaceholder.hidden=false;
-        waveformPlaceholder.textContent=copy
-          ? '没有可显示的音频波形；关键帧与剪切范围仍可使用。'
+        waveformPlaceholder.textContent=videoTrim
+          ? '没有可显示的音频波形；主选视频关键帧与剪切范围仍可使用。'
           : '没有可显示的音频波形；时间范围与画面预览仍可使用。';
       }
       waveformStartEl.hidden=false;
@@ -952,7 +966,7 @@ export function mountMediaWorkspace(hooks) {
       waveformStatus.textContent='时间轴分析失败：'+error.message;
     }finally{button.disabled=false;}
   };
-  const runButtonLabel = () => get('operation').value==='hardsub'?'使用当前参数开始硬压':get('operation').value==='transcode'?'开始视频转码':'开始无损剪切';
+  const runButtonLabel = () => get('operation').value==='hardsub'?'使用当前参数开始硬压':get('operation').value==='transcode'?'开始视频转码':'开始视频流复制 / 剪辑';
   const presetIntent = (encoder,preset) => {
     if(String(encoder).endsWith('_nvenc')){
       const n=Number(String(preset).replace(/^p/i,''));
@@ -968,7 +982,7 @@ export function mountMediaWorkspace(hooks) {
   };
   const renderPlanSummary = task => {
     const raw=read(),operation=raw.operation,copy=operation==='copy';
-    const operationLabel=operation==='hardsub'?'硬字幕压制':operation==='transcode'?'纯视频转码':'无损快速剪切';
+    const operationLabel=operation==='hardsub'?'硬字幕压制':operation==='transcode'?'纯视频转码':'视频流复制 / 快速剪辑';
     const codecLabel={h264:'H.264',h265:'H.265 / HEVC',av1:'AV1'}[raw.codec]||raw.codec||'—';
     const encoderLabel=get('encoder').selectedOptions?.[0]?.textContent||raw.encoder||'—';
     const speed=copy?'无需编码':presetIntent(raw.encoder,raw.preset);
@@ -991,8 +1005,10 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#taskPlanEncoder').textContent=copy?'直接复制':codecLabel+' · '+encoderLabel;
     section.querySelector('#taskPlanSpeed').textContent=speed+(copy?'':' · preset '+raw.preset);
     section.querySelector('#taskPlanRate').textContent=rate;
-    section.querySelector('#taskPlanOutput').textContent=size+' · '+audio+' · '+container;
-    section.querySelector('#taskPlanNote').textContent=note+(task?.estimatedBytes>0?' 当前任务估计数据量 '+formatSize(task.estimatedBytes)+'。':'');
+    const selectedVideos=String(raw.videoStreams||'0').trim().toLowerCase()==='all'?'全部视频流':'视频 #'+String(raw.videoStreams||'0').split(',').map(x=>x.trim()).filter(Boolean).join(' / #');
+    const rangeSummary='视频'+(raw.videoRange==='full'?'完整':'IN/OUT')+' · 音频'+(raw.audioRange==='full'?'完整':'IN/OUT');
+    section.querySelector('#taskPlanOutput').textContent=selectedVideos+' · '+size+' · '+audio+' · '+container;
+    section.querySelector('#taskPlanNote').textContent=note+' '+rangeSummary+'。'+(task?.estimatedBytes>0?' 当前任务估计数据量 '+formatSize(task.estimatedBytes)+'。':'');
   };
   const renderContainerDecision = task => {
     const el=section.querySelector('#taskContainerDecision');
@@ -1004,6 +1020,20 @@ export function mountMediaWorkspace(hooks) {
     }
     el.textContent='实际输出：'+task.outputContainer.toUpperCase()+' · '+task.containerReason+(task.sourceContainer?' · 源容器 '+task.sourceContainer.toUpperCase():'');
     el.dataset.state='resolved';
+  };
+  const syncVideoStreamInfo = () => {
+    const el=section.querySelector('#taskVideoStreamInfo'); if(!el)return;
+    const media=hooks.mediaSnapshot?.() || null;
+    const streams=Array.isArray(media?.videoStreams) ? media.videoStreams : [];
+    if(!streams.length){el.textContent='读取容器后显示可用视频流。视频流序号按 FFmpeg 的 v:N 顺序，从 0 开始。';return;}
+    const facts=streams.map((stream,index)=>{
+      const ordinal=Number.isInteger(Number(stream.ordinal))?Number(stream.ordinal):index;
+      const codec=String(stream.codec||stream.codec_name||'unknown').toUpperCase();
+      const size=Number(stream.width||0)>0&&Number(stream.height||0)>0?' '+stream.width+'×'+stream.height:'';
+      const depth=Number(stream.bitDepth||0)>0?' '+stream.bitDepth+'-bit':'';
+      return '#'+ordinal+' '+codec+size+depth;
+    });
+    el.textContent='可用视频流 '+streams.length+' 条：'+facts.join(' · ')+'。可输入 0、0,1 或 all。';
   };
   const syncAudioPlaybackWarning = (task=null, media=null) => {
     const el=outputPolicy?.querySelector('#taskAudioPlaybackWarning');
@@ -1139,13 +1169,13 @@ export function mountMediaWorkspace(hooks) {
     const copy = mode === 'copy';
     const transcode = mode === 'transcode';
     const hardsub = mode === 'hardsub';
-    const title = hardsub ? '硬字幕压制工作区' : transcode ? '纯视频转码工作区' : '无损快速剪切工作区';
-    const eyebrow = hardsub ? 'HARDSUB · PARAMETERS' : transcode ? 'TRANSCODE' : 'LOSSLESS CUT';
+    const title = hardsub ? '硬字幕压制工作区' : transcode ? '纯视频转码工作区' : '视频流复制 / 快速剪辑工作区';
+    const eyebrow = hardsub ? 'HARDSUB · PARAMETERS' : transcode ? 'TRANSCODE' : 'STREAM PLAN · COPY';
     const description = hardsub
       ? '直接控制编码器、质量、帧率、尺寸、滤镜、音轨与封装。执行前仍沿用同一字幕预检与真实 libass 预览门槛。'
       : transcode
         ? '只处理视频、音频与封装；字幕输入不会参与编码链路。所有编码器与画面参数由当前任务显式决定。'
-        : '围绕时间范围和轨道保留直接复制压缩数据；不运行视频编码，也不做质量校准。';
+        : '所选视频流保持 Stream Copy；音频可独立复制、转码或关闭，视频 / 音频 / 软字幕可分别使用完整时间轴或 IN/OUT。';
 
     section.querySelector('#mediaWorkspaceTitle').textContent = title;
     section.querySelector('#mediaWorkspaceEyebrow').textContent = eyebrow;
@@ -1158,7 +1188,7 @@ export function mountMediaWorkspace(hooks) {
       ? '预检 · 真实预览 · 选方案 · 正式压制'
       : transcode
         ? '媒体检查 · 参数配置 · 试压比较 · 输出验证'
-        : '媒体检查 · 时间范围 · 关键帧边界 · 无损导出';
+        : '媒体检查 · 流选择 · 独立时间策略 · 输出验证';
 
     const inputHeading = document.querySelector('#inputCard .card-heading h2');
     const inputDeck = document.querySelector('#inputCard .card-heading p');
@@ -1253,10 +1283,10 @@ export function mountMediaWorkspace(hooks) {
     syncModeChrome(mode);
     section.querySelector('#taskEncoding').disabled=copy;
     document.querySelectorAll('.input-ass,.input-font').forEach(el=>el.classList.toggle('hidden',get('operation').value!=='hardsub'));
-    for(const o of get('audio').options)o.disabled=copy&&['aac','libopus'].includes(o.value);
-    if(copy && ['aac','libopus'].includes(get('audio').value))get('audio').value='copy';
     section.querySelector('#taskModeHint').textContent=copy
-      ? '无损快速剪切：IN 是请求起点，实际切入会向前定位到关键帧。时间轴会同时显示请求 IN 与实际无损起点；OUT 不强制吸附关键帧。'
+      ? (get('videoRange').value==='trim'
+        ? '视频 Stream Copy：IN 是请求起点，主选视频流决定向前定位的关键帧；音频时间轴和音频编码策略独立。'
+        : '视频保持完整 Stream Copy；IN/OUT 仍可单独作用于音频或软字幕，音频也可以显式转码。')
       : mode==='hardsub'
         ? '硬字幕分支：字幕、字体与真实 libass 预览属于这一分支；编码完成后与其他任务共享封装、验证和保存出口。'
         : '纯视频转码分支：时间轴用于选择源素材的转码范围与定位源帧；不是转码前后质量对比。不会要求 ASS，也不会静默替换你选择的编码器。';
@@ -1300,7 +1330,7 @@ export function mountMediaWorkspace(hooks) {
     updateRate();
     syncAudioPlaybackWarning();
   };
-  const mediaInfoListener = () => syncAudioPlaybackWarning();
+  const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   get('rateMode').onchange=updateRate;
@@ -1313,6 +1343,10 @@ export function mountMediaWorkspace(hooks) {
   get('codec').onchange=()=>{updateEncoder();get('quality').value=get('codec').value==='av1'?'32':'23';syncQualityRange();};
   get('encoder').onchange=()=>{updatePreset();updateRate();};
   get('operation').onchange=()=>{updateMode();updateRate();};
+  get('videoRange').onchange=()=>{updateMode();renderPlanSummary(activeTask);};
+  get('audioRange').onchange=()=>renderPlanSummary(activeTask);
+  get('subtitleRange').onchange=()=>renderPlanSummary(activeTask);
+  get('videoStreams').addEventListener('input',()=>{clearTimelineFrameCache();renderPlanSummary(activeTask);});
   section.querySelector('#taskLoadPreset').onclick=()=>{markCompletedAsPrevious('preset');updatePreset(true);get('quality').value=get('codec').value==='av1'?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
   let platformKey='';
   const platformTimer=setInterval(()=>{const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);

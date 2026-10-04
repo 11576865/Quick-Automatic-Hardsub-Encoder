@@ -145,8 +145,8 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
         .then(payload => postCallback('__onNativePreview', payload))
         .catch(error => postCallback('__onNativePreview', { requestId, ok: false, error: error.message }));
     },
-    renderNativeFrame(requestId, timeSeconds, width) {
-      void makeRequest(config, 'POST', '/api/frame', { requestId, timeSeconds, width })
+    renderNativeFrame(requestId, timeSeconds, width, videoStream = 0) {
+      void makeRequest(config, 'POST', '/api/frame', { requestId, timeSeconds, width, videoStream })
         .then(payload => postCallback('__onNativeFrame', payload))
         .catch(error => postCallback('__onNativeFrame', { requestId, ok: false, error: error.message }));
     },
