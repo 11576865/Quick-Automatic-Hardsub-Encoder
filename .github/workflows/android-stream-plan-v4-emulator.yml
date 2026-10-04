@@ -92,7 +92,7 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -eu
             gradle -p android-native :app:connectedDebugAndroidTest --stacktrace
 
             pack="$RUNNER_TEMP/stream-plan-v4-pack"
