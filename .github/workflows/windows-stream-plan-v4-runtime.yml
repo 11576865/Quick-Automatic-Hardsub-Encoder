@@ -1,0 +1,131 @@
+name: Windows Stream Plan v4 runtime acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'windows/**'
+      - 'src/media-task.js'
+      - 'src/media-container.js'
+      - 'scripts/build-stream-plan-v4-device-fixture.mjs'
+      - 'scripts/build-stream-plan-v4-windows-requests.mjs'
+      - 'scripts/verify-stream-plan-v4-device-outputs.mjs'
+      - '.github/workflows/windows-stream-plan-v4-runtime.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - 'src/media-task.js'
+      - 'src/media-container.js'
+      - 'scripts/build-stream-plan-v4-device-fixture.mjs'
+      - 'scripts/build-stream-plan-v4-windows-requests.mjs'
+      - 'scripts/verify-stream-plan-v4-device-outputs.mjs'
+      - '.github/workflows/windows-stream-plan-v4-runtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install FFmpeg
+        shell: powershell
+        run: choco install ffmpeg --yes --no-progress
+
+      - name: Build canonical fixture and structured task requests
+        shell: powershell
+        run: |
+          $pack = Join-Path $env:RUNNER_TEMP 'stream-plan-v4-pack'
+          $requests = Join-Path $env:RUNNER_TEMP 'stream-plan-v4-windows-requests.json'
+          node scripts/build-stream-plan-v4-device-fixture.mjs $pack
+          node scripts/build-stream-plan-v4-windows-requests.mjs $pack $requests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Execute all eight cases through Windows Native Bridge
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $pack = Join-Path $env:RUNNER_TEMP 'stream-plan-v4-pack'
+          $requestsFile = Join-Path $env:RUNNER_TEMP 'stream-plan-v4-windows-requests.json'
+          $outputs = Join-Path $env:RUNNER_TEMP 'stream-plan-v4-windows-native-outputs'
+          New-Item -ItemType Directory -Path $outputs -Force | Out-Null
+          $source = Join-Path $pack 'stream-plan-v4-source.mkv'
+          $token = 'stream-plan-v4-ci-token'
+          $port = 8891
+          $bridge = Start-Process powershell.exe -PassThru -WindowStyle Hidden -ArgumentList @(
+            '-NoProfile',
+            '-ExecutionPolicy','Bypass',
+            '-File',(Resolve-Path './windows/native-bridge.ps1'),
+            '-NoBrowser',
+            '-Port',"$port",
+            '-Token',$token,
+            '-InitialVideo',$source
+          )
+          try {
+            $headers = @{
+              'X-Quick-Hardsub-Token'=$token
+              'Origin'="http://127.0.0.1:$port"
+            }
+            $ready=$false
+            for($i=0;$i -lt 60;$i++){
+              Start-Sleep -Milliseconds 500
+              try{
+                $health=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/health" -Headers $headers -TimeoutSec 3
+                if($health.available -and [int]$health.taskSchemaVersion -ge 4){$ready=$true;break}
+              }catch{}
+            }
+            if(-not $ready){throw 'Windows Native Bridge did not become ready with task schema v4.'}
+
+            $suite=Get-Content -Raw $requestsFile | ConvertFrom-Json
+            foreach($case in @($suite.cases)){
+              $json=$case.body | ConvertTo-Json -Depth 30 -Compress
+              $started=Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:$port/api/encode" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($json)) -TimeoutSec 30
+              if(-not $started.ok -or -not $started.jobId){throw "$($case.id): bridge did not return a job id"}
+              $jobId=[string]$started.jobId
+              $terminal=$null
+              for($poll=0;$poll -lt 240;$poll++){
+                Start-Sleep -Milliseconds 250
+                $status=Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/jobs/$jobId" -Headers $headers -TimeoutSec 5
+                if($status.state -in @('completed','failed','cancelled')){$terminal=$status;break}
+              }
+              if(-not $terminal){throw "$($case.id): timed out waiting for terminal job state"}
+              if($terminal.state -ne 'completed'){throw "$($case.id): Windows Native failed: $($terminal.error)"}
+
+              $work=Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter "quick-media-job-$jobId-*" |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+              if(-not $work){throw "$($case.id): bridge work directory not found"}
+              $produced=Get-ChildItem -LiteralPath $work.FullName -File -Filter 'output.*' | Select-Object -First 1
+              if(-not $produced -or $produced.Length -le 0){throw "$($case.id): bridge produced no output"}
+              Copy-Item -LiteralPath $produced.FullName -Destination (Join-Path $outputs ([string]$case.output)) -Force
+              Write-Host "$($case.id) completed -> $($case.output)"
+            }
+          } finally {
+            if($bridge -and -not $bridge.HasExited){Stop-Process -Id $bridge.Id -Force}
+          }
+
+      - name: Independently verify Windows Native exported artifacts
+        shell: powershell
+        run: |
+          node scripts/verify-stream-plan-v4-device-outputs.mjs `
+            (Join-Path $env:RUNNER_TEMP 'stream-plan-v4-pack') `
+            (Join-Path $env:RUNNER_TEMP 'stream-plan-v4-windows-native-outputs') |
+            Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'windows-stream-plan-v4-verification.json')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows Native runtime evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-stream-plan-v4-runtime-evidence
+          path: |
+            ${{ runner.temp }}/stream-plan-v4-windows-native-outputs/
+            ${{ runner.temp }}/windows-stream-plan-v4-verification.json
+            ${{ runner.temp }}/stream-plan-v4-windows-requests.json
+          if-no-files-found: error
+          retention-days: 14

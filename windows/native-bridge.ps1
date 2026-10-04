@@ -1,7 +1,8 @@
 ﻿param(
     [int]$Port = 8766,
     [switch]$NoBrowser,
-    [string]$Token = ''
+    [string]$Token = '',
+    [string]$InitialVideo = ''
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -26,6 +27,11 @@ Write-BridgeLog 'Starting local backend and detecting FFmpeg / GPU capabilities.
 $script:AllowedOrigin = 'https://11576865.github.io'
 $script:Token = if($Token){$Token}else{[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '[^A-Za-z0-9]', ''}
 $script:Selections = @{ video=@(); ass=@(); fonts=@() }
+if($InitialVideo){
+    if(-not (Test-Path -LiteralPath $InitialVideo -PathType Leaf)){throw 'InitialVideo does not exist.'}
+    $script:Selections.video=@((Resolve-Path -LiteralPath $InitialVideo).Path)
+    Write-BridgeLog ('Initial video preselected: '+[IO.Path]::GetFileName($script:Selections.video[0]))
+}
 $script:Jobs = @{}
 $script:Samples = @{}
 $script:Ffmpeg = Find-NativeTool 'ffmpeg' $PSScriptRoot
