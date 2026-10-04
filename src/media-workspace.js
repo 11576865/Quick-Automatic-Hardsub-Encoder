@@ -729,7 +729,7 @@ export function mountMediaWorkspace(hooks) {
         framePreviewImage.hidden=false;
         framePreviewPlaceholder.hidden=true;
         framePreviewTime.textContent=formatMediaTimeInput(result.time,3);
-        framePreviewStatus.textContent='源视频 #'+primaryVideoStream()+' 解码帧 · 用于定位，不作为 HDR 色彩判定';
+        framePreviewStatus.textContent='源视频解码帧 #'+primaryVideoStream()+' · 用于定位，不作为 HDR 色彩判定';
       }catch(error){
         if(seq!==timelineFrameRequestSeq)return;
         framePreviewStatus.textContent='画面预览失败：'+error.message;
