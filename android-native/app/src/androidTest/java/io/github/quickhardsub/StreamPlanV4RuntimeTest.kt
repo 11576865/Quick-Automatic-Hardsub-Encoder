@@ -32,6 +32,16 @@ class StreamPlanV4RuntimeTest {
         }
     }
 
+    private fun stageBundledFallback(context: android.content.Context) {
+        val appFontDir = File(context.filesDir, "fonts")
+        assertTrue("could not create app fallback font directory", appFontDir.mkdirs() || appFontDir.isDirectory)
+        val fallback = File(appFontDir, "NotoSansSC-Regular.otf")
+        context.assets.open("www/vendor/fallback-fonts/NotoSansSC-Regular.otf").use { input ->
+            fallback.outputStream().use { output -> input.copyTo(output, 1024 * 1024) }
+        }
+        assertTrue("bundled fallback font was not packaged into the target APK", fallback.isFile && fallback.length() > 0L)
+    }
+
     private fun waitForIdle(timeoutMs: Long = 30_000L) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (EncodeService.isEncoding() && System.currentTimeMillis() < deadline) {
@@ -42,9 +52,14 @@ class StreamPlanV4RuntimeTest {
 
     @Test
     fun executesAllStreamPlanV4CasesThroughEncodeService() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        // The product UI normally completes its native self-test before task execution.
+        // This runtime harness enters EncodeService directly, so establish the same
+        // packaged-font precondition deterministically instead of racing WebView bootstrap.
+        stageBundledFallback(context)
+
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val source = File(context.cacheDir, "stream-plan-v4-source.mkv")
         copyAsset("stream-plan-v4-source.mkv", source)
         assertTrue("fixture source was not staged", source.isFile && source.length() > 0)
