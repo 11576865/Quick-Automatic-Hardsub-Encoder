@@ -316,7 +316,7 @@ test('input identity is locked across native async work', async () => {
   assert.match(main, /fonts:\s*\{ inputId: 'fonts', buttonId: 'fontsNativePickerBtn'/);
   assert.match(main, /function syncTaskInputMutationLocks\(\)/);
   assert.match(main, /button\.disabled = !!busy \|\| state\.operationBusy \|\| !!state\.nativeJobId/);
-  assert.match(main, /if \(state\.operationBusy \|\| state\.nativeJobId\) \{[\s\S]*?任务运行期间不能更换输入素材/);
+  assert.match(main, /if \(state\.operationBusy \|\| state\.nativeJobId \|\| state\.nativeImportJobId\) \{[\s\S]*?任务运行期间不能更换输入素材/);
   assert.match(main, /const hasExistingSelection = role === 'video'/);
   assert.match(main, /if \(!hasExistingSelection && config\?\.metaId/);
   assert.match(main, /正在请求取消 ' \+ nativePlatformName\(\) \+ ' 压制/);
