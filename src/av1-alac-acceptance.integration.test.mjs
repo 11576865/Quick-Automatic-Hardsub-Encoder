@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { compileTask, taskInputArgs, taskDurationArgs } from './media-task.js';
+import { compileTask, taskSourceArgs } from './media-task.js';
 
 const enabled = process.env.FFMPEG_INTEGRATION === '1';
 const run = (cmd, args, options = {}) => execFileSync(cmd, args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, ...options });
@@ -100,9 +100,7 @@ test('real AV1+ALAC MKV acceptance matrix covers copy and hardsub AAC paths', { 
       const args = task.outputArgs.map(arg => arg.replace('__ASS__', 'subtitle.ass').replace('__FONTS__', 'fonts'));
       run('ffmpeg', [
         '-v', 'error', '-y',
-        ...taskInputArgs(task),
-        '-i', source,
-        ...taskDurationArgs(task),
+        ...taskSourceArgs(task, source),
         ...args,
         '-f', task.outputFormat,
         output
