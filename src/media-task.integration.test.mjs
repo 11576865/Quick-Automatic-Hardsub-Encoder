@@ -209,3 +209,91 @@ test('real FFmpeg executes schema-v4 multi-stream selection, remux+transcode and
   }
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+
+test('real FFmpeg keeps soft-subtitle time policy independent while preserving full-source metadata, chapters and attachments',{skip:!enabled},()=>{
+ const dir=mkdtempSync(join(tmpdir(),'media-task-v4-assets-'));
+ try{
+  const source=join(dir,'rich-source.mkv');
+  const subs=join(dir,'soft.srt');
+  const attachment=join(dir,'attachment.txt');
+  const metadata=join(dir,'chapters.ffmeta');
+  writeFileSync(subs,[
+    '1','00:00:00,200 --> 00:00:00,800','EARLY','',
+    '2','00:00:01,200 --> 00:00:01,800','INSIDE A','',
+    '3','00:00:02,200 --> 00:00:02,800','INSIDE B','',
+    '4','00:00:03,200 --> 00:00:03,800','LATE',''
+  ].join('\n'));
+  writeFileSync(attachment,'stream-plan-v4 attachment fixture\n');
+  writeFileSync(metadata,[
+    ';FFMETADATA1',
+    'title=RICH FIXTURE',
+    '[CHAPTER]','TIMEBASE=1/1000','START=0','END=2000','title=First',
+    '[CHAPTER]','TIMEBASE=1/1000','START=2000','END=4000','title=Second',
+    ''
+  ].join('\n'));
+
+  run('ffmpeg',[
+    '-v','error','-y',
+    '-f','lavfi','-i','testsrc2=size=160x90:rate=30:duration=4',
+    '-f','lavfi','-i','sine=frequency=440:sample_rate=48000:duration=4',
+    '-i',subs,
+    '-f','ffmetadata','-i',metadata,
+    '-map','0:v:0','-map','1:a:0','-map','2:s:0',
+    '-map_metadata','3','-map_chapters','3',
+    '-c:v','libx264','-preset','ultrafast','-g','30','-bf','0',
+    '-c:a','aac','-c:s','srt',
+    '-attach',attachment,
+    '-metadata:s:t','mimetype=text/plain',
+    '-metadata:s:t','filename=attachment.txt',
+    '-t','4',source
+  ]);
+
+  const sourceInfo=JSON.parse(run('ffprobe',['-v','error','-show_streams','-show_chapters','-show_format','-of','json',source]));
+  const sourceVideo=sourceInfo.streams.find(s=>s.codec_type==='video');
+  const sourceAudio=sourceInfo.streams.find(s=>s.codec_type==='audio');
+  const media={
+    duration:4,fps:30,videoTracks:1,
+    videoStreams:[{ordinal:0,codec:sourceVideo.codec_name,width:sourceVideo.width,height:sourceVideo.height,fps:30,pixelFormat:sourceVideo.pix_fmt,bitDepth:8,unsafeColorPipeline:false}],
+    audioTracks:1,audioCodec:sourceAudio.codec_name,audioCodecs:[sourceAudio.codec_name],
+    audioStreams:[{ordinal:0,codec:sourceAudio.codec_name,bitRate:Number(sourceAudio.bit_rate||0)}],
+    formatName:sourceInfo.format.format_name,sourceName:'rich-source.mkv',videoCodec:sourceVideo.codec_name
+  };
+  const base={
+    operation:'transcode',codec:'h264',encoder:'libx264',preset:'ultrafast',rateMode:'quality',quality:30,
+    start:1,end:3,videoStreams:'0',videoRange:'trim',
+    audio:'none',audioTrack:'all',audioRange:'trim',subtitleRange:'full',
+    keepSubtitles:true,keepAttachments:true,keepMetadata:true,keepChapters:true,
+    fpsMode:'auto',pixelFormat:'yuv420p',scaleAlgorithm:'lanczos',rotation:'none',deinterlace:'none',
+    multipass:'fullres',lookahead:'',aqStrength:'',outputContainer:'mkv'
+  };
+  const execute=(task,name)=>{
+    const output=join(dir,name+'.'+task.outputExtension);
+    run('ffmpeg',['-v','error','-y',...taskSourceArgs(task,source),...task.outputArgs,'-f',task.outputFormat,output]);
+    return {output,info:JSON.parse(run('ffprobe',['-v','error','-show_streams','-show_chapters','-show_format','-of','json',output]))};
+  };
+
+  // Video is trimmed, but subtitles remain on the complete source timeline.
+  const fullSubs=execute(compileTask(base,media),'video-trim-subs-full');
+  assert.ok(packetEnd(fullSubs.output,'v:0')>1.7 && packetEnd(fullSubs.output,'v:0')<2.3);
+  assert.ok(packetEnd(fullSubs.output,'s:0')>3.5);
+  assert.equal(fullSubs.info.streams.filter(s=>s.codec_type==='subtitle').length,1);
+  assert.equal(fullSubs.info.streams.filter(s=>s.codec_type==='attachment').length,1);
+  assert.equal(fullSubs.info.streams.find(s=>s.codec_type==='attachment')?.tags?.filename,'attachment.txt');
+  assert.equal(fullSubs.info.chapters.length,2);
+  assert.equal(fullSubs.info.format.tags?.title,'RICH FIXTURE');
+
+  // Only subtitles use the requested [1,3] view; video remains the full four seconds.
+  const trimSubs=execute(compileTask({...base,videoRange:'full',subtitleRange:'trim'},media),'video-full-subs-trim');
+  assert.ok(packetEnd(trimSubs.output,'v:0')>3.7);
+  const subtitleEnd=packetEnd(trimSubs.output,'s:0');
+  assert.ok(subtitleEnd>1.5 && subtitleEnd<2.2,String(subtitleEnd));
+  assert.equal(trimSubs.info.streams.filter(s=>s.codec_type==='attachment').length,1);
+  assert.equal(trimSubs.info.chapters.length,2);
+  assert.equal(trimSubs.info.format.tags?.title,'RICH FIXTURE');
+
+  for(const file of [fullSubs.output,trimSubs.output]){
+    run('ffmpeg',['-v','error','-i',file,'-map','0','-f','null','-']);
+  }
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
