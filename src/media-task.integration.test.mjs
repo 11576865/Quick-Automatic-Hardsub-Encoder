@@ -293,7 +293,10 @@ test('real FFmpeg keeps soft-subtitle time policy independent while preserving f
   assert.equal(trimSubs.info.format.tags?.title,'RICH FIXTURE');
 
   for(const file of [fullSubs.output,trimSubs.output]){
-    run('ffmpeg',['-v','error','-i',file,'-map','0','-f','null','-']);
+    // Decode the timed A/V payload. Subtitle packets are exercised above via
+    // ffprobe, while attachments/chapters/metadata are structural assets and
+    // are validated from the container inventory rather than sent to null mux.
+    run('ffmpeg',['-v','error','-i',file,'-map','0:v','-map','0:a?','-f','null','-']);
   }
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
