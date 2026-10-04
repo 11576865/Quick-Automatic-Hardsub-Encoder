@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -19,14 +20,14 @@ import java.util.UUID
 @RunWith(AndroidJUnit4::class)
 class StreamPlanV4RuntimeTest {
     private fun readAsset(name: String): String {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        return context.assets.open(name).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
+        return assets.open(name).bufferedReader(Charsets.UTF_8).use { it.readText() }
     }
 
     private fun copyAsset(name: String, target: File) {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
         target.parentFile?.mkdirs()
-        context.assets.open(name).use { input ->
+        assets.open(name).use { input ->
             target.outputStream().use { output -> input.copyTo(output, 1024 * 1024) }
         }
     }
