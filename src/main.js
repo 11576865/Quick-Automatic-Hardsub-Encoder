@@ -5578,6 +5578,8 @@ mountMediaWorkspace({
     const width = Math.max(320, Math.min(1280, Math.floor(Number(options?.width) || 720)));
     if (state.nativeBackend?.available) {
       if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
+      if (state.nativeInputProbe.sourceAdapterRequired) throw new Error('Bink 2 需要先通过 RAD Video Tools 导入才能分析时间轴');
+      if (state.nativeInputProbe.inputDecodeSmoke === false && !state.nativeInputProbe.inputDecodeDeferred) throw new Error('当前 FFmpeg 无法解码该视频流');
       if (state.nativeInputProbe.sourceAdapterRequired) throw new Error('Bink 2 需要先通过 RAD Video Tools 导入才能生成时间轴画面');
       if (state.nativeInputProbe.inputDecodeSmoke === false && !state.nativeInputProbe.inputDecodeDeferred) throw new Error('当前 FFmpeg 无法解码该视频流');
       return requestNativeFrame(time, width);
@@ -5608,8 +5610,6 @@ mountMediaWorkspace({
     });
     if (state.nativeBackend?.available) {
       if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
-      if (state.nativeInputProbe.sourceAdapterRequired) throw new Error('Bink 2 需要先通过 RAD Video Tools 导入才能分析时间轴');
-      if (state.nativeInputProbe.inputDecodeSmoke === false && !state.nativeInputProbe.inputDecodeDeferred) throw new Error('当前 FFmpeg 无法解码该视频流');
       const duration = Number(state.nativeInputProbe.duration || 0);
       if (!includeKeyframes && Number(state.nativeInputProbe.audioTracks || 0) < 1) {
         if (allowNoWaveform) return emptyTimeline(duration);
