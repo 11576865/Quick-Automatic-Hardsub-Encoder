@@ -104,8 +104,12 @@ export function mountMediaWorkspace(hooks) {
         <button type="button" id="taskFrameFullscreenClose" class="secondary" aria-label="关闭全屏画面对比">关闭</button>
       </header>
       <div id="taskFrameFullscreenStage" class="media-frame-lightbox-stage" tabindex="0" aria-label="全屏画面对比区域">
-        <img id="taskFrameFullscreenBase" alt="" draggable="false">
-        <img id="taskFrameFullscreenCompare" class="media-frame-lightbox-compare" alt="" draggable="false" hidden>
+        <div id="taskFrameFullscreenBaseLayer" class="media-frame-lightbox-layer">
+          <img id="taskFrameFullscreenBase" alt="" draggable="false">
+        </div>
+        <div id="taskFrameFullscreenCompareLayer" class="media-frame-lightbox-layer media-frame-lightbox-compare-layer" hidden>
+          <img id="taskFrameFullscreenCompare" alt="" draggable="false">
+        </div>
         <span id="taskFrameFullscreenDivider" class="media-frame-lightbox-divider" hidden><i></i></span>
         <span id="taskFrameFullscreenLeftLabel" class="media-frame-lightbox-label media-frame-lightbox-label-left" hidden></span>
         <span id="taskFrameFullscreenRightLabel" class="media-frame-lightbox-label media-frame-lightbox-label-right" hidden></span>
@@ -114,9 +118,17 @@ export function mountMediaWorkspace(hooks) {
         <span>请求 IN</span>
         <input id="taskFrameFullscreenWipe" type="range" min="0" max="100" step="1" value="50" aria-label="请求帧与实际无损帧对比分割位置">
         <span>实际无损 IN</span>
-        <button type="button" id="taskFrameFullscreenReset" class="secondary">居中</button>
+        <button type="button" id="taskFrameFullscreenReset" class="secondary">复位对比</button>
       </div>
-      <p class="media-frame-lightbox-help">边界帧：拖动画面分割线或下方滑块比较；双击画面恢复 50/50。按 Esc 退出。</p>
+      <div id="taskFrameFullscreenViewportControls" class="media-frame-lightbox-viewport-controls" aria-label="全屏画面缩放">
+        <span>视图</span>
+        <button type="button" class="secondary" data-frame-zoom="fit" aria-pressed="true">Fit</button>
+        <button type="button" class="secondary" data-frame-zoom="100" aria-pressed="false">100%</button>
+        <button type="button" class="secondary" data-frame-zoom="200" aria-pressed="false">200%</button>
+        <button type="button" class="secondary" data-frame-zoom="400" aria-pressed="false">400%</button>
+        <strong id="taskFrameFullscreenZoomStatus">Fit</strong>
+      </div>
+      <p class="media-frame-lightbox-help">拖动中线或下方滑块比较；放大后拖动画面同步平移，滚轮可连续缩放。双击恢复 50/50，Esc 退出。</p>
     </div>
   </div>
   <p id="taskModeHint" class="note media-mode-hint"></p>
@@ -338,6 +350,8 @@ export function mountMediaWorkspace(hooks) {
   const frameFullscreenTitle=section.querySelector('#taskFrameFullscreenTitle');
   const frameFullscreenMeta=section.querySelector('#taskFrameFullscreenMeta');
   const frameFullscreenStage=section.querySelector('#taskFrameFullscreenStage');
+  const frameFullscreenBaseLayer=section.querySelector('#taskFrameFullscreenBaseLayer');
+  const frameFullscreenCompareLayer=section.querySelector('#taskFrameFullscreenCompareLayer');
   const frameFullscreenBase=section.querySelector('#taskFrameFullscreenBase');
   const frameFullscreenCompare=section.querySelector('#taskFrameFullscreenCompare');
   const frameFullscreenDivider=section.querySelector('#taskFrameFullscreenDivider');
@@ -346,6 +360,9 @@ export function mountMediaWorkspace(hooks) {
   const frameFullscreenControls=section.querySelector('#taskFrameFullscreenControls');
   const frameFullscreenWipe=section.querySelector('#taskFrameFullscreenWipe');
   const frameFullscreenReset=section.querySelector('#taskFrameFullscreenReset');
+  const frameFullscreenViewportControls=section.querySelector('#taskFrameFullscreenViewportControls');
+  const frameFullscreenZoomButtons=[...frameFullscreenViewportControls.querySelectorAll('[data-frame-zoom]')];
+  const frameFullscreenZoomStatus=section.querySelector('#taskFrameFullscreenZoomStatus');
   const frameFullscreenClose=section.querySelector('#taskFrameFullscreenClose');
   const outputVerification=section.querySelector('#taskOutputVerification');
   const verifyFramesButton=section.querySelector('#taskVerifyFrames');
@@ -366,7 +383,12 @@ export function mountMediaWorkspace(hooks) {
   const verifyStatus=section.querySelector('#taskVerifyStatus');
   let verificationSourceUrl=null,verificationOutputUrl=null,verificationFrameSourceTime=null,verificationFrameOutputTime=null;
   let frameFullscreenMode='single';
-  let frameFullscreenDragging=false;
+  let frameFullscreenGesture=null;
+  let frameFullscreenZoomMode='fit';
+  let frameFullscreenScale=1;
+  let frameFullscreenPanX=0;
+  let frameFullscreenPanY=0;
+  let frameFullscreenPointerStart=null;
   const clampWaveformTime=value=>Math.max(0,Math.min(waveformDuration||0,Number(value)||0));
   function readBoundary(name,fallback){
     try{return clampWaveformTime(parseMediaTime(get(name)?.value,{empty:fallback,label:timeLabels[name]||'时间'}));}
