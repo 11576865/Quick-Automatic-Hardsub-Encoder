@@ -26,12 +26,42 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
           }
+      - name: Validate Bink 2 adapter discovery contract
+        shell: powershell
+        run: |
+          . ./windows/bink-import.ps1
+          $work = Join-Path $env:RUNNER_TEMP 'bink adapter smoke'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $bink2 = Join-Path $work 'sample.bk2'
+          $bink1 = Join-Path $work 'sample.bik'
+          [IO.File]::WriteAllBytes($bink2, [byte[]](0x4B,0x42,0x32,0x6A))
+          [IO.File]::WriteAllBytes($bink1, [byte[]](0x42,0x49,0x4B,0x69))
+          if (-not (Test-Bink2File $bink2)) { throw 'KB2 signature was not recognized as Bink 2' }
+          if (Test-Bink2File $bink1) { throw 'Bink 1 signature was misidentified as Bink 2' }
+
+          $fake = Join-Path $work 'radvideo64.exe'
+          [IO.File]::WriteAllBytes($fake, [byte[]](0))
+          $previous = $env:RADVIDEO64
+          try {
+            $env:RADVIDEO64 = $fake
+            $converter = Find-RadVideoConverter
+            if (-not $converter -or $converter.Path -ne $fake -or $converter.Mode -ne 'radvideo64') {
+              throw 'RADVIDEO64 discovery contract failed'
+            }
+            $args = Get-RadBinkConvertArguments $converter 'C:\input clip.bk2' 'C:\output clip.avi'
+            if ($args -notmatch '^binkconv ' -or $args -notmatch '/#$') {
+              throw "Unexpected RAD argument contract: $args"
+            }
+          } finally {
+            $env:RADVIDEO64 = $previous
+          }
+
       - name: Guard Windows launcher and console visibility contract
         shell: powershell
         run: |
