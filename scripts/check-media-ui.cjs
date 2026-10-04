@@ -365,7 +365,7 @@ const {spawn}=require('node:child_process');
   if((await page.locator('#taskSave').textContent()).trim()!=='再次保存上一成品')throw Error('Saved prior artifact lost identity after current settings diverged');
 
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
-  if((await page.locator('#taskRun').textContent()).trim()!=='开始无损剪切')throw Error('Mode change after completion retained stale re-encode label');
+  if((await page.locator('#taskRun').textContent()).trim()!=='开始视频流复制 / 剪辑')throw Error('Mode change after completion retained stale re-encode label');
   if((await page.locator('#taskSave').textContent()).trim()!=='再次保存上一成品')throw Error('Mode change discarded access to the previous saved artifact');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
 
