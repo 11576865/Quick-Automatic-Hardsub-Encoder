@@ -1,0 +1,45 @@
+{
+  "packet_version": 1,
+  "packet_id": "ci-11576865-Quick-Automatic-Hardsub-Encoder-37177443416-1",
+  "status": "pending",
+  "record_type": "ci_failure",
+  "title": "UIGS Evidence Coverage: failure",
+  "summary": "Tracked CI workflow did not complete successfully. Source adapter captured failed job/step evidence when available.",
+  "source_repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "source_event": "workflow_run",
+  "source_ref": "feat/stream-plan-v4",
+  "source_sha": "e48601f1d03891d7ab64e338ec8935c62aa8b0fc",
+  "source_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/37177443416",
+  "created_at": "2026-10-04T04:35:39+00:00",
+  "dedupe_key": "workflow_run:11576865/Quick-Automatic-Hardsub-Encoder:37177443416:1",
+  "routing_hints": [
+    "architecture",
+    "interface-grammar",
+    "operations",
+    "red-reason",
+    "reliability"
+  ],
+  "evidence": {
+    "workflow": "UIGS Evidence Coverage",
+    "run_id": "37177443416",
+    "run_attempt": "1",
+    "conclusion": "failure",
+    "trigger_event": "pull_request",
+    "failed_jobs": [
+      {
+        "id": 111362912386,
+        "name": "invariant-evidence",
+        "conclusion": "failure"
+      }
+    ],
+    "failed_steps": [
+      {
+        "job": "invariant-evidence",
+        "number": 4,
+        "name": "Validate declared invariants and evidence topology",
+        "conclusion": "failure"
+      }
+    ],
+    "capture_error": ""
+  }
+}
