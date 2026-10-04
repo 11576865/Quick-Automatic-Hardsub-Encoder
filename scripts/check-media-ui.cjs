@@ -21,7 +21,7 @@ const {spawn}=require('node:child_process');
       await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({
         backend:'windows-native',platform:'windows',available:true,
         cpu:'CI CPU',gpus:['CI GPU'],ffmpeg:'C:\\ffmpeg.exe',ffprobe:'C:\\ffprobe.exe',
-        ffmpegVersion:'ci',ffmpegSource:'ci',encoders:[],bridgeVersion:4,taskSchemaVersion:3,
+        ffmpegVersion:'ci',ffmpegSource:'ci',encoders:[],bridgeVersion:4,taskSchemaVersion:4,
         fpsModeSupported:true,globalOptions:[],multipassSupported:false,multipassFullresSupported:false,hasAss:true
       })});
       return;

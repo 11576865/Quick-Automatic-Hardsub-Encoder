@@ -195,7 +195,8 @@ class NativeBridge(
                     ?: throw IllegalStateException(probe.getOutput().takeLast(1200).ifBlank { "FFprobe 无法读取该 URI" })
 
                 val streams = info.getStreams()
-                val video = streams.firstOrNull { it.getType() == "video" }
+                val videoStreams = streams.filter { it.getType() == "video" }
+                val video = videoStreams.firstOrNull()
                     ?: throw IllegalStateException("FFprobe 没有发现视频流")
                 val audioStreams = streams.filter { it.getType() == "audio" }
                 val audioTracks = audioStreams.size
@@ -219,6 +220,52 @@ class NativeBridge(
                 val audioBitRate = audioStreams.sumOf { stream ->
                     stream.getBitrate()?.toLongOrNull() ?: 0L
                 }
+                val videoFacts = JSONArray()
+                videoStreams.forEachIndexed { ordinal, stream ->
+                    val streamProps = stream.getAllProperties()
+                    val streamPixel = stream.getFormat() ?: ""
+                    val explicit = streamProps?.optString("bits_per_raw_sample", "")?.toIntOrNull() ?: 0
+                    val depth = if (explicit > 0) explicit else {
+                        Regex("(10|12|14|16)(?:le|be)?", RegexOption.IGNORE_CASE)
+                            .find(streamPixel)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 8
+                    }
+                    val transferValue = streamProps?.optString("color_transfer", "") ?: ""
+                    val primariesValue = streamProps?.optString("color_primaries", "") ?: ""
+                    val spaceValue = streamProps?.optString("color_space", "") ?: ""
+                    val streamHdr = transferValue.contains("smpte2084", true) ||
+                        transferValue.contains("arib-std-b67", true) ||
+                        (primariesValue.contains("bt2020", true) && depth > 8)
+                    videoFacts.put(
+                        JSONObject()
+                            .put("ordinal", ordinal)
+                            .put("index", streamProps?.optInt("index", ordinal) ?: ordinal)
+                            .put("codec", stream.getCodec() ?: "")
+                            .put("bitRate", stream.getBitrate()?.toLongOrNull() ?: 0L)
+                            .put("width", stream.getWidth() ?: 0)
+                            .put("height", stream.getHeight() ?: 0)
+                            .put("fps", stream.getAverageFrameRate() ?: "")
+                            .put("pixelFormat", streamPixel)
+                            .put("bitDepth", depth)
+                            .put("colorTransfer", transferValue)
+                            .put("colorPrimaries", primariesValue)
+                            .put("colorSpace", spaceValue)
+                            .put("hdr", streamHdr)
+                            .put("unsafeColorPipeline", streamHdr || depth > 8)
+                    )
+                }
+                val audioFacts = JSONArray()
+                audioStreams.forEachIndexed { ordinal, stream ->
+                    val streamProps = stream.getAllProperties()
+                    audioFacts.put(
+                        JSONObject()
+                            .put("ordinal", ordinal)
+                            .put("index", streamProps?.optInt("index", ordinal) ?: ordinal)
+                            .put("codec", stream.getCodec() ?: "")
+                            .put("bitRate", stream.getBitrate()?.toLongOrNull() ?: 0L)
+                            .put("channels", streamProps?.optInt("channels", 0) ?: 0)
+                            .put("sampleRate", streamProps?.optString("sample_rate", "")?.toIntOrNull() ?: 0)
+                    )
+                }
 
                 // Keep selection-time probing metadata-only. A real subtitle preview
                 // decodes the same input immediately before production and is the
@@ -235,6 +282,8 @@ class NativeBridge(
                     .put("format", info.getFormat() ?: "")
                     .put("duration", info.getDuration()?.toDoubleOrNull() ?: 0.0)
                     .put("bitRate", info.getBitrate()?.toLongOrNull() ?: 0L)
+                    .put("videoTracks", videoStreams.size)
+                    .put("videoStreams", videoFacts)
                     .put("videoCodec", video.getCodec() ?: "")
                     .put("videoBitRate", video.getBitrate()?.toLongOrNull() ?: 0L)
                     .put("width", video.getWidth() ?: 0)
@@ -248,6 +297,7 @@ class NativeBridge(
                     .put("hdr", hdr)
                     .put("unsafeColorPipeline", hdr || inferredDepth > 8)
                     .put("audioTracks", audioTracks)
+                    .put("audioStreams", audioFacts)
                     .put("audioCodec", audioStreams.firstOrNull()?.getCodec() ?: "")
                     .put("audioCodecs", JSONArray(audioStreams.map { it.getCodec() ?: "" }))
                     .put("audioBitRate", audioBitRate)
@@ -343,7 +393,7 @@ class NativeBridge(
         val power = activity.getSystemService(PowerManager::class.java)
         return JSONObject()
             .put("available", true)
-            .put("taskSchemaVersion", 3)
+            .put("taskSchemaVersion", 4)
             .put("fpsModeSupported", MediaTaskArguments.supportsFpsMode())
             .put("backend", "android-native")
             .put("abi", Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown")
@@ -645,7 +695,7 @@ class NativeBridge(
     }
 
     @JavascriptInterface
-    fun renderNativeFrame(requestId: String, timeSeconds: Double, width: Int) {
+    fun renderNativeFrame(requestId: String, timeSeconds: Double, width: Int, videoStream: Int) {
         if (EncodeService.isEncoding() || !diagnosticRunning.compareAndSet(false, true)) {
             postJsonCallback(
                 "__onNativeFrame",
@@ -669,6 +719,7 @@ class NativeBridge(
                 val inputUri = getPickedUris("video").firstOrNull()
                     ?: throw IllegalStateException("没有可供 Native 时间轴预览使用的视频 URI")
                 val safeWidth = width.coerceIn(320, 1280)
+                val safeVideoStream = videoStream.coerceIn(0, 63)
 
                 if (frameRoot.exists()) frameRoot.deleteRecursively()
                 frameRoot.mkdirs()
@@ -682,7 +733,7 @@ class NativeBridge(
                     "-v", "error",
                     "-ss", String.format(java.util.Locale.US, "%.3f", timeSeconds),
                     "-i", safUrl,
-                    "-map", "0:v:0",
+                    "-map", "0:v:$safeVideoStream",
                     "-an",
                     "-sn",
                     "-frames:v", "1",
@@ -838,6 +889,10 @@ class NativeBridge(
                 safUrl = FFmpegKitConfig.getSafParameterForRead(activity, inputUri, true)
                 if (safUrl.isNullOrBlank()) throw IllegalStateException("无法重新打开任务源视频")
                 val safeWidth = width.coerceIn(320, 1600)
+                val videoStreams = task.optJSONArray("videoStreams")
+                val primaryVideoStream = if (videoStreams != null && videoStreams.length() > 0) {
+                    videoStreams.optInt(0, task.optInt("videoStream", 0))
+                } else task.optInt("videoStream", 0)
                 val filter = MediaTaskArguments.hardsubReferenceFilter(
                     task,
                     timeSeconds,
@@ -855,7 +910,7 @@ class NativeBridge(
                     "-v", "error",
                     "-ss", String.format(java.util.Locale.US, "%.3f", timeSeconds),
                     "-i", safUrl,
-                    "-map", "0:v:0",
+                    "-map", "0:v:$primaryVideoStream",
                     "-an",
                     "-sn",
                     "-frames:v", "1",
@@ -914,6 +969,7 @@ class NativeBridge(
                     ?: throw IllegalStateException("没有可供 Native 时间轴分析使用的视频 URI")
                 val options = try { JSONObject(optionsJson.ifBlank { "{}" }) } catch (_: Throwable) { JSONObject() }
                 val audioTrack = options.optInt("audioTrack", 0).coerceIn(0, 63)
+                val videoStream = options.optInt("videoStream", 0).coerceIn(0, 63)
                 val width = options.optInt("width", 2048).coerceIn(512, 4096)
                 val height = options.optInt("height", 160).coerceIn(96, 320)
                 val duration = options.optDouble("duration", 0.0)
@@ -933,7 +989,7 @@ class NativeBridge(
                     val scan = FFprobeKit.executeWithArguments(
                         arrayOf(
                             "-v", "error",
-                            "-select_streams", "v:0",
+                            "-select_streams", "v:$videoStream",
                             "-skip_frame", "nokey",
                             "-show_frames",
                             "-show_entries", "frame=best_effort_timestamp_time",

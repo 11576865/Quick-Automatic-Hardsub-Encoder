@@ -1,5 +1,5 @@
 import { parseEncoderHelp, validateEncoderSupport } from './media-capabilities.js';
-import { taskInputArgs, taskDurationArgs, firstPassArgs } from './media-task.js';
+import { taskSourceArgs, firstPassArgs, retimeTask } from './media-task.js';
 import { hardsubReferenceFilter } from './media-verification.js';
 const VENDOR_ENTRY = './vendor/ffmpeg-kit-next-web/dist/index.js';
 const FALLBACK_FONT_URL = './vendor/fallback-fonts/NotoSansSC-Regular.otf';
@@ -203,14 +203,15 @@ export class EncoderEngine {
   }
 
   async snapTaskStart(task) {
-    if (task.operation !== 'copy' || task.start <= 0) return task;
-    const session = await this.api.FFprobeKit.execute(`-v error -select_streams v:0 -skip_frame nokey -read_intervals 0%${task.start + 1} -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 ${q(this.inputPath)}`);
+    if (task.operation !== 'copy' || task.videoRange !== 'trim' || task.start <= 0) return task;
+    const primary = Number(task.videoStreams?.[0] ?? task.videoStream ?? 0);
+    const session = await this.api.FFprobeKit.execute(`-v error -select_streams v:${primary} -skip_frame nokey -read_intervals 0%${task.start + 1} -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 ${q(this.inputPath)}`);
     if (!this.api.ReturnCode.isSuccess(session.getReturnCode())) throw new Error('关键帧定位失败');
     const text = await session.getOutput();
     const candidates = String(text).split(/\r?\n/).filter(line=>/^\d/.test(line)).map(line=>Number(line.split(',')[0])).filter(n=>Number.isFinite(n)&&n>=0&&n<=task.start);
     if (!candidates.length) throw new Error('未找到可用关键帧');
     const actualStart=Math.max(...candidates);
-    return {...task,requestedStart:task.start,start:actualStart,expectedDuration:task.end-actualStart};
+    return retimeTask({...task,requestedStart:task.start}, actualStart);
   }
 
   async detectSoftwareEncoders() {
@@ -254,8 +255,9 @@ export class EncoderEngine {
     this.assertReady();
     const duration = Number(options.duration || this.mediaInfo?.duration || 0);
     const maxKeyframes = Math.max(256, Math.min(50000, Math.floor(Number(options.maxKeyframes) || 12000)));
+    const videoStream = Math.max(0, Math.floor(Number(options.videoStream) || 0));
     const session = await this.api.FFprobeKit.execute(
-      `-v error -select_streams v:0 -skip_frame nokey -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 ${q(this.inputPath)}`
+      `-v error -select_streams v:${videoStream} -skip_frame nokey -show_frames -show_entries frame=best_effort_timestamp_time -of csv=p=0 ${q(this.inputPath)}`
     );
     if (!this.api.ReturnCode.isSuccess(session.getReturnCode())) {
       throw new Error((await session.getOutput?.()) || '关键帧分析失败');
@@ -279,11 +281,12 @@ export class EncoderEngine {
     this.assertReady();
     const time = Math.max(0, Number(timeSeconds) || 0);
     const width = Math.max(320, Math.min(1280, Math.floor(Number(options.width) || 720)));
+    const videoStream = Math.max(0, Math.floor(Number(options.videoStream) || 0));
     const run = async () => {
       const output = '/timeline_frame.png';
       const decoder = this.inputDecoderArgs();
       const filter = `scale=${width}:-2:force_original_aspect_ratio=decrease`;
-      const cmd = `-y -ss ${time.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
+      const cmd = `-y -ss ${time.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -map 0:v:${videoStream} -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
       await this.execute(cmd, false, 60000);
       const bytes = await this.api.readFile(output);
       if (!bytes || !bytes.length) throw new Error('时间轴画面预览没有生成');
@@ -305,6 +308,7 @@ export class EncoderEngine {
     if (!this.sourceAssFile && !this.activeAssText) throw new Error('硬字幕参考帧缺少 ASS');
     const time = Math.max(0, Number(timeSeconds) || 0);
     const width = Math.max(320, Math.min(1600, Math.floor(Number(options.width) || 1200)));
+    const videoStream = Math.max(0, Math.floor(Number(options.videoStream ?? task.videoStreams?.[0] ?? task.videoStream ?? 0)));
     const output = '/hardsub_reference_frame.png';
     const decoder = this.inputDecoderArgs();
     const filter = hardsubReferenceFilter(
@@ -314,7 +318,7 @@ export class EncoderEngine {
       escapeFilter(this.fontDir),
       width
     );
-    const cmd = `-y -ss ${time.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
+    const cmd = `-y -ss ${time.toFixed(3)} ${decoder}-i ${q(this.inputPath)} -map 0:v:${videoStream} -an -sn -frames:v 1 -vf ${q(filter)} ${q(output)}`;
     await this.execute(cmd, false, 60000);
     const bytes = await this.api.readFile(output);
     if (!bytes || !bytes.length) throw new Error('硬字幕权威参考帧没有生成');
@@ -363,7 +367,7 @@ export class EncoderEngine {
     const duration = Number(options.duration || this.mediaInfo?.duration || 0);
     const includeKeyframes = !!options.includeKeyframes;
     const keyframeResult = includeKeyframes
-      ? await this.listKeyframes({ duration, maxKeyframes: options.maxKeyframes })
+      ? await this.listKeyframes({ duration, maxKeyframes: options.maxKeyframes, videoStream: options.videoStream })
       : { keyframes: [], keyframesTruncated: false, duration };
 
     if (Number(this.mediaInfo?.audioTracks || 0) < 1) {
@@ -552,7 +556,7 @@ export class EncoderEngine {
 
     if (twoPass) {
       options.onPhase?.('pass1');
-      const firstPass = options.task ? ['-y',...taskInputArgs(options.task),'-i',this.inputPath,...taskDurationArgs(options.task),...firstPassArgs(options.task.outputArgs).map(value=>value.replace('__ASS__',escapeFilter(this.assPath)).replace('__FONTS__',escapeFilter(this.fontDir))),'-pass','1','-passlogfile',passlog,'-f','null','-'].map(q).join(' ') : `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
+      const firstPass = options.task ? ['-y',...taskSourceArgs(options.task,this.inputPath),...firstPassArgs(options.task.outputArgs).map(value=>value.replace('__ASS__',escapeFilter(this.assPath)).replace('__FONTS__',escapeFilter(this.fontDir))),'-pass','1','-passlogfile',passlog,'-f','null','-'].map(q).join(' ') : `-y ${decoder}-i ${q(this.inputPath)} -map 0:v:0 -sn -vf ${q(filter)} -c:v ${encoder} -preset ${preset} -g ${gop} -b:v ${Math.round(targetVideoBitrate)} -pass 1 -passlogfile ${q(passlog)}${extra} -an -f null -`;
       this.onLog(`整片两遍编码：第一遍统计，目标视频码率 ${Math.round(targetVideoBitrate / 1000)} kb/s`);
       await this.executeWithStatistics(firstPass, options.onStatistics, 'pass1');
     }
@@ -599,7 +603,7 @@ export class EncoderEngine {
       }
     }
     const cmd = task
-      ? ['-y',...taskInputArgs(task).map(q),'-i',q(this.inputPath),...taskDurationArgs(task).map(q),...taskArgs.map(q),...streamContainerArgs.map(q),'-f',q(outputFormat),q(target)].join(' ')
+      ? ['-y',...taskSourceArgs(task,this.inputPath).map(q),...taskArgs.map(q),...streamContainerArgs.map(q),'-f',q(outputFormat),q(target)].join(' ')
       : ['-y',decoder.trim(),'-i',q(this.inputPath),'-map','0:v:0','-sn','-vf',q(filter),'-c:v',encoder,'-preset',preset,'-g',String(gop),...rateControl.trim().split(/\s+/),...(extra.trim()?extra.trim().split(/\s+/):[]),...guidedAudioArgs,...streamContainerArgs,'-f',outputFormat,q(target)].filter(Boolean).join(' ');
     this.onLog(`$ ffmpeg ${cmd}`);
 
@@ -721,8 +725,9 @@ export class EncoderEngine {
       .filter(([, type]) => type === 'audio')
       .map(([index]) => index);
 
-    if (videoIndexes.length !== 1) {
-      throw new Error(`成品视频流数量异常：${videoIndexes.length}（预期 1）`);
+    const expectedVideoTracks = Number(validation.task?.expectedVideoTracks ?? 1);
+    if (videoIndexes.length !== expectedVideoTracks) {
+      throw new Error(`成品视频流数量异常：${videoIndexes.length}（预期 ${expectedVideoTracks}）`);
     }
 
     const scanMapToNull = async mapSpec => {
@@ -763,7 +768,7 @@ export class EncoderEngine {
     };
 
     const t0 = performance.now();
-    const videoScan = await scanMapToNull('0:v:0');
+    const videoScan = await scanMapToNull('0:v');
     const audioScan = audioIndexes.length
       ? await scanMapToNull('0:a')
       : null;
@@ -772,13 +777,14 @@ export class EncoderEngine {
       throw new Error('全量视频 packet 扫描没有取得有效末端时间');
     }
 
-    const expected = Number(expectedDuration || 0);
-    const durationDelta = expected > 0 ? videoScan.end - expected : null;
+    const expectedVideoDuration = Number(validation.task?.expectedVideoDuration ?? expectedDuration ?? 0);
+    const durationDelta = expectedVideoDuration > 0 ? videoScan.end - expectedVideoDuration : null;
     const fps = Number(this.mediaInfo?.fps || 0);
     const tolerance = validation.tolerance ?? Math.max(0.5, fps > 0 ? 2 / fps : 0);
     const durationOk = durationDelta == null || Math.abs(durationDelta) <= tolerance;
 
     const expectedAudioTracks = validation.expectedAudioTracks ?? Number(this.mediaInfo?.audioTracks || 0);
+    const expectedAudioDuration = Number(validation.task?.expectedAudioDuration ?? expectedDuration ?? 0);
     const audioTrackCountOk = audioIndexes.length === expectedAudioTracks;
     const audioTolerance = validation.tolerance ?? 1.0;
     const audioEnd = audioScan?.end ?? null;
@@ -788,7 +794,12 @@ export class EncoderEngine {
         audioIndexes.length > 0 &&
         audioEnd != null &&
         audioEnd > 0 &&
-        (expected <= 0 || (validation.allowShortAudio ? audioEnd <= expected+audioTolerance : Math.abs(audioEnd - expected) <= audioTolerance))
+        (
+          expectedAudioDuration <= 0 ||
+          (validation.allowShortAudio
+            ? audioEnd <= expectedAudioDuration + audioTolerance
+            : Math.abs(audioEnd - expectedAudioDuration) <= audioTolerance)
+        )
       );
     const audioOk = audioTrackCountOk && audioDurationsOk;
 
@@ -805,11 +816,13 @@ export class EncoderEngine {
       lastPacketStart: null,
       videoEnd: videoScan.end,
       videoFrameCount: videoScan.frameCount,
-      expectedDuration: expected > 0 ? expected : null,
+      expectedDuration: expectedVideoDuration > 0 ? expectedVideoDuration : null,
+      expectedAudioDuration: expectedAudioDuration > 0 ? expectedAudioDuration : null,
       durationDelta,
       tolerance,
       durationOk,
       videoStreamCount: videoIndexes.length,
+      expectedVideoTracks,
       audioTrackCount: audioIndexes.length,
       expectedAudioTracks,
       audioTrackCountOk,
@@ -819,7 +832,7 @@ export class EncoderEngine {
       audioOk,
       scanMode: 'memory-bounded-demux',
       ok:
-        videoIndexes.length === 1 &&
+        videoIndexes.length === expectedVideoTracks &&
         videoScan.end > 0 &&
         durationOk &&
         audioOk,
@@ -959,19 +972,57 @@ function normalizeMediaInfo(info) {
       ? info.getAllProperties()
       : info;
   const rawStreams = raw.streams || info.getStreams?.() || [];
-  const streams = rawStreams.map?.(s => typeof s.getAllProperties === 'function' ? s.getAllProperties() : s) || [];
+  const streams = rawStreams.map?.(stream =>
+    typeof stream.getAllProperties === 'function' ? stream.getAllProperties() : stream
+  ) || [];
   const format = raw.format || raw.format_properties || raw;
-  const video = streams.find?.(s => (s.codec_type || s.type) === 'video') || {};
-  const audioStreams = streams.filter?.(s => (s.codec_type || s.type) === 'audio') || [];
+
+  const videoStreams = streams
+    .filter(stream => (stream.codec_type || stream.type) === 'video')
+    .map((stream, ordinal) => {
+      const pixelFormat = stream.pix_fmt || stream.pixel_format || '';
+      const bitDepth = inferBitDepth(stream, pixelFormat);
+      const colorTransfer = stream.color_transfer || '';
+      const colorPrimaries = stream.color_primaries || '';
+      const colorSpace = stream.color_space || '';
+      const hdr = /smpte2084|arib-std-b67/i.test(colorTransfer)
+        || (/bt2020/i.test(colorPrimaries) && bitDepth > 8);
+      return {
+        ordinal,
+        index: Number.isInteger(Number(stream.index)) ? Number(stream.index) : ordinal,
+        codec: stream.codec_name || stream.codec || 'unknown',
+        bitRate: Number(stream.bit_rate || stream.bitrate || 0),
+        width: Number(stream.width || 0),
+        height: Number(stream.height || 0),
+        fps: parseFps(stream.avg_frame_rate || stream.r_frame_rate),
+        pixelFormat,
+        bitDepth,
+        colorTransfer,
+        colorPrimaries,
+        colorSpace,
+        hdr,
+        highBitDepth: bitDepth > 8,
+        unsafeColorPipeline: hdr || bitDepth > 8,
+        disposition: stream.disposition || {},
+        tags: stream.tags || {}
+      };
+    });
+
+  const audioStreams = streams
+    .filter(stream => (stream.codec_type || stream.type) === 'audio')
+    .map((stream, ordinal) => ({
+      ordinal,
+      index: Number.isInteger(Number(stream.index)) ? Number(stream.index) : ordinal,
+      codec: stream.codec_name || stream.codec || '',
+      bitRate: Number(stream.bit_rate || stream.bitrate || 0),
+      channels: Number(stream.channels || 0),
+      sampleRate: Number(stream.sample_rate || 0),
+      disposition: stream.disposition || {},
+      tags: stream.tags || {}
+    }));
+
+  const video = videoStreams[0] || {};
   const audio = audioStreams[0] || {};
-  const pixelFormat = video.pix_fmt || video.pixel_format || '';
-  const bitDepth = inferBitDepth(video, pixelFormat);
-  const colorTransfer = video.color_transfer || '';
-  const colorPrimaries = video.color_primaries || '';
-  const colorSpace = video.color_space || '';
-  const hdr = /smpte2084|arib-std-b67/i.test(colorTransfer)
-    || (/bt2020/i.test(colorPrimaries) && bitDepth > 8);
-  const highBitDepth = bitDepth > 8;
 
   return {
     duration: Number(format.duration || raw.duration || 0),
@@ -979,26 +1030,28 @@ function normalizeMediaInfo(info) {
     formatName: String(format.format_name || raw.format_name || ''),
     size: Number(format.size || raw.size || 0),
     bitRate: Number(format.bit_rate || raw.bitrate || 0),
-    videoCodec: video.codec_name || video.codec || 'unknown',
-    videoBitRate: Number(video.bit_rate || video.bitrate || 0),
+    videoStreams,
+    videoTracks: videoStreams.length,
+    videoCodec: video.codec || 'unknown',
+    videoBitRate: Number(video.bitRate || 0),
     width: Number(video.width || 0),
     height: Number(video.height || 0),
-    fps: parseFps(video.avg_frame_rate || video.r_frame_rate),
-    pixelFormat,
-    bitDepth,
-    colorTransfer,
-    colorPrimaries,
-    colorSpace,
-    hdr,
-    highBitDepth,
-    unsafeColorPipeline: hdr || highBitDepth,
-    audioCodec: audio.codec_name || audio.codec || '',
-    audioCodecs: audioStreams.map(s => s.codec_name || s.codec || '').filter(Boolean),
+    fps: Number(video.fps || 0),
+    pixelFormat: video.pixelFormat || '',
+    bitDepth: Number(video.bitDepth || 8),
+    colorTransfer: video.colorTransfer || '',
+    colorPrimaries: video.colorPrimaries || '',
+    colorSpace: video.colorSpace || '',
+    hdr: !!video.hdr,
+    highBitDepth: !!video.highBitDepth,
+    unsafeColorPipeline: !!video.unsafeColorPipeline,
+    audioStreams,
+    audioCodec: audio.codec || '',
+    audioCodecs: audioStreams.map(stream => stream.codec).filter(Boolean),
     audioTracks: audioStreams.length,
-    audioBitRate: audioStreams.reduce((sum, s) => sum + Number(s.bit_rate || s.bitrate || 0), 0)
+    audioBitRate: audioStreams.reduce((sum, stream) => sum + Number(stream.bitRate || 0), 0)
   };
 }
-
 function inferBitDepth(video, pixelFormat = '') {
   const explicit = Number(video.bits_per_raw_sample || video.bits_per_component || 0);
   if (explicit) return explicit;

@@ -1,11 +1,11 @@
 ﻿# Structured output argument validation. No input URLs, file paths or shell commands.
 function Get-MediaTaskArgs($Task) {
-    if ([int]$Task.version -notin @(1,2,3) -or $Task.operation -notin @('copy','transcode','hardsub')) { throw 'Unsupported media task.' }
+    if ([int]$Task.version -notin @(1,2,3,4) -or $Task.operation -notin @('copy','transcode','hardsub')) { throw 'Unsupported media task.' }
     $start=[double]$Task.start; $end=[double]$Task.end
     if ([double]::IsNaN($start) -or [double]::IsInfinity($start) -or [double]::IsNaN($end) -or [double]::IsInfinity($end) -or $start -lt 0 -or $end -le $start) { throw 'Invalid task range.' }
     $values=@{
         '-ss'='^(?:0)$'
-        '-map'='^(?:0:(?:v:0|a\?|a:\d{1,2}|s\?|t\?))$'
+        '-map'='^(?:(?:0|1):(?:v:\d{1,2}|a\?|a:\d{1,2}|s\?)|0:t\?)$'
         '-c:v'='^(?:copy|libx264|libx265|libsvtav1|h264_nvenc|hevc_nvenc|av1_nvenc)$'
         '-c:a'='^(?:copy|aac|libopus)$'
         '-ac'='^(?:\d{1,2})$'
@@ -77,7 +77,6 @@ function Get-MediaTaskArgs($Task) {
             if($value.Contains('ass=__ASS__') -ne ($Task.operation -eq 'hardsub')){throw 'Subtitle mode mismatch.'}
         }elseif(-not $values.ContainsKey($flag) -or $value -cnotmatch $values[$flag]){throw "Unsupported output option: $flag"}
         if($flag -eq '-c:v' -and (($value -eq 'copy') -ne ($Task.operation -eq 'copy'))){throw 'Codec mode mismatch.'}
-        if($Task.operation -eq 'copy' -and $flag -eq '-c:a' -and $value -ne 'copy'){throw 'Copy cannot transcode audio.'}
         $result.Add($value)
     }
     if(-not $seen.ContainsKey('-c:v')){throw 'Missing video codec.'}
@@ -92,7 +91,7 @@ function Get-MediaFirstPassArgs([string[]]$OutputOptions) {
         if($flag -eq '-sn'){continue}
         $i++;$value=$OutputOptions[$i]
         if($flag -in @('-c:a','-b:a','-ac','-ar','-c:s','-c:t','-map_metadata','-map_chapters')){continue}
-        if($flag -eq '-map' -and -not $value.StartsWith('0:v:')){continue}
+        if($flag -eq '-map' -and $value -notmatch '^\d+:v:'){continue}
         $out.Add($flag);$out.Add($value)
     }
     $out.Add('-an');$out.Add('-sn')

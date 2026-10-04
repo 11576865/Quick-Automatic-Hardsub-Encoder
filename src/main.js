@@ -2759,6 +2759,7 @@ function renderSourceVideoSummary(media = state.sourceMedia) {
     return;
   }
   const videoRate = Number(media.videoBitRate || media.bitRate || 0);
+  const videoStreams = Array.isArray(media.videoStreams) ? media.videoStreams : [];
   const audioTracks = Number(media.audioTracks || 0);
   const audioCodecs = [...new Set(
     (Array.isArray(media.audioCodecs) && media.audioCodecs.length
@@ -2774,8 +2775,19 @@ function renderSourceVideoSummary(media = state.sourceMedia) {
       (audioRate > 0 ? ' · ' + formatBitrate(audioRate) : '')
     : '未检测到音轨';
   const color = [media.colorPrimaries, media.colorTransfer, media.colorSpace].filter(Boolean).join(' / ') || '未标记';
+  const videoStreamSummary = videoStreams.length
+    ? videoStreams.map((stream,index)=>{
+        const ordinal=Number.isInteger(Number(stream.ordinal))?Number(stream.ordinal):index;
+        const codec=String(stream.codec||stream.codec_name||'unknown').toUpperCase();
+        const size=Number(stream.width||0)>0&&Number(stream.height||0)>0 ? stream.width+'×'+stream.height : '尺寸未知';
+        const fps=Number(stream.fps||0)>0 ? Number(stream.fps).toFixed(3)+' fps' : 'fps 未知';
+        const depth=Number(stream.bitDepth||0)>0 ? stream.bitDepth+'-bit' : '位深未知';
+        return '#'+ordinal+' '+codec+' · '+size+' · '+fps+' · '+depth;
+      }).join(' / ')
+    : '#0 '+String(media.videoCodec||'未知').toUpperCase();
   const rows = [
-    ['源视频编码', media.videoCodec || '未知'],
+    ['视频流', videoStreamSummary],
+    ['主视频编码', media.videoCodec || '未知'],
     ['分辨率', media.width + '×' + media.height],
     ['帧率', Number(media.fps || 0) > 0 ? Number(media.fps).toFixed(3) + ' fps' : '未知'],
     ['时长', Number(media.duration || 0) > 0 ? formatDuration(Number(media.duration)) : '未知'],
@@ -4609,8 +4621,47 @@ async function runEncode() {
 }
 
 function mediaFromNativeProbe(p) {
-  const fps = parseFpsText(p.fps);
-  const bitDepth = Number(p.bitDepth || 8);
+  const rawVideos = Array.isArray(p.videoStreams) ? p.videoStreams : [];
+  const videoStreams = rawVideos.length
+    ? rawVideos.map((stream,index)=>{
+        const bitDepth=Number(stream.bitDepth||8);
+        return {
+          ordinal:Number.isInteger(Number(stream.ordinal))?Number(stream.ordinal):index,
+          index:Number.isInteger(Number(stream.index))?Number(stream.index):index,
+          codec:stream.codec||stream.codec_name||'unknown',
+          bitRate:Number(stream.bitRate||stream.bit_rate||0),
+          width:Number(stream.width||0),
+          height:Number(stream.height||0),
+          fps:parseFpsText(stream.fps||stream.avg_frame_rate),
+          pixelFormat:stream.pixelFormat||stream.pix_fmt||'',
+          bitDepth,
+          colorTransfer:stream.colorTransfer||stream.color_transfer||'',
+          colorPrimaries:stream.colorPrimaries||stream.color_primaries||'',
+          colorSpace:stream.colorSpace||stream.color_space||'',
+          hdr:!!stream.hdr,
+          highBitDepth:bitDepth>8,
+          unsafeColorPipeline:!!stream.unsafeColorPipeline || !!stream.hdr || bitDepth>8
+        };
+      })
+    : [{
+        ordinal:0,index:0,codec:p.videoCodec||'unknown',bitRate:Number(p.videoBitRate||0),
+        width:Number(p.width||0),height:Number(p.height||0),fps:parseFpsText(p.fps),
+        pixelFormat:p.pixelFormat||'',bitDepth:Number(p.bitDepth||8),
+        colorTransfer:p.colorTransfer||'',colorPrimaries:p.colorPrimaries||'',colorSpace:p.colorSpace||'',
+        hdr:!!p.hdr,highBitDepth:Number(p.bitDepth||8)>8,unsafeColorPipeline:!!p.unsafeColorPipeline
+      }];
+  const primary=videoStreams[0]||{};
+  const rawAudios=Array.isArray(p.audioStreams)?p.audioStreams:[];
+  const audioStreams=rawAudios.length
+    ? rawAudios.map((stream,index)=>({
+        ordinal:Number.isInteger(Number(stream.ordinal))?Number(stream.ordinal):index,
+        index:Number.isInteger(Number(stream.index))?Number(stream.index):index,
+        codec:stream.codec||stream.codec_name||'',
+        bitRate:Number(stream.bitRate||stream.bit_rate||0),
+        channels:Number(stream.channels||0),
+        sampleRate:Number(stream.sampleRate||stream.sample_rate||0)
+      }))
+    : (Array.isArray(p.audioCodecs)?p.audioCodecs:[]).map((codec,index)=>({ordinal:index,index,codec,bitRate:0,channels:0,sampleRate:0}));
   return {
     duration: Number(p.duration || 0),
     durationSource: 'native-ffprobe',
@@ -4618,23 +4669,26 @@ function mediaFromNativeProbe(p) {
     sourceName: state.video?.name || '',
     size: Number(p.statSize > 0 ? p.statSize : state.video?.size || 0),
     bitRate: Number(p.bitRate || 0),
-    videoCodec: p.videoCodec || 'unknown',
-    videoBitRate: Number(p.videoBitRate || 0),
-    width: Number(p.width || 0),
-    height: Number(p.height || 0),
-    fps,
-    pixelFormat: p.pixelFormat || '',
-    bitDepth,
-    colorTransfer: p.colorTransfer || '',
-    colorPrimaries: p.colorPrimaries || '',
-    colorSpace: p.colorSpace || '',
-    hdr: !!p.hdr,
-    highBitDepth: bitDepth > 8,
-    unsafeColorPipeline: !!p.unsafeColorPipeline,
-    audioCodec: p.audioCodec || '',
-    audioCodecs: Array.isArray(p.audioCodecs) ? p.audioCodecs : (p.audioCodec ? [p.audioCodec] : []),
-    audioTracks: Number(p.audioTracks || 0),
-    audioBitRate: Number(p.audioBitRate || 0)
+    videoStreams,
+    videoTracks: videoStreams.length,
+    videoCodec: primary.codec || 'unknown',
+    videoBitRate: Number(primary.bitRate || 0),
+    width: Number(primary.width || 0),
+    height: Number(primary.height || 0),
+    fps: Number(primary.fps || 0),
+    pixelFormat: primary.pixelFormat || '',
+    bitDepth: Number(primary.bitDepth || 8),
+    colorTransfer: primary.colorTransfer || '',
+    colorPrimaries: primary.colorPrimaries || '',
+    colorSpace: primary.colorSpace || '',
+    hdr: !!primary.hdr,
+    highBitDepth: !!primary.highBitDepth,
+    unsafeColorPipeline: !!primary.unsafeColorPipeline,
+    audioStreams,
+    audioCodec: audioStreams[0]?.codec || p.audioCodec || '',
+    audioCodecs: audioStreams.length ? audioStreams.map(x=>x.codec).filter(Boolean) : (Array.isArray(p.audioCodecs) ? p.audioCodecs : (p.audioCodec ? [p.audioCodec] : [])),
+    audioTracks: Number(p.audioTracks ?? audioStreams.length),
+    audioBitRate: Number(p.audioBitRate || audioStreams.reduce((sum,x)=>sum+Number(x.bitRate||0),0))
   };
 }
 
@@ -4661,7 +4715,7 @@ function requestNativePreview(timeSeconds, assText) {
   });
 }
 
-function requestNativeFrame(timeSeconds, width = 720) {
+function requestNativeFrame(timeSeconds, width = 720, videoStream = 0) {
   const bridge = globalThis.NativeHardsub;
   if (!bridge?.renderNativeFrame) {
     return Promise.reject(new Error('Native 时间轴画面桥不可用'));
@@ -4673,7 +4727,7 @@ function requestNativeFrame(timeSeconds, width = 720) {
       reject(new Error('Native 时间轴画面预览超时'));
     }, 60000);
     state.nativeFrameWaiters.set(requestId, { resolve, reject, timer });
-    bridge.renderNativeFrame(requestId, Number(timeSeconds || 0), Number(width || 720));
+    bridge.renderNativeFrame(requestId, Number(timeSeconds || 0), Number(width || 720), Math.max(0, Math.floor(Number(videoStream) || 0)));
   });
 }
 
@@ -5248,7 +5302,7 @@ mountMediaWorkspace({
       throw new Error('硬字幕模式请先在下方完成字幕分析与真实预览');
     }
     if(state.nativeBackend?.available){
-      if(state.nativeBackend.taskSchemaVersion<3)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包');
+      if(state.nativeBackend.taskSchemaVersion<4)throw new Error('当前原生后端版本过旧，请更新 Android APP 或 Windows 包；多流任务需要 task schema v4');
       if(!state.nativeInputProbe?.ok)throw new Error('视频尚未完成原生探测');
       return {
         ...mediaFromNativeProbe(state.nativeInputProbe),
@@ -5270,19 +5324,21 @@ mountMediaWorkspace({
     if (!state.video) throw new Error('请先选择视频');
     const time = Math.max(0, Number(options?.time) || 0);
     const width = Math.max(320, Math.min(1280, Math.floor(Number(options?.width) || 720)));
+    const videoStream = Math.max(0, Math.floor(Number(options?.videoStream) || 0));
     if (state.nativeBackend?.available) {
       if (!state.nativeInputProbe?.ok) throw new Error('视频尚未完成原生探测');
-      return requestNativeFrame(time, width);
+      return requestNativeFrame(time, width, videoStream);
     }
     if (state.video.size > MAX_BYTES) throw new Error('浏览器输入上限为 1 GiB；请使用 Native 版本预览时间轴画面');
     if (!await ensureWebEngineReady()) throw new Error('浏览器 FFmpeg 核心不可用');
     if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
     if (!state.engine.mediaInfo) await state.engine.probe();
-    return state.engine.renderTimelineFrame(time, { width });
+    return state.engine.renderTimelineFrame(time, { width, videoStream });
   },
   waveform: async options => {
     if (!state.video) throw new Error('请先选择视频');
     const audioTrack = Math.max(0, Math.floor(Number(options?.audioTrack) || 0));
+    const videoStream = Math.max(0, Math.floor(Number(options?.videoStream) || 0));
     const width = Math.max(512, Math.min(4096, Math.floor(Number(options?.width) || 2048)));
     const height = Math.max(96, Math.min(320, Math.floor(Number(options?.height) || 160)));
     const includeKeyframes = !!options?.includeKeyframes;
@@ -5308,6 +5364,7 @@ mountMediaWorkspace({
       try {
         return await requestNativeWaveform({
           audioTrack,
+          videoStream,
           width,
           height,
           includeKeyframes,
@@ -5331,6 +5388,7 @@ mountMediaWorkspace({
     try {
       return await state.engine.renderWaveform({
         audioTrack,
+        videoStream,
         width,
         height,
         includeKeyframes,
@@ -5350,6 +5408,7 @@ mountMediaWorkspace({
     const outputTime = Math.max(0, Number(options?.outputTime) || 0);
     const width = Math.max(480, Math.min(1600, Math.floor(Number(options?.width) || 1200)));
     const hardsub = task.operation === 'hardsub';
+    const primaryVideoStream = Math.max(0, Math.floor(Number(task.videoStreams?.[0] ?? task.videoStream ?? 0)));
 
     let sourceFrame;
     let outputFrame;
@@ -5357,7 +5416,7 @@ mountMediaWorkspace({
       if (!completed.jobId) throw new Error('Native 成品验证缺少 job id');
       sourceFrame = hardsub
         ? await requestNativeReferenceFrame(completed.jobId, sourceTime, width)
-        : await requestNativeFrame(sourceTime, width);
+        : await requestNativeFrame(sourceTime, width, primaryVideoStream);
       outputFrame = await requestNativeOutputFrame(completed.jobId, outputTime, width);
     } else {
       if (!completed.blob) throw new Error('浏览器成品验证缺少成品数据');
@@ -5372,11 +5431,11 @@ mountMediaWorkspace({
           await state.engine.setAssText(state.activeAssText);
         }
         if (!state.engine.mediaInfo) await state.engine.probe();
-        sourceFrame = await state.engine.renderHardsubReferenceFrame(sourceTime, task, { width });
+        sourceFrame = await state.engine.renderHardsubReferenceFrame(sourceTime, task, { width, videoStream: primaryVideoStream });
       } else {
         if (state.engine.sourceVideoFile !== state.video) await state.engine.stageFiles(state.video, null, []);
         if (!state.engine.mediaInfo) await state.engine.probe();
-        sourceFrame = await state.engine.renderTimelineFrame(sourceTime, { width });
+        sourceFrame = await state.engine.renderTimelineFrame(sourceTime, { width, videoStream: primaryVideoStream });
       }
       outputFrame = await state.engine.renderVerifiedOutputFrame(
         completed.blob,
@@ -5394,12 +5453,16 @@ mountMediaWorkspace({
     };
   },
   validate: async task => {
-    if(task.operation==='copy')return;
     if(state.nativeBackend?.available){
       if(globalThis.NativeHardsub?.__windowsNative){
-        const encoder=state.nativeBackend.encoders?.find(e=>(e.key||e.Key)===task.encoder);
-        if(!encoder || !(encoder.available || encoder.Available))throw Error('当前原生后端不支持此编码器');
-        validateEncoderSupport(task,encoder,state.nativeBackend.globalOptions||[]);
+        // Windows performs authoritative structured-task validation again when
+        // the job starts. For video Stream Copy there is no video encoder to
+        // preflight here; audio encoder capability is checked by that backend.
+        if(task.operation!=='copy'){
+          const encoder=state.nativeBackend.encoders?.find(e=>(e.key||e.Key)===task.encoder);
+          if(!encoder || !(encoder.available || encoder.Available))throw Error('当前原生后端不支持此编码器');
+          validateEncoderSupport(task,encoder,state.nativeBackend.globalOptions||[]);
+        }
       }else if(globalThis.NativeHardsub?.validateMediaTask){
         const result=JSON.parse(globalThis.NativeHardsub.validateMediaTask(JSON.stringify(task)));
         if(!result.ok)throw Error(result.error||'原生参数能力检查失败');
@@ -5427,6 +5490,9 @@ mountMediaWorkspace({
     const name=outputFileName(base,task);
     log('媒体任务：'+task.operation+' · '+task.outputContainer.toUpperCase()+' · '+task.outputArgs.join(' '));
     if(state.nativeBackend?.available){
+      const primaryVideoOrdinal=Number(task.videoStreams?.[0] ?? task.videoStream ?? 0);
+      const primaryVideo=Array.isArray(media.videoStreams) ? (media.videoStreams[primaryVideoOrdinal] || null) : null;
+      const streamIdentity=currentSourceEvidenceKey()+'|video='+String((task.videoStreams||[primaryVideoOrdinal]).join(','));
       const request={
         codec:task.codec||'h264',
         mode:task.rateMode!=='quality'?'budget-rate':'crf',
@@ -5438,13 +5504,13 @@ mountMediaWorkspace({
         expectedDuration:media.duration,
         expectedAudioTracks:task.expectedAudioTracks,
         estimatedOutputBytes:Math.max(128*1024*1024,task.estimatedBytes ? Math.ceil(task.estimatedBytes*1.15) : Number(state.video.size||media.size||0)*2),
-        sourceIdentity:currentSourceEvidenceKey(),
-        sourceCodec:media.videoCodec||'',
-        sourcePixelFormat:media.pixelFormat||'',
-        sourceVideoBitrate:Number(media.videoBitRate||0),
-        sourceWidth:Number(media.width||0),
-        sourceHeight:Number(media.height||0),
-        sourceFps:Number(media.fps||0),
+        sourceIdentity:streamIdentity,
+        sourceCodec:primaryVideo?.codec||media.videoCodec||'',
+        sourcePixelFormat:primaryVideo?.pixelFormat||media.pixelFormat||'',
+        sourceVideoBitrate:Number(primaryVideo?.bitRate||media.videoBitRate||0),
+        sourceWidth:Number(primaryVideo?.width||media.width||0),
+        sourceHeight:Number(primaryVideo?.height||media.height||0),
+        sourceFps:Number(primaryVideo?.fps||media.fps||0),
         sourceSize:Number(state.video.size||media.size||0),
         subtitleEventCount:Number(state.assInfo?.events?.filter?.(x=>x.kind?.toLowerCase()==='dialogue')?.length||0),
         selectedFontCount:Number(state.fonts?.length||0),

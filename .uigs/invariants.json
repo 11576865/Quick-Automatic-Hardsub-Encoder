@@ -419,7 +419,7 @@
           "level": "source",
           "kind": "pattern",
           "path": "android-native/app/src/main/java/io/github/quickhardsub/NativeBridge.kt",
-          "pattern": "fun renderNativeFrame\\(requestId: String, timeSeconds: Double, width: Int\\)"
+          "pattern": "fun renderNativeFrame\\(requestId: String, timeSeconds: Double, width: Int, videoStream: Int\\)"
         },
         {
           "id": "cross-backend-frame-wiring",
