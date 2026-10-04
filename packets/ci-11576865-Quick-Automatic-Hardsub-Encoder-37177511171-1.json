@@ -1,0 +1,45 @@
+{
+  "packet_version": 1,
+  "packet_id": "ci-11576865-Quick-Automatic-Hardsub-Encoder-37177511171-1",
+  "status": "pending",
+  "record_type": "ci_failure",
+  "title": "Windows local smoke: failure",
+  "summary": "Tracked CI workflow did not complete successfully. Source adapter captured failed job/step evidence when available.",
+  "source_repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "source_event": "workflow_run",
+  "source_ref": "feat/stream-plan-v4",
+  "source_sha": "5db8b4145d37a6d8e51f3fbf7441ad5d69c48a8d",
+  "source_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/37177511171",
+  "created_at": "2026-10-04T04:37:45+00:00",
+  "dedupe_key": "workflow_run:11576865/Quick-Automatic-Hardsub-Encoder:37177511171:1",
+  "routing_hints": [
+    "architecture",
+    "interface-grammar",
+    "operations",
+    "red-reason",
+    "reliability"
+  ],
+  "evidence": {
+    "workflow": "Windows local smoke",
+    "run_id": "37177511171",
+    "run_attempt": "1",
+    "conclusion": "failure",
+    "trigger_event": "push",
+    "failed_jobs": [
+      {
+        "id": 111363118952,
+        "name": "windows",
+        "conclusion": "failure"
+      }
+    ],
+    "failed_steps": [
+      {
+        "job": "windows",
+        "number": 10,
+        "name": "Real AV1 ALAC MKV acceptance",
+        "conclusion": "failure"
+      }
+    ],
+    "capture_error": ""
+  }
+}
