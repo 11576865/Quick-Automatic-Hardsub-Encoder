@@ -78,7 +78,7 @@ IN/OUT 只定义请求区间；视频、音频、软字幕分别选择 `trim` �
 | V4-14 | Web / Windows / Android | producer、capability、parser、执行语义均为 task schema v4 |
 | V4-15 | 成品验证 | 按请求验证视频流数量、音轨数量、时长/packet、显式规格和可解码性 |
 
-实际 FFmpeg 集成测试至少覆盖 V4-01、02、04、05、06、07、08，并对所有产物执行真实解码扫描。Windows CI 额外验证 v4 结构化参数；Android CI 编译 v4 parser/service。Hosted CI 证据与真实设备证据继续分开。
+实际 FFmpeg 集成测试套件定义覆盖 V4-01、02、04、05、06、07、08，并要求对所有产物执行真实解码扫描；是否通过以对应 CI run 为准。Windows CI 另定义 v4 结构化参数验证，Android CI 编译 v4 parser/service。Hosted CI 证据与真实设备证据继续分开。
 
 ### 额外约束
 
