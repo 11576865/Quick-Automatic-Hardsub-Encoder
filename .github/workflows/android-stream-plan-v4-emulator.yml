@@ -77,6 +77,19 @@ jobs:
           cp "$pack/burn.ass" "$assets/burn.ass"
           cp "$requests" "$assets/stream-plan-v4-runtime-requests.json"
 
+      - name: Stage production web assets and bundled fallback font
+        run: |
+          set -euo pipefail
+          mkdir -p public/vendor/fallback-fonts
+          curl -L --fail --retry 3             -o public/vendor/fallback-fonts/NotoSansSC-Regular.otf             https://raw.githubusercontent.com/notofonts/noto-cjk/165c01b46ea533872e002e0785ff17e44f6d97d8/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf
+          test -s public/vendor/fallback-fonts/NotoSansSC-Regular.otf
+          npm install
+          npm run build
+          rm -rf android-native/app/src/main/assets/www
+          mkdir -p android-native/app/src/main/assets/www
+          cp -a dist/. android-native/app/src/main/assets/www/
+          test -s android-native/app/src/main/assets/www/vendor/fallback-fonts/NotoSansSC-Regular.otf
+
       - name: Enable KVM group permissions
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
