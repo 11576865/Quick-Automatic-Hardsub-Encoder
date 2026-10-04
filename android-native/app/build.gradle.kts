@@ -16,6 +16,7 @@ android {
         targetSdk = 35
         versionCode = ciVersionCode ?: 5
         versionName = ciVersionName ?: "0.4.0-native"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
@@ -60,4 +61,8 @@ dependencies {
     implementation("com.arthenica:ffmpeg-kit-next:9.0.0")
     implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("androidx.webkit:webkit:1.12.1")
+
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit-ktx:1.2.1")
 }
