@@ -94,6 +94,8 @@ IN/OUT 只定义请求区间；视频、音频、软字幕分别选择 `trim` �
 
 GitHub CI 另运行桌面/手机浏览器交互检查、Windows 参数验证与原生 smoke、Android Kotlin 编译。CI 截图作为工作流 artifact 保留。
 
+真实 Windows Native / Android 设备的最终验收使用 `docs/stream-plan-v4-device-acceptance.md`。仓库可生成一份固定的多视频/多音频/软字幕/附件/章节测试包，并用独立验证器检查设备导出的 8 个成品；Hosted CI 通过不能替代这一层设备证据。
+
 ## 体积预算、试压与报告（Web 0.3.0 / Android 0.4.0-native）
 
 码率控制现在分为恒定质量 CRF/CQ、目标平均码率、目标体积。目标体积接受 MB/GB（十进制）和 MiB/GiB（二进制），默认预留 4% 给封装与码率偏差。计算为：

@@ -1,0 +1,74 @@
+name: Stream Plan v4 device fixture
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'scripts/build-stream-plan-v4-device-fixture.mjs'
+      - 'scripts/build-stream-plan-v4-reference-outputs.mjs'
+      - 'scripts/verify-stream-plan-v4-device-outputs.mjs'
+      - 'src/media-task.js'
+      - 'src/media-container.js'
+      - 'docs/stream-plan-v4-device-acceptance.md'
+      - '.github/workflows/stream-plan-v4-device-fixture.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-stream-plan-v4-device-fixture.mjs'
+      - 'scripts/build-stream-plan-v4-reference-outputs.mjs'
+      - 'scripts/verify-stream-plan-v4-device-outputs.mjs'
+      - 'src/media-task.js'
+      - 'src/media-container.js'
+      - 'docs/stream-plan-v4-device-acceptance.md'
+      - '.github/workflows/stream-plan-v4-device-fixture.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  fixture-and-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Build canonical multi-stream device fixture
+        run: node scripts/build-stream-plan-v4-device-fixture.mjs
+
+      - name: Build reference outputs through shared task schema v4
+        run: node scripts/build-stream-plan-v4-reference-outputs.mjs
+
+      - name: Verify all reference outputs
+        run: |
+          node scripts/verify-stream-plan-v4-device-outputs.mjs             device-acceptance/stream-plan-v4-pack             device-acceptance/reference-outputs | tee device-acceptance/reference-verification.json
+
+      - name: Inspect fixture inventory
+        run: |
+          ffprobe -v error             -show_streams -show_chapters -show_format             -of json device-acceptance/stream-plan-v4-pack/stream-plan-v4-source.mkv             > device-acceptance/fixture-probe.json
+
+      - name: Upload device acceptance pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: stream-plan-v4-device-acceptance-pack
+          path: device-acceptance/stream-plan-v4-pack/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload reference evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: stream-plan-v4-reference-evidence
+          path: |
+            device-acceptance/reference-outputs/
+            device-acceptance/reference-verification.json
+            device-acceptance/fixture-probe.json
+          if-no-files-found: error
+          retention-days: 14
