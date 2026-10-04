@@ -660,7 +660,8 @@ export function mountMediaWorkspace(hooks) {
     if(event.key==='2'){event.preventDefault();setFrameFullscreenZoomPreset('200');}
     if(event.key==='4'){event.preventDefault();setFrameFullscreenZoomPreset('400');}
   };
-  window.addEventListener('resize',()=>{if(!frameFullscreen.hidden)applyFrameFullscreenViewport();});
+  const frameFullscreenResizeHandler=()=>{if(!frameFullscreen.hidden)applyFrameFullscreenViewport();};
+  window.addEventListener('resize',frameFullscreenResizeHandler);
   document.addEventListener('keydown',frameFullscreenKeyHandler);
   function revokeVerificationFrames(){
     for(const url of [verificationSourceUrl,verificationOutputUrl]){
@@ -1631,5 +1632,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
-  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
