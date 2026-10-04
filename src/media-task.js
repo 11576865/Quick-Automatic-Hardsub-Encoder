@@ -114,11 +114,11 @@ export function compileTask(raw, media) {
   const audioCopyWarning = audioCopyPlaybackWarning(t, media);
   if (audioCopyWarning) t.compatibilityWarnings.push(audioCopyWarning.message);
 
-  const trimNeeded = t.hasTrimRange && (
+  const trimNeeded = !!(t.hasTrimRange && (
     t.videoRange === 'trim' ||
     (t.expectedAudioTracks > 0 && t.audioRange === 'trim') ||
     (t.keepSubtitles && t.subtitleRange === 'trim')
-  );
+  ));
   t.usesTrimInput = trimNeeded;
   const trimInput = trimNeeded ? 1 : 0;
   const inputFor = policy => t.hasTrimRange && policy === 'trim' ? trimInput : 0;

@@ -14,7 +14,7 @@ const packetEnd=(file,spec)=>{
   return Math.max(0,...(json.packets||[]).map(p=>Number(p.pts_time||0)+Number(p.duration_time||0)));
 };
 
-test('real FFmpeg preserves legacy transcode, hardsub, two-pass and packet-identical copy coverage under schema v4',{skip:!enabled},()=>{
+test('real FFmpeg preserves legacy transcode, hardsub, two-pass and packet-identical fast cut under schema v4',{skip:!enabled},()=>{
  const dir=mkdtempSync(join(tmpdir(),'media-task-legacy-v4-'));
  try {
   const source=join(dir,'source.mkv');
