@@ -426,17 +426,112 @@ export function mountMediaWorkspace(hooks) {
   function setFrameFullscreenWipe(value){
     const percent=Math.max(0,Math.min(100,Number(value)||0));
     frameFullscreenWipe.value=String(Math.round(percent));
-    frameFullscreenCompare.style.clipPath='inset(0 '+(100-percent)+'% 0 0)';
+    frameFullscreenCompareLayer.style.clipPath='inset(0 '+(100-percent)+'% 0 0)';
     frameFullscreenDivider.style.left=percent+'%';
+  }
+  function frameFullscreenMetrics(){
+    const rect=frameFullscreenStage.getBoundingClientRect();
+    const naturalWidth=Number(frameFullscreenBase.naturalWidth||frameFullscreenCompare.naturalWidth||0);
+    const naturalHeight=Number(frameFullscreenBase.naturalHeight||frameFullscreenCompare.naturalHeight||0);
+    if(!(rect.width>0&&rect.height>0&&naturalWidth>0&&naturalHeight>0))return null;
+    const containScale=Math.min(rect.width/naturalWidth,rect.height/naturalHeight);
+    return {
+      rect,naturalWidth,naturalHeight,containScale,
+      containWidth:naturalWidth*containScale,
+      containHeight:naturalHeight*containScale
+    };
+  }
+  function syncFrameFullscreenZoomChrome(){
+    for(const button of frameFullscreenZoomButtons){
+      button.setAttribute('aria-pressed',String(button.dataset.frameZoom===frameFullscreenZoomMode));
+    }
+    const metrics=frameFullscreenMetrics();
+    if(frameFullscreenZoomMode==='fit'){
+      frameFullscreenZoomStatus.textContent='Fit';
+    }else if(/^\d+$/.test(frameFullscreenZoomMode)){
+      frameFullscreenZoomStatus.textContent=frameFullscreenZoomMode+'%';
+    }else if(metrics){
+      frameFullscreenZoomStatus.textContent=Math.round(frameFullscreenScale*metrics.containScale*100)+'%';
+    }else{
+      frameFullscreenZoomStatus.textContent='—';
+    }
+  }
+  function resolveFrameFullscreenPresetScale(){
+    const metrics=frameFullscreenMetrics();
+    if(!metrics)return frameFullscreenScale||1;
+    if(frameFullscreenZoomMode==='fit')return 1;
+    if(/^\d+$/.test(frameFullscreenZoomMode)){
+      return (Number(frameFullscreenZoomMode)/100)/metrics.containScale;
+    }
+    return frameFullscreenScale||1;
+  }
+  function applyFrameFullscreenViewport(){
+    const metrics=frameFullscreenMetrics();
+    if(!metrics){syncFrameFullscreenZoomChrome();return;}
+    if(frameFullscreenZoomMode!=='custom')frameFullscreenScale=resolveFrameFullscreenPresetScale();
+    frameFullscreenScale=Math.max(.08,Math.min(20,frameFullscreenScale||1));
+    const contentWidth=metrics.containWidth*frameFullscreenScale;
+    const contentHeight=metrics.containHeight*frameFullscreenScale;
+    const maxPanX=Math.max(0,(contentWidth-metrics.rect.width)/2);
+    const maxPanY=Math.max(0,(contentHeight-metrics.rect.height)/2);
+    frameFullscreenPanX=Math.max(-maxPanX,Math.min(maxPanX,frameFullscreenPanX));
+    frameFullscreenPanY=Math.max(-maxPanY,Math.min(maxPanY,frameFullscreenPanY));
+    const width=metrics.containWidth+'px';
+    const height=metrics.containHeight+'px';
+    const leftMargin=(-metrics.containWidth/2)+'px';
+    const topMargin=(-metrics.containHeight/2)+'px';
+    const transform='translate3d('+frameFullscreenPanX+'px,'+frameFullscreenPanY+'px,0) scale('+frameFullscreenScale+')';
+    for(const image of [frameFullscreenBase,frameFullscreenCompare]){
+      image.style.width=width;
+      image.style.height=height;
+      image.style.left='50%';
+      image.style.top='50%';
+      image.style.marginLeft=leftMargin;
+      image.style.marginTop=topMargin;
+      image.style.transform=transform;
+    }
+    frameFullscreenStage.dataset.zoomed=String(frameFullscreenScale>1.001||Math.abs(frameFullscreenPanX)>.5||Math.abs(frameFullscreenPanY)>.5);
+    syncFrameFullscreenZoomChrome();
+  }
+  function setFrameFullscreenZoomPreset(mode){
+    frameFullscreenZoomMode=String(mode||'fit');
+    frameFullscreenPanX=0;
+    frameFullscreenPanY=0;
+    frameFullscreenScale=resolveFrameFullscreenPresetScale();
+    applyFrameFullscreenViewport();
+  }
+  function resetFrameFullscreenViewport(){
+    frameFullscreenZoomMode='fit';
+    frameFullscreenScale=1;
+    frameFullscreenPanX=0;
+    frameFullscreenPanY=0;
+    applyFrameFullscreenViewport();
   }
   function closeFrameFullscreen(){
     if(frameFullscreen.hidden)return;
     frameFullscreen.hidden=true;
-    frameFullscreenDragging=false;
+    frameFullscreenGesture=null;
+    frameFullscreenPointerStart=null;
     document.body.classList.remove('media-frame-lightbox-open');
     frameFullscreenBase.removeAttribute('src');
     frameFullscreenCompare.removeAttribute('src');
+    frameFullscreenCompareLayer.hidden=true;
     delete frameFullscreenStage.dataset.mode;
+    delete frameFullscreenStage.dataset.gesture;
+    delete frameFullscreenStage.dataset.zoomed;
+  }
+  function prepareFrameFullscreenView(){
+    frameFullscreen.hidden=false;
+    frameFullscreenStage.dataset.mode=frameFullscreenMode;
+    document.body.classList.add('media-frame-lightbox-open');
+    frameFullscreenCompareLayer.hidden=frameFullscreenMode!=='compare';
+    frameFullscreenViewportControls.hidden=false;
+    setFrameFullscreenWipe(50);
+    resetFrameFullscreenViewport();
+    requestAnimationFrame(()=>{
+      applyFrameFullscreenViewport();
+      frameFullscreenStage.focus({preventScroll:true});
+    });
   }
   function openFrameFullscreen(kind){
     frameFullscreenControls.querySelector('span:first-child').textContent='请求 IN';
@@ -444,9 +539,6 @@ export function mountMediaWorkspace(hooks) {
     const compareReady=!requestedFrameImage.hidden&&!actualFrameImage.hidden&&requestedFrameImage.src&&actualFrameImage.src;
     const boundary=kind==='requested'||kind==='actual';
     frameFullscreenMode=boundary&&compareReady?'compare':'single';
-    frameFullscreen.hidden=false;
-    frameFullscreenStage.dataset.mode=frameFullscreenMode;
-    document.body.classList.add('media-frame-lightbox-open');
     if(frameFullscreenMode==='compare'){
       frameFullscreenTitle.textContent='请求 IN ↔ 实际无损 IN';
       frameFullscreenMeta.textContent=(requestedFrameTime.textContent||'—')+' ↔ '+(actualFrameTime.textContent||'—');
@@ -461,7 +553,6 @@ export function mountMediaWorkspace(hooks) {
       frameFullscreenControls.hidden=false;
       frameFullscreenLeftLabel.textContent='请求 IN · '+(requestedFrameTime.textContent||'—');
       frameFullscreenRightLabel.textContent='实际无损 IN · '+(actualFrameTime.textContent||'—');
-      setFrameFullscreenWipe(50);
     }else{
       const source=kind==='cursor'?framePreviewImage:(kind==='requested'?requestedFrameImage:actualFrameImage);
       const time=kind==='cursor'?framePreviewTime.textContent:(kind==='requested'?requestedFrameTime.textContent:actualFrameTime.textContent);
@@ -475,13 +566,18 @@ export function mountMediaWorkspace(hooks) {
       frameFullscreenRightLabel.hidden=true;
       frameFullscreenControls.hidden=true;
     }
-    requestAnimationFrame(()=>frameFullscreenStage.focus({preventScroll:true}));
+    prepareFrameFullscreenView();
   }
   function updateFullscreenWipeFromPointer(event){
     if(frameFullscreenMode!=='compare')return;
     const rect=frameFullscreenStage.getBoundingClientRect();
     if(!(rect.width>0))return;
     setFrameFullscreenWipe((event.clientX-rect.left)/rect.width*100);
+  }
+  function frameFullscreenDividerDistance(event){
+    const rect=frameFullscreenStage.getBoundingClientRect();
+    const dividerX=rect.left+rect.width*(Number(frameFullscreenWipe.value)||0)/100;
+    return Math.abs(event.clientX-dividerX);
   }
   for(const image of [framePreviewImage,requestedFrameImage,actualFrameImage]){
     image.addEventListener('click',()=>{if(!image.hidden&&image.src)openFrameFullscreen(image.dataset.frameFullscreen);});
@@ -492,19 +588,64 @@ export function mountMediaWorkspace(hooks) {
       }
     });
   }
+  for(const image of [frameFullscreenBase,frameFullscreenCompare]){
+    image.addEventListener('load',()=>{if(!frameFullscreen.hidden)requestAnimationFrame(applyFrameFullscreenViewport);});
+  }
+  for(const button of frameFullscreenZoomButtons){
+    button.addEventListener('click',()=>setFrameFullscreenZoomPreset(button.dataset.frameZoom));
+  }
   frameFullscreenClose.onclick=closeFrameFullscreen;
-  frameFullscreenReset.onclick=()=>setFrameFullscreenWipe(50);
+  frameFullscreenReset.onclick=()=>{setFrameFullscreenWipe(50);resetFrameFullscreenViewport();};
   frameFullscreenWipe.addEventListener('input',()=>setFrameFullscreenWipe(frameFullscreenWipe.value));
   frameFullscreenStage.addEventListener('dblclick',()=>{if(frameFullscreenMode==='compare')setFrameFullscreenWipe(50);});
+  frameFullscreenStage.addEventListener('wheel',event=>{
+    if(frameFullscreen.hidden)return;
+    const metrics=frameFullscreenMetrics();
+    if(!metrics)return;
+    event.preventDefault();
+    if(frameFullscreenZoomMode!=='custom')frameFullscreenScale=resolveFrameFullscreenPresetScale();
+    const oldScale=Math.max(.08,frameFullscreenScale||1);
+    const factor=Math.exp(-Math.max(-600,Math.min(600,event.deltaY))*.0015);
+    const newScale=Math.max(.08,Math.min(20,oldScale*factor));
+    const centerX=metrics.rect.left+metrics.rect.width/2;
+    const centerY=metrics.rect.top+metrics.rect.height/2;
+    const cursorX=event.clientX-centerX;
+    const cursorY=event.clientY-centerY;
+    const ratio=newScale/oldScale;
+    frameFullscreenPanX=cursorX-ratio*(cursorX-frameFullscreenPanX);
+    frameFullscreenPanY=cursorY-ratio*(cursorY-frameFullscreenPanY);
+    frameFullscreenZoomMode='custom';
+    frameFullscreenScale=newScale;
+    applyFrameFullscreenViewport();
+  },{passive:false});
   frameFullscreenStage.addEventListener('pointerdown',event=>{
-    if(frameFullscreenMode!=='compare')return;
-    frameFullscreenDragging=true;
-    updateFullscreenWipeFromPointer(event);
+    if(event.pointerType==='mouse'&&event.button!==0)return;
+    const compareHandle=frameFullscreenMode==='compare'&&frameFullscreenDividerDistance(event)<=28;
+    frameFullscreenGesture=compareHandle?'wipe':'pan';
+    frameFullscreenStage.dataset.gesture=frameFullscreenGesture;
+    if(frameFullscreenGesture==='wipe'){
+      updateFullscreenWipeFromPointer(event);
+    }else{
+      frameFullscreenPointerStart={
+        x:event.clientX,y:event.clientY,
+        panX:frameFullscreenPanX,panY:frameFullscreenPanY
+      };
+    }
     frameFullscreenStage.setPointerCapture?.(event.pointerId);
   });
-  frameFullscreenStage.addEventListener('pointermove',event=>{if(frameFullscreenDragging)updateFullscreenWipeFromPointer(event);});
+  frameFullscreenStage.addEventListener('pointermove',event=>{
+    if(frameFullscreenGesture==='wipe'){
+      updateFullscreenWipeFromPointer(event);
+    }else if(frameFullscreenGesture==='pan'&&frameFullscreenPointerStart){
+      frameFullscreenPanX=frameFullscreenPointerStart.panX+(event.clientX-frameFullscreenPointerStart.x);
+      frameFullscreenPanY=frameFullscreenPointerStart.panY+(event.clientY-frameFullscreenPointerStart.y);
+      applyFrameFullscreenViewport();
+    }
+  });
   const stopFullscreenDrag=event=>{
-    frameFullscreenDragging=false;
+    frameFullscreenGesture=null;
+    frameFullscreenPointerStart=null;
+    delete frameFullscreenStage.dataset.gesture;
     try{frameFullscreenStage.releasePointerCapture?.(event.pointerId);}catch{}
   };
   frameFullscreenStage.addEventListener('pointerup',stopFullscreenDrag);
@@ -513,8 +654,13 @@ export function mountMediaWorkspace(hooks) {
   frameFullscreenShell.addEventListener('click',event=>event.stopPropagation());
   const frameFullscreenKeyHandler=event=>{
     if(frameFullscreen.hidden)return;
-    if(event.key==='Escape'){event.preventDefault();closeFrameFullscreen();}
+    if(event.key==='Escape'){event.preventDefault();closeFrameFullscreen();return;}
+    if(event.key==='0'){event.preventDefault();setFrameFullscreenZoomPreset('fit');}
+    if(event.key==='1'){event.preventDefault();setFrameFullscreenZoomPreset('100');}
+    if(event.key==='2'){event.preventDefault();setFrameFullscreenZoomPreset('200');}
+    if(event.key==='4'){event.preventDefault();setFrameFullscreenZoomPreset('400');}
   };
+  window.addEventListener('resize',()=>{if(!frameFullscreen.hidden)applyFrameFullscreenViewport();});
   document.addEventListener('keydown',frameFullscreenKeyHandler);
   function revokeVerificationFrames(){
     for(const url of [verificationSourceUrl,verificationOutputUrl]){
@@ -594,9 +740,6 @@ export function mountMediaWorkspace(hooks) {
     if(verificationFrameSourceTime==null||verificationFrameOutputTime==null)return;
     const times={sourceTime:verificationFrameSourceTime,outputTime:verificationFrameOutputTime};
     frameFullscreenMode='compare';
-    frameFullscreen.hidden=false;
-    frameFullscreenStage.dataset.mode='compare';
-    document.body.classList.add('media-frame-lightbox-open');
     const hardsub=activeTask?.operation==='hardsub';
     const leftLabel=hardsub?'权威字幕参考':'源素材';
     const rightLabel=hardsub?'硬压成品':'转码成品';
@@ -607,6 +750,7 @@ export function mountMediaWorkspace(hooks) {
     frameFullscreenCompare.src=verificationSourceUrl;
     frameFullscreenCompare.alt=leftLabel+'全屏验证帧';
     frameFullscreenCompare.hidden=false;
+    frameFullscreenCompareLayer.hidden=false;
     frameFullscreenDivider.hidden=false;
     frameFullscreenLeftLabel.hidden=false;
     frameFullscreenRightLabel.hidden=false;
@@ -615,8 +759,7 @@ export function mountMediaWorkspace(hooks) {
     frameFullscreenRightLabel.textContent=rightLabel+' · '+formatMediaTimeInput(times.outputTime,3);
     frameFullscreenControls.querySelector('span:first-child').textContent=leftLabel;
     frameFullscreenControls.querySelector('span:nth-of-type(2)').textContent=rightLabel;
-    setFrameFullscreenWipe(50);
-    requestAnimationFrame(()=>frameFullscreenStage.focus({preventScroll:true}));
+    prepareFrameFullscreenView();
   }
   for(const img of [verifySourceImage,verifyOutputImage]){
     img.addEventListener('click',openOutputVerificationFullscreen);
