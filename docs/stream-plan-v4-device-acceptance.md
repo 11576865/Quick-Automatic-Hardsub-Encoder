@@ -108,7 +108,21 @@ node scripts/verify-stream-plan-v4-device-outputs.mjs \
 3. verifier 能识别正确输出；
 4. 如果真机输出失败，可以优先定位平台执行层，而不是先怀疑测试数据。
 
-## 5. 证据等级
+## 5. 当前证据状态
+
+截至本验收链路加入时：
+
+- shared task schema v4 + desktop FFmpeg reference：已通过；
+- GitHub hosted Windows runner 上的真实 Windows Native Bridge：8/8 用例已执行并通过独立 verifier；
+- Windows local smoke：通过；
+- Android Kotlin / task parser：已编译通过；
+- **用户实际 Windows 机器：尚未形成 field-device 证据**；
+- **真实 Android 设备：尚未形成 field-device 证据**；
+- 外部目标播放器：仍属于独立兼容性验收。
+
+GitHub Windows runner 的 runtime-backed 结果比单纯 parser/fixture evidence 更强，因为任务确实进入 Native Bridge、由 Bridge 启动 FFmpeg、经过 Bridge 自己的终态验证，再由外部 verifier 读取最终成品。但它仍不能代表用户机器上的 GPU、驱动、文件系统、杀进程行为、OEM Android 环境或具体播放器。
+
+## 6. 证据等级
 
 这一阶段严格区分：
 
@@ -125,7 +139,7 @@ Task compile pass
 
 播放器验收尤其独立：FFprobe 能看到音轨、packet 完整、FFmpeg 能解码，都不能证明某个具体外部播放器一定能播放该 codec/container 组合。
 
-## 6. 当前不纳入本轮 Device Acceptance 的能力
+## 7. 当前不纳入本轮 Device Acceptance 的能力
 
 task schema v4 当前仍明确不支持同一任务内的 per-video heterogeneous action，例如：
 
