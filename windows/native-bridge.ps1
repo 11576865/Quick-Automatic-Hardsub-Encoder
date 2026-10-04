@@ -10,6 +10,7 @@ Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
+. (Join-Path $PSScriptRoot 'bink-import.ps1')
 . (Join-Path $PSScriptRoot 'compression-history.ps1')
 
 $ErrorActionPreference = 'Stop'
@@ -34,8 +35,11 @@ if($InitialVideo){
 }
 $script:Jobs = @{}
 $script:Samples = @{}
+$script:ImportJobs = @{}
+$script:VideoImport = $null
 $script:Ffmpeg = Find-NativeTool 'ffmpeg' $PSScriptRoot
 $script:Ffprobe = Find-NativeTool 'ffprobe' $PSScriptRoot
+$script:RadVideo = Find-RadVideoConverter $PSScriptRoot
 $script:Capabilities = if ($script:Ffmpeg) { Get-NativeCapabilities $script:Ffmpeg $script:Ffprobe $PSScriptRoot } else { $null }
 
 function ConvertTo-JsonUtf8($Object) {
@@ -105,10 +109,210 @@ function Stage-BridgeAssets([string]$WorkDir, [string]$AssText) {
     }
 }
 
+function Get-OriginalVideoPath {
+    $items = @($script:Selections.video)
+    if (-not $items.Count) { return $null }
+    return [string]$items[0]
+}
+
+function Clear-Bink2ImportStaging {
+    $work = if ($script:VideoImport) { [string]$script:VideoImport.Work } else { '' }
+    if ($work -and (Test-Path -LiteralPath $work)) {
+        Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if ($work) {
+        foreach ($id in @($script:ImportJobs.Keys)) {
+            $job = $script:ImportJobs[$id]
+            if ($job.Work -eq $work -and $job.State -ne 'importing') {
+                $script:ImportJobs.Remove($id)
+            }
+        }
+    }
+    $script:VideoImport = $null
+}
+
 function Get-SelectedPath([string]$Role) {
+    if ($Role -eq 'video' -and $script:VideoImport -and
+        $script:VideoImport.Source -eq (Get-OriginalVideoPath) -and
+        (Test-Path -LiteralPath $script:VideoImport.Path -PathType Leaf)) {
+        return [string]$script:VideoImport.Path
+    }
     $items = @($script:Selections[$Role])
     if (-not $items.Count) { return $null }
     return [string]$items[0]
+}
+
+function Test-Bink2ImportBusy {
+    foreach ($job in $script:ImportJobs.Values) {
+        if ($job.State -eq 'importing') {
+            try {
+                if (-not $job.Started.Process.HasExited) { return $true }
+            } catch {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
+function Get-Bink2ImportAdapterInfo {
+    $original = Get-OriginalVideoPath
+    $isBink2 = [bool]($original -and (Test-Bink2File $original))
+    if ($isBink2 -and -not $script:RadVideo) {
+        $script:RadVideo = Find-RadVideoConverter $PSScriptRoot
+    }
+    return [pscustomobject]@{
+        kind = if ($isBink2) { 'rad-bink2' } else { '' }
+        isBink2 = $isBink2
+        available = [bool]$script:RadVideo
+        applied = [bool]($script:VideoImport -and $script:VideoImport.Source -eq $original)
+        tool = if ($script:RadVideo) { $script:RadVideo.Label } else { '' }
+        toolSource = if ($script:RadVideo) { $script:RadVideo.Source } else { '' }
+        externalDependency = $true
+        bundled = $false
+    }
+}
+
+function Start-Bink2ImportJob {
+    if (Test-Bink2ImportBusy) { throw 'A Bink 2 import is already running.' }
+    foreach ($existing in $script:Jobs.Values) {
+        if ($existing.State -ne 'encoding') { continue }
+        $alive = $false
+        try { $alive = -not $existing.Started.Process.HasExited } catch { $alive = $true }
+        if ($alive) { throw 'A Native encode job is already running.' }
+    }
+
+    $source = Get-OriginalVideoPath
+    if (-not $source) { throw 'No video selected.' }
+    if (-not (Test-Bink2File $source)) { throw 'Selected source is not a Bink 2 file.' }
+
+    if (-not $script:RadVideo) { $script:RadVideo = Find-RadVideoConverter $PSScriptRoot }
+    if (-not $script:RadVideo) {
+        throw 'RAD Video Tools was not found. Install or extract RAD Video Tools and set RADVIDEO64 or RADVIDEO_HOME.'
+    }
+
+    Clear-Bink2ImportStaging
+    $work = New-BridgeWorkDir 'quick-bink2-import-'
+    $output = Join-Path $work 'decoded.avi'
+    $args = Get-RadBinkConvertArguments $script:RadVideo $source $output
+    $started = Start-BridgeTool $script:RadVideo.Path $args $work
+    $jobId = [guid]::NewGuid().ToString('N')
+    $job = [pscustomobject]@{
+        Id = $jobId
+        Kind = 'bink2-import'
+        State = 'importing'
+        Source = $source
+        Work = $work
+        Output = $output
+        Started = $started
+        StartedAt = [DateTime]::UtcNow
+        Finalized = $false
+        Cancelled = $false
+        Error = ''
+        Converter = $script:RadVideo.Label
+    }
+    $script:ImportJobs[$jobId] = $job
+    Write-BridgeLog ("Bink 2 import "+$jobId+" started via "+$script:RadVideo.Label)
+    return [pscustomobject]@{
+        ok = $true
+        jobId = $jobId
+        state = 'importing'
+        kind = 'rad-bink2'
+        converter = $script:RadVideo.Label
+    }
+}
+
+function Get-Bink2ImportJobStatus([string]$JobId) {
+    if (-not $script:ImportJobs.ContainsKey($JobId)) {
+        return [pscustomobject]@{ ok=$false; error='Unknown Bink 2 import job.' }
+    }
+    $j = $script:ImportJobs[$JobId]
+
+    if ($j.State -eq 'completed') {
+        if (-not (Test-Path -LiteralPath $j.Output -PathType Leaf)) {
+            $j.State = 'failed'
+            $j.Error = 'Bink 2 staging file is missing.'
+            return [pscustomobject]@{ ok=$true; state='failed'; jobId=$JobId; kind='rad-bink2'; error=$j.Error }
+        }
+        return [pscustomobject]@{
+            ok=$true; state='completed'; jobId=$JobId; kind='rad-bink2'
+            outputBytes=(Get-Item -LiteralPath $j.Output).Length
+            elapsedSeconds=[Math]::Max(0,([DateTime]::UtcNow-$j.StartedAt).TotalSeconds)
+            sourceAdapterApplied=$true
+        }
+    }
+    if ($j.State -eq 'cancelled') {
+        return [pscustomobject]@{ ok=$true; state='cancelled'; jobId=$JobId; kind='rad-bink2' }
+    }
+    if ($j.State -eq 'failed') {
+        return [pscustomobject]@{ ok=$true; state='failed'; jobId=$JobId; kind='rad-bink2'; error=$j.Error }
+    }
+
+    $p = $j.Started.Process
+    if (-not $p.HasExited) {
+        return [pscustomobject]@{
+            ok=$true; state='importing'; jobId=$JobId; kind='rad-bink2'
+            elapsedSeconds=[Math]::Max(0,([DateTime]::UtcNow-$j.StartedAt).TotalSeconds)
+            converter=$j.Converter
+        }
+    }
+
+    if (-not $j.Finalized) {
+        $j.Finalized = $true
+        $stderr = ''
+        try { $stderr = [string]$j.Started.StdErrTask.Result } catch {}
+        if ($j.Cancelled) {
+            $j.State = 'cancelled'
+            Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+        } elseif ($p.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $j.Output -PathType Leaf) -or (Get-Item -LiteralPath $j.Output).Length -le 0) {
+            $j.State = 'failed'
+            $j.Error = $(if ($stderr.Trim()) { $stderr.Trim() } else { 'RAD Video Tools did not produce a usable AVI staging file.' })
+            Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+        } else {
+            $probe = Invoke-BridgeTool $script:Ffprobe ('-v error -show_streams -show_format -of json ' + (Quote-NativeArg $j.Output))
+            $decode = Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -ss 0 -i ' + (Quote-NativeArg $j.Output) + ' -map 0:v:0 -frames:v 1 -f null NUL')
+            if ($probe.ExitCode -ne 0 -or $decode.ExitCode -ne 0) {
+                $j.State = 'failed'
+                $detail = ($probe.StdErr.Trim() + ' ' + $decode.StdErr.Trim()).Trim()
+                $j.Error = 'RAD import completed, but FFmpeg could not validate/decode the staging AVI. ' + $detail
+                Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+            } else {
+                $json = $probe.StdOut | ConvertFrom-Json
+                $videos = @($json.streams | Where-Object { $_.codec_type -eq 'video' })
+                if (-not $videos.Count) {
+                    $j.State = 'failed'
+                    $j.Error = 'RAD import produced no video stream.'
+                    Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue
+                } else {
+                    $script:VideoImport = [pscustomobject]@{
+                        Source = $j.Source
+                        Path = $j.Output
+                        Work = $j.Work
+                        Kind = 'rad-bink2'
+                        Converter = $j.Converter
+                    }
+                    $j.State = 'completed'
+                    Write-BridgeLog ("Bink 2 import "+$JobId+" completed · "+(Get-Item -LiteralPath $j.Output).Length+" bytes")
+                }
+            }
+        }
+        try { $p.Dispose() } catch {}
+    }
+
+    return Get-Bink2ImportJobStatus $JobId
+}
+
+function Cancel-Bink2ImportJob([string]$JobId) {
+    if (-not $script:ImportJobs.ContainsKey($JobId)) {
+        return [pscustomobject]@{ ok=$false; error='Unknown Bink 2 import job.' }
+    }
+    $j = $script:ImportJobs[$JobId]
+    if ($j.State -ne 'importing') { return [pscustomobject]@{ ok=$true; state=$j.State; jobId=$JobId } }
+    $j.Cancelled = $true
+    try {
+        if (-not $j.Started.Process.HasExited) { $j.Started.Process.Kill() }
+    } catch {}
+    return [pscustomobject]@{ ok=$true; state='cancelling'; jobId=$JobId }
 }
 
 function Show-NativeOpenFileDialog([string]$Filter, [bool]$Multiselect = $false) {
@@ -200,8 +404,12 @@ function Show-NativeSaveFileDialog([string]$Filter, [string]$DefaultExt, [string
 function Show-BridgePicker([string]$Role) {
     $picked = @()
     if ($Role -eq 'video') {
-        $picked = @(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts|All files|*.*')
-        if ($picked.Count) { $script:Selections.video = @($picked[0]) }
+        if (Test-Bink2ImportBusy) { throw 'Bink 2 import is running; cancel or wait before replacing the video.' }
+        $picked = @(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts;*.bik;*.bk2|Bink video|*.bik;*.bk2|All files|*.*')
+        if ($picked.Count) {
+            Clear-Bink2ImportStaging
+            $script:Selections.video = @($picked[0])
+        }
     } elseif ($Role -eq 'ass') {
         $picked = @(Show-NativeOpenFileDialog 'ASS subtitles|*.ass|All files|*.*')
         if ($picked.Count) { $script:Selections.ass = @($picked[0]) }
@@ -278,10 +486,14 @@ function Get-BackendInfo {
         multipassFullresSupported=if($script:Capabilities){[bool]$script:Capabilities.MultipassFullresSupported}else{$false}
         hasAss=if($script:Capabilities){[bool]$script:Capabilities.HasAss}else{$false}
         encoders=[object[]]$encoderList
-        bridgeVersion=5
+        bridgeVersion=6
         taskSchemaVersion=4
         fpsModeSupported=[bool]$script:Capabilities.FpsModeSupported
         globalOptions=[object[]]$script:Capabilities.GlobalOptions
+        bink2ImportAvailable=[bool]$script:RadVideo
+        bink2ImportTool=if($script:RadVideo){[string]$script:RadVideo.Label}else{''}
+        bink2ImportToolSource=if($script:RadVideo){[string]$script:RadVideo.Source}else{''}
+        bink2ImportExternal=$true
     }
 }
 
@@ -319,13 +531,68 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
 }
 
 function Get-ProbeMedia {
+    $original = Get-OriginalVideoPath
     $video = Get-SelectedPath 'video'
-    if (-not $video) { throw 'No video selected.' }
+    if (-not $original -or -not $video) { throw 'No video selected.' }
+
+    $adapter = Get-Bink2ImportAdapterInfo
+    $adapterApplied = [bool]($adapter.applied -and $video -ne $original)
+    $sourceItem = Get-Item -LiteralPath $original
+    $executionItem = Get-Item -LiteralPath $video
+
     $r = Invoke-BridgeTool $script:Ffprobe ('-v error -show_format -show_streams -of json ' + (Quote-NativeArg $video))
-    if ($r.ExitCode -ne 0) { throw ($r.StdErr.Trim()) }
+    if ($r.ExitCode -ne 0) {
+        if ($adapter.isBink2 -and -not $adapterApplied) {
+            return [pscustomobject]@{
+                ok=$true; seekable=$true
+                statSize=$sourceItem.Length; executionStatSize=$sourceItem.Length
+                inputDecodeSmoke=$false; inputDecodeDeferred=$false; inputDecodeError=$r.StdErr.Trim()
+                format='bink'; duration=0; bitRate=0
+                videoTracks=0; videoStreams=[object[]]@(); videoCodec='bink2'; videoBitRate=0
+                width=0; height=0; fps='0/1'; pixelFormat=''; bitDepth=8
+                colorTransfer=''; colorPrimaries=''; colorSpace=''; hdr=$false; unsafeColorPipeline=$false
+                audioTracks=0; audioStreams=[object[]]@(); audioCodec=''; audioCodecs=[object[]]@(); audioBitRate=0
+                sourceAdapter='rad-bink2'
+                sourceAdapterRequired=$true
+                sourceAdapterAvailable=[bool]$adapter.available
+                sourceAdapterApplied=$false
+                sourceAdapterTool=[string]$adapter.tool
+                sourceOriginalName=$sourceItem.Name
+                sourceOriginalSize=$sourceItem.Length
+                sourceOriginalKind='bink2'
+            }
+        }
+        throw ($r.StdErr.Trim())
+    }
+
     $json = $r.StdOut | ConvertFrom-Json
     $videos = @($json.streams | Where-Object { $_.codec_type -eq 'video' })
-    if (-not $videos.Count) { throw 'FFprobe found no video stream.' }
+    if (-not $videos.Count) {
+        if ($adapter.isBink2 -and -not $adapterApplied) {
+            $fallbackDuration = 0.0
+            [void][double]::TryParse([string]$json.format.duration,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$fallbackDuration)
+            return [pscustomobject]@{
+                ok=$true; seekable=$true
+                statSize=$sourceItem.Length; executionStatSize=$sourceItem.Length
+                inputDecodeSmoke=$false; inputDecodeDeferred=$false; inputDecodeError='FFprobe found no decodable video stream.'
+                format=[string]$json.format.format_name; duration=$fallbackDuration; bitRate=0
+                videoTracks=0; videoStreams=[object[]]@(); videoCodec='bink2'; videoBitRate=0
+                width=0; height=0; fps='0/1'; pixelFormat=''; bitDepth=8
+                colorTransfer=''; colorPrimaries=''; colorSpace=''; hdr=$false; unsafeColorPipeline=$false
+                audioTracks=0; audioStreams=[object[]]@(); audioCodec=''; audioCodecs=[object[]]@(); audioBitRate=0
+                sourceAdapter='rad-bink2'
+                sourceAdapterRequired=$true
+                sourceAdapterAvailable=[bool]$adapter.available
+                sourceAdapterApplied=$false
+                sourceAdapterTool=[string]$adapter.tool
+                sourceOriginalName=$sourceItem.Name
+                sourceOriginalSize=$sourceItem.Length
+                sourceOriginalKind='bink2'
+            }
+        }
+        throw 'FFprobe found no video stream.'
+    }
+
     $audios = @($json.streams | Where-Object { $_.codec_type -eq 'audio' })
     $videoFacts = @()
     for($i=0;$i -lt $videos.Count;$i++){
@@ -335,9 +602,10 @@ function Get-ProbeMedia {
         $streamTransfer=[string]$stream.color_transfer
         $streamPrimaries=[string]$stream.color_primaries
         $streamHdr=($streamTransfer -match 'smpte2084|arib-std-b67') -or (($streamPrimaries -match 'bt2020') -and $streamDepth -gt 8)
+        $streamRate=if($adapterApplied){0L}elseif($stream.bit_rate){[long]$stream.bit_rate}else{0L}
         $videoFacts += [pscustomobject]@{
             ordinal=$i; index=if($null -ne $stream.index){[int]$stream.index}else{$i}
-            codec=[string]$stream.codec_name; bitRate=if($stream.bit_rate){[long]$stream.bit_rate}else{0}
+            codec=[string]$stream.codec_name; bitRate=$streamRate
             width=[int]$stream.width; height=[int]$stream.height; fps=[string]$stream.avg_frame_rate
             pixelFormat=$streamPix; bitDepth=$streamDepth; colorTransfer=$streamTransfer
             colorPrimaries=$streamPrimaries; colorSpace=[string]$stream.color_space
@@ -347,28 +615,47 @@ function Get-ProbeMedia {
     $audioFacts=@()
     for($i=0;$i -lt $audios.Count;$i++){
         $stream=$audios[$i]
+        $streamRate=if($adapterApplied){0L}elseif($stream.bit_rate){[long]$stream.bit_rate}else{0L}
         $audioFacts += [pscustomobject]@{
             ordinal=$i; index=if($null -ne $stream.index){[int]$stream.index}else{$i}
-            codec=[string]$stream.codec_name; bitRate=if($stream.bit_rate){[long]$stream.bit_rate}else{0}
+            codec=[string]$stream.codec_name; bitRate=$streamRate
             channels=if($stream.channels){[int]$stream.channels}else{0}
             sampleRate=if($stream.sample_rate){[int]$stream.sample_rate}else{0}
         }
     }
+
     $v=$videoFacts[0]
-    $duration = [double]($json.format.duration)
+    $duration=0.0
+    [void][double]::TryParse([string]$json.format.duration,[Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,[ref]$duration)
     $decode = Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -ss 0 -i ' + (Quote-NativeArg $video) + ' -map 0:v:0 -frames:v 1 -f null NUL')
+    $decodeOk = $decode.ExitCode -eq 0
     $audioRate = 0L
-    foreach($a in $audios){ if($a.bit_rate){ $audioRate += [long]$a.bit_rate } }
+    foreach($a in $audioFacts){ $audioRate += [long]$a.bitRate }
+    $planningBitRate=if($adapterApplied){0L}elseif($json.format.bit_rate){[long]$json.format.bit_rate}else{0L}
+
     return [pscustomobject]@{
-        ok=$true; seekable=$true; statSize=(Get-Item -LiteralPath $video).Length
-        inputDecodeSmoke=($decode.ExitCode -eq 0); inputDecodeError=$decode.StdErr.Trim()
-        format=[string]$json.format.format_name; duration=$duration; bitRate=[long]($json.format.bit_rate)
-        videoTracks=$videoFacts.Count; videoStreams=$videoFacts
+        ok=$true; seekable=$true
+        statSize=$sourceItem.Length; executionStatSize=$executionItem.Length
+        inputDecodeSmoke=$decodeOk; inputDecodeDeferred=$false; inputDecodeError=$decode.StdErr.Trim()
+        format=[string]$json.format.format_name; duration=$duration; bitRate=$planningBitRate
+        videoTracks=$videoFacts.Count; videoStreams=[object[]]$videoFacts
         videoCodec=[string]$v.codec; videoBitRate=[long]$v.bitRate
         width=[int]$v.width; height=[int]$v.height; fps=[string]$v.fps
-        pixelFormat=[string]$v.pixelFormat; bitDepth=[int]$v.bitDepth; colorTransfer=[string]$v.colorTransfer; colorPrimaries=[string]$v.colorPrimaries
+        pixelFormat=[string]$v.pixelFormat; bitDepth=[int]$v.bitDepth
+        colorTransfer=[string]$v.colorTransfer; colorPrimaries=[string]$v.colorPrimaries
         colorSpace=[string]$v.colorSpace; hdr=[bool]$v.hdr; unsafeColorPipeline=[bool]$v.unsafeColorPipeline
-        audioTracks=$audios.Count; audioStreams=$audioFacts; audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}; audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$audioRate
+        audioTracks=$audioFacts.Count; audioStreams=[object[]]$audioFacts
+        audioCodec=if($audioFacts.Count){[string]$audioFacts[0].codec}else{''}
+        audioCodecs=[object[]]@($audioFacts | ForEach-Object { [string]$_.codec })
+        audioBitRate=$audioRate
+        sourceAdapter=if($adapter.isBink2){'rad-bink2'}else{''}
+        sourceAdapterRequired=[bool]($adapter.isBink2 -and -not $adapterApplied -and -not $decodeOk)
+        sourceAdapterAvailable=[bool]$adapter.available
+        sourceAdapterApplied=$adapterApplied
+        sourceAdapterTool=[string]$adapter.tool
+        sourceOriginalName=$sourceItem.Name
+        sourceOriginalSize=$sourceItem.Length
+        sourceOriginalKind=if($adapter.isBink2){'bink2'}else{'native'}
     }
 }
 
@@ -672,12 +959,16 @@ function Invoke-Sample($Body) {
 }
 
 function Start-MediaTaskJob($Body) {
+    if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $request=$Body.request; $task=$request.task
     $outputArgs=Get-MediaTaskArgs $task
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $probe=Get-ProbeMedia
+    if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
+    if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
+    if($probe.sourceAdapterApplied -and $task.operation -eq 'copy'){throw 'Stream Copy is unavailable for a Bink 2 source after external decode import; choose transcode or hard-sub instead.'}
     if($task.operation -ne 'copy'){
         $selected=@($task.videoStreams)
         if(-not $selected.Count){$selected=@(0)}
@@ -756,11 +1047,15 @@ function Start-MediaTaskJob($Body) {
 }
 
 function Start-EncodeJob($Body) {
+    if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $request=$Body.request
     if($request.task){return Start-MediaTaskJob $Body}
+    $probe=Get-ProbeMedia
+    if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
+    if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
     $outputFormat=if([string]$request.outputFormat){[string]$request.outputFormat}else{'matroska'}
     $outputExtension=if([string]$request.outputExtension){[string]$request.outputExtension}else{'mkv'}
     if($outputFormat -notin @('matroska','mp4')){throw 'Unsupported output container format.'}
@@ -1097,18 +1392,29 @@ function Handle-Request($Request) {
         $path=$Request.Path
         $quietRequest = $path -eq '/api/health' -or $path -eq '/api/history' -or
             $path -eq '/api/preview' -or $path -eq '/api/frame' -or
-            ($Request.Method -eq 'GET' -and $path -match '^/api/jobs/[A-Za-z0-9]+$')
+            ($Request.Method -eq 'GET' -and $path -match '^/api/jobs/[A-Za-z0-9]+$') -or
+            ($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/[A-Za-z0-9]+$')
         if(-not $quietRequest){Write-BridgeLog ($Request.Method+' '+$path)}
         if($Request.Method -eq 'GET' -and $path -eq '/api/health'){Send-HttpJson $Request 200 (Get-BackendInfo);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/self-test'){Send-HttpJson $Request 200 (Get-SelfTest);return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/history'){Send-HttpJson $Request 200 (Get-CompressionHistorySnapshot);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/history'){Send-HttpJson $Request 200 (Add-ClientCompressionEvidence $body.record);return}
         if($Request.Method -eq 'POST' -and $path -match '^/api/pick/(video|ass|fonts)$'){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
+        if($Request.Method -eq 'GET' -and $path -eq '/api/selection/video'){
+            $p=Get-OriginalVideoPath
+            if(-not $p -or -not(Test-Path -LiteralPath $p -PathType Leaf)){Send-HttpJson $Request 200 @{ok=$false;error='No video selected.'};return}
+            $item=Get-Item -LiteralPath $p
+            $modified=[DateTimeOffset]$item.LastWriteTimeUtc
+            Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;lastModified=$modified.ToUnixTimeMilliseconds()};return
+        }
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/ass'){
             $p=Get-SelectedPath 'ass';if(-not $p){throw 'No ASS selected.'};$item=Get-Item -LiteralPath $p
             Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($p))};return
         }
         if($Request.Method -eq 'POST' -and $path -eq '/api/probe'){Send-HttpJson $Request 200 (Get-ProbeMedia);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/import/bink2'){Send-HttpJson $Request 200 (Start-Bink2ImportJob);return}
+        if($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)$'){Send-HttpJson $Request 200 (Get-Bink2ImportJobStatus $Matches[1]);return}
+        if($Request.Method -eq 'POST' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)/cancel$'){Send-HttpJson $Request 200 (Cancel-Bink2ImportJob $Matches[1]);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/preview'){Send-HttpJson $Request 200 (Invoke-Preview $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/frame'){Send-HttpJson $Request 200 (Invoke-Frame $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/waveform'){Send-HttpJson $Request 200 (Invoke-Waveform $body);return}
@@ -1153,6 +1459,11 @@ if($script:Capabilities){
     $available=@($script:Capabilities.Encoders | Where-Object { $_.Available } | ForEach-Object { $_.Key })
     Write-BridgeLog ("Encoders: "+$(if($available.Count){$available -join ' / '}else{'none'}))
 }
+if($script:RadVideo){
+    Write-BridgeLog ("Bink 2 import adapter: "+$script:RadVideo.Label+" · source: "+$script:RadVideo.Source)
+}else{
+    Write-BridgeLog 'Bink 2 import adapter: RAD Video Tools not detected; .bk2 files will be identified but cannot be decoded automatically.' 'WARN'
+}
 Write-BridgeLog 'Keep this window open while using Windows Native. Closing it disconnects the local backend.'
 Write-Host ''
 
@@ -1170,4 +1481,9 @@ try{
 }finally{
     try{$listener.Stop()}catch{}
     foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
+    foreach($j in $script:ImportJobs.Values){
+        try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
+        try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
+    }
+    Clear-Bink2ImportStaging
 }
