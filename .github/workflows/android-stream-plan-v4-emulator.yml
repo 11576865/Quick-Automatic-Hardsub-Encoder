@@ -10,6 +10,7 @@ on:
       - 'scripts/build-stream-plan-v4-device-fixture.mjs'
       - 'scripts/build-stream-plan-v4-windows-requests.mjs'
       - 'scripts/verify-stream-plan-v4-device-outputs.mjs'
+      - 'scripts/run-android-stream-plan-v4-emulator.sh'
       - '.github/workflows/android-stream-plan-v4-emulator.yml'
   push:
     branches: [main]
@@ -104,13 +105,7 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
-          script: |
-            set -eu
-            gradle -p android-native :app:connectedDebugAndroidTest --stacktrace
-
-            mkdir -p "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs"
-            jq -r '.cases[].output' "$RUNNER_TEMP/stream-plan-v4-pack/device-acceptance-cases.json" | while IFS= read -r name; do adb exec-out run-as io.github.quickhardsub cat "files/device-acceptance-outputs/$name" > "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs/$name"; test -s "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs/$name"; done
-            node scripts/verify-stream-plan-v4-device-outputs.mjs "$RUNNER_TEMP/stream-plan-v4-pack" "$RUNNER_TEMP/stream-plan-v4-android-emulator-outputs" | tee "$RUNNER_TEMP/android-stream-plan-v4-verification.json"
+          script: bash scripts/run-android-stream-plan-v4-emulator.sh
 
       - name: Upload Android emulator runtime evidence
         uses: actions/upload-artifact@v4
