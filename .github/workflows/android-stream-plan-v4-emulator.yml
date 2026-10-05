@@ -21,6 +21,7 @@ on:
       - 'scripts/build-stream-plan-v4-device-fixture.mjs'
       - 'scripts/build-stream-plan-v4-windows-requests.mjs'
       - 'scripts/verify-stream-plan-v4-device-outputs.mjs'
+      - 'scripts/run-android-stream-plan-v4-emulator.sh'
       - '.github/workflows/android-stream-plan-v4-emulator.yml'
 
 permissions:
@@ -115,6 +116,7 @@ jobs:
           path: |
             ${{ runner.temp }}/stream-plan-v4-android-emulator-outputs/
             ${{ runner.temp }}/android-stream-plan-v4-verification.json
+            ${{ runner.temp }}/android-stream-plan-v4-instrumentation.txt
             android-native/app/build/reports/androidTests/
             android-native/app/build/outputs/androidTest-results/
           if-no-files-found: warn

@@ -116,6 +116,8 @@ node scripts/verify-stream-plan-v4-device-outputs.mjs \
 - GitHub hosted Windows runner 上的真实 Windows Native Bridge：8/8 用例已执行并通过独立 verifier；
 - Windows local smoke：通过；
 - Android Kotlin / task parser：已编译通过；
+- Android API 35 x86_64 emulator 上的真实 MainActivity + EncodeService + packaged FFmpegKit：8/8 用例已执行；最终导出 artifact 已在 host 侧重新通过独立 FFmpeg/FFprobe verifier；
+- Android emulator 的成品交接曾出现一次假绿：connected test 结束后 target package 已被卸载，后续 `run-as` 把错误文本写进媒体文件，同时 POSIX `node ... | tee` 未传播 verifier 非零退出码。现已改为手动安装 APK、直接运行 instrumentation、在卸载前导出成品，并在仓库 Bash 脚本中使用 `set -euo pipefail`；PR #64 run 37315987657 明确输出 `passed: 8 / total: 8`；
 - **用户实际 Windows 机器：尚未形成 field-device 证据**；
 - **真实 Android 设备：尚未形成 field-device 证据**；
 - 外部目标播放器：仍属于独立兼容性验收。
@@ -130,8 +132,8 @@ GitHub Windows runner 的 runtime-backed 结果比单纯 parser/fixture evidence
 Task compile pass
   < real FFmpeg reference pass
   < hosted Windows / Android build pass
-  < real Windows Native device pass
-  < real Android device pass
+  < hosted native-runtime pass (Windows Native Bridge / Android Emulator)
+  < real Windows / Android field-device pass
   < target-player playback pass
 ```
 
