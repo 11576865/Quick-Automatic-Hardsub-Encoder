@@ -287,8 +287,20 @@ const {spawn}=require('node:child_process');
     slider.value='73';
     slider.dispatchEvent(new Event('input',{bubbles:true}));
   });
-  const fullscreenCompareStyle=await page.locator('#taskFrameFullscreenCompare').getAttribute('style');
-  if(!fullscreenCompareStyle?.includes('27%'))throw Error('Fullscreen wipe slider did not update clip position: '+fullscreenCompareStyle);
+  const fullscreenCompareLayerStyle=await page.locator('#taskFrameFullscreenCompareLayer').getAttribute('style');
+  if(!fullscreenCompareLayerStyle?.includes('27%'))throw Error('Fullscreen wipe slider did not update clip position: '+fullscreenCompareLayerStyle);
+  await page.click('[data-frame-zoom="200"]');
+  const fullscreenViewport=await page.evaluate(()=>({
+    base:document.querySelector('#taskFrameFullscreenBase').style.transform,
+    compare:document.querySelector('#taskFrameFullscreenCompare').style.transform,
+    zoom:document.querySelector('#taskFrameFullscreenZoomStatus').textContent,
+    pressed:document.querySelector('[data-frame-zoom="200"]').getAttribute('aria-pressed')
+  }));
+  if(fullscreenViewport.base!==fullscreenViewport.compare || !fullscreenViewport.base.includes('scale('))throw Error('Fullscreen zoom is not synchronized: '+JSON.stringify(fullscreenViewport));
+  if(fullscreenViewport.zoom.trim()!=='200%' || fullscreenViewport.pressed!=='true')throw Error('Fullscreen zoom preset chrome is wrong: '+JSON.stringify(fullscreenViewport));
+  await page.click('#taskFrameFullscreenReset');
+  if((await page.locator('#taskFrameFullscreenZoomStatus').textContent()).trim()!=='Fit')throw Error('Fullscreen reset did not restore Fit viewport');
+  if((await page.inputValue('#taskFrameFullscreenWipe'))!=='50')throw Error('Fullscreen reset did not restore 50/50 wipe');
   await page.keyboard.press('Escape');
   if(!await page.locator('#taskFrameFullscreen').evaluate(el=>el.hidden))throw Error('Escape did not close fullscreen frame comparison');
   await page.screenshot({path:'media-workspace-copy-keyframes-mobile.png',fullPage:true});

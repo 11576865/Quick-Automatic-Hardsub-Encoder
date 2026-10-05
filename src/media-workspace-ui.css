@@ -1269,7 +1269,7 @@ body.media-frame-lightbox-open {
 
 .media-frame-lightbox-shell {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
   width: 100%;
   height: 100dvh;
   min-height: 100vh;
@@ -1317,23 +1317,38 @@ body.media-frame-lightbox-open {
   cursor: default;
 }
 
-.media-frame-lightbox-stage[data-mode="compare"] {
+.media-frame-lightbox-stage[data-zoomed="true"] {
+  cursor: grab;
+}
+
+.media-frame-lightbox-stage[data-gesture="pan"] {
+  cursor: grabbing;
+}
+
+.media-frame-lightbox-stage[data-gesture="wipe"] {
   cursor: ew-resize;
 }
 
-.media-frame-lightbox-stage > img {
+.media-frame-lightbox-layer {
   position: absolute;
   inset: 0;
+  overflow: hidden;
+}
+
+.media-frame-lightbox-layer > img {
+  position: absolute;
   display: block;
-  width: 100%;
-  height: 100%;
+  max-width: none;
+  max-height: none;
   object-fit: contain;
   object-position: center;
+  transform-origin: center center;
+  will-change: transform;
   user-select: none;
   pointer-events: none;
 }
 
-.media-frame-lightbox-compare {
+.media-frame-lightbox-compare-layer {
   z-index: 2;
   clip-path: inset(0 50% 0 0);
 }
@@ -1423,6 +1438,36 @@ body.media-frame-lightbox-open {
   min-width: 0;
 }
 
+.media-frame-lightbox-viewport-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0 18px 8px;
+  color: var(--muted);
+  font-size: .66rem;
+}
+
+.media-frame-lightbox-viewport-controls button {
+  min-width: 54px;
+  padding: 5px 9px;
+}
+
+.media-frame-lightbox-viewport-controls button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent-strong) 72%, var(--border));
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface-2));
+}
+
+#taskFrameFullscreenZoomStatus {
+  min-width: 46px;
+  color: var(--text);
+  font: 700 .66rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 .media-frame-lightbox-help {
   margin: 0;
   padding: 0 18px 12px;
@@ -1451,6 +1496,16 @@ body.media-frame-lightbox-open {
   .media-frame-lightbox-controls button {
     grid-column: 1 / -1;
     justify-self: center;
+  }
+
+  .media-frame-lightbox-viewport-controls {
+    gap: 5px;
+    padding: 0 10px 7px;
+  }
+
+  .media-frame-lightbox-viewport-controls button {
+    min-width: 48px;
+    padding: 5px 7px;
   }
 
   .media-frame-lightbox-help {

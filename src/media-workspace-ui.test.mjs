@@ -65,6 +65,16 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(workspace, /id="taskFrameFullscreen"/);
   assert.match(workspace, /id="taskFrameFullscreenStage"/);
   assert.match(workspace, /id="taskFrameFullscreenWipe"/);
+  assert.match(workspace, /id="taskFrameFullscreenBaseLayer"/);
+  assert.match(workspace, /id="taskFrameFullscreenCompareLayer"/);
+  assert.match(workspace, /id="taskFrameFullscreenViewportControls"/);
+  assert.match(workspace, /data-frame-zoom="fit"/);
+  assert.match(workspace, /data-frame-zoom="100"/);
+  assert.match(workspace, /data-frame-zoom="200"/);
+  assert.match(workspace, /data-frame-zoom="400"/);
+  assert.match(workspace, /applyFrameFullscreenViewport/);
+  assert.match(workspace, /setFrameFullscreenZoomPreset/);
+  assert.match(workspace, /frameFullscreenZoomMode='custom'/);
   assert.match(workspace, /data-frame-fullscreen="cursor"/);
   assert.match(workspace, /data-frame-fullscreen="requested"/);
   assert.match(workspace, /data-frame-fullscreen="actual"/);
@@ -145,6 +155,10 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /\.media-frame-lightbox-stage\s*\{/);
   assert.match(css, /\.media-frame-lightbox-divider/);
   assert.match(css, /\.media-frame-lightbox-controls/);
+  assert.match(css, /\.media-frame-lightbox-layer\s*\{/);
+  assert.match(css, /\.media-frame-lightbox-compare-layer/);
+  assert.match(css, /\.media-frame-lightbox-viewport-controls\s*\{/);
+  assert.match(css, /data-gesture="pan"/);
   assert.match(css, /body\.media-frame-lightbox-open/);
   assert.match(css, /\.media-output-verification\s*\{/);
   assert.match(css, /\.media-output-verification-grid\s*\{/);
