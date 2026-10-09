@@ -232,3 +232,19 @@ test('null quality fields do not silently become zero-quality evidence', () => {
   assert.equal(model.ok, false);
   assert.equal(model.points.length, 1);
 });
+
+test('raw model inputs reject boolean and whitespace pseudo-measurements', () => {
+  for (const invalid of [false,true,' ','\\t',[],{}]) {
+    const model = fitRateDistortionModel([
+      {sampleBitrate:100000,averageSsim:invalid,ssim:invalid},
+      {sampleBitrate:200000,averageSsim:.92,ssim:.91}
+    ]);
+    assert.equal(model.ok,false,'Invalid input must not become a measured endpoint: '+String(invalid));
+    assert.equal(model.points.length,1);
+  }
+  const valid = fitRateDistortionModel([
+    {sampleBitrate:100000,averageSsim:0,ssim:0},
+    {sampleBitrate:200000,averageSsim:1,ssim:1}
+  ]);
+  assert.equal(valid.ok,true,'Legitimate measured SSIM boundaries must remain valid');
+});

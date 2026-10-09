@@ -1,5 +1,7 @@
 function finite(value, fallback = null) {
-  if (value === null || value === undefined || value === '') return fallback;
+  // Missing, blank and boolean values are not valid numerical observations.
+  if (typeof value !== 'number' && typeof value !== 'string') return fallback;
+  if (typeof value === 'string' && !value.trim()) return fallback;
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
 }

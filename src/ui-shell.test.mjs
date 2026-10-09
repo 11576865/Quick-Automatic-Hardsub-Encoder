@@ -488,12 +488,14 @@ test('Bink 2 input adapter distinguishes probe, decode, and external import stat
   assert.match(bridge, /FFmpeg cannot decode the video stream/);
 });
 
-test('hard-sub quality plan renders actual search-order exploration measurements', async () => {
+test('hard-sub quality plan reports measured search progress without a second chart', async () => {
   const [main, curves] = await Promise.all([
     readFile(new URL('./main.js', import.meta.url),'utf8'),
     readFile(new URL('./transcode-curves.js', import.meta.url),'utf8')
   ]);
-  assert.match(main,/id="qualityExplorationChart"/);
+  assert.doesNotMatch(main,/id="qualityExplorationChart"/);
+  assert.match(main,/id="qualityExplorationReadout"/);
+  assert.doesNotMatch(main,/renderExplorationSvg\(/);
   assert.match(main,/qualityExplorationPoints:\s*\{\}/);
   assert.match(main,/function renderQualityExploration\(\)/);
   assert.match(main,/state\.qualityExplorationPoints\[codec\]\.push\(/);

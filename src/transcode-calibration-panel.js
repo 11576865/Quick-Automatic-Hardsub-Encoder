@@ -1,49 +1,53 @@
 import { compileTask } from './media-task.js';
-import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, buildExplorationPlot, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
+import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, CALIBRATION_PROFILES, summarizeCalibrationEvidence, parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
-import { renderRateDistortionSvg, renderExplorationSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
+import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 
-// Measured curves for manual video-only transcode. This is intentionally
+// One measured size-quality curve for manual video-only transcode. This is intentionally
 // separate from subtitle calibration: sample identity must match the manual
 // encoder, preset and selected timeline, or no curve is published.
 export function mountTranscodeCurves(section, hooks) {
   const panel = document.createElement('section');
   panel.id = 'taskCompressionCurves';
   panel.className = 'media-compression-curves';
-  panel.setAttribute('aria-label', '压制前实测效率与探索曲线');
+  panel.setAttribute('aria-label', '压制前体积—质量曲线');
   panel.innerHTML = [
-    '<div class="media-curves-header"><div><strong>压制前 · 实测效率与探索曲线</strong>',
+    '<div class="media-curves-header"><div><strong>压制前 · 体积—质量曲线</strong>',
     '<p>在选定的视频区间上抽取分散的短片，逐步测量质量与码率。不会先重压整段母片。</p></div>',
-    '<div class="media-curve-actions"><button type="button" id="taskExploreCurve" class="secondary">探索当前编码器</button>',
-    '<button type="button" id="taskStopCurve" class="secondary" disabled>停止探索</button></div></div>',
+    '<div class="media-curve-actions"><button type="button" id="taskExploreCurve" class="secondary">开始实测</button>',
+    '<button type="button" id="taskStopCurve" class="secondary" disabled>停止实测</button></div></div>',
     '<div class="media-curve-options"><label class="media-curve-target">最低样本 SSIM 目标 <input type="number" id="taskExploreTarget" min="0.80" max="0.9999" step="0.001" value="0.980"></label>',
     '<label class="media-curve-target">采样力度 <select id="taskCurveProfile"><option value="quick">快速 · 3 处 × 2 秒</option><option value="balanced" selected>均衡 · 5 处 × 4 秒</option><option value="thorough">深入 · 7 处 × 6 秒</option></select></label></div>',
     '<p id="taskCurveStatus" class="note" role="status">尚无当前素材的实测结果。曲线要求 Windows Native 的编码器一致性检查。</p>',
     '<div class="media-curve-grid">',
-    '<div><strong>探索曲线</strong><small>横轴为真实试压次序；点旁为 CQ/CRF，虚线为目标 SSIM。</small>',
-    '<div class="media-curve-viewport"><svg id="taskExplorationChart" viewBox="0 0 720 300" role="img" aria-label="实测 CQ 或 CRF 探索次序与质量"></svg></div>',
-    '<div class="media-curve-legend"><span class="legend-search">搜索顺序</span><span class="legend-pass">达标</span><span class="legend-fail">未达标</span><span class="legend-whisker">场景范围</span></div>',
-    '<div id="taskExplorationPoints" class="media-curve-points"></div></div>',
-    '<div><strong>效率曲线</strong><small>横轴为预算体积（对数），纵轴为短片 SSIM。仅在实测码率范围内插值。</small>',
+    '<div><strong>体积—质量曲线</strong><small>横轴为预算体积（对数），纵轴为短片 SSIM。圆点为实测，连线为有证据约束的插值。</small>',
     '<div class="media-curve-viewport"><svg id="taskEfficiencyChart" viewBox="0 0 720 300" role="slider" tabindex="0" aria-label="选择实测范围内的目标视频码率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></svg></div>',
     '<div class="media-curve-legend"><span class="legend-fit">保序拟合</span><span class="legend-observed">原始观测</span><span class="legend-band">范围插值</span><span class="legend-whisker">场景范围</span><span class="legend-knee">局部拐点</span></div>',
     '<div id="taskCurveReadout" class="media-curve-readout">至少完成两个不同码率的有效测试后显示曲线。</div>',
-    '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需复核）</button></div></div>',
+    '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需复核）</button>',
+    '<details class="media-curve-observations"><summary id="taskMeasuredQualitySummary">实测 CQ/CRF 参数（可采用）</summary>',
+    '<div id="taskMeasuredQualityPoints" class="media-curve-points"></div></details></div></div>',
     '<p class="note">SSIM 和局部效率拐点只是样本证据，不等于视觉无损或七小时整片质量保证。选择码率采用 VBR，不代表能复现 CQ 模式下的相同 SSIM。源音频复制时，图中估计体积不包含音频。</p>'
   ].join('');
   section.querySelector('#taskEncoding').before(panel);
   const get = id => panel.querySelector('#' + id);
-  const btn = get('taskExploreCurve'), plot = get('taskExplorationChart');
+  const btn = get('taskExploreCurve');
   const efficiency = get('taskEfficiencyChart'), readout = get('taskCurveReadout');
   const targetControl = get('taskExploreTarget'), profileControl = get('taskCurveProfile'), stop = get('taskStopCurve');
   let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, disposed = false, sourceKey = '';
-  let fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  let evidenceMedia = null, fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  // Measurements depend on the video encode and sample positions, not on the
+  // user's SSIM acceptance threshold or on the final audio size budget.
   const evidenceIsCurrent = () => !!sourceKey &&
-    sourceKey === calibrationKey(hooks.settings(), {duration:sourceDuration});
+    sourceKey === measurementKey(hooks.settings(), {duration:sourceDuration});
+  const targetIsValid = () => {
+    const value = parseMeasuredQuality(targetControl.value);
+    return value !== null && value >= .8 && value <= .9999;
+  };
   const label = text => { get('taskCurveStatus').textContent = text; };
   const measuredVideoSize = bytes => (bytes / 1e9).toFixed(2) + ' GB';
   const useQuality = q => {
-    if (running || hooks.busy() || !evidenceIsCurrent()) return;
+    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid()) return;
     hooks.applyQuality(q);
     label('已采用实际测试过的 CQ/CRF ' + q + '。改变参数后应再次检查输出。');
   };
@@ -60,11 +64,10 @@ export function mountTranscodeCurves(section, hooks) {
   const render = () => {
     btn.disabled = running;
     stop.disabled = !running || cancelRequested;
-    btn.textContent = running ? '正在实测…' : '探索当前编码器';
-    const exploration = buildExplorationPlot(points, Number(targetControl.value));
-    if (exploration.ok) plot.innerHTML = renderExplorationSvg(exploration);
-    else plot.replaceChildren();
-    const rows = get('taskExplorationPoints');
+    btn.textContent = running ? '正在实测…' : '开始实测';
+    get('taskMeasuredQualitySummary').textContent =
+      '实测 CQ/CRF 参数（' + points.length + ' 项，可采用）';
+    const rows = get('taskMeasuredQualityPoints');
     rows.replaceChildren();
     for (const point of points) {
       const row = document.createElement('div');
@@ -72,10 +75,11 @@ export function mountTranscodeCurves(section, hooks) {
       const details = document.createElement('span');
       details.textContent = '#' + point.iteration + ' · CQ/CRF ' + point.qualitySetting +
         ' · 最低 SSIM ' + point.ssim.toFixed(5) +
-        ' · ' + (point.sampleBitrate / 1e6).toFixed(2) + ' Mbps';
+        ' · ' + (point.sampleBitrate / 1e6).toFixed(2) + ' Mbps' +
+        (point.meetsTarget ? ' · 达标' : ' · 未达标');
       const adopt = document.createElement('button');
       adopt.type='button';adopt.className='secondary';adopt.textContent='采用此质量值';
-      adopt.disabled = running || hooks.busy() || !evidenceIsCurrent();
+      adopt.disabled = running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid();
       adopt.addEventListener('click', () => useQuality(point.qualitySetting));
       row.append(details,adopt);rows.append(row);
     }
@@ -111,10 +115,10 @@ export function mountTranscodeCurves(section, hooks) {
         (dispersion.minBitrate/1e6).toFixed(1) + '–' + (dispersion.maxBitrate/1e6).toFixed(1) + ' Mbps' : '') +
       (dispersion?.widelyDivergent ? ' · 样本波动大，整片体积与画质预测风险较高' : '') :
       '请选择已测量的体积范围';
-    get('taskAdoptCurveRate').disabled = !dot || running || !evidenceIsCurrent();
+    get('taskAdoptCurveRate').disabled = !dot || running || !evidenceIsCurrent() || !targetIsValid();
   };
 
-  const updateEvidence = (newPoints, raw, task) => {
+  const updateEvidence = (newPoints, raw, task, { preserveSelection = false } = {}) => {
     points = newPoints;
     const audio = audioPlan(raw,task);
     calculatedAudioRate = audio.rate;
@@ -124,7 +128,7 @@ export function mountTranscodeCurves(section, hooks) {
       audioBitrate: calculatedAudioRate,
       reservePercent: 4
     });
-    selectedBytes = null;
+    if (!preserveSelection) selectedBytes = null;
     render();
   };
   const pointerSelect = event => {
@@ -155,22 +159,29 @@ export function mountTranscodeCurves(section, hooks) {
   });
   get('taskAdoptCurveRate').addEventListener('click',()=>{
     const evaluation = frontier?.evaluateTargetBytes(selectedBytes);
-    if (running || hooks.busy() || !evidenceIsCurrent() || evaluation?.status !== 'within-evidence')return;
+    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid() || evaluation?.status !== 'within-evidence')return;
     hooks.applyBitrate(Math.round(evaluation.videoBitrate));
     label('已采用 ' + (evaluation.videoBitrate/1e6).toFixed(2) +
       ' Mbps 的目标平均码率。VBR 与实测 CQ 不同；正式输出的体积/画质仍需验证。');
   });
-  const calibrationKey=(raw,media) => JSON.stringify([
+  const measurementKey=(raw,media) => JSON.stringify([
     hooks.sourceIdentity(),media.duration,raw.operation,raw.codec,raw.encoder,raw.preset,
     raw.start,raw.end,raw.videoRange,raw.videoStreams,raw.pixelFormat,raw.fpsMode,raw.fps,raw.frames,
     raw.crop,raw.rotation,raw.deinterlace,raw.width,raw.height,raw.squarePixels,
     raw.denoise,raw.deband,raw.sharpen,raw.gop,raw.bf,raw.refs,raw.threads,
     raw.codecParams,raw.profile,raw.level,raw.tune,raw.maxrate,raw.bufsize,
     raw.spatialAq,raw.temporalAq,raw.lookahead,raw.aqStrength,raw.multipass,
-    raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,targetControl.value,profileControl.value
+    profileControl.value
+  ]);
+  // An in-flight search must still reject threshold/audio changes. Only completed
+  // observations can be re-evaluated under a different decision or audio budget.
+  const calibrationKey=(raw,media) => JSON.stringify([
+    measurementKey(raw,media), raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,
+    targetControl.value
   ]);
   const clearEvidence=()=>{
     points=[];frontier=null;selectedBytes=null;sourceKey='';sourceDuration=0;
+    evidenceMedia=null;
   };
   const invalidate=()=>{
     if (running) {
@@ -179,6 +190,27 @@ export function mountTranscodeCurves(section, hooks) {
       label('输入或编码参数发生变化，已停止继续采样；当前试压结束后将作废证据。');
       render();
       return;
+    }
+    const raw=hooks.settings();
+    if (evidenceMedia && evidenceIsCurrent()) {
+      if (!targetIsValid()) {
+        label('目标 SSIM 无效。现有视频试压结果已保留，输入有效目标后重新评估。');
+        render();
+        return;
+      }
+      try {
+        const task=compileTask({...raw,rateMode:'quality',twoPass:false},evidenceMedia);
+        if(Number(task.expectedVideoDuration)!==fullDuration)
+          throw Error('视频输出时长发生变化');
+        const target=parseMeasuredQuality(targetControl.value);
+        const reevaluated=points.map(point=>({...point,meetsTarget:point.ssim>=target}));
+        updateEvidence(reevaluated,raw,task,{preserveSelection:true});
+        label('已按当前目标和音频预算重新计算；保留 '+points.length+
+          ' 组视频实测证据，无需重新试压。必要时可继续追加校准。');
+        return;
+      } catch(error) {
+        hooks.log?.('校准预算重算不可用：'+error.message);
+      }
     }
     clearEvidence();
     label('素材或编码方案已改变；请重新运行实测。');
@@ -236,7 +268,8 @@ export function mountTranscodeCurves(section, hooks) {
       sourceDuration=Number(media.duration);
       const target=Number(targetControl.value);
       if(!(target>=.8&&target<=.9999))throw Error('目标 SSIM 须在 0.80–0.9999 之间');
-      sourceKey=calibrationKey(raw,media);
+      sourceKey=measurementKey(raw,media);
+      evidenceMedia=media;
       updateEvidence([],raw,task);
       const limits=raw.encoder.endsWith('_nvenc')?{min:14,max:45}:raw.codec==='av1'?{min:18,max:50}:{min:12,max:40};
       const result=await exploreQuality({
@@ -254,13 +287,17 @@ export function mountTranscodeCurves(section, hooks) {
               quality:q,start,duration:profile.seconds
             });
             assertRunCurrent();
-            if(!sample || sample.ssim==null || sample.totalVideoBytes==null)throw Error('真实样本未返回 SSIM 或视频字节数');
-            const seconds=Number(sample.duration||0);
-            if(!(seconds>0) || !(Number(sample.totalVideoBytes)>0))throw Error('测试片段缺少有效时长或视频包字节数');
+            // Validate the *raw* bridge payload before Number() can turn
+            // false, whitespace or missing evidence into a measured zero.
+            const ssim=parseMeasuredQuality(sample?.ssim);
+            const bytes=parseMeasuredNumber(sample?.totalVideoBytes);
+            const seconds=parseMeasuredNumber(sample?.duration);
+            if(ssim===null || !(bytes>0) || !(seconds>0))
+              throw Error('真实样本缺少有效 SSIM、时长或视频字节数，拒绝生成实测曲线');
             samples.push({
-              start,ssim:Number(sample.ssim),duration:seconds,
-              bitrate:Number(sample.totalVideoBytes)*8/seconds,
-              elapsedSeconds:Number(sample.elapsedSeconds||0)
+              start,ssim,duration:seconds,
+              bitrate:bytes*8/seconds,
+              elapsedSeconds:parseMeasuredNumber(sample.elapsedSeconds) ?? 0
             });
           }
           const rates=samples.map(s=>s.bitrate),qualities=samples.map(s=>s.ssim);
