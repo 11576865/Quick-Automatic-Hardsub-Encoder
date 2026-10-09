@@ -523,8 +523,8 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
                 throw 'Requested NVENC fullres multipass is unavailable.'
             }
             $mpArg = if ($Profile.SupportsMultipass) { ' -multipass ' + $mp } else { '' }
-            # Mirror default production NVENC flags without an implicit
-            # tune, maxrate, bufsize, or quality model substitution.
+            # Mirror default production NVENC flags: no implicit hq tune;
+            # no maxrate, bufsize, or quality model substitution.
             if ($targetRate -gt 0) {
                 return "-c:v $($Profile.Encoder) -preset $preset -rc vbr -b:v $targetRate$mpArg -spatial-aq 0 -temporal-aq 0"
             }
