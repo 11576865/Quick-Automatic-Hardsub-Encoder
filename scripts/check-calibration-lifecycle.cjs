@@ -104,7 +104,9 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
     assert.equal(await page.locator('#taskAdoptCurveRate').isDisabled(),true,
       'CQ predictions alone must not enable VBR adoption');
     await page.click('#taskVerifyCurveRate');
-    assert.equal(await page.locator('#taskAdoptCurveRate').isDisabled(),false);
+    await settle(); // Click dispatches an async native-sampling handler; wait for its final render.
+    assert.equal(await page.locator('#taskAdoptCurveRate').isDisabled(),false,
+      await page.locator('#taskCurveStatus').textContent());
     await page.click('#taskAdoptCurveRate');
     assert.equal(await page.evaluate(()=>window.calibrationTest.applied[1]?.[0]),'bitrate',
       'Current measured frontier must allow adopting bitrate');
