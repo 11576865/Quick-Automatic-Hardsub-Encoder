@@ -6828,6 +6828,4 @@ body.ui-phone .size-frontier-scale span:nth-child(2) {
 .size-frontier-chart {min-width:560px}
 .quality-exploration-panel {min-width:0;overflow-x:auto}
 .quality-exploration-panel svg {min-width:560px}
-@media(min-width:760px){
-  .size-frontier-chart,.quality-exploration-panel svg {min-width:0}
-}
+

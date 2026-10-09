@@ -1712,7 +1712,7 @@ body.media-frame-lightbox-open {
 .media-curves-header p,.media-compression-curves small {font-size:.82rem;opacity:.78;margin:.3rem 0 0}
 .media-curve-target {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .media-curve-target input {width:115px}
-.media-curve-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.media-curve-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,560px),1fr));gap:16px}
 .media-curve-grid>div {min-width:0;display:flex;flex-direction:column;gap:9px}
 .media-curve-grid strong {font-size:.95rem}
 .media-curve-grid svg {width:100%;height:auto;aspect-ratio:720/220;min-height:120px;background:rgba(10,15,29,.25);border:1px solid rgba(128,145,169,.25);border-radius:9px}
@@ -1749,4 +1749,4 @@ body.media-frame-lightbox-open {
 /* Narrow screens scroll the plot instead of scaling numeric ticks below legibility. */
 .media-curve-viewport {width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
 .media-curve-viewport svg {min-width:560px;display:block}
-@media(min-width:760px){.media-curve-viewport svg{min-width:0}}
+
