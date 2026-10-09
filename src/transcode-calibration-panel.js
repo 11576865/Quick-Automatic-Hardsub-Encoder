@@ -180,16 +180,31 @@ export function mountTranscodeCurves(section, hooks) {
     raw.spatialAq,raw.temporalAq,raw.lookahead,raw.aqStrength,raw.multipass,
     raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,targetControl.value,profileControl.value
   ]);
+  const clearEvidence=()=>{
+    points=[];frontier=null;selectedBytes=null;sourceKey='';sourceDuration=0;
+  };
   const invalidate=()=>{
-    if (running)return;
-    points=[];frontier=null;selectedBytes=null;sourceKey='';
+    if (running) {
+      cancelRequested=true;
+      label('输入或编码参数发生变化，已停止继续采样；当前试压结束后将作废证据。');
+      render();
+      return;
+    }
+    clearEvidence();
     label('素材或编码方案已改变；请重新运行实测。');
     render();
   };
   targetControl.addEventListener('change',invalidate);
+  profileControl.addEventListener('change',invalidate);
+  stop.addEventListener('click',()=>{
+    if(!running)return;
+    cancelRequested=true;
+    label('已请求停止；当前原生短片试压结束后中断，不会采纳不完整曲线。');
+    render();
+  });
   btn.addEventListener('click',async()=>{
     if (running || hooks.busy())return;
-    running=true;render();hooks.setBusy(true);
+    running=true;cancelRequested=false;render();hooks.setBusy(true);
     try {
       const raw=hooks.settings();
       if(raw.operation!=='transcode')throw Error('请切换至纯视频转码模式');
@@ -209,9 +224,12 @@ export function mountTranscodeCurves(section, hooks) {
       if(v?.hdr||v?.isHdr||/10|12|p010|p016/.test(String(v?.pixelFormat||media.pixelFormat||'')))
         throw Error('HDR/高位深输入尚无经过验证的等价样本链路，拒绝绘制曲线');
       const from=task.videoRange==='full'?0:Number(task.start),to=task.videoRange==='full'?Number(media.duration):Number(task.end);
-      const starts=calibrationSampleStarts(from,to,2);
-      if(!starts.length)throw Error('所选片段不足 2 秒');
+      const profile=CALIBRATION_PROFILES[profileControl.value];
+      if(!profile)throw Error('未知校准采样方案');
+      const starts=calibrationSampleStarts(from,to,profile.seconds,profile.count);
+      if(!starts.length)throw Error('所选片段不足 '+profile.seconds+' 秒');
       fullDuration=Number(task.expectedVideoDuration);
+      sourceDuration=Number(media.duration);
       const target=Number(targetControl.value);
       if(!(target>=.8&&target<=.9999))throw Error('目标 SSIM 须在 0.80–0.9999 之间');
       sourceKey=calibrationKey(raw,media);
@@ -223,13 +241,18 @@ export function mountTranscodeCurves(section, hooks) {
         evaluate:async q=>{
           const samples=[];
           for(const start of starts){
-            label('探索中：CQ/CRF '+q+' · 样本 '+(samples.length+1)+'/'+starts.length+' · 位置 '+Math.round(start)+' 秒');
+            if(cancelRequested)throw Error('用户已停止校准');
+            label('探索中：CQ/CRF '+q+' · 样本 '+(samples.length+1)+'/'+starts.length+
+              ' · 位置 '+Math.round(start)+' 秒 · '+profile.seconds+' 秒/处');
             const sample=await hooks.calibrationSample({
               codec:raw.codec,encoder:raw.encoder,preset:raw.preset,
-              quality:q,start,duration:2
+              multipass:task.multipass,
+              quality:q,start,duration:profile.seconds
             });
+            if(cancelRequested)throw Error('用户已停止校准');
             if(!sample || sample.ssim==null || sample.totalVideoBytes==null)throw Error('真实样本未返回 SSIM 或视频字节数');
-            const seconds=Number(sample.duration||2);
+            const seconds=Number(sample.duration||0);
+            if(!(seconds>0) || !(Number(sample.totalVideoBytes)>0))throw Error('测试片段缺少有效时长或视频包字节数');
             samples.push({
               start,ssim:Number(sample.ssim),duration:seconds,
               bitrate:Number(sample.totalVideoBytes)*8/seconds,
@@ -253,11 +276,12 @@ export function mountTranscodeCurves(section, hooks) {
       });
       updateEvidence(result.points,raw,task);
       label('实测完成：'+result.evaluatedCount+' 个 CQ/CRF，'+starts.length+
-        ' 个分散位置/设置；'+(result.best?'满足最低样本 SSIM 的最高已测质量值 '+result.best.qualitySetting:'所测设置均未达到目标')+
-        '。曲线不对未测区间做外推。');
+        ' 个分散位置，每处 '+profile.seconds+' 秒；'+(result.best?'满足最低样本 SSIM 的最高已测质量值 '+result.best.qualitySetting:'所测设置均未达到目标')+
+        '。曲线仅代表短片观测，不保证七小时整片。');
     } catch(error){
-      label('无法生成可信实测曲线：'+error.message);
-      hooks.log?.('转码曲线校准失败：'+(error.stack||error.message));
+      clearEvidence();
+      label((cancelRequested ? '已作废未完成曲线：' : '无法生成可信实测曲线：') + error.message);
+      hooks.log?.('转码曲线校准结束：'+(error.stack||error.message));
     } finally {
       running=false;hooks.setBusy(false);render();
     }
