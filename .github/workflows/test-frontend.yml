@@ -10,6 +10,7 @@ on:
       - 'package-lock.json'
       - '.github/workflows/test-frontend.yml'
       - 'scripts/check-media-ui.cjs'
+      - 'scripts/check-calibration-lifecycle.cjs'
       - '.uigs/**'
   push:
     branches: [main]
@@ -22,6 +23,7 @@ on:
       - 'package-lock.json'
       - '.github/workflows/test-frontend.yml'
       - 'scripts/check-media-ui.cjs'
+      - 'scripts/check-calibration-lifecycle.cjs'
 
 jobs:
   frontend:

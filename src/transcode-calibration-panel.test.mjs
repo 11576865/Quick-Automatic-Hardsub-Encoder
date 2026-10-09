@@ -34,7 +34,7 @@ test('calibration workflow retains source identity and stops incomplete trials s
     assert.match(panel,new RegExp('id="'+id+'"'));
   assert.match(panel,/CALIBRATION_PROFILES\[profileControl\.value\]/);
   assert.match(panel,/calibrationSampleStarts\(from,to,profile\.seconds,profile\.count\)/);
-  assert.match(panel,/if\(cancelRequested\)throw Error\('用户已停止校准'\)/);
+  assert.match(panel,/if\(cancelRequested \|\| disposed\)throw Error\('用户已停止校准'\)/);
   assert.match(panel,/clearEvidence\(\);[\s\S]*?label\(\(cancelRequested/);
   assert.match(panel,/const evidenceIsCurrent/);
   assert.match(panel,/evidenceIsCurrent\(\)/);
