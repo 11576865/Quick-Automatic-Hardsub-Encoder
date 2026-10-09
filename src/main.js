@@ -5594,6 +5594,8 @@ mountMediaWorkspace({
     if (state.nativeInputProbe?.ok) return mediaFromNativeProbe(state.nativeInputProbe);
     return null;
   },
+  videoIdentity: () => state.video
+    ? [state.video.name,state.video.size,state.video.lastModified].join('|') : '',
   setBusy: value => {
     state.operationBusy=value;
     for (const id of ['video','ass','fonts','videoNativePickerBtn','assNativePickerBtn','fontsNativePickerBtn','analyze','encodeBtn','previewBtn','benchmarkBtn','calibrateQualityBtn']) if($(id)) $(id).disabled=value;

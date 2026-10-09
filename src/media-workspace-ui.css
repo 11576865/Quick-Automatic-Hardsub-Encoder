@@ -1695,3 +1695,31 @@ body.media-frame-lightbox-open {
     min-height: 150px;
   }
 }
+
+/* Measured transcode calibration: both plots use the exact same trial evidence. */
+.media-compression-curves {
+  display: grid;
+  gap: 12px;
+  padding: clamp(12px,2vw,22px);
+  margin: 14px 0 20px;
+  border: 1px solid var(--border,rgba(128,145,169,.35));
+  border-radius: 14px;
+  background: var(--surface-2,rgba(38,43,58,.34));
+}
+.media-compression-curves[hidden] { display: none !important; }
+.media-curves-header {display:flex;justify-content:space-between;align-items:start;gap:14px;flex-wrap:wrap}
+.media-curves-header strong {font-size:1.03rem}
+.media-curves-header p,.media-compression-curves small {font-size:.82rem;opacity:.78;margin:.3rem 0 0}
+.media-curve-target {display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.media-curve-target input {width:115px}
+.media-curve-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.media-curve-grid>div {min-width:0;display:flex;flex-direction:column;gap:9px}
+.media-curve-grid strong {font-size:.95rem}
+.media-curve-grid svg {width:100%;height:auto;aspect-ratio:720/220;min-height:120px;background:rgba(10,15,29,.25);border:1px solid rgba(128,145,169,.25);border-radius:9px}
+#taskEfficiencyChart {touch-action:none;cursor:crosshair}
+#taskEfficiencyChart:focus-visible {outline:2px solid #46abda;outline-offset:2px}
+.media-curve-points {display:grid;gap:5px;max-height:172px;overflow-y:auto}
+.media-curve-measurement {display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.78rem;padding:5px 0;border-bottom:1px solid rgba(128,145,169,.18)}
+.media-curve-measurement button {font-size:.75rem;white-space:nowrap}
+.media-curve-readout {font-size:.83rem;min-height:42px;line-height:1.5}
+@media(max-width:760px){.media-curve-grid{grid-template-columns:1fr}}
