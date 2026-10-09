@@ -47,3 +47,12 @@ test('calibration workflow retains source identity and stops incomplete trials s
   assert.equal((bridge.match(/function Invoke-Sample/g)||[]).length,1);
   assert.match(bridge,/Requested NVENC fullres multipass is unavailable/);
 });
+
+test('exact video-only calibration reads source directly for SSIM instead of writing full-resolution FFV1 files',async()=>{
+  const script=await readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8');
+  assert.match(script,/function Get-SsimAgainstSource/);
+  assert.match(script,/format=yuv420p,setpts=PTS-STARTPTS/);
+  assert.match(script,/if\(-not \[bool\]\$o\.sampleExact\)/);
+  assert.match(script,/Get-SsimAgainstSource \$candidate \$video \$startText \$durationText/);
+  assert.match(script,/Get-Ssim \$candidate \$reference \$work/);
+});
