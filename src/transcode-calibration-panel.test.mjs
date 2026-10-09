@@ -113,3 +113,17 @@ test('formal VBR bitrate adoption requires native sample confirmation, never CQ 
  assert.match(main,/targetVideoBitrate: mode==='bitrate' \? bitrate : 0/);
  assert.match(bridge,/if \(\$targetRate -gt 0\) \{ return "-c:v/);
 });
+
+test('native exact CQ/VBR probes include an FFmpeg process timeout',async()=>{
+ const [panel,main,bridge]=await Promise.all([
+  readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(panel,/elapsedEncodeSeconds/);
+ assert.match(panel,/timeoutSeconds:Math\.max/);
+ assert.match(main,/timeoutSeconds/);
+ assert.match(bridge,/if \(\$TimeoutSeconds -gt 0\)/);
+ assert.match(bridge,/\$p\.Kill\(\)/);
+ assert.match(bridge,/FFmpeg sample encode timeout after/);
+});

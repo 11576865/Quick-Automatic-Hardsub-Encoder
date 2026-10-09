@@ -212,7 +212,8 @@ export function mountTranscodeCurves(section, hooks) {
           ' · '+(bitrate/1e6).toFixed(2)+' Mbps');
         const sample=await hooks.calibrationSample({
           codec:raw.codec,encoder:raw.encoder,preset:raw.preset,multipass:task.multipass,
-          mode:'bitrate',bitrate,start,duration:profile.seconds
+          mode:'bitrate',bitrate,start,duration:profile.seconds,
+          timeoutSeconds:Math.max(2,Math.ceil((calibrationTimeBudget(fullDuration)||120)/starts.length))
         });
         if(!current())throw Error('验证配置已变化，旧结果不可使用');
         const ssim=parseMeasuredQuality(sample?.ssim),seconds=parseMeasuredNumber(sample?.duration),
@@ -349,6 +350,7 @@ export function mountTranscodeCurves(section, hooks) {
       const limits=raw.encoder.endsWith('_nvenc')?{min:14,max:45}:raw.codec==='av1'?{min:18,max:50}:{min:12,max:40};
       const budgetSeconds=calibrationTimeBudget(fullDuration);
       label('本次校准预计软预算约 '+Math.round(budgetSeconds)+' 秒；单个不可中断的原生样本仍可能超时。');
+      let elapsedEncodeSeconds=0;
       const result=await exploreQuality({
         minQuality:limits.min,maxQuality:limits.max,targetSsim:target,
         maxEvaluations:7,
@@ -362,7 +364,8 @@ export function mountTranscodeCurves(section, hooks) {
             const sample=await hooks.calibrationSample({
               codec:raw.codec,encoder:raw.encoder,preset:raw.preset,
               multipass:task.multipass,
-              quality:q,start,duration:profile.seconds
+              quality:q,start,duration:profile.seconds,
+              timeoutSeconds:Math.max(2,Math.ceil(budgetSeconds-elapsedEncodeSeconds))
             });
             assertRunCurrent();
             // Validate the *raw* bridge payload before Number() can turn
@@ -372,6 +375,7 @@ export function mountTranscodeCurves(section, hooks) {
             const seconds=parseMeasuredNumber(sample?.duration);
             if(ssim===null || !(bytes>0) || !(seconds>0))
               throw Error('真实样本缺少有效 SSIM、时长或视频字节数，拒绝生成实测曲线');
+            elapsedEncodeSeconds+=parseMeasuredNumber(sample.elapsedSeconds)||0;
             samples.push({
               start,ssim,duration:seconds,
               bitrate:bytes*8/seconds,
