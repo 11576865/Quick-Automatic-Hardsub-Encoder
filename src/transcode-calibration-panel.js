@@ -1,6 +1,7 @@
 import { compileTask } from './media-task.js';
 import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, buildExplorationPlot, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
+import { renderRateDistortionSvg, renderExplorationSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 
 // Measured curves for manual video-only transcode. This is intentionally
 // separate from subtitle calibration: sample identity must match the manual
@@ -21,9 +22,11 @@ export function mountTranscodeCurves(section, hooks) {
     '<div class="media-curve-grid">',
     '<div><strong>探索曲线</strong><small>横轴为真实试压次序；点旁为 CQ/CRF，虚线为目标 SSIM。</small>',
     '<svg id="taskExplorationChart" viewBox="0 0 720 220" role="img" aria-label="实测 CQ 或 CRF 探索次序与质量"></svg>',
+    '<div class="media-curve-legend"><span class="legend-search">搜索顺序</span><span class="legend-pass">达标</span><span class="legend-fail">未达标</span><span class="legend-whisker">场景范围</span></div>',
     '<div id="taskExplorationPoints" class="media-curve-points"></div></div>',
     '<div><strong>效率曲线</strong><small>横轴为预算体积（对数），纵轴为短片 SSIM。仅在实测码率范围内插值。</small>',
     '<svg id="taskEfficiencyChart" viewBox="0 0 720 220" role="slider" tabindex="0" aria-label="选择实测范围内的目标视频码率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></svg>',
+    '<div class="media-curve-legend"><span class="legend-fit">局部拟合</span><span class="legend-observed">实测点</span><span class="legend-band">样本范围</span><span class="legend-knee">局部拐点</span></div>',
     '<div id="taskCurveReadout" class="media-curve-readout">至少完成两个不同码率的有效测试后显示曲线。</div>',
     '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需复核）</button></div></div>',
     '<p class="note">SSIM 和局部效率拐点只是样本证据，不等于视觉无损或七小时整片质量保证。选择码率采用 VBR，不代表能复现 CQ 模式下的相同 SSIM。源音频复制时，图中估计体积不包含音频。</p>'
@@ -58,17 +61,8 @@ export function mountTranscodeCurves(section, hooks) {
     stop.disabled = !running || cancelRequested;
     btn.textContent = running ? '正在实测…' : '探索当前编码器';
     const exploration = buildExplorationPlot(points, Number(targetControl.value));
-    if (exploration.ok) {
-      plot.innerHTML =
-        '<line x1="32" x2="688" y1="' + exploration.targetY.toFixed(2) + '" y2="' + exploration.targetY.toFixed(2) + '" stroke="currentColor" stroke-dasharray="5 5" opacity=".5"></line>' +
-        '<path d="' + exploration.line + '" fill="none" stroke="currentColor" stroke-width="2.5"></path>' +
-        exploration.measured.map(p =>
-          '<circle cx="' + p.x.toFixed(2) + '" cy="' + p.y.toFixed(2) + '" r="5" fill="' +
-          (p.meetsTarget ? '#31bc89' : '#df9876') + '"></circle>' +
-          '<text x="' + p.x.toFixed(2) + '" y="' + Math.max(12,p.y-10).toFixed(2) +
-          '" text-anchor="middle" fill="currentColor" font-size="12">CQ ' + p.qualitySetting + '</text>'
-        ).join('');
-    } else plot.replaceChildren();
+    if (exploration.ok) plot.innerHTML = renderExplorationSvg(exploration);
+    else plot.replaceChildren();
     const rows = get('taskExplorationPoints');
     rows.replaceChildren();
     for (const point of points) {
@@ -100,15 +94,7 @@ export function mountTranscodeCurves(section, hooks) {
       return;
     }
     const dot = plotted.selected;
-    efficiency.innerHTML =
-      '<path d="' + plotted.bandPath + '" fill="currentColor" opacity=".10"></path>' +
-      '<path d="' + plotted.curvePath + '" fill="none" stroke="currentColor" stroke-width="2.5"></path>' +
-      plotted.evidencePoints.map(p => '<circle cx="' + p.x.toFixed(2) + '" cy="' + p.y.toFixed(2) +
-        '" r="4" fill="#46abda"></circle>').join('') +
-      (plotted.knee ? '<circle cx="' + plotted.knee.x.toFixed(2) + '" cy="' + plotted.knee.y.toFixed(2) +
-        '" r="6" fill="#dfb260"><title>局部效率拐点</title></circle>' : '') +
-      (dot ? '<circle cx="' + dot.x.toFixed(2) + '" cy="' + dot.y.toFixed(2) +
-        '" r="7" fill="#31bc89"></circle>' : '');
+    efficiency.innerHTML = renderRateDistortionSvg(plotted);
     const frac = evidenceFractionForTargetBytes(frontier, selectedBytes);
     efficiency.setAttribute('aria-valuenow',String(Math.round(100 * (frac ?? 0))));
     efficiency.setAttribute('aria-valuetext',dot
@@ -142,10 +128,12 @@ export function mountTranscodeCurves(section, hooks) {
   };
   const pointerSelect = event => {
     if (!frontier?.ok || running || !evidenceIsCurrent()) return;
-    const rect = efficiency.getBoundingClientRect();
-    if (!(rect.width > 0)) return;
-    const x = (Number(event.clientX) - rect.left) * 720 / rect.width;
-    selectedBytes = targetBytesAtEvidenceFraction(frontier, clamp((x-34)/652,0,1));
+    const plotted = buildSizeFrontierPlot(frontier);
+    if (!plotted.ok) return;
+    const x = plotXFromClientX(event.clientX, efficiency.getBoundingClientRect(), plotted.width);
+    const fraction = plotFractionAtX(plotted, x);
+    if (fraction === null) return;
+    selectedBytes = targetBytesAtEvidenceFraction(frontier, fraction);
     render();
   };
   function clamp(value, lo, hi){return Math.max(lo,Math.min(hi,value));}
