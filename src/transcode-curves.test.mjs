@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calibrationSampleStarts, exploreQuality, createMeasuredSizeFrontier, buildExplorationPlot } from './transcode-curves.js';
+import { calibrationSampleStarts, exploreQuality, createMeasuredSizeFrontier, buildExplorationPlot, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
 
 test('probe starts spread across a long range and respect trim boundaries', () => {
   const starts = calibrationSampleStarts(3600, 7*3600, 2);
@@ -44,4 +44,28 @@ test('curve rejects invented measurements and refuses extrapolation', async () =
   assert.equal(frontier.ok,true);
   assert.equal(frontier.evaluateTargetBytes(frontier.maximumEvidenceTargetBytes*1.5).status,'above-evidence');
   assert.equal(frontier.evaluateTargetBytes(frontier.minimumEvidenceTargetBytes*.3).status,'below-evidence');
+});
+
+test('quality presets span long videos without overlapping windows', () => {
+  const {count,seconds}=CALIBRATION_PROFILES.thorough;
+  const starts=calibrationSampleStarts(0,25200,seconds,count);
+  assert.equal(starts.length,7);
+  assert.ok(starts[0]>=0 && starts.at(-1)+seconds<=25200);
+  assert.ok(starts.every((v,i)=>i===0||v-starts[i-1]>=seconds));
+  assert.equal(calibrationSampleStarts(0,10,4,7).length,2);
+  assert.deepEqual(calibrationSampleStarts(100,102,2,7),[100]);
+  assert.deepEqual(calibrationSampleStarts(0,1.5,2,7),[]);
+});
+
+test('calibration summary exposes sample spread without pretending to be a confidence interval', () => {
+  const summary=summarizeCalibrationEvidence([{sampleMeasurements:[
+    {start:0,bitrate:8_000_000,ssim:.95},
+    {start:100,bitrate:25_000_000,ssim:.99},
+    {start:200,bitrate:14_000_000,ssim:.975}
+  ]}]);
+  assert.equal(summary.sampleCount,3);
+  assert.equal(summary.widelyDivergent,true);
+  assert.equal(summary.minBitrate,8_000_000);
+  assert.equal(summary.maxBitrate,25_000_000);
+  assert.equal(summarizeCalibrationEvidence([{sampleMeasurements:[{bitrate:0,ssim:.9}]}]),null);
 });

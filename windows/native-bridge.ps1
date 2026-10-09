@@ -509,6 +509,26 @@ function Get-PreferredEncoder([string]$Codec) {
 function Get-BridgeEncoderArgs($Profile, $Options) {
     if (-not $Profile) { throw 'No available encoder for this codec.' }
     $targetRate = [long]($Options.targetVideoBitrate)
+    if ([bool]$Options.sampleExact) {
+        if ($targetRate -gt 0) { throw 'Exact CQ sample must not request bitrate mode.' }
+        $quality = [int]$Options.crf
+        $preset = [string]$Options.preset
+        if ($quality -lt 0 -or $quality -gt 63) { throw 'Invalid exact sample quality.' }
+        if ($Profile.Hardware) {
+            if ($preset -notmatch '^p[1-7]$') { throw 'Invalid exact NVENC preset.' }
+            $mp = [string]$Options.multipass
+            if ($mp -notin @('disabled','fullres')) { throw 'Unsupported exact sample multipass mode.' }
+            if ($mp -eq 'fullres' -and -not $Profile.SupportsMultipassFullres) {
+                throw 'Requested NVENC fullres multipass is unavailable.'
+            }
+            $mpArg = if ($Profile.SupportsMultipass) { ' -multipass ' + $mp } else { '' }
+            # Mirror compileTask quality-mode defaults: no implicit hq tune;
+            # spatial/temporal AQ disabled unless explicitly requested.
+            return "-c:v $($Profile.Encoder) -preset $preset -rc vbr -cq $quality -b:v 0$mpArg -spatial-aq 0 -temporal-aq 0"
+        }
+        if (-not $preset) { throw 'Missing exact software encoder preset.' }
+        return "-c:v $($Profile.Encoder) -preset $preset -crf $quality"
+    }
     if ($Profile.Hardware) {
         $cq = [int]($Options.crf)
         if ($cq -lt 0) { $cq = [int]$Profile.Quality }
@@ -894,6 +914,20 @@ function Get-Ssim([string]$Candidate,[string]$Reference,[string]$Work) {
     return $null
 }
 
+function Get-SsimAgainstSource([string]$Candidate,[string]$Source,[string]$Start,[string]$Duration,[string]$Work) {
+    # Only for the validated, filter-free video-transcode calibration path.
+    # Decode the source directly: no multi-GB FFV1 reference written to disk.
+    # Independent seek windows reset PTS before same-frame SSIM comparison.
+    $cmd='-hide_banner -nostdin -loglevel info -i '+(Quote-NativeArg $Candidate)+
+      ' -ss '+$Start+' -t '+$Duration+' -i '+(Quote-NativeArg $Source)+
+      ' -filter_complex "[0:v]setpts=PTS-STARTPTS[encoded];[1:v]format=yuv420p,setpts=PTS-STARTPTS[reference];[encoded][reference]ssim" -an -sn -f null NUL'
+    $r=Invoke-BridgeTool $script:Ffmpeg $cmd $Work
+    if($r.ExitCode -ne 0){throw 'Source-backed SSIM failed: '+$r.StdErr.Trim()}
+    $match=[regex]::Match(($r.StdErr+[Environment]::NewLine+$r.StdOut),'All:(?<v>[0-9.]+)')
+    if(-not $match.Success){throw 'Source-backed SSIM did not report All value.'}
+    return [double]::Parse($match.Groups['v'].Value,[Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Get-PacketStats([string]$File) {
     $r=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_packets -show_entries packet=size -of csv=p=0 '+(Quote-NativeArg $File))
     $count=0;$bytes=0L
@@ -940,8 +974,12 @@ function Invoke-Sample($Body) {
         $startText=$start.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
         $durationText=$duration.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
         $vf=if($withSubs){' -vf "ass=subtitle.ass:fontsdir=fonts"'}else{''}
-        $rr=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$vf+' -c:v ffv1 '+(Quote-NativeArg $reference)) $work
-        if($rr.ExitCode -ne 0){throw ($rr.StdErr.Trim())}
+        if(-not [bool]$o.sampleExact){
+            # Legacy hard-sub samples require the subtitle-rendered FFV1
+            # reference; exact filter-free transcoding measures from source.
+            $rr=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$vf+' -c:v ffv1 '+(Quote-NativeArg $reference)) $work
+            if($rr.ExitCode -ne 0){throw ($rr.StdErr.Trim())}
+        }
         $encArgs=Get-BridgeEncoderArgs $profile $o
         $sw=[Diagnostics.Stopwatch]::StartNew()
         $run=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$vf+' '+$encArgs+' -pix_fmt yuv420p '+(Quote-NativeArg $candidate)) $work
@@ -950,7 +988,13 @@ function Invoke-Sample($Body) {
         $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $candidate))
         $measured=if($probe.ExitCode -eq 0){[double]::Parse($probe.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$duration}
         $packets=Get-PacketStats $candidate
-        $ssim=if([bool]$o.measureSsim){Get-Ssim $candidate $reference $work}else{$null}
+        $ssim=if([bool]$o.measureSsim){
+            if([bool]$o.sampleExact){
+                Get-SsimAgainstSource $candidate $video $startText $durationText $work
+            }else{
+                Get-Ssim $candidate $reference $work
+            }
+        }else{$null}
         $sampleBytes=(Get-Item $candidate).Length
         if([bool]$o.retainSample){
             $keep=Join-Path ([IO.Path]::GetTempPath()) ("quick-hardsub-sample-$sampleId.mkv")

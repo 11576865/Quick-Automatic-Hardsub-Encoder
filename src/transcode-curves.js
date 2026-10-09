@@ -6,13 +6,40 @@ const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 
 // Separate positions across the selected clip: these are time-spaced probes,
 // not a claim that the content is statistically representative.
-export function calibrationSampleStarts(start, end, seconds = 2) {
+export const CALIBRATION_PROFILES = Object.freeze({
+  quick: Object.freeze({ count: 3, seconds: 2, label: '快速 · 3 处 × 2 秒' }),
+  balanced: Object.freeze({ count: 5, seconds: 4, label: '均衡 · 5 处 × 4 秒' }),
+  thorough: Object.freeze({ count: 7, seconds: 6, label: '深入 · 7 处 × 6 秒' })
+});
+
+export function calibrationSampleStarts(start, end, seconds = 2, requestedCount = 3) {
   const a = finite(start), b = finite(end), duration = finite(seconds);
   if (a === null || b === null || duration === null || a < 0 || b - a < duration || duration <= 0) return [];
-  const slack = b - a - duration;
-  if (slack < duration * 2) return [a + slack / 2];
-  const starts = [0.12, 0.5, 0.88].map(f => a + slack * f);
-  return starts.filter((value, index) => index === 0 || value - starts[index - 1] >= duration);
+  const requested = Number.isSafeInteger(Number(requestedCount)) ? Number(requestedCount) : 3;
+  if (requested < 1 || requested > 15) return [];
+  // Non-overlapping windows. For short clips, reduce the count rather than
+  // repeatedly testing the same frames and inflating our evidence count.
+  const count = Math.min(requested, Math.floor((b - a + 1e-8) / duration));
+  return Array.from({ length: count }, (_, i) => a + ((i + 0.5) * (b - a) / count) - duration / 2);
+}
+
+export function summarizeCalibrationEvidence(points) {
+  if (!Array.isArray(points) || !points.length) return null;
+  const latest = points.at(-1);
+  const samples = Array.isArray(latest.sampleMeasurements) ? latest.sampleMeasurements : [];
+  const rates = samples.map(s => Number(s.bitrate)).filter(v => Number.isFinite(v) && v > 0);
+  const qualities = samples.map(s => Number(s.ssim)).filter(v => Number.isFinite(v) && v >= 0 && v <= 1);
+  if (!rates.length || rates.length !== samples.length || qualities.length !== samples.length) return null;
+  const rateMin = Math.min(...rates), rateMax = Math.max(...rates);
+  const worstSsim = Math.min(...qualities), bestSsim = Math.max(...qualities);
+  return {
+    sampleCount: samples.length,
+    minBitrate: rateMin, maxBitrate: rateMax,
+    bitrateSpread: rateMax / rateMin,
+    worstSsim, bestSsim,
+    ssimSpread: bestSsim - worstSsim,
+    widelyDivergent: rateMax / rateMin >= 2 || bestSsim - worstSsim > 0.02
+  };
 }
 
 // Search order is preserved separately from the quality-sorted rate/distortion
