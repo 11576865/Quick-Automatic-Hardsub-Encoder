@@ -5,6 +5,19 @@ import { CURVE_CHART_LAYOUT } from './curve-chart-svg.js';
 const finite = value => Number.isFinite(Number(value)) ? Number(value) : null;
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
 
+// Number(null), Number('') and Number(false) are finite, but are not evidence.
+function measurement(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function qualityMeasurement(value) {
+  const parsed = measurement(value);
+  return parsed !== null && parsed >= 0 && parsed <= 1 ? parsed : null;
+}
+
 // Separate positions across the selected clip: these are time-spaced probes,
 // not a claim that the content is statistically representative.
 export const CALIBRATION_PROFILES = Object.freeze({
@@ -28,8 +41,8 @@ export function summarizeCalibrationEvidence(points) {
   if (!Array.isArray(points) || !points.length) return null;
   const latest = points.at(-1);
   const samples = Array.isArray(latest.sampleMeasurements) ? latest.sampleMeasurements : [];
-  const rates = samples.map(s => Number(s.bitrate)).filter(v => Number.isFinite(v) && v > 0);
-  const qualities = samples.map(s => Number(s.ssim)).filter(v => Number.isFinite(v) && v >= 0 && v <= 1);
+  const rates = samples.map(s => measurement(s?.bitrate)).filter(v => v !== null && v > 0);
+  const qualities = samples.map(s => qualityMeasurement(s?.ssim)).filter(v => v !== null);
   if (!rates.length || rates.length !== samples.length || qualities.length !== samples.length) return null;
   const rateMin = Math.min(...rates), rateMax = Math.max(...rates);
   const worstSsim = Math.min(...qualities), bestSsim = Math.max(...qualities);
@@ -57,9 +70,9 @@ export async function exploreQuality({
   const test = async (q, lower, upper) => {
     if (cache.has(q)) return cache.get(q);
     const raw = await evaluate(q);
-    const bitrate = Number(raw?.sampleBitrate), ssim = Number(raw?.ssim);
-    const average = Number(raw?.averageSsim ?? ssim);
-    if (!(bitrate > 0) || !(ssim >= 0 && ssim <= 1) || !(average >= 0 && average <= 1))
+    const bitrate = measurement(raw?.sampleBitrate), ssim = qualityMeasurement(raw?.ssim);
+    const average = qualityMeasurement(raw?.averageSsim ?? ssim);
+    if (!(bitrate > 0) || ssim === null || average === null)
       throw Error('测试片段缺少有效码率或 SSIM，无法绘制实测曲线');
     const point = {
       ...raw, qualitySetting: q, sampleBitrate: bitrate,
@@ -113,25 +126,29 @@ export function buildExplorationPlot(points, targetSsim, {
   paddingX = CURVE_CHART_LAYOUT.paddingX, paddingY = CURVE_CHART_LAYOUT.paddingY
 } = {}) {
   if (!Array.isArray(points) || !points.length) return { ok: false, reason: 'no-measurements' };
-  const valid = points.filter(p => Number.isFinite(Number(p.ssim)) && Number.isFinite(Number(p.qualitySetting)));
+  const target = qualityMeasurement(targetSsim);
+  if (target === null) return { ok: false, reason: 'invalid-threshold' };
+  const valid = points.flatMap((p,i) => {
+    const ssim = qualityMeasurement(p?.ssim), qualitySetting = measurement(p?.qualitySetting);
+    if (ssim === null || qualitySetting === null) return [];
+    const iteration = measurement(p.iteration);
+    return [{...p,ssim,qualitySetting,
+      iteration:Number.isSafeInteger(iteration) && iteration > 0 ? iteration : i+1,
+      meetsTarget:ssim >= target}];
+  });
   if (!valid.length) return { ok: false, reason: 'invalid-measurements' };
+  const sampleQualities = p => Array.isArray(p.sampleMeasurements)
+    ? p.sampleMeasurements.map(s=>qualityMeasurement(s?.ssim)).filter(v=>v!==null) : [];
   const quality = valid.flatMap(p => [
-    Number(p.ssim),
-    ...(Array.isArray(p.sampleMeasurements)
-      ? p.sampleMeasurements.map(s => Number(s.ssim)).filter(v => Number.isFinite(v) && v >= 0 && v <= 1)
-      : [])
+    p.ssim, ...sampleQualities(p)
   ]);
-  const target = Number(targetSsim);
-  if (!Number.isFinite(target) || !(target >= 0 && target <= 1)) return { ok: false, reason: 'invalid-threshold' };
   const min = clamp(Math.min(...quality, target) - 0.005, 0, 1);
   const max = clamp(Math.max(...quality, target) + 0.005, 0, 1);
   const span = Math.max(0.000001, max - min);
   const innerWidth = width - paddingX * 2, innerHeight = height - paddingY * 2;
   const yForQuality = value => paddingY + innerHeight * (1 - (Number(value) - min) / span);
   const measured = valid.map((p, i) => {
-    const observations=Array.isArray(p.sampleMeasurements)
-      ? p.sampleMeasurements.map(s=>Number(s.ssim)).filter(v=>Number.isFinite(v)&&v>=0&&v<=1)
-      : [];
+    const observations=sampleQualities(p);
     return {
       ...p,
       x: paddingX + (valid.length === 1 ? innerWidth / 2 : i * innerWidth / (valid.length - 1)),

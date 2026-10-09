@@ -47,6 +47,15 @@ test('search status differs by shape and latest trial has a visible label',()=>{
  assert.match(svg,/试压轮次/);
 });
 
+test('threshold readout stays outside the data area even when a trial equals the target',()=>{
+ const plot=buildExplorationPlot([{qualitySetting:20,ssim:.98}],.98);
+ const svg=renderExplorationSvg(plot);
+ const match=svg.match(/<text class="curve-threshold-label"[^>]*y="([\d.]+)"/);
+ assert.ok(match);
+ assert.ok(Number(match[1])<plot.paddingY,'Threshold text must not overlap plotted trials');
+ assert.doesNotMatch(svg,/NaN|undefined/);
+});
+
 const frontier=()=>{
  const model=fitRateDistortionModel([
  {sampleBitrate:4e6,ssim:.91,averageSsim:.935,sampleMeasurements:[{ssim:.91},{ssim:.96}]},

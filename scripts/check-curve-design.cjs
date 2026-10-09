@@ -35,10 +35,17 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.equal(await page.locator('#efficiency .curve-observation').count(),4);
     assert.equal(await page.locator('#exploration path.curve-fail').count(),2);
     assert.equal(await page.locator('#exploration circle.curve-pass').count(),2);
+    const thresholdOutsidePlot=()=>page.evaluate(()=>{
+      const label=document.querySelector('#exploration .curve-threshold-label');
+      const b=label.getBBox();
+      return b.y+b.height<56;
+    });
+    assert.ok(await thresholdOutsidePlot(),'Threshold readout must stay above trial marks');
     assert.ok((await page.locator('#efficiency .curve-selection-label').textContent()).includes('估计'));
     await page.screenshot({path:'media-workspace-curves-design-desktop.png',fullPage:true});
     await page.setViewportSize({width:390,height:844});
     assert.deepEqual(await overflow(),[]);
+    assert.ok(await thresholdOutsidePlot());
     const geometry=await page.evaluate(()=>({
       document:document.documentElement.scrollWidth,width:innerWidth,
       charts:[...document.querySelectorAll('.media-curve-viewport')].map(el=>({width:el.clientWidth,scroll:el.scrollWidth}))
