@@ -13,6 +13,7 @@ import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics
 import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
 import { createSizeQualityFrontier, fitRateDistortionModel } from './rate-distortion-model.js';
 import { buildSizeFrontierPlot, evidenceFractionForTargetBytes, targetBytesAtEvidenceFraction } from './size-frontier-ui.js';
+import { buildExplorationPlot } from './transcode-curves.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -71,6 +72,7 @@ const state = {
   benchmarks: {},
   qualityCalibration: {},
   rateDistortionModels: {},
+  qualityExplorationPoints: {},
   sizeBudgetTargetBytes: null,
   sizeFrontierPointerId: null,
   qualityCalibrationTarget: null,
@@ -325,6 +327,12 @@ app.innerHTML = `
             <button id="calibrateQualityBtn" type="button">比较可用编码器并校准</button>
             <small>校准会对代表性短片段反复试编码。短样本用于寻找参数边界，不是整片质量保证。</small>
             <div id="qualityCalibrationResult" class="note"></div>
+            <div id="qualityExplorationPanel" class="quality-exploration-panel">
+              <strong>实测探索曲线</strong>
+              <small>横轴为实测顺序，点旁为 CQ/CRF；虚线表示最低样本 SSIM 阈值。</small>
+              <svg id="qualityExplorationChart" viewBox="0 0 720 220" role="img" aria-label="硬字幕校准的真实 CQ/CRF 探索轨迹"></svg>
+              <p id="qualityExplorationReadout" class="note">校准前没有实测探索点。</p>
+            </div>
           </div>
         </div>
 
@@ -1346,6 +1354,7 @@ $('encodeGoal').addEventListener('change', () => {
 
 $('qualityTarget').addEventListener('change', () => {
   state.qualityCalibration = {};
+  state.qualityExplorationPoints = {};
   state.qualityCalibrationTarget = null;
   $('qualityCalibrationResult').textContent = '';
   updateQualityTargetPreview();
@@ -3985,11 +3994,37 @@ function chooseDefaultCodec(goal) {
 function invalidateQualityCalibration() {
   state.qualityCalibration = {};
   state.rateDistortionModels = {};
+  state.qualityExplorationPoints = {};
   state.sizeBudgetTargetBytes = null;
   state.sizeFrontierPointerId = null;
   state.qualityCalibrationTarget = null;
   if ($('sizeBudgetBytes')) $('sizeBudgetBytes').value = '';
   if ($('qualityCalibrationResult')) $('qualityCalibrationResult').textContent = '';
+}
+
+
+function renderQualityExploration() {
+  const chart=$('qualityExplorationChart'),readout=$('qualityExplorationReadout');
+  if(!chart || !readout)return;
+  const codec=state.selectedCodec || chooseDefaultCodec('targetQuality');
+  const trials=state.qualityExplorationPoints?.[codec]||[];
+  const target=Number(state.qualityCalibrationTarget || $('qualityTarget')?.value || .985);
+  const p=buildExplorationPlot(trials,target);
+  if(!p.ok){
+    chart.replaceChildren();
+    readout.textContent='当前编码器尚无实测探索点；执行目标质量校准后逐点绘制。';
+    return;
+  }
+  chart.innerHTML=
+    '<line x1="32" x2="688" y1="'+p.targetY.toFixed(2)+'" y2="'+p.targetY.toFixed(2)+'" stroke="currentColor" opacity=".55" stroke-dasharray="5 5"></line>'+
+    '<path d="'+p.line+'" fill="none" stroke="currentColor" stroke-width="2.5"></path>'+
+    p.measured.map(x=>
+      '<circle cx="'+x.x.toFixed(2)+'" cy="'+x.y.toFixed(2)+'" r="5" fill="'+(x.meetsTarget?'#31bc89':'#df9876')+'"></circle>'+
+      '<text x="'+x.x.toFixed(2)+'" y="'+Math.max(12,x.y-10).toFixed(2)+'" fill="currentColor" font-size="12" text-anchor="middle">CRF '+Number(x.qualitySetting)+'</text>'
+    ).join('');
+  readout.textContent=codec.toUpperCase()+' · '+trials.length+' 个实测参数 · 最近 CRF '+
+    trials.at(-1).qualitySetting+'，最低样本 SSIM '+Number(trials.at(-1).ssim).toFixed(5)+
+    '。曲线显示探索顺序，不是全视频精度或整片画质保证。';
 }
 
 function updateQualityCalibrationControls() {
@@ -4041,6 +4076,7 @@ function updateQualityCalibrationControls() {
   }
 
   renderSizeFrontier();
+  renderQualityExploration();
 }
 function renderPlanOptions() {
   if (!state.media) {
@@ -4377,6 +4413,13 @@ async function calibrateCodecQuality(codec, target) {
       ' · 目标 SSIM ' + target.toFixed(3) + '…';
     const result = await evaluateQualityCandidate(codec, crf, preset, target);
     tested.set(crf, result);
+    if (!state.qualityExplorationPoints[codec]) state.qualityExplorationPoints[codec]=[];
+    state.qualityExplorationPoints[codec].push({
+      ...result, qualitySetting:crf,
+      iteration:state.qualityExplorationPoints[codec].length+1,
+      meetsTarget:result.ssim>=target
+    });
+    renderQualityExploration();
     if (!bestQuality || result.ssim > bestQuality.ssim) bestQuality = result;
     log(
       '目标质量校准 ' + codec.toUpperCase() +
@@ -4474,9 +4517,11 @@ async function runQualityCalibration() {
   if (goal === 'efficiency') {
     state.qualityCalibration = {};
     state.rateDistortionModels = {};
+    state.qualityExplorationPoints = {};
   } else {
     delete state.qualityCalibration[state.selectedCodec];
     delete state.rateDistortionModels[state.selectedCodec];
+    delete state.qualityExplorationPoints[state.selectedCodec];
   }
   state.qualityCalibrationTarget = target;
   updateQualityCalibrationControls();
