@@ -69,3 +69,16 @@ test('calibration summary exposes sample spread without pretending to be a confi
   assert.equal(summary.maxBitrate,25_000_000);
   assert.equal(summarizeCalibrationEvidence([{sampleMeasurements:[{bitrate:0,ssim:.9}]}]),null);
 });
+
+test('visual exploration plot retains measured min/max per-point whiskers',()=>{
+ const p=buildExplorationPlot([
+  {qualitySetting:20,ssim:.945,sampleMeasurements:[{ssim:.945},{ssim:.963}]},
+  {qualitySetting:25,ssim:.975,sampleMeasurements:[{ssim:.975},{ssim:.99}]}
+ ],.98);
+ assert.equal(p.ok,true);
+ assert.equal(p.paddingX,66);
+ assert.equal(p.paddingY,34);
+ assert.ok(p.measured[0].highY < p.measured[0].lowY);
+ assert.ok(p.measured[1].highY < p.measured[1].lowY);
+ assert.ok(p.targetY >= p.paddingY && p.targetY <= p.height-p.paddingY);
+});

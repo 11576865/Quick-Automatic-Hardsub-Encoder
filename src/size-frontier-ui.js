@@ -37,8 +37,8 @@ function pathFor(points, key) {
 export function buildSizeFrontierPlot(frontier, {
   width = 720,
   height = 220,
-  paddingX = 34,
-  paddingY = 24,
+  paddingX = 66,
+  paddingY = 34,
   sampleCount = 72,
   selectedTargetBytes = null
 } = {}) {

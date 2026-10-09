@@ -6801,3 +6801,31 @@ body.ui-phone .size-frontier-scale span:nth-child(2) {
 .quality-exploration-panel small {font-size:.8rem;opacity:.75}
 .quality-exploration-panel svg {display:block;width:100%;height:auto;aspect-ratio:720/220;min-height:120px;border:1px solid rgba(120,145,174,.2);border-radius:8px;background:rgba(10,15,29,.2)}
 .quality-exploration-panel p {margin:0;font-size:.83rem}
+
+/* Shared measured-chart semantics: measured evidence != fitted interpolation. */
+.curve-axis {stroke:color-mix(in srgb,var(--muted) 75%,transparent);stroke-width:1}
+.curve-grid {stroke:color-mix(in srgb,var(--muted) 20%,transparent);stroke-width:1;pointer-events:none}
+.curve-tick,.curve-point-label,.curve-threshold-label {
+  fill:var(--muted);font:11px/1 ui-monospace,SFMono-Regular,Consolas,monospace;
+  pointer-events:none
+}
+.curve-fit {fill:none;stroke:var(--plan);stroke-width:2.6;stroke-linecap:round;pointer-events:none}
+.curve-band {fill:color-mix(in srgb,var(--plan) 18%,transparent);stroke:none;pointer-events:none}
+.curve-observation {fill:var(--surface);stroke:var(--plan);stroke-width:2.2;pointer-events:none}
+.curve-cursor {stroke:var(--plan);stroke-width:1;stroke-dasharray:3 5;opacity:.7;pointer-events:none}
+.curve-knee {fill:var(--surface-2);stroke:var(--warn);stroke-width:2;pointer-events:none}
+.curve-selected-halo {fill:color-mix(in srgb,var(--plan) 20%,transparent);pointer-events:none}
+.curve-selected {fill:var(--plan);stroke:var(--surface);stroke-width:1.8;pointer-events:none}
+.curve-threshold {stroke:var(--warn);stroke-width:1.5;pointer-events:none}
+.curve-threshold-label {fill:var(--warn)}
+.curve-trajectory {fill:none;stroke:var(--plan);stroke-width:2;stroke-dasharray:5 4;opacity:.8;pointer-events:none}
+.curve-pass {fill:var(--surface);stroke:#25966c;stroke-width:2.6;pointer-events:none}
+.curve-fail {fill:var(--surface);stroke:#d38058;stroke-width:2.6;pointer-events:none}
+.curve-sample-whisker {stroke:var(--muted);stroke-width:1.5;opacity:.8;pointer-events:none}
+
+/* Guided hard-sub curves use the same minimum readable SVG scale. */
+.size-frontier-chart-wrap {overflow-x:auto;overscroll-behavior-x:contain}
+.size-frontier-chart {min-width:560px}
+.quality-exploration-panel {min-width:0;overflow-x:auto}
+.quality-exploration-panel svg {min-width:560px}
+
