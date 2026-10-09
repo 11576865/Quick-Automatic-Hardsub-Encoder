@@ -127,7 +127,7 @@ export function renderExplorationSvg(plot) {
     x:trials.map((p,i)=>({fraction:trials.length===1?0.5:i/(trials.length-1),label:String(p.iteration??i+1)}))
   },'试压轮次 · 虚线仅表示执行顺序','最低样本 SSIM');
   const threshold=line(paddingX,plot.targetY,width-paddingX,plot.targetY,'curve-threshold',' stroke-dasharray="5 5"')+
-    text(paddingX+12,clamp(plot.targetY-8,paddingY+14,height-paddingY-8),
+    text(paddingX,paddingY-10,
       '目标 '+Number(plot.targetSsim).toFixed(5),'curve-threshold-label','start');
   // Search order is discrete and may move back and forth in CQ. Dashed
   // segments denote execution order, never interpolation between trials.

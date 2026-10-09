@@ -82,3 +82,50 @@ test('visual exploration plot retains measured min/max per-point whiskers',()=>{
  assert.ok(p.measured[1].highY < p.measured[1].lowY);
  assert.ok(p.targetY >= p.paddingY && p.targetY <= p.height-p.paddingY);
 });
+
+test('exploration excludes absent and invalid observations without inventing zero SSIM',()=>{
+ const invalid=[null,undefined,'','  ',false,true,-.01,1.01,NaN,Infinity];
+ for(const ssim of invalid){
+  assert.equal(buildExplorationPlot([{qualitySetting:20,ssim}],.98).ok,false,String(ssim));
+ }
+ assert.equal(buildExplorationPlot([{qualitySetting:null,ssim:.99}],.98).ok,false);
+ for(const target of [null,undefined,'',' ',false,true])
+  assert.equal(buildExplorationPlot([{qualitySetting:20,ssim:.99}],target).ok,false);
+ const plot=buildExplorationPlot([
+  {qualitySetting:30,ssim:null},
+  {qualitySetting:'20',ssim:'.99',sampleMeasurements:[{ssim:null},{ssim:''},{ssim:.99},{ssim:1}]}
+ ],.98);
+ assert.equal(plot.measured.length,1);
+ assert.equal(plot.measured[0].ssim,.99);
+ assert.equal(plot.measured[0].iteration,2);
+ assert.ok(plot.min>.9,'Missing samples must not expand the scale toward zero');
+ assert.equal(plot.measured[0].lowY,plot.measured[0].y);
+});
+
+test('exploration derives pass status from the plotted threshold and retains boundary measurements',()=>{
+ const plot=buildExplorationPlot([
+  {qualitySetting:0,ssim:0,meetsTarget:true},
+  {qualitySetting:20,ssim:1,meetsTarget:false}
+ ],1);
+ assert.equal(plot.ok,true);
+ assert.deepEqual(plot.measured.map(p=>p.meetsTarget),[false,true]);
+ assert.deepEqual(plot.measured.map(p=>p.iteration),[1,2]);
+});
+
+test('quality search rejects missing SSIM and nonfinite rate before publishing evidence',async()=>{
+ for(const ssim of [null,undefined,'',' ',false,true]){
+  const published=[];
+  await assert.rejects(exploreQuality({minQuality:20,maxQuality:40,targetSsim:.98,
+   evaluate:async()=>({sampleBitrate:1e6,ssim}),onPoint:p=>published.push(p)
+  }),/有效码率或 SSIM/);
+  assert.equal(published.length,0);
+ }
+ await assert.rejects(exploreQuality({minQuality:20,maxQuality:40,targetSsim:.98,
+  evaluate:async()=>({sampleBitrate:Infinity,ssim:.99})
+ }),/有效码率或 SSIM/);
+});
+
+test('sample summary refuses missing quality instead of reporting zero as a measured minimum',()=>{
+ for(const ssim of [null,undefined,'',' ',false,true])
+  assert.equal(summarizeCalibrationEvidence([{sampleMeasurements:[{bitrate:1e6,ssim}]}]),null);
+});
