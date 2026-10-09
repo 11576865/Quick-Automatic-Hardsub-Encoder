@@ -1,5 +1,6 @@
 import { fitRateDistortionModel, createSizeQualityFrontier } from './rate-distortion-model.js';
 import { buildSizeFrontierPlot } from './size-frontier-ui.js';
+import { CURVE_CHART_LAYOUT } from './curve-chart-svg.js';
 
 const finite = value => Number.isFinite(Number(value)) ? Number(value) : null;
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
@@ -108,7 +109,8 @@ export function createMeasuredSizeFrontier(points, {
 }
 
 export function buildExplorationPlot(points, targetSsim, {
-  width = 720, height = 220, paddingX = 66, paddingY = 34
+  width = CURVE_CHART_LAYOUT.width, height = CURVE_CHART_LAYOUT.height,
+  paddingX = CURVE_CHART_LAYOUT.paddingX, paddingY = CURVE_CHART_LAYOUT.paddingY
 } = {}) {
   if (!Array.isArray(points) || !points.length) return { ok: false, reason: 'no-measurements' };
   const valid = points.filter(p => Number.isFinite(Number(p.ssim)) && Number.isFinite(Number(p.qualitySetting)));
@@ -140,5 +142,5 @@ export function buildExplorationPlot(points, targetSsim, {
   });
   const targetY = yForQuality(target);
   const line = measured.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' ');
-  return { ok: true, width, height, paddingX, paddingY, measured, line, targetY, min, max };
+  return { ok: true, width, height, paddingX, paddingY, measured, line, targetY, targetSsim:target, min, max };
 }
