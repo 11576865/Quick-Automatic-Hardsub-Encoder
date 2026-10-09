@@ -2,6 +2,7 @@ import { compileTask } from './media-task.js';
 import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, CALIBRATION_PROFILES, summarizeCalibrationEvidence, parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
 import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
+import { calibrationTimeBudget } from './compression-decision.js';
 
 // One measured size-quality curve for manual video-only transcode. This is intentionally
 // separate from subtitle calibration: sample identity must match the manual
@@ -272,9 +273,12 @@ export function mountTranscodeCurves(section, hooks) {
       evidenceMedia=media;
       updateEvidence([],raw,task);
       const limits=raw.encoder.endsWith('_nvenc')?{min:14,max:45}:raw.codec==='av1'?{min:18,max:50}:{min:12,max:40};
+      const budgetSeconds=calibrationTimeBudget(fullDuration);
+      label('本次校准预计软预算约 '+Math.round(budgetSeconds)+' 秒；单个不可中断的原生样本仍可能超时。');
       const result=await exploreQuality({
         minQuality:limits.min,maxQuality:limits.max,targetSsim:target,
         maxEvaluations:7,
+        budgetSeconds,
         evaluate:async q=>{
           const samples=[];
           for(const start of starts){
@@ -320,6 +324,8 @@ export function mountTranscodeCurves(section, hooks) {
       updateEvidence(result.points,raw,task);
       label('实测完成：'+result.evaluatedCount+' 个 CQ/CRF，'+starts.length+
         ' 个分散位置，每处 '+profile.seconds+' 秒；'+(result.best?'满足最低样本 SSIM 的最高已测质量值 '+result.best.qualitySetting:'所测设置均未达到目标')+
+        '；实测编码耗时 '+result.encodeSeconds.toFixed(1)+' 秒'+
+        (result.partial?'，提前停止原因 '+result.stopReason+'（当前证据可能不足）':'')+
         '。曲线仅代表短片观测，不保证七小时整片。');
     } catch(error){
       clearEvidence();

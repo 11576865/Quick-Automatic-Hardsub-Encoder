@@ -82,7 +82,7 @@ export function createMultiBranchFrontier(branches, {
       ? incumbent : winner;
     return {
       status:'within-evidence',targetBytes:bytes,videoBitrate:chosen.videoBitrate,
-      prediction:chosen.prediction,branchId:chosen.id,preset:chosen.preset,
+      prediction:{...chosen.prediction,branchId:chosen.id},branchId:chosen.id,preset:chosen.preset,
       bestMeasuredId:winner.id,handoff:!!(incumbent && chosen.id!==incumbent.id),
       qualityGainOverIncumbent:incumbent?winner.conservativeQuality-incumbent.conservativeQuality:null,
       alternatives:ordered.map(c=>({id:c.id,quality:c.prediction.quality,

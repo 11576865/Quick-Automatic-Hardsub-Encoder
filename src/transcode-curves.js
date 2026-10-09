@@ -1,6 +1,7 @@
 import { fitRateDistortionModel, createSizeQualityFrontier } from './rate-distortion-model.js';
 import { buildSizeFrontierPlot } from './size-frontier-ui.js';
 import { CURVE_CHART_LAYOUT } from './curve-chart-svg.js';
+import { calibrationCost, calibrationShouldContinue } from './compression-decision.js';
 
 const finite = value => Number.isFinite(Number(value)) ? Number(value) : null;
 const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
@@ -64,13 +65,21 @@ export function summarizeCalibrationEvidence(points) {
 // evidence. Endpoints establish the sampled range; midpoint trials converge on
 // the last setting meeting the minimum (worst-segment) SSIM threshold.
 export async function exploreQuality({
-  minQuality, maxQuality, targetSsim, evaluate, onPoint = () => {}, maxEvaluations = 7
+  minQuality, maxQuality, targetSsim, evaluate, onPoint = () => {}, maxEvaluations = 7,
+  budgetSeconds = null
 }) {
   const lo = Math.ceil(Number(minQuality)), hi = Math.floor(Number(maxQuality));
   const target = Number(targetSsim);
   if (!(lo >= 0 && hi > lo && hi <= 63 && target > 0 && target < 1)) throw Error('无效的质量搜索范围或目标 SSIM');
   if (typeof evaluate !== 'function') throw Error('缺少真实测试片段评估函数');
   const points = [], cache = new Map();
+  let stopReason = 'search-exhausted';
+  const affordable = () => {
+    if (budgetSeconds === null) return true;
+    const decision = calibrationShouldContinue({points, budgetSeconds});
+    if (!decision.continue) {stopReason = decision.reason;return false;}
+    return true;
+  };
   const test = async (q, lower, upper) => {
     if (cache.has(q)) return cache.get(q);
     const raw = await evaluate(q);
@@ -90,9 +99,9 @@ export async function exploreQuality({
     return point;
   };
   await test(lo, lo, hi);
-  if (points.length < maxEvaluations) await test(hi, lo, hi);
+  if (points.length < maxEvaluations && affordable()) await test(hi, lo, hi);
   let lower = lo, upper = hi;
-  while (points.length < maxEvaluations && lower <= upper) {
+  while (points.length < maxEvaluations && lower <= upper && affordable()) {
     const mid = Math.floor((lower + upper) / 2);
     if (cache.has(mid)) {
       const existing = cache.get(mid);
@@ -111,7 +120,11 @@ export async function exploreQuality({
     model: fitRateDistortionModel(points),
     evaluatedCount: points.length,
     targetSsim: target,
-    searchExhausted: lower > upper
+    searchExhausted: lower > upper,
+    stopReason: stopReason === 'time-budget' || stopReason === 'unknown-cost'
+      ? stopReason : lower > upper ? 'search-exhausted' : 'evaluation-cap',
+    encodeSeconds: points.map(calibrationCost).filter(Number.isFinite).reduce((a,b)=>a+b,0),
+    partial: !(lower > upper)
   };
 }
 

@@ -92,3 +92,11 @@ test('small-screen curves maintain readable numeric tick width and local scrolli
  assert.match(css,/\.media-curve-viewport svg\s*\{min-width:560px/);
  assert.match(globalCss,/\.size-frontier-chart \{min-width:560px\}/);
 });
+
+test('manual calibration enforces an observed-cost soft budget without claiming a hard timeout',async()=>{
+ const source=await readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8');
+ assert.match(source,/calibrationTimeBudget\(fullDuration\)/);
+ assert.match(source,/budgetSeconds,/);
+ assert.match(source,/result\.stopReason/);
+ assert.match(source,/单个不可中断的原生样本仍可能超时/);
+});

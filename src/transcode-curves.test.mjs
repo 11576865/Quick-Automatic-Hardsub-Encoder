@@ -140,3 +140,18 @@ test('native sample ingress validation distinguishes numbers from missing eviden
     assert.equal(parseMeasuredNumber(invalid),null,String(invalid));
   assert.equal(parseMeasuredNumber(0),0);
 });
+
+test('soft time budget stops exploration before unaffordable candidate and preserves partial evidence',async()=>{
+ const values=[];
+ const r=await exploreQuality({
+  minQuality:12,maxQuality:40,targetSsim:.98,budgetSeconds:10,
+  evaluate:async q=>({sampleBitrate:1e6+(40-q)*1e5,ssim:1-q/1000,
+    sampleMeasurements:[{elapsedSeconds:6,ssim:1-q/1000,bitrate:1e6}]}),
+  onPoint:p=>values.push(p)
+ });
+ assert.equal(r.evaluatedCount,1);
+ assert.equal(r.stopReason,'time-budget');
+ assert.equal(r.partial,true);
+ assert.equal(values.length,1);
+ assert.equal(r.model.ok,false);
+});
