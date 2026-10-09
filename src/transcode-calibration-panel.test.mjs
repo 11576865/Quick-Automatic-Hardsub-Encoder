@@ -22,3 +22,28 @@ test('manual transcode mounts measured exploration and efficiency curves',async(
   assert.match(bridge,/Sample encoder does not match the selected codec/);
   assert.match(bridge,/Selected sample encoder is not runtime-available/);
 });
+
+test('calibration workflow retains source identity and stops incomplete trials safely',async()=>{
+  const [panel,workspace,main,bridge]=await Promise.all([
+    readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+    readFile(new URL('./media-workspace.js',import.meta.url),'utf8'),
+    readFile(new URL('./main.js',import.meta.url),'utf8'),
+    readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+  ]);
+  for(const id of ['taskCurveProfile','taskStopCurve','taskExploreTarget','taskAdoptCurveRate'])
+    assert.match(panel,new RegExp('id="'+id+'"'));
+  assert.match(panel,/CALIBRATION_PROFILES\[profileControl\.value\]/);
+  assert.match(panel,/calibrationSampleStarts\(from,to,profile\.seconds,profile\.count\)/);
+  assert.match(panel,/if\(cancelRequested\)throw Error\('用户已停止校准'\)/);
+  assert.match(panel,/clearEvidence\(\);[\s\S]*?label\(\(cancelRequested/);
+  assert.match(panel,/const evidenceIsCurrent/);
+  assert.match(panel,/evidenceIsCurrent\(\)/);
+  assert.match(panel,/expectedAudioDuration/);
+  assert.match(workspace,/transcodeCurves\.invalidate\(\)/);
+  assert.match(main,/sampleExact: true/);
+  assert.match(main,/multipass, sampleExact: true/);
+  assert.match(bridge,/if \(\[bool\]\$Options\.sampleExact\)/);
+  assert.match(bridge,/no implicit hq tune/);
+  assert.equal((bridge.match(/function Invoke-Sample/g)||[]).length,1);
+  assert.match(bridge,/Requested NVENC fullres multipass is unavailable/);
+});

@@ -1723,3 +1723,12 @@ body.media-frame-lightbox-open {
 .media-curve-measurement button {font-size:.75rem;white-space:nowrap}
 .media-curve-readout {font-size:.83rem;min-height:42px;line-height:1.5}
 @media(max-width:760px){.media-curve-grid{grid-template-columns:1fr}}
+
+.media-curve-actions,.media-curve-options {
+  display:flex;flex-wrap:wrap;align-items:center;gap:12px;
+}
+.media-curve-actions button {min-height:38px}
+.media-curve-options select {max-width:100%;min-width:190px}
+.media-compression-curves #taskStopCurve:not(:disabled) {
+  border-color:rgba(220,130,100,.6);
+}
