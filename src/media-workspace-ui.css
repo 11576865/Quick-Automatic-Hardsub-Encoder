@@ -1745,3 +1745,8 @@ body.media-frame-lightbox-open {
 .legend-fail::before {border:2px solid #d38058;border-radius:50%}
 .legend-whisker::before {border-left:2px solid var(--muted);border-top:1px solid var(--muted);border-bottom:1px solid var(--muted);width:5px!important;height:10px!important}
 .media-curve-legend,.media-curve-readout {font-variant-numeric:tabular-nums}
+
+/* Narrow screens scroll the plot instead of scaling numeric ticks below legibility. */
+.media-curve-viewport {width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+.media-curve-viewport svg {min-width:560px;display:block}
+@media(min-width:760px){.media-curve-viewport svg{min-width:0}}

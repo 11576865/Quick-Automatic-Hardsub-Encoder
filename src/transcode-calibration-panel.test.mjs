@@ -78,3 +78,14 @@ test('both manual chart interfaces use the same axis, evidence and pointer geome
   assert.match(style,/\.curve-axis/);
   assert.match(mediaCss,/\.media-curve-legend/);
 });
+
+test('small-screen curves maintain readable numeric tick width and local scrolling',async()=>{
+ const [panel,css,globalCss]=await Promise.all([
+  readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+  readFile(new URL('./media-workspace-ui.css',import.meta.url),'utf8'),
+  readFile(new URL('./style.css',import.meta.url),'utf8')
+ ]);
+ assert.equal((panel.match(/class="media-curve-viewport"/g)||[]).length,2);
+ assert.match(css,/\.media-curve-viewport svg\s*\{min-width:560px/);
+ assert.match(globalCss,/\.size-frontier-chart \{min-width:560px\}/);
+});
