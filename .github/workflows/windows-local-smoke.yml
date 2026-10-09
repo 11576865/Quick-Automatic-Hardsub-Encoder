@@ -190,8 +190,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Reference fixture failed.' }
           & ffmpeg -hide_banner -loglevel error -y -i $reference -vf 'scale=160:90:flags=bicubic' -c:v libx264 -pix_fmt yuv420p $candidate
           if ($LASTEXITCODE -ne 0) { throw 'Reduced-resolution candidate failed.' }
-          $score=& ffmpeg -hide_banner -nostdin -i $candidate -i $reference -lavfi '[0:v]scale=320:180:flags=bicubic,setpts=PTS-STARTPTS[up];[1:v]setpts=PTS-STARTPTS[ref];[up][ref]ssim' -f null NUL 2>&1
-          if ($LASTEXITCODE -ne 0 -or (-join $score) -notmatch 'All:[0-9.]+') {
+          $ssimLog=Join-Path $work 'common-reference-ssim.log'
+          & ffmpeg -hide_banner -nostdin -i $candidate -i $reference -lavfi '[0:v]scale=320:180:flags=bicubic,setpts=PTS-STARTPTS[up];[1:v]setpts=PTS-STARTPTS[ref];[up][ref]ssim' -f null NUL 2> $ssimLog
+          $exitCode=$LASTEXITCODE
+          $score=Get-Content -Raw -LiteralPath $ssimLog
+          if ($exitCode -ne 0 -or $score -notmatch 'All:[0-9.]+') {
             throw 'Reduced candidate cannot be scored against the original-size reference.'
           }
       - name: Real AV1 ALAC MKV acceptance
