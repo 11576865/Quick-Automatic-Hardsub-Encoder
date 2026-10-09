@@ -36,13 +36,14 @@ export function mountTranscodeCurves(section, hooks) {
   const btn = get('taskExploreCurve'), plot = get('taskExplorationChart');
   const efficiency = get('taskEfficiencyChart'), readout = get('taskCurveReadout');
   const targetControl = get('taskExploreTarget'), profileControl = get('taskCurveProfile'), stop = get('taskStopCurve');
-  let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, sourceKey = '';
+  let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, disposed = false, sourceKey = '';
   let fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
   const evidenceIsCurrent = () => !!sourceKey &&
     sourceKey === calibrationKey(hooks.settings(), {duration:sourceDuration});
   const label = text => { get('taskCurveStatus').textContent = text; };
   const measuredVideoSize = bytes => (bytes / 1e9).toFixed(2) + ' GB';
   const useQuality = q => {
+    if (running || hooks.busy() || !evidenceIsCurrent()) return;
     hooks.applyQuality(q);
     label('已采用实际测试过的 CQ/CRF ' + q + '。改变参数后应再次检查输出。');
   };
@@ -74,7 +75,7 @@ export function mountTranscodeCurves(section, hooks) {
         ' · ' + (point.sampleBitrate / 1e6).toFixed(2) + ' Mbps';
       const adopt = document.createElement('button');
       adopt.type='button';adopt.className='secondary';adopt.textContent='采用此质量值';
-      adopt.disabled = running;
+      adopt.disabled = running || hooks.busy() || !evidenceIsCurrent();
       adopt.addEventListener('click', () => useQuality(point.qualitySetting));
       row.append(details,adopt);rows.append(row);
     }
@@ -154,7 +155,7 @@ export function mountTranscodeCurves(section, hooks) {
   });
   get('taskAdoptCurveRate').addEventListener('click',()=>{
     const evaluation = frontier?.evaluateTargetBytes(selectedBytes);
-    if (!evidenceIsCurrent() || evaluation?.status !== 'within-evidence')return;
+    if (running || hooks.busy() || !evidenceIsCurrent() || evaluation?.status !== 'within-evidence')return;
     hooks.applyBitrate(Math.round(evaluation.videoBitrate));
     label('已采用 ' + (evaluation.videoBitrate/1e6).toFixed(2) +
       ' Mbps 的目标平均码率。VBR 与实测 CQ 不同；正式输出的体积/画质仍需验证。');
@@ -174,6 +175,7 @@ export function mountTranscodeCurves(section, hooks) {
   const invalidate=()=>{
     if (running) {
       cancelRequested=true;
+      clearEvidence();
       label('输入或编码参数发生变化，已停止继续采样；当前试压结束后将作废证据。');
       render();
       return;
@@ -183,6 +185,7 @@ export function mountTranscodeCurves(section, hooks) {
     render();
   };
   targetControl.addEventListener('change',invalidate);
+  targetControl.addEventListener('input',invalidate);
   profileControl.addEventListener('change',invalidate);
   stop.addEventListener('click',()=>{
     if(!running)return;
@@ -191,15 +194,28 @@ export function mountTranscodeCurves(section, hooks) {
     render();
   });
   btn.addEventListener('click',async()=>{
-    if (running || hooks.busy())return;
+    if (disposed || running || hooks.busy())return;
+    clearEvidence();
     running=true;cancelRequested=false;render();hooks.setBusy(true);
     try {
       const raw=hooks.settings();
+      // Capture the entire input identity before the first await. Do not stamp
+      // old settings with a new source/target after prepare or validation.
+      const runKey=calibrationKey(raw,{});
+      const assertRunCurrent=()=>{
+        if(cancelRequested || disposed)throw Error('用户已停止校准');
+        if(runKey!==calibrationKey(hooks.settings(),{})) {
+          cancelRequested=true;
+          throw Error('素材或编码参数已改变，请重新运行实测');
+        }
+      };
       if(raw.operation!=='transcode')throw Error('请切换至纯视频转码模式');
       if(!hooks.isWindows())throw Error('当前曲线需要 Windows Native；其他端尚未验证样本编码器一致性');
       const media=await hooks.prepare('transcode');
+      assertRunCurrent();
       const task=compileTask({...raw,rateMode:'quality',twoPass:false},media);
       await hooks.validate?.(task);
+      assertRunCurrent();
       if(task.expectedVideoTracks!==1 || task.videoStreams[0]!==0)throw Error('曲线当前只支持主视频流 v:0');
       const unsupported=['fps','frames','width','height','crop','gop','bf','refs','threads','codecParams','profile','level','tune','maxrate','bufsize','lookahead','aqStrength'];
       if(unsupported.some(k=>String(raw[k]??'').trim()))throw Error('当前使用了样本接口未等价支持的高级参数，请先恢复默认再校准');
@@ -229,7 +245,7 @@ export function mountTranscodeCurves(section, hooks) {
         evaluate:async q=>{
           const samples=[];
           for(const start of starts){
-            if(cancelRequested)throw Error('用户已停止校准');
+            assertRunCurrent();
             label('探索中：CQ/CRF '+q+' · 样本 '+(samples.length+1)+'/'+starts.length+
               ' · 位置 '+Math.round(start)+' 秒 · '+profile.seconds+' 秒/处');
             const sample=await hooks.calibrationSample({
@@ -237,7 +253,7 @@ export function mountTranscodeCurves(section, hooks) {
               multipass:task.multipass,
               quality:q,start,duration:profile.seconds
             });
-            if(cancelRequested)throw Error('用户已停止校准');
+            assertRunCurrent();
             if(!sample || sample.ssim==null || sample.totalVideoBytes==null)throw Error('真实样本未返回 SSIM 或视频字节数');
             const seconds=Number(sample.duration||0);
             if(!(seconds>0) || !(Number(sample.totalVideoBytes)>0))throw Error('测试片段缺少有效时长或视频包字节数');
@@ -257,11 +273,13 @@ export function mountTranscodeCurves(section, hooks) {
           };
         },
         onPoint:(point,current)=>{
+          assertRunCurrent();
           updateEvidence(current,raw,task);
           label('已实测 '+current.length+' 个质量设置；最新 CQ/CRF '+point.qualitySetting+
             '，最低 SSIM '+point.ssim.toFixed(5)+'，样本码率 '+(point.sampleBitrate/1e6).toFixed(2)+' Mbps');
         }
       });
+      assertRunCurrent();
       updateEvidence(result.points,raw,task);
       label('实测完成：'+result.evaluatedCount+' 个 CQ/CRF，'+starts.length+
         ' 个分散位置，每处 '+profile.seconds+' 秒；'+(result.best?'满足最低样本 SSIM 的最高已测质量值 '+result.best.qualitySetting:'所测设置均未达到目标')+
@@ -271,10 +289,12 @@ export function mountTranscodeCurves(section, hooks) {
       label((cancelRequested ? '已作废未完成曲线：' : '无法生成可信实测曲线：') + error.message);
       hooks.log?.('转码曲线校准结束：'+(error.stack||error.message));
     } finally {
-      running=false;hooks.setBusy(false);render();
+      running=false;hooks.setBusy(false);if(!disposed)render();
     }
   });
   const refresh=()=>{panel.hidden=hooks.settings().operation!=='transcode';};
   refresh();render();
-  return {panel,refresh,invalidate,dispose:()=>panel.remove()};
+  return {panel,refresh,invalidate,dispose:()=>{
+    disposed=true;cancelRequested=true;clearEvidence();panel.remove();
+  }};
 }
