@@ -1100,6 +1100,8 @@ function renderSizeFrontier() {
   const goal = $('encodeGoal')?.value || 'balanced';
   const codec = state.selectedCodec || chooseDefaultCodec(goal);
   const model = codec ? state.rateDistortionModels?.[codec] : null;
+  const multiReady=state.sizeEnvelopeEnabled &&
+    Object.values(state.rateDistortionModels).filter(m=>m?.ok).length>=2;
   const nativeOnly = !state.nativeBackend?.available;
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
   const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
@@ -1121,7 +1123,7 @@ function renderSizeFrontier() {
   if(branchAction){branchAction.classList.add('hidden');branchAction.disabled=true;}
 
   const label = codec ? codec.toUpperCase() : '当前编码器';
-  if (!model?.ok) {
+  if (!model?.ok && !multiReady) {
     wrap.classList.add('hidden');
     empty.classList.remove('hidden');
     empty.textContent = nativeOnly
