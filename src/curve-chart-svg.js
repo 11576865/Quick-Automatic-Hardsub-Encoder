@@ -3,6 +3,7 @@
 // not duplicated as magic layout numbers in event listeners.
 const n = value => Number(value).toFixed(2);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+export const CURVE_CHART_LAYOUT = Object.freeze({width:720,height:300,paddingX:76,paddingY:56});
 const line = (x1, y1, x2, y2, cls, extra = '') =>
   '<line class="' + cls + '" x1="' + n(x1) + '" y1="' + n(y1) +
   '" x2="' + n(x2) + '" y2="' + n(y2) + '"' + extra + '></line>';
@@ -24,47 +25,80 @@ export function plotXFromClientX(clientX, rect, width = 720) {
   return (x - left) * width / w;
 }
 
-function axes(plot, ticks) {
+function distinctLabels(values, minimumDecimals = 0) {
+  for (let decimals = minimumDecimals; decimals <= 8; decimals++) {
+    const labels = values.map(v=>Number(v).toFixed(decimals));
+    if (new Set(labels).size === values.length) return labels;
+  }
+  return values.map(v=>Number(v).toPrecision(12));
+}
+
+function qualityTicks(min, max) {
+  const values = [0,.25,.5,.75,1].map(f=>min+(max-min)*f);
+  const labels = distinctLabels(values,4);
+  return values.map((value,i)=>({value,label:labels[i]}));
+}
+
+function budgetScale(min, max) {
+  const [unit,divisor] = max>=1e12 ? ['TB',1e12] : max>=1e9 ? ['GB',1e9]
+    : max>=1e6 ? ['MB',1e6] : max>=1e3 ? ['kB',1e3] : ['B',1];
+  const fractions = [0,.25,.5,.75,1];
+  const values = fractions.map(f=>Math.exp(Math.log(min)+(Math.log(max)-Math.log(min))*f)/divisor);
+  const labels = distinctLabels(values,values.at(-1)<10?2:1);
+  return {unit,divisor,ticks:fractions.map((fraction,i)=>({fraction,label:labels[i]}))};
+}
+
+function badge(plot, value) {
+  const width = 280, x = plot.width-plot.paddingX-width;
+  return '<rect class="curve-selection-badge" x="'+n(x)+'" y="12" width="'+width+'" height="29" rx="7"></rect>'+
+    text(x+width/2,31,value,'curve-selection-label');
+}
+
+function whisker(p, lowY, highY) {
+  if (![lowY,highY].every(Number.isFinite) || Math.abs(lowY-highY)<.5) return '';
+  return line(p.x,lowY,p.x,highY,'curve-sample-whisker')+
+    line(p.x-4,lowY,p.x+4,lowY,'curve-sample-whisker')+
+    line(p.x-4,highY,p.x+4,highY,'curve-sample-whisker');
+}
+
+function axes(plot, ticks, xTitle, yTitle) {
   const x0 = plot.paddingX, x1 = plot.width - plot.paddingX;
   const y0 = plot.paddingY, y1 = plot.height - plot.paddingY;
   let result = '';
   for (const tick of ticks.y) {
     const y = y1 - clamp((tick.value - ticks.min) / (ticks.max - ticks.min), 0, 1) * (y1-y0);
     result += line(x0,y,x1,y,'curve-grid');
-    result += text(x0-9,y+4,tick.label,'curve-tick','end');
+    result += text(x0-10,y+4,tick.label,'curve-tick curve-y-tick','end');
   }
   result += line(x0,y0,x0,y1,'curve-axis');
   result += line(x0,y1,x1,y1,'curve-axis');
   for(const tick of ticks.x) {
     const x = x0 + tick.fraction * (x1-x0);
+    if(tick.fraction>0 && tick.fraction<1)result += line(x,y0,x,y1,'curve-grid curve-grid-vertical');
     result += line(x,y1,x,y1+5,'curve-axis');
-    result += text(x,y1+19,tick.label,'curve-tick');
+    result += text(x,y1+23,tick.label,'curve-tick curve-x-tick');
   }
+  result += text(x0,30,yTitle,'curve-axis-title','start');
+  result += text((x0+x1)/2,plot.height-9,xTitle,'curve-axis-title');
   return result;
 }
 
 export function renderRateDistortionSvg(plot) {
   if (!plot?.ok) return '';
   const { width, height, paddingX, paddingY } = plot;
-  const formatGB = bytes => {
-    const gb=bytes/1e9;
-    return gb >= 100 ? gb.toFixed(0) : gb >= 10 ? gb.toFixed(1) : gb.toFixed(2);
-  };
   const min = plot.minBytes, max = plot.maxBytes;
-  const mid = Math.sqrt(min * max);
-  const yTicks = [0,0.5,1].map(f => ({
-    value:plot.qualityMin+(plot.qualityMax-plot.qualityMin)*f,
-    label:(plot.qualityMin+(plot.qualityMax-plot.qualityMin)*f).toFixed(4)
-  }));
+  const scale = budgetScale(min,max);
+  const formatSize = bytes=>(Number(bytes)/scale.divisor).toFixed(3)+' '+scale.unit;
   const ticks = axes(plot,{
-    min:plot.qualityMin,max:plot.qualityMax,y:yTicks,
-    x:[{fraction:0,label:formatGB(min)+' GB'},{fraction:0.5,label:formatGB(mid)+' GB'},{fraction:1,label:formatGB(max)+' GB'}]
-  });
+    min:plot.qualityMin,max:plot.qualityMax,y:qualityTicks(plot.qualityMin,plot.qualityMax),x:scale.ticks
+  },'体积预算 · '+scale.unit+' · 对数刻度','平均样本 SSIM');
   const band = '<path class="curve-band size-frontier-band" d="'+plot.bandPath+'"></path>';
   const fit = '<path class="curve-fit size-frontier-line" d="'+plot.curvePath+'"></path>';
   const points = plot.evidencePoints.map(p =>
+    whisker(p,p.lowerY,p.upperY)+
     '<circle class="curve-observation size-frontier-evidence" cx="'+n(p.x)+'" cy="'+n(p.y)+'" r="4.5">'+
-    '<title>实际测试数据：'+(Number(p.targetBytes)/1e9).toFixed(3)+' GB，SSIM '+Number(p.quality).toFixed(5)+'</title></circle>'
+    '<title>原始观测均值：SSIM '+Number(p.quality).toFixed(5)+'；样本码率映射预算 '+formatSize(p.targetBytes)+
+    '，不是整片实测体积</title></circle>'
   ).join('');
   const knee = plot.knee ?
     '<path class="curve-knee size-frontier-knee" d="M'+n(plot.knee.x)+' '+n(plot.knee.y-7)+
@@ -72,10 +106,14 @@ export function renderRateDistortionSvg(plot) {
     ' L'+n(plot.knee.x-7)+' '+n(plot.knee.y)+' Z"><title>样本范围内局部效率拐点</title></path>' : '';
   const selected = plot.selected ?
     line(plot.selected.x,paddingY,plot.selected.x,height-paddingY,'curve-cursor') +
+    line(paddingX,plot.selected.y,width-paddingX,plot.selected.y,'curve-cursor curve-cursor-horizontal') +
     '<circle class="curve-selected-halo size-frontier-thumb-halo" cx="'+n(plot.selected.x)+'" cy="'+n(plot.selected.y)+'" r="10"></circle>'+
     '<circle class="curve-selected size-frontier-thumb" cx="'+n(plot.selected.x)+'" cy="'+n(plot.selected.y)+'" r="5.5"></circle>' : '';
+  const selectionLabel=plot.selected
+    ? badge(plot,formatSize(plot.selected.targetBytes)+' · 估计 '+Number(plot.selected.quality).toFixed(5))
+    : badge(plot,'原始观测 '+plot.evidencePoints.length+' 点 · 局部拟合');
   return '<rect class="size-frontier-bg" x="0" y="0" width="'+n(width)+'" height="'+n(height)+'" rx="8"></rect>'+
-    ticks+band+fit+points+knee+selected;
+    ticks+band+fit+points+knee+selected+selectionLabel;
 }
 
 export function renderExplorationSvg(plot) {
@@ -85,24 +123,32 @@ export function renderExplorationSvg(plot) {
   const min=plot.min,max=plot.max;
   const ticks=axes(plot,{
     min,max,
-    y:[0,0.5,1].map(f=>({value:min+(max-min)*f,label:(min+(max-min)*f).toFixed(4)})),
+    y:qualityTicks(min,max),
     x:trials.map((p,i)=>({fraction:trials.length===1?0.5:i/(trials.length-1),label:String(p.iteration??i+1)}))
-  });
+  },'试压轮次 · 虚线仅表示执行顺序','最低样本 SSIM');
   const threshold=line(paddingX,plot.targetY,width-paddingX,plot.targetY,'curve-threshold',' stroke-dasharray="5 5"')+
-    text(width-paddingX-2,clamp(plot.targetY-5,paddingY+10,height-paddingY-3),'目标','curve-threshold-label','end');
+    text(paddingX+12,clamp(plot.targetY-8,paddingY+14,height-paddingY-8),
+      '目标 '+Number(plot.targetSsim).toFixed(5),'curve-threshold-label','start');
   // Search order is discrete and may move back and forth in CQ. Dashed
   // segments denote execution order, never interpolation between trials.
   const trajectory='<path class="curve-trajectory" d="'+plot.line+'"></path>';
-  const pts=trials.map(p=>{
-    const range=Number.isFinite(p.lowY)&&Number.isFinite(p.highY)&&Math.abs(p.lowY-p.highY)>0.5
-      ?line(p.x,p.lowY,p.x,p.highY,'curve-sample-whisker')+
-       line(p.x-4,p.lowY,p.x+4,p.lowY,'curve-sample-whisker')+
-       line(p.x-4,p.highY,p.x+4,p.highY,'curve-sample-whisker'):'';
-    return range+
-      '<circle class="'+(p.meetsTarget?'curve-pass':'curve-fail')+'" cx="'+n(p.x)+'" cy="'+n(p.y)+'" r="5">'+
-      '<title>第'+Number(p.iteration)+'次，CQ/CRF '+Number(p.qualitySetting)+
-      '，最低 SSIM '+Number(p.ssim).toFixed(5)+'</title></circle>'+
-      text(p.x,Math.max(paddingY+10,p.y-11),'Q'+Number(p.qualitySetting),'curve-point-label');
+  const pts=trials.map((p,i)=>{
+    const title='<title>第'+Number(p.iteration)+'次，CQ/CRF '+Number(p.qualitySetting)+
+      '，最低 SSIM '+Number(p.ssim).toFixed(5)+(p.meetsTarget?'，达标':'，未达标')+'</title>';
+    const mark=p.meetsTarget
+      ? '<circle class="curve-pass" cx="'+n(p.x)+'" cy="'+n(p.y)+'" r="5.5">'+title+'</circle>'
+      : '<path class="curve-fail" d="M'+n(p.x)+' '+n(p.y-6)+' L'+n(p.x+6)+' '+n(p.y)+
+        ' L'+n(p.x)+' '+n(p.y+6)+' L'+n(p.x-6)+' '+n(p.y)+' Z">'+title+'</path>';
+    // Keep labels outside the scene whisker and alternate crowded vertical
+    // positions. Edge labels align inward rather than spilling off the plot.
+    const above=Math.min(p.highY??p.y,p.y)-13;
+    const below=Math.max(p.lowY??p.y,p.y)+21;
+    const y=above>=paddingY+12 && (i%2===0 || below>height-paddingY-8)?above:below;
+    return whisker(p,p.lowY,p.highY)+mark+
+      text(p.x,clamp(y,paddingY+12,height-paddingY-8),'Q'+Number(p.qualitySetting),'curve-point-label',
+        i===0?'start':i===trials.length-1?'end':'middle');
   }).join('');
-  return ticks+threshold+trajectory+pts;
+  const last=trials.at(-1);
+  return '<rect class="size-frontier-bg" x="0" y="0" width="'+n(width)+'" height="'+n(height)+'" rx="8"></rect>'+
+    ticks+threshold+trajectory+pts+badge(plot,'最新 #'+Number(last.iteration)+' · CQ/CRF '+Number(last.qualitySetting));
 }

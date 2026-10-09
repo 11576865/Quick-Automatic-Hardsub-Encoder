@@ -6799,19 +6799,19 @@ body.ui-phone .size-frontier-scale span:nth-child(2) {
 .quality-exploration-panel {display:grid;gap:8px;margin-top:12px;padding:12px;border:1px solid rgba(120,145,174,.29);border-radius:12px}
 .quality-exploration-panel strong {font-size:.95rem}
 .quality-exploration-panel small {font-size:.8rem;opacity:.75}
-.quality-exploration-panel svg {display:block;width:100%;height:auto;aspect-ratio:720/220;min-height:120px;border:1px solid rgba(120,145,174,.2);border-radius:8px;background:rgba(10,15,29,.2)}
+.quality-exploration-panel svg {display:block;width:100%;height:auto;aspect-ratio:720/300;min-height:180px;border:1px solid rgba(120,145,174,.2);border-radius:8px;background:rgba(10,15,29,.2)}
 .quality-exploration-panel p {margin:0;font-size:.83rem}
 
 /* Shared measured-chart semantics: measured evidence != fitted interpolation. */
 .curve-axis {stroke:color-mix(in srgb,var(--muted) 75%,transparent);stroke-width:1}
 .curve-grid {stroke:color-mix(in srgb,var(--muted) 20%,transparent);stroke-width:1;pointer-events:none}
 .curve-tick,.curve-point-label,.curve-threshold-label {
-  fill:var(--muted);font:11px/1 ui-monospace,SFMono-Regular,Consolas,monospace;
+  fill:var(--muted);font:12px/1 ui-monospace,SFMono-Regular,Consolas,monospace;
   pointer-events:none
 }
 .curve-fit {fill:none;stroke:var(--plan);stroke-width:2.6;stroke-linecap:round;pointer-events:none}
 .curve-band {fill:color-mix(in srgb,var(--plan) 18%,transparent);stroke:none;pointer-events:none}
-.curve-observation {fill:var(--surface);stroke:var(--plan);stroke-width:2.2;pointer-events:none}
+.curve-observation {fill:var(--surface);stroke:var(--plan);stroke-width:2.2}
 .curve-cursor {stroke:var(--plan);stroke-width:1;stroke-dasharray:3 5;opacity:.7;pointer-events:none}
 .curve-knee {fill:var(--surface-2);stroke:var(--warn);stroke-width:2;pointer-events:none}
 .curve-selected-halo {fill:color-mix(in srgb,var(--plan) 20%,transparent);pointer-events:none}
@@ -6822,6 +6822,13 @@ body.ui-phone .size-frontier-scale span:nth-child(2) {
 .curve-pass {fill:var(--surface);stroke:#25966c;stroke-width:2.6;pointer-events:none}
 .curve-fail {fill:var(--surface);stroke:#d38058;stroke-width:2.6;pointer-events:none}
 .curve-sample-whisker {stroke:var(--muted);stroke-width:1.5;opacity:.8;pointer-events:none}
+.curve-axis-title {fill:var(--muted);font:12px/1 system-ui,sans-serif;pointer-events:none}
+.curve-selection-badge {fill:var(--surface-2);stroke:var(--border);pointer-events:none}
+.curve-selection-label {fill:var(--text);font:12px/1 ui-monospace,SFMono-Regular,Consolas,monospace;pointer-events:none}
+.curve-cursor-horizontal {opacity:.45}
+.curve-grid-vertical {stroke-dasharray:2 6;opacity:.55}
+.curve-point-label {paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round;fill:var(--text)}
+.curve-threshold-label {paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
 
 /* Guided hard-sub curves use the same minimum readable SVG scale. */
 .size-frontier-chart-wrap {overflow-x:auto;overscroll-behavior-x:contain}

@@ -5,6 +5,48 @@ import { buildSizeFrontierPlot } from './size-frontier-ui.js';
 import { buildExplorationPlot } from './transcode-curves.js';
 import { fitRateDistortionModel, createSizeQualityFrontier } from './rate-distortion-model.js';
 
+test('small budgets use readable units and selected cursor exposes its estimated value',()=>{
+ const f=createSizeQualityFrontier(fitRateDistortionModel([
+  {sampleBitrate:100000,ssim:.95},{sampleBitrate:200000,ssim:.98}
+ ]),{durationSeconds:2});
+ const p=buildSizeFrontierPlot(f,{selectedTargetBytes:f.minimumEvidenceTargetBytes});
+ const svg=renderRateDistortionSvg(p);
+ assert.match(svg,/kB/);
+ assert.match(svg,/对数刻度/);
+ assert.match(svg,/SSIM/);
+ assert.match(svg,/curve-selection-label/);
+ assert.match(svg,/估计/);
+ assert.match(svg,/curve-cursor-horizontal/);
+ const labels=[...svg.matchAll(/class="curve-tick curve-x-tick"[^>]*>([^<]+)</g)].map(m=>m[1]);
+ assert.ok(labels.length>=3);
+ assert.equal(new Set(labels).size,labels.length);
+});
+
+test('narrow SSIM ranges keep distinct y tick labels',()=>{
+ const f=createSizeQualityFrontier(fitRateDistortionModel([
+  {sampleBitrate:1e6,ssim:.99801},{sampleBitrate:2e6,ssim:.99802}
+ ]),{durationSeconds:60});
+ const p=buildSizeFrontierPlot(f);
+ // Exercise tiny ranges as well as the model's normal display padding.
+ const svg=renderRateDistortionSvg({...p,qualityMin:.99801,qualityMax:.99802});
+ const labels=[...svg.matchAll(/class="curve-tick curve-y-tick"[^>]*>([^<]+)</g)].map(m=>m[1]);
+ assert.ok(labels.length>=3);
+ assert.equal(new Set(labels).size,labels.length);
+});
+
+test('search status differs by shape and latest trial has a visible label',()=>{
+ const p=buildExplorationPlot([
+  {iteration:1,qualitySetting:30,ssim:.95,meetsTarget:false},
+  {iteration:2,qualitySetting:20,ssim:.99,meetsTarget:true}
+ ],.98);
+ const svg=renderExplorationSvg(p);
+ assert.match(svg,/<path class="curve-fail"/);
+ assert.match(svg,/<circle class="curve-pass"/);
+ assert.match(svg,/最新/);
+ assert.match(svg,/最低样本 SSIM/);
+ assert.match(svg,/试压轮次/);
+});
+
 const frontier=()=>{
  const model=fitRateDistortionModel([
  {sampleBitrate:4e6,ssim:.91,averageSsim:.935,sampleMeasurements:[{ssim:.91},{ssim:.96}]},

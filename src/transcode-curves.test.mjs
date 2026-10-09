@@ -76,8 +76,8 @@ test('visual exploration plot retains measured min/max per-point whiskers',()=>{
   {qualitySetting:25,ssim:.975,sampleMeasurements:[{ssim:.975},{ssim:.99}]}
  ],.98);
  assert.equal(p.ok,true);
- assert.equal(p.paddingX,66);
- assert.equal(p.paddingY,34);
+ assert.equal(p.paddingX,76);
+ assert.equal(p.paddingY,56);
  assert.ok(p.measured[0].highY < p.measured[0].lowY);
  assert.ok(p.measured[1].highY < p.measured[1].lowY);
  assert.ok(p.targetY >= p.paddingY && p.targetY <= p.height-p.paddingY);
