@@ -4371,7 +4371,7 @@ function qualitySampleStarts(duration) {
   return distinct.slice(0, 2);
 }
 
-async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
+async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, outputSize = null) {
   // Two seconds reduces keyframe/GOP overhead bias compared with the tiny
   // diagnostic benchmark while keeping repeated AV1 calibration tolerable.
   const duration = Math.min(2.0, Math.max(1.2, Number(state.media?.duration || 2.0) / 20));
@@ -4389,6 +4389,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
       crf,
       preset,
       targetVideoBitrate: 0,
+      outputWidth:outputSize?.width||0,outputHeight:outputSize?.height||0,
+      referenceWidth:outputSize?.width ? Number(state.media?.width||0):0,
+      referenceHeight:outputSize?.height ? Number(state.media?.height||0):0,
       timeoutSeconds:Math.max(2,Math.ceil((calibrationTimeBudget(Number(state.media?.duration||0))||120)/Math.max(1,starts.length)))
     }, shiftAssForPreview(originalAss, start));
 
@@ -4430,7 +4433,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
     }))
   };
 
-  await persistCompressionEvidence(qualityEvidenceRecord({
+  // Resized evidence is session-only: the existing persistent evidence key
+  // does not carry output resolution and common-reference metric identity.
+  if(!outputSize?.width) await persistCompressionEvidence(qualityEvidenceRecord({
     media: state.media,
     sourceName: state.video?.name || state.media?.sourceName || '',
     sourceSize: Number(state.video?.size || state.media?.size || 0),
@@ -4451,7 +4456,7 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
   return summary;
 }
 
-async function calibrateCodecQuality(codec, target, budgetSeconds=null) {
+async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSize=null) {
   const range = qualityCrfRange(codec);
   const preset = profileFor(codec, 'balanced').preset;
   let low = range.min;
@@ -4471,17 +4476,20 @@ async function calibrateCodecQuality(codec, target, budgetSeconds=null) {
     if (tested.has(crf)) return tested.get(crf);
     $('qualityCalibrationResult').textContent =
       '正在校准 ' + codec.toUpperCase() +
+      (outputSize?.id?' / '+outputSize.id:'')+
       ' · CRF ' + crf +
       ' · 目标 SSIM ' + target.toFixed(3) + '…';
-    const result = await evaluateQualityCandidate(codec, crf, preset, target);
+    const result = await evaluateQualityCandidate(codec, crf, preset, target,outputSize);
     tested.set(crf, result);
-    if (!state.qualityExplorationPoints[codec]) state.qualityExplorationPoints[codec]=[];
-    state.qualityExplorationPoints[codec].push({
-      ...result, qualitySetting:crf,
-      iteration:state.qualityExplorationPoints[codec].length+1,
-      meetsTarget:result.ssim>=target
-    });
-    renderQualityExploration();
+    if(!outputSize || outputSize.id==='source') {
+      if (!state.qualityExplorationPoints[codec]) state.qualityExplorationPoints[codec]=[];
+      state.qualityExplorationPoints[codec].push({
+        ...result, qualitySetting:crf,
+        iteration:state.qualityExplorationPoints[codec].length+1,
+        meetsTarget:result.ssim>=target
+      });
+      renderQualityExploration();
+    }
     if (!bestQuality || result.ssim > bestQuality.ssim) bestQuality = result;
     log(
       '目标质量校准 ' + codec.toUpperCase() +
@@ -4551,7 +4559,68 @@ function chooseEfficiencyCalibration(calibrations) {
   })[0];
 }
 
-async function runQualityCalibration({compareForSize=false}={}) {
+async function runResolutionCalibration() {
+  const codec=state.selectedCodec||chooseDefaultCodec('sizeBudget');
+  const candidates=guidedResolutionCandidates(state.media||{});
+  if(!state.nativeBackend?.available||state.nativeJobId||state.qualityCalibrationBusy||
+     !codec||state.softwareEncoders[codec]===false||candidates.length<2) {
+    $('qualityCalibrationResult').textContent='当前无法安全开展跨分辨率实测；需要 Windows Native、可用编码器和至少两档合法尺寸。';
+    return;
+  }
+  const target=Number($('qualityTarget')?.value||.985);
+  if(!(target>0&&target<1))return;
+  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
+    ':'+currentRuntimeEvidenceKey();
+  state.qualityCalibrationBusy=true;
+  state.sizeEnvelopeEnabled=false;
+  state.resolutionRateDistortionModels={};
+  state.guidedOutputSize=null;
+  const budget=calibrationTimeBudget(Number(state.media.duration))||120;
+  const eachBudget=Math.max(8,budget/candidates.length);
+  const records=[];
+  updateQualityCalibrationControls();
+  try{
+    for(const size of candidates) {
+      const id=codec+'@'+size.id;
+      try{
+        const evidence=await calibrateCodecQuality(codec,target,eachBudget,size);
+        const model=fitRateDistortionModel(evidence.testedPoints||[]);
+        if(!model.ok)throw Error('有效实测点不足两个，不能构建体积—质量曲线');
+        state.resolutionRateDistortionModels[id]={
+          id,codec,resolutionId:size.id,outputWidth:size.width,outputHeight:size.height,
+          label:size.label,model,preset:evidence.preset,
+          metric:COMMON_REFERENCE_METRIC,sourceScope
+        };
+        if(size.id==='source'){
+          state.qualityCalibration[codec]=evidence;
+          state.rateDistortionModels[codec]=model;
+        }
+        records.push({id,ok:true,pointCount:model.points.length});
+        log('统一参考尺寸校准 '+id+' 成功：'+model.points.length+' 个码率观测点');
+      }catch(error){
+        records.push({id,ok:false,error:error.message});
+        log('统一参考尺寸校准 '+id+' 失败：'+error.message);
+      }
+      renderPlanOptions();
+    }
+    state.sizeEnvelopeEnabled=Object.values(state.resolutionRateDistortionModels)
+      .filter(b=>b.model?.ok).length>=2;
+    const frontier=currentSizeFrontier();
+    $('qualityCalibrationResult').textContent=
+      '同源公共参考 SSIM：'+records.map(x=>x.id+(x.ok?' '+x.pointCount+' 点':' 失败：'+x.error)).join('；')+
+      '。'+(frontier?.kind==='multi-branch'
+        ? '已形成共同实测区间的单张跨分辨率上包络曲线。'
+        : '无充分重叠证据，保留单配置曲线；不推断最优分辨率。');
+  }finally{
+    state.qualityCalibrationBusy=false;
+    updateQualityCalibrationControls();
+    renderPlanOptions();
+    refreshBenchmarkEnabled();
+  }
+}
+
+async function runQualityCalibration({compareForSize=false,compareResolution=false}={}) {
+  if(compareResolution)return runResolutionCalibration();
   if (!state.nativeBackend?.available) {
     alert('目标质量校准当前只在 Native 模式可用。');
     return;
