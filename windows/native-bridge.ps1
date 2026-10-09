@@ -920,8 +920,13 @@ function Invoke-Waveform($Body) {
         Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
-function Get-Ssim([string]$Candidate,[string]$Reference,[string]$Work) {
-    $r=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -nostdin -i '+(Quote-NativeArg $Candidate)+' -i '+(Quote-NativeArg $Reference)+' -lavfi "[0:v][1:v]ssim" -f null NUL') $Work
+function Get-Ssim([string]$Candidate,[string]$Reference,[string]$Work,[int]$ReferenceWidth=0,[int]$ReferenceHeight=0) {
+    # Downscaled candidates are always bicubic-upsampled to the same original
+    # full-resolution, subtitle-rendered reference before SSIM is measured.
+    $filter=if($ReferenceWidth -gt 0 -and $ReferenceHeight -gt 0){
+        '[0:v]scale='+$ReferenceWidth+':'+$ReferenceHeight+':flags=bicubic,setpts=PTS-STARTPTS[up];[1:v]setpts=PTS-STARTPTS[ref];[up][ref]ssim'
+    }else{'[0:v][1:v]ssim'}
+    $r=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -nostdin -i '+(Quote-NativeArg $Candidate)+' -i '+(Quote-NativeArg $Reference)+' -lavfi "'+$filter+'" -f null NUL') $Work
     $m=[regex]::Match(($r.StdErr+[Environment]::NewLine+$r.StdOut),'All:(?<v>[0-9.]+)')
     if($m.Success){return [double]::Parse($m.Groups['v'].Value,[Globalization.CultureInfo]::InvariantCulture)}
     return $null
@@ -986,7 +991,25 @@ function Invoke-Sample($Body) {
         $candidate=Join-Path $work 'sample.mkv'
         $startText=$start.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
         $durationText=$duration.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
-        $vf=if($withSubs){' -vf "ass=subtitle.ass:fontsdir=fonts"'}else{''}
+        $outW=[int]$o.outputWidth
+        $outH=[int]$o.outputHeight
+        $refW=[int]$o.referenceWidth
+        $refH=[int]$o.referenceHeight
+        $scaled=$outW -gt 0 -or $outH -gt 0
+        if($scaled){
+            if(-not $withSubs -or [bool]$o.sampleExact){throw 'Resolution trials require subtitle-rendered common reference mode.'}
+            if($outW -lt 2 -or $outH -lt 2 -or $outW -gt 16384 -or $outH -gt 16384 -or
+                ($outW % 2) -or ($outH % 2) -or
+                $refW -lt $outW -or $refH -lt $outH -or
+                $refW -gt 16384 -or $refH -gt 16384){
+                throw 'Invalid common-reference candidate resolution.'
+            }
+        }
+        $vf=if($withSubs){
+            $filter='ass=subtitle.ass:fontsdir=fonts'
+            if($scaled){$filter+=',scale='+$outW+':'+$outH+':flags=bicubic'}
+            ' -vf "'+$filter+'"'
+        }else{''}
         if(-not [bool]$o.sampleExact){
             # Legacy hard-sub samples require the subtitle-rendered FFV1
             # reference; exact filter-free transcoding measures from source.
@@ -1006,7 +1029,8 @@ function Invoke-Sample($Body) {
             if([bool]$o.sampleExact){
                 Get-SsimAgainstSource $candidate $video $startText $durationText $work
             }else{
-                Get-Ssim $candidate $reference $work
+                if($scaled){Get-Ssim $candidate $reference $work $refW $refH}
+                else{Get-Ssim $candidate $reference $work}
             }
         }else{$null}
         $sampleBytes=(Get-Item $candidate).Length
@@ -1160,7 +1184,14 @@ function Start-EncodeJob($Body) {
             }
         }
     }
-    $args='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -sn -vf "ass=subtitle.ass:fontsdir=fonts" '+$encArgs+$audioArgs+$containerArgs+' -f '+$outputFormat+' '+(Quote-NativeArg $outputFile)
+    $outW=[int]$request.outputWidth
+    $outH=[int]$request.outputHeight
+    $scaled=$outW -gt 0 -or $outH -gt 0
+    if($scaled -and ($outW -lt 2 -or $outH -lt 2 -or $outW -gt 16384 -or $outH -gt 16384 -or
+        ($outW % 2) -or ($outH % 2))){throw 'Invalid guided output size.'}
+    $videoFilter='ass=subtitle.ass:fontsdir=fonts'
+    if($scaled){$videoFilter+=',scale='+$outW+':'+$outH+':flags=bicubic'}
+    $args='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -sn -vf "'+$videoFilter+'" '+$encArgs+$audioArgs+$containerArgs+' -f '+$outputFormat+' '+(Quote-NativeArg $outputFile)
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
