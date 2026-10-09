@@ -1142,6 +1142,7 @@ function renderSizeFrontier() {
       : '生成当前编码器曲线';
   if(compare)compare.disabled=button.disabled;
   if(compareResolution)compareResolution.disabled=button.disabled ||
+    state.nativeBackend?.backend!=='windows-native' ||
     guidedResolutionCandidates(state.media||{}).length<2;
   if(branchAction){branchAction.classList.add('hidden');branchAction.disabled=true;}
 
@@ -4562,7 +4563,8 @@ function chooseEfficiencyCalibration(calibrations) {
 async function runResolutionCalibration() {
   const codec=state.selectedCodec||chooseDefaultCodec('sizeBudget');
   const candidates=guidedResolutionCandidates(state.media||{});
-  if(!state.nativeBackend?.available||state.nativeJobId||state.qualityCalibrationBusy||
+  if(!state.nativeBackend?.available||state.nativeBackend?.backend!=='windows-native'||
+     state.nativeJobId||state.qualityCalibrationBusy||
      !codec||state.softwareEncoders[codec]===false||candidates.length<2) {
     $('qualityCalibrationResult').textContent='当前无法安全开展跨分辨率实测；需要 Windows Native、可用编码器和至少两档合法尺寸。';
     return;
