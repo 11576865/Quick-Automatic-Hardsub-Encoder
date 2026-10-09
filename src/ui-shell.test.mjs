@@ -502,3 +502,13 @@ test('hard-sub quality plan reports measured search progress without a second ch
   assert.match(main,/renderQualityExploration\(\);/);
   assert.match(curves,/function buildExplorationPlot\(/);
 });
+
+test('guided size budget compares compatible measured codec curves with explicit handoff',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/id="compareSizeFrontierBtn"/);
+ assert.match(main,/id="adoptSizeFrontierBranchBtn"/);
+ assert.match(main,/createMultiBranchFrontier\(/);
+ assert.match(main,/state\.sizeEnvelopeEnabled=compareForSize/);
+ assert.match(main,/selectCodec\(recommendation\.branchId\)/);
+ assert.match(main,/calibrationShouldContinue\(/);
+});
