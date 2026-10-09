@@ -5637,6 +5637,23 @@ mountMediaWorkspace({
     const caps=await state.engine.taskCapabilities('copy');
     return {...media,sourceName:state.video.name,fpsModeSupported:caps.fpsModeSupported};
   },
+  // Curves must measure exactly the encoder/preset selected in the manual
+  // transcode task. Refuse unsupported backends rather than sample a different
+  // implementation and silently label its result as the user's configuration.
+  calibrationSample: async ({codec, encoder, preset, quality, start, duration}) => {
+    if (!state.nativeBackend?.available || !globalThis.NativeHardsub?.__windowsNative) {
+      throw new Error('实测曲线目前需要 Windows Native；当前后端不能保证样本编码器与正式方案一致');
+    }
+    const actual = await requestNativeSample({
+      codec, encoder, preset, crf: quality,
+      start, duration, withSubtitles: false,
+      targetVideoBitrate: 0, measureSsim: true, retainSample: false
+    }, '');
+    if (actual.encoder !== encoder) {
+      throw new Error('实际测试编码器 '+String(actual.encoder)+' 与当前选择 '+encoder+' 不一致，拒绝生成曲线');
+    }
+    return actual;
+  },
   frame: async options => {
     if (!state.video) throw new Error('请先选择视频');
     const time = Math.max(0, Number(options?.time) || 0);
