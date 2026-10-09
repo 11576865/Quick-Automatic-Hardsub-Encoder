@@ -108,23 +108,37 @@ export function createMeasuredSizeFrontier(points, {
 }
 
 export function buildExplorationPlot(points, targetSsim, {
-  width = 720, height = 220, padding = 32
+  width = 720, height = 220, paddingX = 66, paddingY = 34
 } = {}) {
   if (!Array.isArray(points) || !points.length) return { ok: false, reason: 'no-measurements' };
   const valid = points.filter(p => Number.isFinite(Number(p.ssim)) && Number.isFinite(Number(p.qualitySetting)));
   if (!valid.length) return { ok: false, reason: 'invalid-measurements' };
-  const quality = valid.map(p => Number(p.ssim));
+  const quality = valid.flatMap(p => [
+    Number(p.ssim),
+    ...(Array.isArray(p.sampleMeasurements)
+      ? p.sampleMeasurements.map(s => Number(s.ssim)).filter(v => Number.isFinite(v) && v >= 0 && v <= 1)
+      : [])
+  ]);
   const target = Number(targetSsim);
+  if (!Number.isFinite(target) || !(target >= 0 && target <= 1)) return { ok: false, reason: 'invalid-threshold' };
   const min = clamp(Math.min(...quality, target) - 0.005, 0, 1);
   const max = clamp(Math.max(...quality, target) + 0.005, 0, 1);
   const span = Math.max(0.000001, max - min);
-  const innerWidth = width - padding * 2, innerHeight = height - padding * 2;
-  const measured = valid.map((p, i) => ({
-    ...p,
-    x: padding + (valid.length === 1 ? innerWidth / 2 : i * innerWidth / (valid.length - 1)),
-    y: padding + innerHeight * (1 - (Number(p.ssim) - min) / span)
-  }));
-  const targetY = padding + innerHeight * (1 - (target - min) / span);
+  const innerWidth = width - paddingX * 2, innerHeight = height - paddingY * 2;
+  const yForQuality = value => paddingY + innerHeight * (1 - (Number(value) - min) / span);
+  const measured = valid.map((p, i) => {
+    const observations=Array.isArray(p.sampleMeasurements)
+      ? p.sampleMeasurements.map(s=>Number(s.ssim)).filter(v=>Number.isFinite(v)&&v>=0&&v<=1)
+      : [];
+    return {
+      ...p,
+      x: paddingX + (valid.length === 1 ? innerWidth / 2 : i * innerWidth / (valid.length - 1)),
+      y: yForQuality(p.ssim),
+      lowY: yForQuality(observations.length ? Math.min(...observations) : p.ssim),
+      highY: yForQuality(observations.length ? Math.max(...observations) : p.ssim)
+    };
+  });
+  const targetY = yForQuality(target);
   const line = measured.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' ');
-  return { ok: true, width, height, measured, line, targetY, min, max };
+  return { ok: true, width, height, paddingX, paddingY, measured, line, targetY, min, max };
 }
