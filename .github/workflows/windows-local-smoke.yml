@@ -136,6 +136,41 @@ jobs:
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
+      - name: Verify exact CQ and VBR sample encoder arguments
+        shell: powershell
+        run: |
+          $bridge = Get-Content -Raw './windows/native-bridge.ps1'
+          $start = $bridge.IndexOf('function Get-BridgeEncoderArgs')
+          $stop = $bridge.IndexOf('function Get-ProbeMedia', $start)
+          if ($start -lt 0 -or $stop -le $start) { throw 'Exact sample encoder argument builder is missing' }
+          . ([scriptblock]::Create($bridge.Substring($start, $stop - $start)))
+          $software = [pscustomobject]@{Encoder='libx264';Hardware=$false}
+          $cq = Get-BridgeEncoderArgs $software ([pscustomobject]@{
+            sampleExact=$true;targetVideoBitrate=0;crf=24;preset='medium'
+          })
+          $rate = Get-BridgeEncoderArgs $software ([pscustomobject]@{
+            sampleExact=$true;targetVideoBitrate=1500000;crf=0;preset='medium'
+          })
+          if ($cq -notmatch '-crf 24' -or $cq -match '-b:v') { throw "CQ mode contract lost: $cq" }
+          if ($rate -notmatch '-b:v 1500000' -or $rate -match '-crf|-maxrate|-bufsize') {
+            throw "Exact VBR sample changed the formal default bitrate contract: $rate"
+          }
+          $gpu = [pscustomobject]@{Encoder='h264_nvenc';Hardware=$true;SupportsMultipass=$true;SupportsMultipassFullres=$true}
+          $gpuRate = Get-BridgeEncoderArgs $gpu ([pscustomobject]@{
+            sampleExact=$true;targetVideoBitrate=1500000;crf=0;preset='p5';multipass='fullres'
+          })
+          if ($gpuRate -notmatch '-preset p5' -or $gpuRate -notmatch '-b:v 1500000' -or
+              $gpuRate -notmatch '-multipass fullres' -or $gpuRate -match '-cq|-maxrate') {
+            throw "NVENC VBR option parity failed: $gpuRate"
+          }
+          $work = Join-Path $env:RUNNER_TEMP 'exact-rate-sample-smoke'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $sample = Join-Path $work 'vbr.mkv'
+          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=2' -an -c:v libx264 -preset medium -b:v 1500000 -pix_fmt yuv420p $sample
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sample) -or (Get-Item $sample).Length -le 0) {
+            throw 'Software exact-VBR short encode produced no valid output'
+          }
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |

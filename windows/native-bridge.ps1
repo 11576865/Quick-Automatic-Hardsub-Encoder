@@ -46,7 +46,7 @@ function ConvertTo-JsonUtf8($Object) {
     return ($Object | ConvertTo-Json -Depth 12 -Compress)
 }
 
-function Invoke-BridgeTool([string]$Exe, [string]$Arguments, [string]$WorkingDirectory = '') {
+function Invoke-BridgeTool([string]$Exe, [string]$Arguments, [string]$WorkingDirectory = '', [double]$TimeoutSeconds = 0) {
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo.FileName = $Exe
     $p.StartInfo.Arguments = $Arguments
@@ -59,6 +59,14 @@ function Invoke-BridgeTool([string]$Exe, [string]$Arguments, [string]$WorkingDir
         [void]$p.Start()
         $outTask = $p.StandardOutput.ReadToEndAsync()
         $errTask = $p.StandardError.ReadToEndAsync()
+        if ($TimeoutSeconds -gt 0) {
+            $milliseconds = [int][Math]::Min(2147483647, [Math]::Ceiling($TimeoutSeconds * 1000))
+            if (-not $p.WaitForExit($milliseconds)) {
+                try { $p.Kill() } catch {}
+                $p.WaitForExit()
+                throw ('FFmpeg sample encode timeout after ' + $TimeoutSeconds + ' seconds.')
+            }
+        }
         $p.WaitForExit()
         return [pscustomobject]@{
             ExitCode=$p.ExitCode
@@ -510,10 +518,11 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
     if (-not $Profile) { throw 'No available encoder for this codec.' }
     $targetRate = [long]($Options.targetVideoBitrate)
     if ([bool]$Options.sampleExact) {
-        if ($targetRate -gt 0) { throw 'Exact CQ sample must not request bitrate mode.' }
+        # Exact samples may verify either the measured CQ mode or the
+        # final bitrate/VBR mode, with the same selected encoder and preset.
         $quality = [int]$Options.crf
         $preset = [string]$Options.preset
-        if ($quality -lt 0 -or $quality -gt 63) { throw 'Invalid exact sample quality.' }
+        if ($targetRate -le 0 -and ($quality -lt 0 -or $quality -gt 63)) { throw 'Invalid exact sample quality.' }
         if ($Profile.Hardware) {
             if ($preset -notmatch '^p[1-7]$') { throw 'Invalid exact NVENC preset.' }
             $mp = [string]$Options.multipass
@@ -522,11 +531,15 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
                 throw 'Requested NVENC fullres multipass is unavailable.'
             }
             $mpArg = if ($Profile.SupportsMultipass) { ' -multipass ' + $mp } else { '' }
-            # Mirror compileTask quality-mode defaults: no implicit hq tune;
-            # spatial/temporal AQ disabled unless explicitly requested.
+            # Mirror default production NVENC flags: no implicit hq tune;
+            # no maxrate, bufsize, or quality model substitution.
+            if ($targetRate -gt 0) {
+                return "-c:v $($Profile.Encoder) -preset $preset -rc vbr -b:v $targetRate$mpArg -spatial-aq 0 -temporal-aq 0"
+            }
             return "-c:v $($Profile.Encoder) -preset $preset -rc vbr -cq $quality -b:v 0$mpArg -spatial-aq 0 -temporal-aq 0"
         }
         if (-not $preset) { throw 'Missing exact software encoder preset.' }
+        if ($targetRate -gt 0) { return "-c:v $($Profile.Encoder) -preset $preset -b:v $targetRate" }
         return "-c:v $($Profile.Encoder) -preset $preset -crf $quality"
     }
     if ($Profile.Hardware) {
@@ -982,7 +995,8 @@ function Invoke-Sample($Body) {
         }
         $encArgs=Get-BridgeEncoderArgs $profile $o
         $sw=[Diagnostics.Stopwatch]::StartNew()
-        $run=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$vf+' '+$encArgs+' -pix_fmt yuv420p '+(Quote-NativeArg $candidate)) $work
+        $encodeTimeout = if ($o.timeoutSeconds) { [Math]::Max(2, [Math]::Min(300, [double]$o.timeoutSeconds)) } else { 0 }
+        $run=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$vf+' '+$encArgs+' -pix_fmt yuv420p '+(Quote-NativeArg $candidate)) $work $encodeTimeout
         $sw.Stop()
         if($run.ExitCode -ne 0 -or -not(Test-Path $candidate)){throw ($run.StdErr.Trim())}
         $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $candidate))

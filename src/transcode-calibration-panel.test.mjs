@@ -92,3 +92,38 @@ test('small-screen curves maintain readable numeric tick width and local scrolli
  assert.match(css,/\.media-curve-viewport svg\s*\{min-width:560px/);
  assert.match(globalCss,/\.size-frontier-chart \{min-width:560px\}/);
 });
+
+test('manual calibration enforces an observed-cost soft budget without claiming a hard timeout',async()=>{
+ const source=await readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8');
+ assert.match(source,/calibrationTimeBudget\(fullDuration\)/);
+ assert.match(source,/budgetSeconds,/);
+ assert.match(source,/result\.stopReason/);
+ assert.match(source,/单个不可中断的原生样本仍可能超时/);
+});
+
+test('formal VBR bitrate adoption requires native sample confirmation, never CQ interpolation alone',async()=>{
+ const [panel,main,bridge]=await Promise.all([
+  readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(panel,/id="taskVerifyCurveRate"/);
+ assert.match(panel,/verifiedSelection\.bitrate/);
+ assert.match(panel,/mode:'bitrate',bitrate/);
+ assert.match(main,/targetVideoBitrate: mode==='bitrate' \? bitrate : 0/);
+ assert.match(bridge,/if \(\$targetRate -gt 0\) \{ return "-c:v/);
+});
+
+test('native exact CQ/VBR probes include an FFmpeg process timeout',async()=>{
+ const [panel,main,bridge]=await Promise.all([
+  readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(panel,/elapsedEncodeSeconds/);
+ assert.match(panel,/timeoutSeconds:Math\.max/);
+ assert.match(main,/timeoutSeconds/);
+ assert.match(bridge,/if \(\$TimeoutSeconds -gt 0\)/);
+ assert.match(bridge,/\$p\.Kill\(\)/);
+ assert.match(bridge,/FFmpeg sample encode timeout after/);
+});

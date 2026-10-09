@@ -6605,6 +6605,9 @@ body[data-runtime-backend="web"] .runtime-mode-banner {
 
 @layer current {
 /* Measured target-size frontier -------------------------------------------- */
+.size-frontier-actions {display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.size-frontier-actions button {white-space:normal}
+
 .size-frontier-panel {
   display: grid;
   gap: 10px;
