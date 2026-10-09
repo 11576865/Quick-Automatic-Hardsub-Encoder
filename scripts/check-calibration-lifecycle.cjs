@@ -38,12 +38,13 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
             pixelFormat:'yuv420p',bitDepth:8,unsafeColorPipeline:false}]};
       },
       validate:async()=>{state.validations++;await hold('validate');},
-      calibrationSample:async({quality,duration,mode})=>{
+      calibrationSample:async({quality,duration,mode,bitrate})=>{
         state.samples++;
         await hold('sample');
         return {ssim:Object.hasOwn(state,'sampleOverride')?state.sampleOverride:
           mode==='bitrate'?.998:1-quality/1000,
-          totalVideoBytes:(64-quality)*1000,duration,elapsedSeconds:.1};
+          totalVideoBytes:mode==='bitrate'?Math.max(1,Math.round(bitrate*duration/8)):(64-quality)*1000,
+          duration,elapsedSeconds:.1};
       },
       applyQuality:q=>state.applied.push(['quality',q]),
       applyBitrate:b=>state.applied.push(['bitrate',b])
