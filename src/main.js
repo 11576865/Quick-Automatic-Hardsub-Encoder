@@ -14,6 +14,7 @@ import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, quality
 import { createSizeQualityFrontier, fitRateDistortionModel } from './rate-distortion-model.js';
 import { buildSizeFrontierPlot, evidenceFractionForTargetBytes, targetBytesAtEvidenceFraction } from './size-frontier-ui.js';
 import { buildExplorationPlot } from './transcode-curves.js';
+import { renderRateDistortionSvg, renderExplorationSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -1153,30 +1154,7 @@ function renderSizeFrontier() {
     ? '效率拐点约 ' + formatBytes(frontier.knee.targetBytes)
     : '当前实测范围';
 
-  const evidenceDots = plot.evidencePoints.map(point =>
-    '<circle class="size-frontier-evidence" cx="' + point.x.toFixed(2) +
-    '" cy="' + point.y.toFixed(2) + '" r="4"><title>实测 · ' +
-    escapeHtml(formatBytes(point.targetBytes)) + ' · SSIM ' +
-    Number(point.quality).toFixed(5) + '</title></circle>'
-  ).join('');
-  const kneeDot = plot.knee
-    ? '<circle class="size-frontier-knee" cx="' + plot.knee.x.toFixed(2) +
-      '" cy="' + plot.knee.y.toFixed(2) + '" r="5"><title>效率拐点 · ' +
-      escapeHtml(formatBytes(plot.knee.targetBytes)) + '</title></circle>'
-    : '';
-  const selectedDot = plot.selected
-    ? '<circle class="size-frontier-thumb-halo" cx="' + plot.selected.x.toFixed(2) +
-      '" cy="' + plot.selected.y.toFixed(2) + '" r="11"></circle>' +
-      '<circle class="size-frontier-thumb" cx="' + plot.selected.x.toFixed(2) +
-      '" cy="' + plot.selected.y.toFixed(2) + '" r="6"></circle>'
-    : '';
-
-  svg.innerHTML =
-    '<rect class="size-frontier-bg" x="0" y="0" width="720" height="220" rx="8"></rect>' +
-    '<line class="size-frontier-grid" x1="34" y1="196" x2="686" y2="196"></line>' +
-    '<path class="size-frontier-band" d="' + plot.bandPath + '"></path>' +
-    '<path class="size-frontier-line" d="' + plot.curvePath + '"></path>' +
-    evidenceDots + kneeDot + selectedDot;
+  svg.innerHTML = renderRateDistortionSvg(plot);
 
   const ariaBytes = directBytes > 0
     ? Math.max(frontier.minimumEvidenceTargetBytes, Math.min(frontier.maximumEvidenceTargetBytes, directBytes))
@@ -1219,9 +1197,11 @@ function sizeFrontierTargetFromPointer(event) {
   if (!svg || !frontier) return null;
   const rect = svg.getBoundingClientRect();
   if (!(rect.width > 0)) return null;
-  const svgX = (Number(event.clientX) - rect.left) / rect.width * 720;
-  const fraction = Math.max(0, Math.min(1, (svgX - 34) / (720 - 68)));
-  return targetBytesAtEvidenceFraction(frontier, fraction);
+  const plot = buildSizeFrontierPlot(frontier);
+  if (!plot.ok) return null;
+  const svgX = plotXFromClientX(event.clientX, rect, plot.width);
+  const fraction = plotFractionAtX(plot, svgX);
+  return fraction === null ? null : targetBytesAtEvidenceFraction(frontier, fraction);
 }
 
 function commitSizeFrontierKeyboard(event) {
@@ -4015,13 +3995,7 @@ function renderQualityExploration() {
     readout.textContent='当前编码器尚无实测探索点；执行目标质量校准后逐点绘制。';
     return;
   }
-  chart.innerHTML=
-    '<line x1="32" x2="688" y1="'+p.targetY.toFixed(2)+'" y2="'+p.targetY.toFixed(2)+'" stroke="currentColor" opacity=".55" stroke-dasharray="5 5"></line>'+
-    '<path d="'+p.line+'" fill="none" stroke="currentColor" stroke-width="2.5"></path>'+
-    p.measured.map(x=>
-      '<circle cx="'+x.x.toFixed(2)+'" cy="'+x.y.toFixed(2)+'" r="5" fill="'+(x.meetsTarget?'#31bc89':'#df9876')+'"></circle>'+
-      '<text x="'+x.x.toFixed(2)+'" y="'+Math.max(12,x.y-10).toFixed(2)+'" fill="currentColor" font-size="12" text-anchor="middle">CRF '+Number(x.qualitySetting)+'</text>'
-    ).join('');
+  chart.innerHTML=renderExplorationSvg(p);
   readout.textContent=codec.toUpperCase()+' · '+trials.length+' 个实测参数 · 最近 CRF '+
     trials.at(-1).qualitySetting+'，最低样本 SSIM '+Number(trials.at(-1).ssim).toFixed(5)+
     '。曲线显示探索顺序，不是全视频精度或整片画质保证。';
