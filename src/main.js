@@ -5727,14 +5727,15 @@ mountMediaWorkspace({
   // Curves must measure exactly the encoder/preset selected in the manual
   // transcode task. Refuse unsupported backends rather than sample a different
   // implementation and silently label its result as the user's configuration.
-  calibrationSample: async ({codec, encoder, preset, multipass, quality, start, duration}) => {
+  calibrationSample: async ({codec, encoder, preset, multipass, quality, bitrate, mode='quality', start, duration}) => {
     if (!state.nativeBackend?.available || !globalThis.NativeHardsub?.__windowsNative) {
       throw new Error('实测曲线目前需要 Windows Native；当前后端不能保证样本编码器与正式方案一致');
     }
     const actual = await requestNativeSample({
-      codec, encoder, preset, multipass, sampleExact: true, crf: quality,
+      codec, encoder, preset, multipass, sampleExact: true,
+      crf: mode==='bitrate' ? 0 : quality,
       start, duration, withSubtitles: false,
-      targetVideoBitrate: 0, measureSsim: true, retainSample: false
+      targetVideoBitrate: mode==='bitrate' ? bitrate : 0, measureSsim: true, retainSample: false
     }, '');
     if (actual.encoder !== encoder) {
       throw new Error('实际测试编码器 '+String(actual.encoder)+' 与当前选择 '+encoder+' 不一致，拒绝生成曲线');

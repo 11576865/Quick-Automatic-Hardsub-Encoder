@@ -510,10 +510,11 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
     if (-not $Profile) { throw 'No available encoder for this codec.' }
     $targetRate = [long]($Options.targetVideoBitrate)
     if ([bool]$Options.sampleExact) {
-        if ($targetRate -gt 0) { throw 'Exact CQ sample must not request bitrate mode.' }
+        # Exact samples may verify either the measured CQ mode or the
+        # final bitrate/VBR mode, with the same selected encoder and preset.
         $quality = [int]$Options.crf
         $preset = [string]$Options.preset
-        if ($quality -lt 0 -or $quality -gt 63) { throw 'Invalid exact sample quality.' }
+        if ($targetRate -le 0 -and ($quality -lt 0 -or $quality -gt 63)) { throw 'Invalid exact sample quality.' }
         if ($Profile.Hardware) {
             if ($preset -notmatch '^p[1-7]$') { throw 'Invalid exact NVENC preset.' }
             $mp = [string]$Options.multipass
@@ -522,11 +523,15 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
                 throw 'Requested NVENC fullres multipass is unavailable.'
             }
             $mpArg = if ($Profile.SupportsMultipass) { ' -multipass ' + $mp } else { '' }
-            # Mirror compileTask quality-mode defaults: no implicit hq tune;
-            # spatial/temporal AQ disabled unless explicitly requested.
+            # Mirror default production NVENC flags without an implicit
+            # tune, maxrate, bufsize, or quality model substitution.
+            if ($targetRate -gt 0) {
+                return "-c:v $($Profile.Encoder) -preset $preset -rc vbr -b:v $targetRate$mpArg -spatial-aq 0 -temporal-aq 0"
+            }
             return "-c:v $($Profile.Encoder) -preset $preset -rc vbr -cq $quality -b:v 0$mpArg -spatial-aq 0 -temporal-aq 0"
         }
         if (-not $preset) { throw 'Missing exact software encoder preset.' }
+        if ($targetRate -gt 0) { return "-c:v $($Profile.Encoder) -preset $preset -b:v $targetRate" }
         return "-c:v $($Profile.Encoder) -preset $preset -crf $quality"
     }
     if ($Profile.Hardware) {
