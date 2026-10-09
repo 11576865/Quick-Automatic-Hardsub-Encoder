@@ -1,15 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-test('manual transcode mounts measured exploration and efficiency curves',async()=>{
+test('manual transcode renders one measured size-quality curve with optional CQ observations',async()=>{
   const [panel, workspace, main, bridge] = await Promise.all([
     readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
     readFile(new URL('./media-workspace.js',import.meta.url),'utf8'),
     readFile(new URL('./main.js',import.meta.url),'utf8'),
     readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
   ]);
-  assert.match(panel,/id="taskExplorationChart"/);
   assert.match(panel,/id="taskEfficiencyChart"/);
+  assert.doesNotMatch(panel,/id="taskExplorationChart"/);
+  assert.match(panel,/<details class="media-curve-observations">/);
+  assert.match(panel,/id="taskMeasuredQualityPoints"/);
+  assert.equal((panel.match(/<svg id="task[^"]+Chart"/g)||[]).length,1);
   assert.match(panel,/exploreQuality\(/);
   assert.match(panel,/createMeasuredSizeFrontier/);
   assert.match(panel,/hooks\.applyBitrate/);
@@ -57,7 +60,7 @@ test('exact video-only calibration reads source directly for SSIM instead of wri
   assert.match(script,/Get-Ssim \$candidate \$reference \$work/);
 });
 
-test('both manual chart interfaces use the same axis, evidence and pointer geometry',async()=>{
+test('the single manual curve retains measured evidence and pointer geometry',async()=>{
   const [panel,main,svg,style,mediaCss]=await Promise.all([
     readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
     readFile(new URL('./main.js',import.meta.url),'utf8'),
@@ -67,7 +70,7 @@ test('both manual chart interfaces use the same axis, evidence and pointer geome
   ]);
   for(const source of [panel,main]) {
     assert.match(source,/renderRateDistortionSvg\(/);
-    assert.match(source,/renderExplorationSvg\(/);
+    assert.doesNotMatch(source,/renderExplorationSvg\(/);
     assert.match(source,/plotFractionAtX\(/);
     assert.match(source,/plotXFromClientX\(/);
   }
@@ -85,7 +88,7 @@ test('small-screen curves maintain readable numeric tick width and local scrolli
   readFile(new URL('./media-workspace-ui.css',import.meta.url),'utf8'),
   readFile(new URL('./style.css',import.meta.url),'utf8')
  ]);
- assert.equal((panel.match(/class="media-curve-viewport"/g)||[]).length,2);
+ assert.equal((panel.match(/class="media-curve-viewport"/g)||[]).length,1);
  assert.match(css,/\.media-curve-viewport svg\s*\{min-width:560px/);
  assert.match(globalCss,/\.size-frontier-chart \{min-width:560px\}/);
 });

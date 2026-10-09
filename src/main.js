@@ -13,8 +13,7 @@ import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics
 import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
 import { createSizeQualityFrontier, fitRateDistortionModel } from './rate-distortion-model.js';
 import { buildSizeFrontierPlot, evidenceFractionForTargetBytes, targetBytesAtEvidenceFraction } from './size-frontier-ui.js';
-import { buildExplorationPlot } from './transcode-curves.js';
-import { renderRateDistortionSvg, renderExplorationSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
+import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -328,13 +327,7 @@ app.innerHTML = `
             <button id="calibrateQualityBtn" type="button">比较可用编码器并校准</button>
             <small>校准会对代表性短片段反复试编码。短样本用于寻找参数边界，不是整片质量保证。</small>
             <div id="qualityCalibrationResult" class="note"></div>
-            <div id="qualityExplorationPanel" class="quality-exploration-panel">
-              <strong>实测探索曲线</strong>
-              <small>横轴为实测顺序，点旁为 CQ/CRF；虚线表示最低样本 SSIM 阈值。</small>
-              <svg id="qualityExplorationChart" viewBox="0 0 720 300" role="img" aria-label="硬字幕校准的真实 CQ/CRF 探索轨迹"></svg>
-              <div class="media-curve-legend"><span class="legend-pass">圆点：达标</span><span class="legend-fail">菱形：未达标</span><span class="legend-whisker">场景范围</span></div>
-              <p id="qualityExplorationReadout" class="note">校准前没有实测探索点。</p>
-            </div>
+            <p id="qualityExplorationReadout" class="note" role="status">校准前没有实测参数。</p>
           </div>
         </div>
 
@@ -3986,21 +3979,21 @@ function invalidateQualityCalibration() {
 
 
 function renderQualityExploration() {
-  const chart=$('qualityExplorationChart'),readout=$('qualityExplorationReadout');
-  if(!chart || !readout)return;
-  const codec=state.selectedCodec || chooseDefaultCodec('targetQuality');
-  const trials=state.qualityExplorationPoints?.[codec]||[];
-  const target=Number(state.qualityCalibrationTarget || $('qualityTarget')?.value || .985);
-  const p=buildExplorationPlot(trials,target);
-  if(!p.ok){
-    chart.replaceChildren();
-    readout.textContent='当前编码器尚无实测探索点；执行目标质量校准后逐点绘制。';
+  const readout = $('qualityExplorationReadout');
+  if (!readout) return;
+  const codec = state.selectedCodec || chooseDefaultCodec('targetQuality');
+  const trials = state.qualityExplorationPoints?.[codec] || [];
+  if (!trials.length) {
+    readout.textContent = '当前编码器尚无实测参数；校准期间会逐点显示进度。';
     return;
   }
-  chart.innerHTML=renderExplorationSvg(p);
-  readout.textContent=codec.toUpperCase()+' · '+trials.length+' 个实测参数 · 最近 CRF '+
-    trials.at(-1).qualitySetting+'，最低样本 SSIM '+Number(trials.at(-1).ssim).toFixed(5)+
-    '。曲线显示探索顺序，不是全视频精度或整片画质保证。';
+  const target = Number(state.qualityCalibrationTarget || $('qualityTarget')?.value || .985);
+  const latest = trials.at(-1);
+  const passing = trials.filter(point => Number(point.ssim) >= target).length;
+  readout.textContent = codec.toUpperCase() + ' · 已试压 ' + trials.length +
+    ' 个 CQ/CRF 参数，' + passing + ' 个达到最低样本 SSIM ' + target.toFixed(3) +
+    '；最近 CRF ' + latest.qualitySetting + '，最低样本 SSIM ' +
+    Number(latest.ssim).toFixed(5) + '。结果仅代表短片样本。';
 }
 
 function updateQualityCalibrationControls() {

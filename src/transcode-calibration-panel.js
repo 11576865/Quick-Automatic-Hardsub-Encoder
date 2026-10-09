@@ -1,39 +1,37 @@
 import { compileTask } from './media-task.js';
-import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, buildExplorationPlot, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
+import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
-import { renderRateDistortionSvg, renderExplorationSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
+import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 
-// Measured curves for manual video-only transcode. This is intentionally
+// One measured size-quality curve for manual video-only transcode. This is intentionally
 // separate from subtitle calibration: sample identity must match the manual
 // encoder, preset and selected timeline, or no curve is published.
 export function mountTranscodeCurves(section, hooks) {
   const panel = document.createElement('section');
   panel.id = 'taskCompressionCurves';
   panel.className = 'media-compression-curves';
-  panel.setAttribute('aria-label', '压制前实测效率与探索曲线');
+  panel.setAttribute('aria-label', '压制前体积—质量曲线');
   panel.innerHTML = [
-    '<div class="media-curves-header"><div><strong>压制前 · 实测效率与探索曲线</strong>',
+    '<div class="media-curves-header"><div><strong>压制前 · 体积—质量曲线</strong>',
     '<p>在选定的视频区间上抽取分散的短片，逐步测量质量与码率。不会先重压整段母片。</p></div>',
-    '<div class="media-curve-actions"><button type="button" id="taskExploreCurve" class="secondary">探索当前编码器</button>',
-    '<button type="button" id="taskStopCurve" class="secondary" disabled>停止探索</button></div></div>',
+    '<div class="media-curve-actions"><button type="button" id="taskExploreCurve" class="secondary">开始实测</button>',
+    '<button type="button" id="taskStopCurve" class="secondary" disabled>停止实测</button></div></div>',
     '<div class="media-curve-options"><label class="media-curve-target">最低样本 SSIM 目标 <input type="number" id="taskExploreTarget" min="0.80" max="0.9999" step="0.001" value="0.980"></label>',
     '<label class="media-curve-target">采样力度 <select id="taskCurveProfile"><option value="quick">快速 · 3 处 × 2 秒</option><option value="balanced" selected>均衡 · 5 处 × 4 秒</option><option value="thorough">深入 · 7 处 × 6 秒</option></select></label></div>',
     '<p id="taskCurveStatus" class="note" role="status">尚无当前素材的实测结果。曲线要求 Windows Native 的编码器一致性检查。</p>',
     '<div class="media-curve-grid">',
-    '<div><strong>探索曲线</strong><small>横轴为真实试压次序；点旁为 CQ/CRF，虚线为目标 SSIM。</small>',
-    '<div class="media-curve-viewport"><svg id="taskExplorationChart" viewBox="0 0 720 300" role="img" aria-label="实测 CQ 或 CRF 探索次序与质量"></svg></div>',
-    '<div class="media-curve-legend"><span class="legend-search">搜索顺序</span><span class="legend-pass">达标</span><span class="legend-fail">未达标</span><span class="legend-whisker">场景范围</span></div>',
-    '<div id="taskExplorationPoints" class="media-curve-points"></div></div>',
-    '<div><strong>效率曲线</strong><small>横轴为预算体积（对数），纵轴为短片 SSIM。仅在实测码率范围内插值。</small>',
+    '<div><strong>体积—质量曲线</strong><small>横轴为预算体积（对数），纵轴为短片 SSIM。圆点为实测，连线为有证据约束的插值。</small>',
     '<div class="media-curve-viewport"><svg id="taskEfficiencyChart" viewBox="0 0 720 300" role="slider" tabindex="0" aria-label="选择实测范围内的目标视频码率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></svg></div>',
     '<div class="media-curve-legend"><span class="legend-fit">保序拟合</span><span class="legend-observed">原始观测</span><span class="legend-band">范围插值</span><span class="legend-whisker">场景范围</span><span class="legend-knee">局部拐点</span></div>',
     '<div id="taskCurveReadout" class="media-curve-readout">至少完成两个不同码率的有效测试后显示曲线。</div>',
-    '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需复核）</button></div></div>',
+    '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需复核）</button>',
+    '<details class="media-curve-observations"><summary id="taskMeasuredQualitySummary">实测 CQ/CRF 参数（可采用）</summary>',
+    '<div id="taskMeasuredQualityPoints" class="media-curve-points"></div></details></div></div>',
     '<p class="note">SSIM 和局部效率拐点只是样本证据，不等于视觉无损或七小时整片质量保证。选择码率采用 VBR，不代表能复现 CQ 模式下的相同 SSIM。源音频复制时，图中估计体积不包含音频。</p>'
   ].join('');
   section.querySelector('#taskEncoding').before(panel);
   const get = id => panel.querySelector('#' + id);
-  const btn = get('taskExploreCurve'), plot = get('taskExplorationChart');
+  const btn = get('taskExploreCurve');
   const efficiency = get('taskEfficiencyChart'), readout = get('taskCurveReadout');
   const targetControl = get('taskExploreTarget'), profileControl = get('taskCurveProfile'), stop = get('taskStopCurve');
   let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, disposed = false, sourceKey = '';
@@ -60,11 +58,10 @@ export function mountTranscodeCurves(section, hooks) {
   const render = () => {
     btn.disabled = running;
     stop.disabled = !running || cancelRequested;
-    btn.textContent = running ? '正在实测…' : '探索当前编码器';
-    const exploration = buildExplorationPlot(points, Number(targetControl.value));
-    if (exploration.ok) plot.innerHTML = renderExplorationSvg(exploration);
-    else plot.replaceChildren();
-    const rows = get('taskExplorationPoints');
+    btn.textContent = running ? '正在实测…' : '开始实测';
+    get('taskMeasuredQualitySummary').textContent =
+      '实测 CQ/CRF 参数（' + points.length + ' 项，可采用）';
+    const rows = get('taskMeasuredQualityPoints');
     rows.replaceChildren();
     for (const point of points) {
       const row = document.createElement('div');
@@ -72,7 +69,8 @@ export function mountTranscodeCurves(section, hooks) {
       const details = document.createElement('span');
       details.textContent = '#' + point.iteration + ' · CQ/CRF ' + point.qualitySetting +
         ' · 最低 SSIM ' + point.ssim.toFixed(5) +
-        ' · ' + (point.sampleBitrate / 1e6).toFixed(2) + ' Mbps';
+        ' · ' + (point.sampleBitrate / 1e6).toFixed(2) + ' Mbps' +
+        (point.meetsTarget ? ' · 达标' : ' · 未达标');
       const adopt = document.createElement('button');
       adopt.type='button';adopt.className='secondary';adopt.textContent='采用此质量值';
       adopt.disabled = running || hooks.busy() || !evidenceIsCurrent();

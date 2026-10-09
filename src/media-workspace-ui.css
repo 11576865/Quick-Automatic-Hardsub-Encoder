@@ -1696,7 +1696,7 @@ body.media-frame-lightbox-open {
   }
 }
 
-/* Measured transcode calibration: both plots use the exact same trial evidence. */
+/* Measured transcode calibration: a single size-quality plot with optional raw CQ details. */
 .media-compression-curves {
   display: grid;
   gap: 12px;
@@ -1718,6 +1718,9 @@ body.media-frame-lightbox-open {
 .media-curve-grid svg {width:100%;height:auto;aspect-ratio:720/300;min-height:180px;background:rgba(10,15,29,.25);border:1px solid rgba(128,145,169,.25);border-radius:9px}
 #taskEfficiencyChart {touch-action:none;cursor:crosshair}
 #taskEfficiencyChart:focus-visible {outline:2px solid #46abda;outline-offset:2px}
+.media-curve-observations {min-width:0;border-top:1px solid rgba(128,145,169,.18);padding-top:8px}
+.media-curve-observations summary {cursor:pointer;font-size:.81rem;color:var(--text);list-style-position:inside}
+.media-curve-observations[open] .media-curve-points {margin-top:8px}
 .media-curve-points {display:grid;gap:5px;max-height:172px;overflow-y:auto}
 .media-curve-measurement {display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.78rem;padding:5px 0;border-bottom:1px solid rgba(128,145,169,.18)}
 .media-curve-measurement button {font-size:.75rem;white-space:nowrap}
