@@ -25,7 +25,8 @@ export function mountTranscodeCurves(section, hooks) {
     '<div class="media-curve-viewport"><svg id="taskEfficiencyChart" viewBox="0 0 720 300" role="slider" tabindex="0" aria-label="选择实测范围内的目标视频码率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></svg></div>',
     '<div class="media-curve-legend"><span class="legend-fit">保序拟合</span><span class="legend-observed">原始观测</span><span class="legend-band">范围插值</span><span class="legend-whisker">场景范围</span><span class="legend-knee">局部拐点</span></div>',
     '<div id="taskCurveReadout" class="media-curve-readout">至少完成两个不同码率的有效测试后显示曲线。</div>',
-    '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需复核）</button>',
+    '<button type="button" id="taskVerifyCurveRate" class="secondary" disabled>实测验证当前 VBR 码率</button>',
+    '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需先验证）</button>',
     '<details class="media-curve-observations"><summary id="taskMeasuredQualitySummary">实测 CQ/CRF 参数（可采用）</summary>',
     '<div id="taskMeasuredQualityPoints" class="media-curve-points"></div></details></div></div>',
     '<p class="note">SSIM 和局部效率拐点只是样本证据，不等于视觉无损或七小时整片质量保证。选择码率采用 VBR，不代表能复现 CQ 模式下的相同 SSIM。源音频复制时，图中估计体积不包含音频。</p>'
@@ -36,7 +37,8 @@ export function mountTranscodeCurves(section, hooks) {
   const efficiency = get('taskEfficiencyChart'), readout = get('taskCurveReadout');
   const targetControl = get('taskExploreTarget'), profileControl = get('taskCurveProfile'), stop = get('taskStopCurve');
   let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, disposed = false, sourceKey = '';
-  let evidenceMedia = null, fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  let evidenceMedia = null, evidenceTask = null, verifiedSelection = null;
+  let fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
   // Measurements depend on the video encode and sample positions, not on the
   // user's SSIM acceptance threshold or on the final audio size budget.
   const evidenceIsCurrent = () => !!sourceKey &&
@@ -89,6 +91,7 @@ export function mountTranscodeCurves(section, hooks) {
       efficiency.replaceChildren();
       readout.textContent = '至少需要两个不同码率的有效测量点。';
       get('taskAdoptCurveRate').disabled = true;
+      get('taskVerifyCurveRate').disabled = true;
       return;
     }
     if (!(selectedBytes > 0)) selectedBytes = frontier.knee?.targetBytes || frontier.minimumEvidenceTargetBytes;
@@ -97,6 +100,7 @@ export function mountTranscodeCurves(section, hooks) {
       efficiency.replaceChildren();
       readout.textContent = '无法构建有证据约束的体积—质量图。';
       get('taskAdoptCurveRate').disabled = true;
+      get('taskVerifyCurveRate').disabled = true;
       return;
     }
     const dot = plotted.selected;
@@ -116,7 +120,17 @@ export function mountTranscodeCurves(section, hooks) {
         (dispersion.minBitrate/1e6).toFixed(1) + '–' + (dispersion.maxBitrate/1e6).toFixed(1) + ' Mbps' : '') +
       (dispersion?.widelyDivergent ? ' · 样本波动大，整片体积与画质预测风险较高' : '') :
       '请选择已测量的体积范围';
-    get('taskAdoptCurveRate').disabled = !dot || running || !evidenceIsCurrent() || !targetIsValid();
+    const target=parseMeasuredQuality(targetControl.value);
+    const bitrate=dot?Math.round(dot.videoBitrate):null;
+    const verified=!!dot && !!verifiedSelection &&
+      verifiedSelection.sourceKey===sourceKey && verifiedSelection.bitrate===bitrate &&
+      verifiedSelection.target===target;
+    get('taskVerifyCurveRate').disabled = !dot || running || hooks.busy() ||
+      !evidenceIsCurrent() || !targetIsValid();
+    get('taskAdoptCurveRate').disabled = !verified || running || hooks.busy() ||
+      !evidenceIsCurrent() || !targetIsValid();
+    get('taskAdoptCurveRate').textContent=verified
+      ? '采用所选码率（短样已验证）' : '采用所选码率（需先验证）';
   };
 
   const updateEvidence = (newPoints, raw, task, { preserveSelection = false } = {}) => {
@@ -130,6 +144,7 @@ export function mountTranscodeCurves(section, hooks) {
       reservePercent: 4
     });
     if (!preserveSelection) selectedBytes = null;
+    verifiedSelection = null;
     render();
   };
   const pointerSelect = event => {
@@ -140,6 +155,7 @@ export function mountTranscodeCurves(section, hooks) {
     const fraction = plotFractionAtX(plotted, x);
     if (fraction === null) return;
     selectedBytes = targetBytesAtEvidenceFraction(frontier, fraction);
+    verifiedSelection = null;
     render();
   };
   function clamp(value, lo, hi){return Math.max(lo,Math.min(hi,value));}
@@ -156,14 +172,71 @@ export function mountTranscodeCurves(section, hooks) {
     else return;
     event.preventDefault();
     selectedBytes=targetBytesAtEvidenceFraction(frontier,clamp(next,0,1));
+    verifiedSelection=null;
     render();
   });
   get('taskAdoptCurveRate').addEventListener('click',()=>{
     const evaluation = frontier?.evaluateTargetBytes(selectedBytes);
-    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid() || evaluation?.status !== 'within-evidence')return;
+    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid() ||
+      evaluation?.status !== 'within-evidence' || !verifiedSelection ||
+      verifiedSelection.sourceKey!==sourceKey ||
+      verifiedSelection.target!==parseMeasuredQuality(targetControl.value) ||
+      verifiedSelection.bitrate!==Math.round(evaluation.videoBitrate))return;
     hooks.applyBitrate(Math.round(evaluation.videoBitrate));
-    label('已采用 ' + (evaluation.videoBitrate/1e6).toFixed(2) +
-      ' Mbps 的目标平均码率。VBR 与实测 CQ 不同；正式输出的体积/画质仍需验证。');
+    label('已采用 '+(evaluation.videoBitrate/1e6).toFixed(2)+
+      ' Mbps 的目标平均码率；同配置 VBR 短样质量已达标，正式整片仍需体积/画质验证。');
+  });
+  // CQ interpolation is never accepted as a VBR measurement. Execute the
+  // selected encoder and preset in bitrate mode on the same sample positions.
+  get('taskVerifyCurveRate').addEventListener('click',async()=>{
+    const choice=frontier?.evaluateTargetBytes(selectedBytes);
+    if(disposed || running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid() ||
+      choice?.status!=='within-evidence'||!evidenceTask||!evidenceMedia)return;
+    const bitrate=Math.round(choice.videoBitrate),raw=hooks.settings(),task=evidenceTask;
+    const runKey=calibrationKey(raw,{});
+    const profile=CALIBRATION_PROFILES[profileControl.value];
+    const from=task.videoRange==='full'?0:Number(task.start);
+    const to=task.videoRange==='full'?Number(evidenceMedia.duration):Number(task.end);
+    const starts=calibrationSampleStarts(from,to,profile.seconds,profile.count);
+    if(!starts.length){label('无法取得有效 VBR 采样位置。');return;}
+    running=true;cancelRequested=false;verifiedSelection=null;
+    render();hooks.setBusy(true);
+    const current=()=>!cancelRequested && !disposed && evidenceIsCurrent() &&
+      runKey===calibrationKey(hooks.settings(),{}) &&
+      Math.round(frontier?.evaluateTargetBytes(selectedBytes)?.videoBitrate||0)===bitrate;
+    try{
+      const observations=[];
+      for(const start of starts){
+        if(!current())throw Error('验证配置已变化，旧结果不可使用');
+        label('实际 VBR 验证 '+(observations.length+1)+'/'+starts.length+
+          ' · '+(bitrate/1e6).toFixed(2)+' Mbps');
+        const sample=await hooks.calibrationSample({
+          codec:raw.codec,encoder:raw.encoder,preset:raw.preset,multipass:task.multipass,
+          mode:'bitrate',bitrate,start,duration:profile.seconds
+        });
+        if(!current())throw Error('验证配置已变化，旧结果不可使用');
+        const ssim=parseMeasuredQuality(sample?.ssim),seconds=parseMeasuredNumber(sample?.duration),
+          bytes=parseMeasuredNumber(sample?.totalVideoBytes);
+        if(ssim===null||!(seconds>0)||!(bytes>0))
+          throw Error('原生 VBR 样本缺少有效 SSIM、时长或视频字节数');
+        observations.push({ssim,bitrate:bytes*8/seconds});
+      }
+      const min=Math.min(...observations.map(o=>o.ssim));
+      const observed=observations.reduce((sum,o)=>sum+o.bitrate,0)/observations.length;
+      const target=parseMeasuredQuality(targetControl.value);
+      if(min<target){
+        label('VBR 短样质量未达标：最低 SSIM '+min.toFixed(5)+
+          ' < 目标 '+target.toFixed(5)+'；CQ 插值不能保证 VBR 质量。');
+      }else{
+        verifiedSelection={sourceKey,bitrate,target};
+        label('VBR 短样达标：最低 SSIM '+min.toFixed(5)+
+          ' · 实际平均 '+(observed/1e6).toFixed(2)+
+          ' Mbps。允许采用此码率；整片质量与大小仍需验证。');
+      }
+    }catch(error){
+      verifiedSelection=null;
+      label('VBR 样本验证失败：'+error.message);
+    }finally{running=false;hooks.setBusy(false);if(!disposed)render();}
   });
   const measurementKey=(raw,media) => JSON.stringify([
     hooks.sourceIdentity(),media.duration,raw.operation,raw.codec,raw.encoder,raw.preset,
@@ -182,7 +255,7 @@ export function mountTranscodeCurves(section, hooks) {
   ]);
   const clearEvidence=()=>{
     points=[];frontier=null;selectedBytes=null;sourceKey='';sourceDuration=0;
-    evidenceMedia=null;
+    evidenceMedia=null;evidenceTask=null;verifiedSelection=null;
   };
   const invalidate=()=>{
     if (running) {
@@ -205,6 +278,7 @@ export function mountTranscodeCurves(section, hooks) {
           throw Error('视频输出时长发生变化');
         const target=parseMeasuredQuality(targetControl.value);
         const reevaluated=points.map(point=>({...point,meetsTarget:point.ssim>=target}));
+        evidenceTask=task;
         updateEvidence(reevaluated,raw,task,{preserveSelection:true});
         label('已按当前目标和音频预算重新计算；保留 '+points.length+
           ' 组视频实测证据，无需重新试压。必要时可继续追加校准。');
@@ -270,7 +344,7 @@ export function mountTranscodeCurves(section, hooks) {
       const target=Number(targetControl.value);
       if(!(target>=.8&&target<=.9999))throw Error('目标 SSIM 须在 0.80–0.9999 之间');
       sourceKey=measurementKey(raw,media);
-      evidenceMedia=media;
+      evidenceMedia=media;evidenceTask=task;
       updateEvidence([],raw,task);
       const limits=raw.encoder.endsWith('_nvenc')?{min:14,max:45}:raw.codec==='av1'?{min:18,max:50}:{min:12,max:40};
       const budgetSeconds=calibrationTimeBudget(fullDuration);

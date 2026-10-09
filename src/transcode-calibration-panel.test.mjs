@@ -100,3 +100,16 @@ test('manual calibration enforces an observed-cost soft budget without claiming 
  assert.match(source,/result\.stopReason/);
  assert.match(source,/单个不可中断的原生样本仍可能超时/);
 });
+
+test('formal VBR bitrate adoption requires native sample confirmation, never CQ interpolation alone',async()=>{
+ const [panel,main,bridge]=await Promise.all([
+  readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(panel,/id="taskVerifyCurveRate"/);
+ assert.match(panel,/verifiedSelection\.bitrate/);
+ assert.match(panel,/mode:'bitrate',bitrate/);
+ assert.match(main,/targetVideoBitrate: mode==='bitrate' \? bitrate : 0/);
+ assert.match(bridge,/if \(\$targetRate -gt 0\) \{ return "-c:v/);
+});

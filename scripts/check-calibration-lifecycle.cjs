@@ -38,10 +38,11 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
             pixelFormat:'yuv420p',bitDepth:8,unsafeColorPipeline:false}]};
       },
       validate:async()=>{state.validations++;await hold('validate');},
-      calibrationSample:async({quality,duration})=>{
+      calibrationSample:async({quality,duration,mode})=>{
         state.samples++;
         await hold('sample');
-        return {ssim:Object.hasOwn(state,'sampleOverride')?state.sampleOverride:1-quality/1000,
+        return {ssim:Object.hasOwn(state,'sampleOverride')?state.sampleOverride:
+          mode==='bitrate'?.998:1-quality/1000,
           totalVideoBytes:(64-quality)*1000,duration,elapsedSeconds:.1};
       },
       applyQuality:q=>state.applied.push(['quality',q]),
@@ -100,6 +101,10 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
     await page.locator('.media-curve-measurement button').first().click();
     assert.equal(await page.evaluate(()=>window.calibrationTest.applied.length),1,
       'Current evidence must remain usable');
+    assert.equal(await page.locator('#taskAdoptCurveRate').isDisabled(),true,
+      'CQ predictions alone must not enable VBR adoption');
+    await page.click('#taskVerifyCurveRate');
+    assert.equal(await page.locator('#taskAdoptCurveRate').isDisabled(),false);
     await page.click('#taskAdoptCurveRate');
     assert.equal(await page.evaluate(()=>window.calibrationTest.applied[1]?.[0]),'bitrate',
       'Current measured frontier must allow adopting bitrate');
