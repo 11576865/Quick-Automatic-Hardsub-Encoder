@@ -512,3 +512,13 @@ test('guided size budget compares compatible measured codec curves with explicit
  assert.match(main,/selectCodec\(recommendation\.branchId\)/);
  assert.match(main,/calibrationShouldContinue\(/);
 });
+
+test('final verified output reports predicted vs actual size without claiming perceptual quality validation',async()=>{
+ const source=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(source,/nativeJobProjection/);
+ assert.match(source,/plannedBytes:Number\(plan\.plannedBytes/);
+ assert.match(source,/const sizeError=projection\?\.plannedBytes/);
+ assert.match(source,/体积误差/);
+ assert.match(source,/已超出目标体积上限/);
+ assert.match(source,/sizeComparison:projection/);
+});

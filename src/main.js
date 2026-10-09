@@ -58,6 +58,7 @@ const state = {
   nativeJobId: null,
   nativeImportJobId: null,
   nativeCompletedJob: null,
+  nativeJobProjection: null,
   localBenchmarkHistory: [],
   appRelease: null,
   appUpdateCheck: null,
@@ -5298,6 +5299,10 @@ async function runNativeEncode() {
 
   state.nativeJobId = started.jobId;
   state.nativeCompletedJob = null;
+  state.nativeJobProjection = plan.mode==='budget-rate' ? {
+    jobId:started.jobId,plannedBytes:Number(plan.plannedBytes||0),
+    budgetBytes:Number(plan.sizeCeiling||0),codec:plan.codec
+  } : null;
   localStorage.setItem('nativeEncodeJobId', started.jobId);
   $('encodeBtn').disabled = true;
   $('cancelEncodeBtn').classList.remove('hidden');
@@ -5377,16 +5382,30 @@ async function monitorNativeJob(jobId) {
     } else if (status.state === 'cancelling') {
       $('liveEta').textContent = '正在取消 Native 压制…';
     } else if (status.state === 'completed') {
+      const projection=state.nativeJobProjection?.jobId===jobId
+        ? state.nativeJobProjection : null;
+      const actualBytes=Number(status.outputBytes||0);
+      const sizeError=projection?.plannedBytes>0 && actualBytes>0
+        ? (actualBytes-projection.plannedBytes)/projection.plannedBytes*100 : null;
       state.nativeCompletedJob = {
         jobId,
-        suggestedName: status.suggestedName || 'hardsub.mkv'
+        suggestedName: status.suggestedName || 'hardsub.mkv',
+        sizeComparison:projection && Number.isFinite(sizeError)
+          ? {plannedBytes:projection.plannedBytes,budgetBytes:projection.budgetBytes,
+            actualBytes,errorPercent:sizeError} : null
       };
+      state.nativeJobProjection=null;
       state.nativeJobId = null;
       syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '100%';
       $('liveEta').textContent =
-        'Native 压制完成 · ' + formatBytes(Number(status.outputBytes || 0)) +
+        'Native 压制完成 · ' + formatBytes(actualBytes) +
+        (Number.isFinite(sizeError)
+          ? ' · 规划 '+formatBytes(projection.plannedBytes)+
+            ' · 体积误差 '+(sizeError>=0?'+':'')+sizeError.toFixed(1)+'%'+
+            (actualBytes>projection.budgetBytes?' · 已超出目标体积上限':' · 未超过目标上限')
+          : '') +
         ' · packet 扫描 + 完整解码验证通过 · 点击“保存成品”选择保存位置';
       $('encodeBtn').disabled = false;
       $('encodeBtn').textContent = '保存成品';
@@ -5400,7 +5419,12 @@ async function monitorNativeJob(jobId) {
         (status.audioDecodeSeconds != null
           ? ' · 音频完整解码 ' + Number(status.audioDecodeSeconds || 0).toFixed(2) + ' s'
           : '') +
-        ' · SHA-256 ' + (status.sha256 || '')
+        ' · SHA-256 ' + (status.sha256 || '') +
+        (Number.isFinite(sizeError)
+          ? ' · 体积预测 '+formatBytes(projection.plannedBytes)+
+            ' 实际 '+formatBytes(actualBytes)+
+            ' 误差 '+sizeError.toFixed(2)+'%'
+          : '')
       );
       return;
     } else if (status.state === 'failed') {
