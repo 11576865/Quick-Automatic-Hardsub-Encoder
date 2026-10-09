@@ -1,5 +1,5 @@
 import { compileTask } from './media-task.js';
-import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
+import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, CALIBRATION_PROFILES, summarizeCalibrationEvidence, parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
 import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 
@@ -35,13 +35,19 @@ export function mountTranscodeCurves(section, hooks) {
   const efficiency = get('taskEfficiencyChart'), readout = get('taskCurveReadout');
   const targetControl = get('taskExploreTarget'), profileControl = get('taskCurveProfile'), stop = get('taskStopCurve');
   let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, disposed = false, sourceKey = '';
-  let fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  let evidenceMedia = null, fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  // Measurements depend on the video encode and sample positions, not on the
+  // user's SSIM acceptance threshold or on the final audio size budget.
   const evidenceIsCurrent = () => !!sourceKey &&
-    sourceKey === calibrationKey(hooks.settings(), {duration:sourceDuration});
+    sourceKey === measurementKey(hooks.settings(), {duration:sourceDuration});
+  const targetIsValid = () => {
+    const value = parseMeasuredQuality(targetControl.value);
+    return value !== null && value >= .8 && value <= .9999;
+  };
   const label = text => { get('taskCurveStatus').textContent = text; };
   const measuredVideoSize = bytes => (bytes / 1e9).toFixed(2) + ' GB';
   const useQuality = q => {
-    if (running || hooks.busy() || !evidenceIsCurrent()) return;
+    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid()) return;
     hooks.applyQuality(q);
     label('已采用实际测试过的 CQ/CRF ' + q + '。改变参数后应再次检查输出。');
   };
@@ -73,7 +79,7 @@ export function mountTranscodeCurves(section, hooks) {
         (point.meetsTarget ? ' · 达标' : ' · 未达标');
       const adopt = document.createElement('button');
       adopt.type='button';adopt.className='secondary';adopt.textContent='采用此质量值';
-      adopt.disabled = running || hooks.busy() || !evidenceIsCurrent();
+      adopt.disabled = running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid();
       adopt.addEventListener('click', () => useQuality(point.qualitySetting));
       row.append(details,adopt);rows.append(row);
     }
@@ -109,10 +115,10 @@ export function mountTranscodeCurves(section, hooks) {
         (dispersion.minBitrate/1e6).toFixed(1) + '–' + (dispersion.maxBitrate/1e6).toFixed(1) + ' Mbps' : '') +
       (dispersion?.widelyDivergent ? ' · 样本波动大，整片体积与画质预测风险较高' : '') :
       '请选择已测量的体积范围';
-    get('taskAdoptCurveRate').disabled = !dot || running || !evidenceIsCurrent();
+    get('taskAdoptCurveRate').disabled = !dot || running || !evidenceIsCurrent() || !targetIsValid();
   };
 
-  const updateEvidence = (newPoints, raw, task) => {
+  const updateEvidence = (newPoints, raw, task, { preserveSelection = false } = {}) => {
     points = newPoints;
     const audio = audioPlan(raw,task);
     calculatedAudioRate = audio.rate;
@@ -122,7 +128,7 @@ export function mountTranscodeCurves(section, hooks) {
       audioBitrate: calculatedAudioRate,
       reservePercent: 4
     });
-    selectedBytes = null;
+    if (!preserveSelection) selectedBytes = null;
     render();
   };
   const pointerSelect = event => {
@@ -153,22 +159,29 @@ export function mountTranscodeCurves(section, hooks) {
   });
   get('taskAdoptCurveRate').addEventListener('click',()=>{
     const evaluation = frontier?.evaluateTargetBytes(selectedBytes);
-    if (running || hooks.busy() || !evidenceIsCurrent() || evaluation?.status !== 'within-evidence')return;
+    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid() || evaluation?.status !== 'within-evidence')return;
     hooks.applyBitrate(Math.round(evaluation.videoBitrate));
     label('已采用 ' + (evaluation.videoBitrate/1e6).toFixed(2) +
       ' Mbps 的目标平均码率。VBR 与实测 CQ 不同；正式输出的体积/画质仍需验证。');
   });
-  const calibrationKey=(raw,media) => JSON.stringify([
+  const measurementKey=(raw,media) => JSON.stringify([
     hooks.sourceIdentity(),media.duration,raw.operation,raw.codec,raw.encoder,raw.preset,
     raw.start,raw.end,raw.videoRange,raw.videoStreams,raw.pixelFormat,raw.fpsMode,raw.fps,raw.frames,
     raw.crop,raw.rotation,raw.deinterlace,raw.width,raw.height,raw.squarePixels,
     raw.denoise,raw.deband,raw.sharpen,raw.gop,raw.bf,raw.refs,raw.threads,
     raw.codecParams,raw.profile,raw.level,raw.tune,raw.maxrate,raw.bufsize,
     raw.spatialAq,raw.temporalAq,raw.lookahead,raw.aqStrength,raw.multipass,
-    raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,targetControl.value,profileControl.value
+    profileControl.value
+  ]);
+  // An in-flight search must still reject threshold/audio changes. Only completed
+  // observations can be re-evaluated under a different decision or audio budget.
+  const calibrationKey=(raw,media) => JSON.stringify([
+    measurementKey(raw,media), raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,
+    targetControl.value
   ]);
   const clearEvidence=()=>{
     points=[];frontier=null;selectedBytes=null;sourceKey='';sourceDuration=0;
+    evidenceMedia=null;
   };
   const invalidate=()=>{
     if (running) {
@@ -177,6 +190,27 @@ export function mountTranscodeCurves(section, hooks) {
       label('输入或编码参数发生变化，已停止继续采样；当前试压结束后将作废证据。');
       render();
       return;
+    }
+    const raw=hooks.settings();
+    if (evidenceMedia && evidenceIsCurrent()) {
+      if (!targetIsValid()) {
+        label('目标 SSIM 无效。现有视频试压结果已保留，输入有效目标后重新评估。');
+        render();
+        return;
+      }
+      try {
+        const task=compileTask({...raw,rateMode:'quality',twoPass:false},evidenceMedia);
+        if(Number(task.expectedVideoDuration)!==fullDuration)
+          throw Error('视频输出时长发生变化');
+        const target=parseMeasuredQuality(targetControl.value);
+        const reevaluated=points.map(point=>({...point,meetsTarget:point.ssim>=target}));
+        updateEvidence(reevaluated,raw,task,{preserveSelection:true});
+        label('已按当前目标和音频预算重新计算；保留 '+points.length+
+          ' 组视频实测证据，无需重新试压。必要时可继续追加校准。');
+        return;
+      } catch(error) {
+        hooks.log?.('校准预算重算不可用：'+error.message);
+      }
     }
     clearEvidence();
     label('素材或编码方案已改变；请重新运行实测。');
@@ -234,7 +268,8 @@ export function mountTranscodeCurves(section, hooks) {
       sourceDuration=Number(media.duration);
       const target=Number(targetControl.value);
       if(!(target>=.8&&target<=.9999))throw Error('目标 SSIM 须在 0.80–0.9999 之间');
-      sourceKey=calibrationKey(raw,media);
+      sourceKey=measurementKey(raw,media);
+      evidenceMedia=media;
       updateEvidence([],raw,task);
       const limits=raw.encoder.endsWith('_nvenc')?{min:14,max:45}:raw.codec==='av1'?{min:18,max:50}:{min:12,max:40};
       const result=await exploreQuality({
@@ -252,13 +287,17 @@ export function mountTranscodeCurves(section, hooks) {
               quality:q,start,duration:profile.seconds
             });
             assertRunCurrent();
-            if(!sample || sample.ssim==null || sample.totalVideoBytes==null)throw Error('真实样本未返回 SSIM 或视频字节数');
-            const seconds=Number(sample.duration||0);
-            if(!(seconds>0) || !(Number(sample.totalVideoBytes)>0))throw Error('测试片段缺少有效时长或视频包字节数');
+            // Validate the *raw* bridge payload before Number() can turn
+            // false, whitespace or missing evidence into a measured zero.
+            const ssim=parseMeasuredQuality(sample?.ssim);
+            const bytes=parseMeasuredNumber(sample?.totalVideoBytes);
+            const seconds=parseMeasuredNumber(sample?.duration);
+            if(ssim===null || !(bytes>0) || !(seconds>0))
+              throw Error('真实样本缺少有效 SSIM、时长或视频字节数，拒绝生成实测曲线');
             samples.push({
-              start,ssim:Number(sample.ssim),duration:seconds,
-              bitrate:Number(sample.totalVideoBytes)*8/seconds,
-              elapsedSeconds:Number(sample.elapsedSeconds||0)
+              start,ssim,duration:seconds,
+              bitrate:bytes*8/seconds,
+              elapsedSeconds:parseMeasuredNumber(sample.elapsedSeconds) ?? 0
             });
           }
           const rates=samples.map(s=>s.bitrate),qualities=samples.map(s=>s.ssim);

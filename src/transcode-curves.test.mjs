@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calibrationSampleStarts, exploreQuality, createMeasuredSizeFrontier, buildExplorationPlot, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
+import { calibrationSampleStarts, exploreQuality, createMeasuredSizeFrontier, buildExplorationPlot, CALIBRATION_PROFILES, summarizeCalibrationEvidence, parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
 
 test('probe starts spread across a long range and respect trim boundaries', () => {
   const starts = calibrationSampleStarts(3600, 7*3600, 2);
@@ -128,4 +128,15 @@ test('quality search rejects missing SSIM and nonfinite rate before publishing e
 test('sample summary refuses missing quality instead of reporting zero as a measured minimum',()=>{
  for(const ssim of [null,undefined,'',' ',false,true])
   assert.equal(summarizeCalibrationEvidence([{sampleMeasurements:[{bitrate:1e6,ssim}]}]),null);
+});
+
+test('native sample ingress validation distinguishes numbers from missing evidence',()=>{
+  for(const invalid of [null,undefined,'','  ',false,true,[],{},NaN,Infinity,-.1,1.1])
+    assert.equal(parseMeasuredQuality(invalid),null,String(invalid));
+  assert.equal(parseMeasuredQuality(0),0);
+  assert.equal(parseMeasuredQuality(1),1);
+  assert.equal(parseMeasuredQuality('0.987'),.987);
+  for(const invalid of [null,undefined,' ',false,true,{},[]])
+    assert.equal(parseMeasuredNumber(invalid),null,String(invalid));
+  assert.equal(parseMeasuredNumber(0),0);
 });

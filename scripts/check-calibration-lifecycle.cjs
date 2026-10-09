@@ -41,7 +41,8 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
       calibrationSample:async({quality,duration})=>{
         state.samples++;
         await hold('sample');
-        return {ssim:1-quality/1000,totalVideoBytes:(64-quality)*1000,duration,elapsedSeconds:.1};
+        return {ssim:Object.hasOwn(state,'sampleOverride')?state.sampleOverride:1-quality/1000,
+          totalVideoBytes:(64-quality)*1000,duration,elapsedSeconds:.1};
       },
       applyQuality:q=>state.applied.push(['quality',q]),
       applyBitrate:b=>state.applied.push(['bitrate',b])
@@ -80,6 +81,22 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
 
     await setup('');await start();await settle();
     assert.ok(await page.locator('.media-curve-measurement').count()>1);
+    const beforeReuse = await page.evaluate(()=>({
+      samples:window.calibrationTest.samples,
+      count:document.querySelectorAll('.media-curve-measurement').length
+    }));
+    await page.fill('#taskExploreTarget','0.995');
+    assert.deepEqual(await page.evaluate(()=>({
+      samples:window.calibrationTest.samples,
+      count:document.querySelectorAll('.media-curve-measurement').length
+    })),beforeReuse,'Changing a completed SSIM target must reuse the same measured points');
+    assert.match(await page.locator('#taskCurveStatus').textContent(),/无需重新试压/);
+    await page.evaluate(()=>{const s=window.calibrationTest;s.raw.audio='aac';s.raw.audioBitrate='192000';s.controller.invalidate();});
+    assert.deepEqual(await page.evaluate(()=>({
+      samples:window.calibrationTest.samples,
+      count:document.querySelectorAll('.media-curve-measurement').length
+    })),beforeReuse,'Audio-budget changes must retain existing video quality observations');
+    await page.click('#taskMeasuredQualitySummary');
     await page.locator('.media-curve-measurement button').first().click();
     assert.equal(await page.evaluate(()=>window.calibrationTest.applied.length),1,
       'Current evidence must remain usable');
@@ -99,11 +116,17 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
     assert.equal(await page.evaluate(()=>window.calibrationTest.applied.length),2,
       'Stale evidence must not change quality or bitrate');
 
+    await setup('');await page.evaluate(()=>{window.calibrationTest.sampleOverride=false;});
+    await start();await settle();
+    assert.equal(await page.locator('.media-curve-measurement').count(),0,
+      'A boolean SSIM returned from the native boundary must never become measured zero');
+    assert.match(await page.locator('#taskCurveStatus').textContent(),/缺少有效 SSIM/);
+
     await setup('sample');await start();await hold('sample');
     await page.evaluate(()=>window.calibrationTest.controller.dispose());
     await release();await settle();
     assert.equal(await page.evaluate(()=>window.calibrationTest.samples),1,
       'Unmounting the panel must stop further native samples');
-    console.log('Calibration lifecycle: prepare/validate/source/input/adoption/dispose passed');
+    console.log('Calibration lifecycle: stale fences, completed evidence reuse, raw validation, adoption, dispose passed');
   } finally { await page.close(); }
 };

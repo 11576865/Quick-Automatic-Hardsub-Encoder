@@ -18,6 +18,10 @@ function qualityMeasurement(value) {
   return parsed !== null && parsed >= 0 && parsed <= 1 ? parsed : null;
 }
 
+// Use these at the native-sample ingress, before coercion destroys provenance.
+export const parseMeasuredNumber = measurement;
+export const parseMeasuredQuality = qualityMeasurement;
+
 // Separate positions across the selected clip: these are time-spaced probes,
 // not a claim that the content is statistically representative.
 export const CALIBRATION_PROFILES = Object.freeze({
