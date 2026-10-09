@@ -190,11 +190,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Reference fixture failed.' }
           & ffmpeg -hide_banner -loglevel error -y -i $reference -vf 'scale=160:90:flags=bicubic' -c:v libx264 -pix_fmt yuv420p $candidate
           if ($LASTEXITCODE -ne 0) { throw 'Reduced-resolution candidate failed.' }
-          $ssimLog=Join-Path $work 'common-reference-ssim.log'
-          & ffmpeg -hide_banner -nostdin -i $candidate -i $reference -lavfi '[0:v]scale=320:180:flags=bicubic,setpts=PTS-STARTPTS[up];[1:v]setpts=PTS-STARTPTS[ref];[up][ref]ssim' -f null NUL 2> $ssimLog
-          $exitCode=$LASTEXITCODE
-          $score=Get-Content -Raw -LiteralPath $ssimLog
-          if ($exitCode -ne 0 -or $score -notmatch 'All:[0-9.]+') {
+          # Use FFmpeg's SSIM stats_file so PowerShell 5.1 never turns
+          # the normal FFmpeg stderr progress stream into NativeCommandError.
+          Push-Location $work
+          try {
+            & ffmpeg -hide_banner -nostdin -loglevel error -i $candidate -i $reference -lavfi '[0:v]scale=320:180:flags=bicubic,setpts=PTS-STARTPTS[up];[1:v]setpts=PTS-STARTPTS[ref];[up][ref]ssim=stats_file=ssim.stats' -f null NUL
+            $exitCode=$LASTEXITCODE
+          } finally { Pop-Location }
+          $ssimLog=Join-Path $work 'ssim.stats'
+          if ($exitCode -ne 0 -or -not(Test-Path $ssimLog) -or
+              (Get-Content -Raw -LiteralPath $ssimLog) -notmatch 'All:[0-9.]+') {
             throw 'Reduced candidate cannot be scored against the original-size reference.'
           }
       - name: Real AV1 ALAC MKV acceptance
