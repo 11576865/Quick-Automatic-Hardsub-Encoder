@@ -39,6 +39,7 @@ jobs:
       - run: node --test src/compression-evidence.test.mjs
       - run: node --test src/rate-distortion-model.test.mjs
       - run: node --test src/size-frontier-ui.test.mjs
+      - run: node --test src/curve-chart-svg.test.mjs
       - run: node --test src/transcode-curves.test.mjs src/transcode-calibration-panel.test.mjs
       - run: node --test src/native-job-monitor.test.mjs
       - run: node src/ui-shell.test.mjs

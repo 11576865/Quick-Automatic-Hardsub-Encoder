@@ -56,3 +56,25 @@ test('exact video-only calibration reads source directly for SSIM instead of wri
   assert.match(script,/Get-SsimAgainstSource \$candidate \$video \$startText \$durationText/);
   assert.match(script,/Get-Ssim \$candidate \$reference \$work/);
 });
+
+test('both manual chart interfaces use the same axis, evidence and pointer geometry',async()=>{
+  const [panel,main,svg,style,mediaCss]=await Promise.all([
+    readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+    readFile(new URL('./main.js',import.meta.url),'utf8'),
+    readFile(new URL('./curve-chart-svg.js',import.meta.url),'utf8'),
+    readFile(new URL('./style.css',import.meta.url),'utf8'),
+    readFile(new URL('./media-workspace-ui.css',import.meta.url),'utf8')
+  ]);
+  for(const source of [panel,main]) {
+    assert.match(source,/renderRateDistortionSvg\(/);
+    assert.match(source,/renderExplorationSvg\(/);
+    assert.match(source,/plotFractionAtX\(/);
+    assert.match(source,/plotXFromClientX\(/);
+  }
+  assert.doesNotMatch(panel,/\(x-34\)\/652/);
+  assert.doesNotMatch(main,/\(svgX - 34\) \/ \(720 - 68\)/);
+  assert.match(panel,/class="media-curve-legend"/);
+  assert.match(svg,/curve-sample-whisker/);
+  assert.match(style,/\.curve-axis/);
+  assert.match(mediaCss,/\.media-curve-legend/);
+});

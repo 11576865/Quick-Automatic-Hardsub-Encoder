@@ -1732,3 +1732,16 @@ body.media-frame-lightbox-open {
 .media-compression-curves #taskStopCurve:not(:disabled) {
   border-color:rgba(220,130,100,.6);
 }
+
+.media-curve-legend {display:flex;gap:8px 15px;flex-wrap:wrap;font-size:.74rem;line-height:1.4;color:var(--muted)}
+.media-curve-legend span {display:inline-flex;align-items:center;gap:6px}
+.media-curve-legend span::before {content:"";display:inline-block;width:13px;height:8px;box-sizing:border-box}
+.legend-search::before {border-top:2px dashed var(--plan)}
+.legend-fit::before {border-top:3px solid var(--plan)}
+.legend-observed::before {height:10px!important;width:10px!important;border:2px solid var(--plan);border-radius:50%}
+.legend-band::before {background:color-mix(in srgb,var(--plan) 20%,transparent)}
+.legend-knee::before {border:2px solid var(--warn);transform:rotate(45deg);width:9px!important;height:9px!important}
+.legend-pass::before {border:2px solid #25966c;border-radius:50%}
+.legend-fail::before {border:2px solid #d38058;border-radius:50%}
+.legend-whisker::before {border-left:2px solid var(--muted);border-top:1px solid var(--muted);border-bottom:1px solid var(--muted);width:5px!important;height:10px!important}
+.media-curve-legend,.media-curve-readout {font-variant-numeric:tabular-nums}
