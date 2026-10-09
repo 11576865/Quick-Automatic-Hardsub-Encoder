@@ -487,3 +487,16 @@ test('Bink 2 input adapter distinguishes probe, decode, and external import stat
   assert.match(bridge, /Stream Copy is unavailable for a Bink 2 source/);
   assert.match(bridge, /FFmpeg cannot decode the video stream/);
 });
+
+test('hard-sub quality plan renders actual search-order exploration measurements', async () => {
+  const [main, curves] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url),'utf8'),
+    readFile(new URL('./transcode-curves.js', import.meta.url),'utf8')
+  ]);
+  assert.match(main,/id="qualityExplorationChart"/);
+  assert.match(main,/qualityExplorationPoints:\s*\{\}/);
+  assert.match(main,/function renderQualityExploration\(\)/);
+  assert.match(main,/state\.qualityExplorationPoints\[codec\]\.push\(/);
+  assert.match(main,/renderQualityExploration\(\);/);
+  assert.match(curves,/function buildExplorationPlot\(/);
+});

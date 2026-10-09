@@ -6794,3 +6794,10 @@ body.ui-phone .size-frontier-scale span:nth-child(2) {
   display: none;
 }
 }
+
+/* Actual CQ/CRF search trajectory in guided hard-sub calibration. */
+.quality-exploration-panel {display:grid;gap:8px;margin-top:12px;padding:12px;border:1px solid rgba(120,145,174,.29);border-radius:12px}
+.quality-exploration-panel strong {font-size:.95rem}
+.quality-exploration-panel small {font-size:.8rem;opacity:.75}
+.quality-exploration-panel svg {display:block;width:100%;height:auto;aspect-ratio:720/220;min-height:120px;border:1px solid rgba(120,145,174,.2);border-radius:8px;background:rgba(10,15,29,.2)}
+.quality-exploration-panel p {margin:0;font-size:.83rem}

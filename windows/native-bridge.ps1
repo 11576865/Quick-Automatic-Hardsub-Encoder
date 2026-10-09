@@ -517,7 +517,10 @@ function Get-BridgeEncoderArgs($Profile, $Options) {
             return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -b:v $targetRate -maxrate $targetRate -bufsize $($targetRate * 2)"
         }
         $multipass = if ($Profile.SupportsMultipassFullres) { ' -multipass fullres' } else { '' }
-        return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -cq $cq -b:v 0$multipass"
+        $samplePreset = [string]$Options.preset
+        if ($samplePreset -and $samplePreset -notmatch '^p[1-7]$') { throw 'Invalid NVENC sample preset.' }
+        if (-not $samplePreset) { $samplePreset = 'p7' }
+        return "-c:v $($Profile.Encoder) -preset $samplePreset -tune $tune -rc vbr -cq $cq -b:v 0$multipass"
     }
 
     $preset = [string]$Options.preset
@@ -907,7 +910,22 @@ function Invoke-Sample($Body) {
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $o=$Body.options
-    $profile=Get-PreferredEncoder ([string]$o.codec)
+    $requestedEncoder=[string]$o.encoder
+    if($requestedEncoder){
+        $allowedEncoders=@()
+        switch([string]$o.codec){
+            'h264' { $allowedEncoders=@('libx264','h264_nvenc') }
+            'h265' { $allowedEncoders=@('libx265','hevc_nvenc') }
+            'av1'  { $allowedEncoders=@('libsvtav1','av1_nvenc') }
+        }
+        if($requestedEncoder -notin $allowedEncoders){
+            throw 'Sample encoder does not match the selected codec.'
+        }
+        $profile=@($script:Capabilities.Encoders | Where-Object { $_.Key -eq $requestedEncoder -and $_.Available }) | Select-Object -First 1
+        if(-not $profile){throw 'Selected sample encoder is not runtime-available.'}
+    }else{
+        $profile=Get-PreferredEncoder ([string]$o.codec)
+    }
     if(-not $profile){throw 'No available Windows Native encoder for this codec.'}
     $duration=[double]$o.duration
     if($duration -le 0 -or $duration -gt 8){throw 'Sample duration must be between 0 and 8 seconds.'}

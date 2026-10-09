@@ -1,6 +1,7 @@
 import { formatSize, outputReport, sampleSettings, sampleProjection } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { audioCopyPlaybackWarning } from './media-container.js';
+import { mountTranscodeCurves } from './transcode-calibration-panel.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
@@ -286,6 +287,33 @@ export function mountMediaWorkspace(hooks) {
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
+  const transcodeCurves = mountTranscodeCurves(section, {
+    settings: read,
+    busy: hooks.busy,
+    isWindows: hooks.isWindows,
+    sourceIdentity: () => hooks.videoIdentity?.() || '',
+    prepare: hooks.prepare,
+    validate: hooks.validate,
+    calibrationSample: hooks.calibrationSample,
+    setBusy: hooks.setBusy,
+    log: hooks.log,
+    applyBitrate: bitrate => {
+      markCompletedAsPrevious('bitrate');
+      get('rateMode').value = 'bitrate';
+      get('bitrate').value = String(bitrate);
+      updateRate();
+      get('bitrate').dispatchEvent(new Event('input',{bubbles:true}));
+    },
+    applyQuality: quality => {
+      markCompletedAsPrevious('quality');
+      get('rateMode').value = 'quality';
+      get('quality').value = String(quality);
+      syncQualityRange();
+      updateRate();
+      get('quality').dispatchEvent(new Event('input',{bubbles:true}));
+    }
+  });
+
   const formatTaskClock = seconds => {
     const value=Math.max(0,Number(seconds)||0),whole=Math.floor(value),h=Math.floor(whole/3600),m=Math.floor((whole%3600)/60),s=whole%60;
     return h ? h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0') : m+':'+String(s).padStart(2,'0');
@@ -1374,6 +1402,7 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#taskLoadPreset').classList.toggle('media-copy-suppressed', copy);
     syncWorkflowStrip(mode);
     syncHardsubStrategyChrome(mode);
+    transcodeCurves.refresh();
     hooks.onModeChange?.(mode);
   }
 
@@ -1499,6 +1528,8 @@ export function mountMediaWorkspace(hooks) {
   const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
+  const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
+  document.addEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);
   get('rateMode').onchange=updateRate;
   section.querySelector('#taskStore').onclick=()=>{try{const name=get('configName').value.trim();if(!name||name.length>80)throw Error('请输入 1–80 字的配置名称');const c=configs();Object.defineProperty(c,name,{value:read(),enumerable:true,configurable:true,writable:true});localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();get('savedConfig').value=name;status('配置已保存');}catch(e){status(e.message);}};
   section.querySelector('#taskRestore').onclick=()=>{try{const raw=configs()[get('savedConfig').value];if(raw){applyConfig(raw);renderPlanSummary(activeTask);}}catch(e){status(e.message);}};
@@ -1623,6 +1654,7 @@ export function mountMediaWorkspace(hooks) {
   const invalidateCompiledPlan = event => {
     const sourceName=event?.target?.name||'';
     if(!sourceName)return;
+    if(!new Set(['quality','bitrate','rateMode','targetSize','sizeUnit','sizeReserve','sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
     markCompletedAsPrevious(sourceName);
     activeTask=null;
     renderContainerDecision(null);
@@ -1632,5 +1664,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
-  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
