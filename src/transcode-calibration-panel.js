@@ -215,7 +215,7 @@ export function mountTranscodeCurves(section, hooks) {
       if(task.expectedVideoTracks!==1 || task.videoStreams[0]!==0)throw Error('曲线当前只支持主视频流 v:0');
       const unsupported=['fps','frames','width','height','crop','gop','bf','refs','threads','codecParams','profile','level','tune','maxrate','bufsize','lookahead','aqStrength'];
       if(unsupported.some(k=>String(raw[k]??'').trim()))throw Error('当前使用了样本接口未等价支持的高级参数，请先恢复默认再校准');
-      if((raw.fpsMode!=='auto'&&raw.fpsMode!=='passthrough')||raw.pixelFormat!=='yuv420p'||
+      if(raw.fpsMode!=='auto'||raw.pixelFormat!=='yuv420p'||
         raw.rotation!=='none'||raw.deinterlace!=='none'||
         raw.squarePixels||raw.denoise||raw.deband||raw.sharpen||raw.spatialAq||raw.temporalAq||
         (raw.encoder.endsWith('_nvenc') && raw.multipass!=='fullres'))
