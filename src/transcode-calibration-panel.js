@@ -1,5 +1,5 @@
 import { compileTask } from './media-task.js';
-import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, buildExplorationPlot } from './transcode-curves.js';
+import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, buildExplorationPlot, CALIBRATION_PROFILES, summarizeCalibrationEvidence } from './transcode-curves.js';
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
 
 // Measured curves for manual video-only transcode. This is intentionally
@@ -13,14 +13,16 @@ export function mountTranscodeCurves(section, hooks) {
   panel.innerHTML = [
     '<div class="media-curves-header"><div><strong>压制前 · 实测效率与探索曲线</strong>',
     '<p>在选定的视频区间上抽取分散的短片，逐步测量质量与码率。不会先重压整段母片。</p></div>',
-    '<button type="button" id="taskExploreCurve" class="secondary">探索当前编码器</button></div>',
-    '<label class="media-curve-target">最低样本 SSIM 目标 <input type="number" id="taskExploreTarget" min="0.80" max="0.9999" step="0.001" value="0.980"></label>',
+    '<div class="media-curve-actions"><button type="button" id="taskExploreCurve" class="secondary">探索当前编码器</button>',
+    '<button type="button" id="taskStopCurve" class="secondary" disabled>停止探索</button></div></div>',
+    '<div class="media-curve-options"><label class="media-curve-target">最低样本 SSIM 目标 <input type="number" id="taskExploreTarget" min="0.80" max="0.9999" step="0.001" value="0.980"></label>',
+    '<label class="media-curve-target">采样力度 <select id="taskCurveProfile"><option value="quick">快速 · 3 处 × 2 秒</option><option value="balanced" selected>均衡 · 5 处 × 4 秒</option><option value="thorough">深入 · 7 处 × 6 秒</option></select></label></div>',
     '<p id="taskCurveStatus" class="note" role="status">尚无当前素材的实测结果。曲线要求 Windows Native 的编码器一致性检查。</p>',
     '<div class="media-curve-grid">',
     '<div><strong>探索曲线</strong><small>横轴为真实试压次序；点旁为 CQ/CRF，虚线为目标 SSIM。</small>',
     '<svg id="taskExplorationChart" viewBox="0 0 720 220" role="img" aria-label="实测 CQ 或 CRF 探索次序与质量"></svg>',
     '<div id="taskExplorationPoints" class="media-curve-points"></div></div>',
-    '<div><strong>效率曲线</strong><small>横轴为估计体积（对数），纵轴为短片 SSIM。仅在实测码率范围内插值。</small>',
+    '<div><strong>效率曲线</strong><small>横轴为预算体积（对数），纵轴为短片 SSIM。仅在实测码率范围内插值。</small>',
     '<svg id="taskEfficiencyChart" viewBox="0 0 720 220" role="slider" tabindex="0" aria-label="选择实测范围内的目标视频码率" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></svg>',
     '<div id="taskCurveReadout" class="media-curve-readout">至少完成两个不同码率的有效测试后显示曲线。</div>',
     '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需复核）</button></div></div>',
@@ -30,9 +32,11 @@ export function mountTranscodeCurves(section, hooks) {
   const get = id => panel.querySelector('#' + id);
   const btn = get('taskExploreCurve'), plot = get('taskExplorationChart');
   const efficiency = get('taskEfficiencyChart'), readout = get('taskCurveReadout');
-  const targetControl = get('taskExploreTarget');
-  let points = [], frontier = null, selectedBytes = null, running = false, sourceKey = '';
-  let fullDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  const targetControl = get('taskExploreTarget'), profileControl = get('taskCurveProfile'), stop = get('taskStopCurve');
+  let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, sourceKey = '';
+  let fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  const evidenceIsCurrent = () => !!sourceKey &&
+    sourceKey === calibrationKey(hooks.settings(), {duration:sourceDuration});
   const label = text => { get('taskCurveStatus').textContent = text; };
   const measuredVideoSize = bytes => (bytes / 1e9).toFixed(2) + ' GB';
   const useQuality = q => {
@@ -43,10 +47,15 @@ export function mountTranscodeCurves(section, hooks) {
     const tracks = Number(task.expectedAudioTracks || 0);
     if (raw.audio === 'none' || tracks === 0) return { rate: 0, uncertain: false };
     if (raw.audio === 'copy') return { rate: 0, uncertain: true };
-    return { rate: Number(raw.audioBitrate || 128000) * tracks, uncertain: false };
+    // Account for audio kept full when the video timeline is trimmed.
+    const videoSeconds = Number(task.expectedVideoDuration || 0);
+    const audioSeconds = Number(task.expectedAudioDuration || 0);
+    if (!(videoSeconds > 0) || !(audioSeconds >= 0)) return { rate: 0, uncertain: true };
+    return { rate: Number(raw.audioBitrate || 128000) * tracks * audioSeconds/videoSeconds, uncertain: false };
   };
   const render = () => {
     btn.disabled = running;
+    stop.disabled = !running || cancelRequested;
     btn.textContent = running ? '正在实测…' : '探索当前编码器';
     const exploration = buildExplorationPlot(points, Number(targetControl.value));
     if (exploration.ok) {
@@ -76,7 +85,7 @@ export function mountTranscodeCurves(section, hooks) {
       row.append(details,adopt);rows.append(row);
     }
 
-    if (!frontier?.ok) {
+    if (!frontier?.ok || !evidenceIsCurrent()) {
       efficiency.replaceChildren();
       readout.textContent = '至少需要两个不同码率的有效测量点。';
       get('taskAdoptCurveRate').disabled = true;
@@ -105,13 +114,17 @@ export function mountTranscodeCurves(section, hooks) {
     efficiency.setAttribute('aria-valuetext',dot
       ? ((dot.videoBitrate/1e6).toFixed(2) + ' Mbps，预计 '+measuredVideoSize(selectedBytes))
       : '未选择有证据的码率');
+    const dispersion = summarizeCalibrationEvidence(points);
     readout.textContent = dot ?
       '选择 ' + (dot.videoBitrate/1e6).toFixed(2) + ' Mbps · ' +
-      (audioUncertain ? '视频体积约 ' : '预算体积约 ') + measuredVideoSize(selectedBytes) +
-      ' · 样本 SSIM 预测 ' + dot.quality.toFixed(5) +
-      '（样本范围 ' + dot.lowerQuality.toFixed(5) + '–' + dot.upperQuality.toFixed(5) + '）' :
+      (audioUncertain ? '仅视频预算约 ' : '音视频预算约 ') + measuredVideoSize(selectedBytes) +
+      ' · 已测点插值 SSIM ' + dot.quality.toFixed(5) +
+      '（跨位置观察范围 ' + dot.lowerQuality.toFixed(5) + '–' + dot.upperQuality.toFixed(5) + '）' +
+      (dispersion ? ' · 最近一次 CQ 的样本码率范围 ' +
+        (dispersion.minBitrate/1e6).toFixed(1) + '–' + (dispersion.maxBitrate/1e6).toFixed(1) + ' Mbps' : '') +
+      (dispersion?.widelyDivergent ? ' · 样本波动大，整片体积与画质预测风险较高' : '') :
       '请选择已测量的体积范围';
-    get('taskAdoptCurveRate').disabled = !dot || running;
+    get('taskAdoptCurveRate').disabled = !dot || running || !evidenceIsCurrent();
   };
 
   const updateEvidence = (newPoints, raw, task) => {
@@ -128,7 +141,7 @@ export function mountTranscodeCurves(section, hooks) {
     render();
   };
   const pointerSelect = event => {
-    if (!frontier?.ok || running) return;
+    if (!frontier?.ok || running || !evidenceIsCurrent()) return;
     const rect = efficiency.getBoundingClientRect();
     if (!(rect.width > 0)) return;
     const x = (Number(event.clientX) - rect.left) * 720 / rect.width;
@@ -139,7 +152,7 @@ export function mountTranscodeCurves(section, hooks) {
   efficiency.addEventListener('pointerdown',pointerSelect);
   efficiency.addEventListener('pointermove',event=>{if(event.buttons===1)pointerSelect(event);});
   efficiency.addEventListener('keydown',event=>{
-    if (!frontier?.ok || running) return;
+    if (!frontier?.ok || running || !evidenceIsCurrent()) return;
     const existing = evidenceFractionForTargetBytes(frontier,selectedBytes) ?? 0.5;
     let next=existing;
     if(event.key==='ArrowLeft'||event.key==='ArrowDown')next-=0.02;
@@ -153,7 +166,7 @@ export function mountTranscodeCurves(section, hooks) {
   });
   get('taskAdoptCurveRate').addEventListener('click',()=>{
     const evaluation = frontier?.evaluateTargetBytes(selectedBytes);
-    if (evaluation?.status !== 'within-evidence')return;
+    if (!evidenceIsCurrent() || evaluation?.status !== 'within-evidence')return;
     hooks.applyBitrate(Math.round(evaluation.videoBitrate));
     label('已采用 ' + (evaluation.videoBitrate/1e6).toFixed(2) +
       ' Mbps 的目标平均码率。VBR 与实测 CQ 不同；正式输出的体积/画质仍需验证。');
@@ -165,7 +178,7 @@ export function mountTranscodeCurves(section, hooks) {
     raw.denoise,raw.deband,raw.sharpen,raw.gop,raw.bf,raw.refs,raw.threads,
     raw.codecParams,raw.profile,raw.level,raw.tune,raw.maxrate,raw.bufsize,
     raw.spatialAq,raw.temporalAq,raw.lookahead,raw.aqStrength,raw.multipass,
-    raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,targetControl.value
+    raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,targetControl.value,profileControl.value
   ]);
   const invalidate=()=>{
     if (running)return;
