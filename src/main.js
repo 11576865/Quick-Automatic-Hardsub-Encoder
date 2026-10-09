@@ -4652,6 +4652,8 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
   if (goal === 'efficiency'||compareForSize) {
     state.qualityCalibration = {};
     state.rateDistortionModels = {};
+    state.resolutionRateDistortionModels = {};
+    state.guidedOutputSize = null;
     state.qualityExplorationPoints = {};
     state.sizeEnvelopeEnabled = false;
   } else {
