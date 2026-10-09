@@ -16,6 +16,7 @@ import { buildSizeFrontierPlot, evidenceFractionForTargetBytes, targetBytesAtEvi
 import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 import { createMultiBranchFrontier, calibrationTimeBudget, calibrationShouldContinue } from './compression-decision.js';
 import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
+import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -75,6 +76,8 @@ const state = {
   benchmarks: {},
   qualityCalibration: {},
   rateDistortionModels: {},
+  resolutionRateDistortionModels: {},
+  guidedOutputSize: null,
   sizeEnvelopeEnabled: false,
   qualityExplorationPoints: {},
   sizeBudgetTargetBytes: null,
@@ -347,6 +350,7 @@ app.innerHTML = `
               <div class="size-frontier-actions">
                 <button id="calibrateSizeFrontierBtn" class="plan-interaction" type="button">生成当前编码器曲线</button>
                 <button id="compareSizeFrontierBtn" class="plan-interaction secondary" type="button">比较可用编码器</button>
+                <button id="compareResolutionFrontierBtn" class="plan-interaction secondary" type="button">比较当前编码器分辨率</button>
               </div>
             </div>
             <div id="sizeFrontierEmpty" class="size-frontier-empty note">尚无当前编码器的 R-D 模型。仍可使用下方手动倍率预算。</div>
@@ -1037,23 +1041,37 @@ function currentSizeFrontier(codec = null) {
     durationSeconds:Number(state.media.duration),audioBitrate:estimatedSizeBudgetAudioBitrate(),
     reservePercent:4,containerReservePercent:1,fixedReserveBytes:256*1024,minimumVideoBitrate:150000
   };
+  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
+    ':'+currentRuntimeEvidenceKey();
+  const resolutionChoices=Object.values(state.resolutionRateDistortionModels)
+    .filter(x=>x.model?.ok && x.metric===COMMON_REFERENCE_METRIC &&
+      x.sourceScope===sourceScope);
   if(codec===null && state.sizeEnvelopeEnabled) {
-    const scope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
-      ':'+currentRuntimeEvidenceKey();
-    const branches=['h264','h265','av1']
-      .filter(id=>state.softwareEncoders[id]!==false && state.rateDistortionModels[id]?.ok)
-      .map(id=>({id,model:state.rateDistortionModels[id],
-        preset:state.qualityCalibration[id]?.preset||profileFor(id,'balanced').preset,
-        measurementScope:scope}));
+    const useRes=resolutionChoices.length>=2;
+    const branches=useRes
+      ? resolutionChoices.map(x=>({id:x.id,model:x.model,preset:x.preset,
+        measurementScope:sourceScope+':'+COMMON_REFERENCE_METRIC}))
+      : ['h264','h265','av1']
+        .filter(id=>state.softwareEncoders[id]!==false && state.rateDistortionModels[id]?.ok)
+        .map(id=>({id,model:state.rateDistortionModels[id],
+          preset:state.qualityCalibration[id]?.preset||profileFor(id,'balanced').preset,
+          measurementScope:sourceScope}));
     if(branches.length>=2) {
+      const incumbentId=useRes
+        ? state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source')
+        : state.selectedCodec;
       const envelope=createMultiBranchFrontier(branches,{
-        ...budget,incumbentId:state.selectedCodec,hysteresisSsim:.003
+        ...budget,incumbentId,hysteresisSsim:.003
       });
       if(envelope.ok)return envelope;
     }
   }
   const selected=codec||state.selectedCodec||chooseDefaultCodec('sizeBudget');
-  const model=selected?state.rateDistortionModels?.[selected]:null;
+  const sizeId=state.guidedOutputSize?.id;
+  const scaledModel=sizeId && codec===selected
+    ? state.resolutionRateDistortionModels[selected+'@'+sizeId] : null;
+  const model=scaledModel?.model?.ok && scaledModel.sourceScope===sourceScope
+    ? scaledModel.model : selected?state.rateDistortionModels?.[selected]:null;
   if(!model?.ok)return null;
   const frontier=createSizeQualityFrontier(model,budget);
   return frontier?.ok?frontier:null;
@@ -1095,14 +1113,16 @@ function renderSizeFrontier() {
   const empty = $('sizeFrontierEmpty');
   const readout = $('sizeFrontierReadout');
   const button = $('calibrateSizeFrontierBtn');
-  const compare=$('compareSizeFrontierBtn'), branchAction=$('adoptSizeFrontierBranchBtn');
+  const compare=$('compareSizeFrontierBtn'),
+    compareResolution=$('compareResolutionFrontierBtn'),branchAction=$('adoptSizeFrontierBranchBtn');
   if (!panel || !svg || !wrap || !empty || !readout || !button) return;
 
   const goal = $('encodeGoal')?.value || 'balanced';
   const codec = state.selectedCodec || chooseDefaultCodec(goal);
   const model = codec ? state.rateDistortionModels?.[codec] : null;
-  const multiReady=state.sizeEnvelopeEnabled &&
-    Object.values(state.rateDistortionModels).filter(m=>m?.ok).length>=2;
+  const multiReady=state.sizeEnvelopeEnabled && (
+    Object.values(state.rateDistortionModels).filter(m=>m?.ok).length>=2 ||
+    Object.values(state.resolutionRateDistortionModels).filter(x=>x.model?.ok).length>=2);
   const nativeOnly = !state.nativeBackend?.available;
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
   const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
@@ -1121,6 +1141,8 @@ function renderSizeFrontier() {
       ? '刷新当前编码器曲线'
       : '生成当前编码器曲线';
   if(compare)compare.disabled=button.disabled;
+  if(compareResolution)compareResolution.disabled=button.disabled ||
+    guidedResolutionCandidates(state.media||{}).length<2;
   if(branchAction){branchAction.classList.add('hidden');branchAction.disabled=true;}
 
   const label = codec ? codec.toUpperCase() : '当前编码器';
@@ -1170,7 +1192,7 @@ function renderSizeFrontier() {
   wrap.classList.remove('hidden');
   $('sizeFrontierSubtitle').textContent = frontier.kind==='multi-branch'
     ? frontier.branchIds.map(id=>id.toUpperCase()).join(' / ')+
-      ' · 仅在相同参考画面与共同实测预算区间内形成上包络，不作外推。'
+      ' · 统一源尺寸参考画面 SSIM；仅在共同实测体积区间内形成上包络。'
     : label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。';
   $('sizeFrontierMin').textContent = formatBytes(frontier.minimumEvidenceTargetBytes);
   $('sizeFrontierMax').textContent = formatBytes(frontier.maximumEvidenceTargetBytes);
@@ -1203,14 +1225,16 @@ function renderSizeFrontier() {
         : '')+
       (frontier.kind==='multi-branch'
         ? ' · 建议 '+escapeHtml(String(plot.selected.branchId||'').toUpperCase())+
-          (plot.selected.branchId!==state.selectedCodec?'（未采用，执行方案不变）':'（已选择）')
+          (plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source') &&
+            plot.selected.branchId!==state.selectedCodec?'（未采用，执行方案不变）':'（已选择）')
         : '');
     if(branchAction && frontier.kind==='multi-branch' && plot.selected.branchId &&
-      plot.selected.branchId!==state.selectedCodec){
+      plot.selected.branchId!==state.selectedCodec &&
+      plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source')){
       branchAction.dataset.codec=plot.selected.branchId;
       branchAction.disabled=state.qualityCalibrationBusy||state.operationBusy;
       branchAction.classList.remove('hidden');
-      branchAction.textContent='采用推荐编码器 '+plot.selected.branchId.toUpperCase();
+      branchAction.textContent='采用推荐配置 '+plot.selected.branchId.toUpperCase();
     }
   } else if (directBytes > 0) {
     const evaluation = frontier.evaluateTargetBytes(directBytes);
@@ -1483,13 +1507,22 @@ document.addEventListener('change', event => {
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('calibrateSizeFrontierBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('compareSizeFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true})));
+$('compareResolutionFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true,compareResolution:true})));
 $('adoptSizeFrontierBranchBtn').addEventListener('click',()=>{
   const frontier=currentSizeFrontier();
   const recommendation=frontier?.evaluateTargetBytes(Number(state.sizeBudgetTargetBytes||0));
   if(state.operationBusy||state.qualityCalibrationBusy||frontier?.kind!=='multi-branch'||
     recommendation?.status!=='within-evidence'||!recommendation.branchId||
     recommendation.branchId===state.selectedCodec)return;
-  selectCodec(recommendation.branchId);
+  const resolution=state.resolutionRateDistortionModels[recommendation.branchId];
+  if(resolution) {
+    state.selectedCodec=resolution.codec;
+    state.guidedOutputSize=resolution.outputWidth>0
+      ? {id:resolution.resolutionId,width:resolution.outputWidth,height:resolution.outputHeight}
+      : null;
+    renderPlanOptions();
+    refreshGuidedContainerDecision();
+  } else selectCodec(recommendation.branchId);
 });
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
 $('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
@@ -4019,6 +4052,8 @@ function chooseDefaultCodec(goal) {
 function invalidateQualityCalibration() {
   state.qualityCalibration = {};
   state.rateDistortionModels = {};
+  state.resolutionRateDistortionModels = {};
+  state.guidedOutputSize = null;
   state.sizeEnvelopeEnabled = false;
   state.qualityExplorationPoints = {};
   state.sizeBudgetTargetBytes = null;
@@ -4300,6 +4335,7 @@ function renderSelectedTestResult() {
 function selectCodec(codec) {
   if (state.operationBusy) return;
   state.selectedCodec = codec;
+  state.guidedOutputSize = null;
   renderPlanOptions();
   refreshGuidedContainerDecision();
 }
@@ -5249,6 +5285,7 @@ async function runNativeEncode() {
     crf: plan.crf,
     preset: plan.preset,
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+    outputWidth:plan.outputWidth||0,outputHeight:plan.outputHeight||0,
     expectedDuration: Number(state.media.duration || 0),
     expectedAudioTracks: audioSettings.audio === 'none' ? 0 : sourceAudioTracks,
     audio: audioSettings.audio,
@@ -5628,7 +5665,9 @@ function buildEncodePlan(codec) {
     sourceVideoBitrate,
     audioBitRate,
     budgetSource: directBudgetBytes > 0 ? 'frontier' : 'multiplier',
-    frontierPrediction
+    frontierPrediction,
+    outputWidth:state.guidedOutputSize?.width||0,
+    outputHeight:state.guidedOutputSize?.height||0
   };
 }
 
