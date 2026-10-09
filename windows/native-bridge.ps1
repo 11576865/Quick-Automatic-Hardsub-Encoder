@@ -1005,6 +1005,7 @@ function Invoke-Sample($Body) {
                 throw 'Invalid common-reference candidate resolution.'
             }
         }
+        $referenceFilter=if($withSubs){' -vf "ass=subtitle.ass:fontsdir=fonts"'}else{''}
         $vf=if($withSubs){
             $filter='ass=subtitle.ass:fontsdir=fonts'
             if($scaled){$filter+=',scale='+$outW+':'+$outH+':flags=bicubic'}
@@ -1013,7 +1014,7 @@ function Invoke-Sample($Body) {
         if(-not [bool]$o.sampleExact){
             # Legacy hard-sub samples require the subtitle-rendered FFV1
             # reference; exact filter-free transcoding measures from source.
-            $rr=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$vf+' -c:v ffv1 '+(Quote-NativeArg $reference)) $work
+            $rr=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$referenceFilter+' -c:v ffv1 '+(Quote-NativeArg $reference)) $work
             if($rr.ExitCode -ne 0){throw ($rr.StdErr.Trim())}
         }
         $encArgs=Get-BridgeEncoderArgs $profile $o
