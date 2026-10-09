@@ -171,6 +171,29 @@ jobs:
             throw 'Software exact-VBR short encode produced no valid output'
           }
 
+      - name: Verify common-reference downscale and bicubic upsample SSIM
+        shell: powershell
+        run: |
+          $bridge = Get-Content -Raw './windows/native-bridge.ps1'
+          foreach ($contract in @(
+            'Resolution trials require subtitle-rendered common reference mode.',
+            'Invalid common-reference candidate resolution.',
+            'Guided output resolution differs from adopted calibration branch.'
+          )) {
+            if (-not $bridge.Contains($contract)) { throw "Common-reference resolution contract missing: $contract" }
+          }
+          $work=Join-Path $env:RUNNER_TEMP 'common-reference-resolution'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $reference=Join-Path $work 'reference.mkv'
+          $candidate=Join-Path $work 'candidate.mkv'
+          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=2' -c:v ffv1 $reference
+          if ($LASTEXITCODE -ne 0) { throw 'Reference fixture failed.' }
+          & ffmpeg -hide_banner -loglevel error -y -i $reference -vf 'scale=160:90:flags=bicubic' -c:v libx264 -pix_fmt yuv420p $candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Reduced-resolution candidate failed.' }
+          $score=& ffmpeg -hide_banner -nostdin -i $candidate -i $reference -lavfi '[0:v]scale=320:180:flags=bicubic,setpts=PTS-STARTPTS[up];[1:v]setpts=PTS-STARTPTS[ref];[up][ref]ssim' -f null NUL 2>&1
+          if ($LASTEXITCODE -ne 0 -or (-join $score) -notmatch 'All:[0-9.]+') {
+            throw 'Reduced candidate cannot be scored against the original-size reference.'
+          }
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |

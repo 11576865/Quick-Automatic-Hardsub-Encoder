@@ -1343,7 +1343,19 @@ function Get-JobStatus([string]$JobId) {
             $check=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
             if($check.ExitCode -ne 0 -or -not $check.StdOut.Trim()){$j.State='failed';$j.Error='FFprobe could not validate the encoded video stream.'}else{
                 $j.State='completed'
-                if($j.Task){
+                if(-not $j.Task -and [int]$j.Request.outputWidth -gt 0) {
+                    try{
+                        $dimensions=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=width,height -of json '+(Quote-NativeArg $j.Output))
+                        if($dimensions.ExitCode -ne 0){throw 'Guided output size probe failed.'}
+                        $videoInfo=$dimensions.StdOut | ConvertFrom-Json
+                        $stream=@($videoInfo.streams | Select-Object -First 1)
+                        if(-not $stream.Count -or [int]$stream[0].width -ne [int]$j.Request.outputWidth -or
+                            [int]$stream[0].height -ne [int]$j.Request.outputHeight){
+                            throw 'Guided output resolution differs from adopted calibration branch.'
+                        }
+                    }catch{$j.State='failed';$j.Error=$_.Exception.Message}
+                }
+                if($j.State -eq 'completed' -and $j.Task){
                     try {
                         $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_streams -show_format -of json '+(Quote-NativeArg $j.Output))
                         if($probe.ExitCode -ne 0){throw 'Output probe failed.'}
