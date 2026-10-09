@@ -331,7 +331,8 @@ app.innerHTML = `
             <div id="qualityExplorationPanel" class="quality-exploration-panel">
               <strong>实测探索曲线</strong>
               <small>横轴为实测顺序，点旁为 CQ/CRF；虚线表示最低样本 SSIM 阈值。</small>
-              <svg id="qualityExplorationChart" viewBox="0 0 720 220" role="img" aria-label="硬字幕校准的真实 CQ/CRF 探索轨迹"></svg>
+              <svg id="qualityExplorationChart" viewBox="0 0 720 300" role="img" aria-label="硬字幕校准的真实 CQ/CRF 探索轨迹"></svg>
+              <div class="media-curve-legend"><span class="legend-pass">圆点：达标</span><span class="legend-fail">菱形：未达标</span><span class="legend-whisker">场景范围</span></div>
               <p id="qualityExplorationReadout" class="note">校准前没有实测探索点。</p>
             </div>
           </div>
@@ -350,13 +351,14 @@ app.innerHTML = `
             </div>
             <div id="sizeFrontierEmpty" class="size-frontier-empty note">尚无当前编码器的 R-D 模型。仍可使用下方手动倍率预算。</div>
             <div id="sizeFrontierChartWrap" class="size-frontier-chart-wrap hidden">
-              <svg id="sizeFrontierChart" class="size-frontier-chart" viewBox="0 0 720 220" role="slider" tabindex="0" aria-label="沿实测体积质量曲线选择目标体积"></svg>
+              <svg id="sizeFrontierChart" class="size-frontier-chart" viewBox="0 0 720 300" role="slider" tabindex="0" aria-label="沿实测体积质量曲线选择目标体积"></svg>
               <div class="size-frontier-scale">
                 <span id="sizeFrontierMin">—</span>
                 <span id="sizeFrontierKnee">实测范围</span>
                 <span id="sizeFrontierMax">—</span>
               </div>
             </div>
+            <div class="media-curve-legend"><span class="legend-observed">原始观测</span><span class="legend-fit">保序拟合</span><span class="legend-band">范围插值</span><span class="legend-whisker">场景范围</span></div>
             <div id="sizeFrontierReadout" class="size-frontier-readout">当前仍按手动倍率规划；拖动曲线后切换为实测预算。</div>
           </div>
 
@@ -1133,7 +1135,7 @@ function renderSizeFrontier() {
   const directBytes = Number(state.sizeBudgetTargetBytes || 0);
   const plot = buildSizeFrontierPlot(frontier, {
     width: 720,
-    height: 220,
+    height: 300,
     selectedTargetBytes: directBytes > 0 ? directBytes : null
   });
   if (!plot.ok) {

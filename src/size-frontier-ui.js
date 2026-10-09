@@ -1,3 +1,5 @@
+import { CURVE_CHART_LAYOUT } from './curve-chart-svg.js';
+
 function finite(value, fallback = null) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -35,10 +37,10 @@ function pathFor(points, key) {
 }
 
 export function buildSizeFrontierPlot(frontier, {
-  width = 720,
-  height = 220,
-  paddingX = 66,
-  paddingY = 34,
+  width = CURVE_CHART_LAYOUT.width,
+  height = CURVE_CHART_LAYOUT.height,
+  paddingX = CURVE_CHART_LAYOUT.paddingX,
+  paddingY = CURVE_CHART_LAYOUT.paddingY,
   sampleCount = 72,
   selectedTargetBytes = null
 } = {}) {
@@ -52,7 +54,7 @@ export function buildSizeFrontierPlot(frontier, {
     return { ok: false, reason: 'invalid-evidence-domain' };
   }
 
-  const qualityValues = curve.flatMap(point => [
+  const qualityValues = [...curve, ...(frontier.evidencePoints || [])].flatMap(point => [
     finite(point.lowerQuality, point.quality),
     finite(point.quality),
     finite(point.upperQuality, point.quality)
@@ -93,7 +95,9 @@ export function buildSizeFrontierPlot(frontier, {
     .map(point => ({
       ...point,
       x: xForBytes(point.targetBytes),
-      y: yForQuality(point.quality)
+      y: yForQuality(point.quality),
+      lowerY: yForQuality(point.lowerQuality),
+      upperY: yForQuality(point.upperQuality)
     }))
     .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
 

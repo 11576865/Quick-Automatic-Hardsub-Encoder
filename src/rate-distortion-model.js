@@ -166,6 +166,9 @@ export function fitRateDistortionModel(rawPoints, options = {}) {
     const quality = clamp01(centerFit[index]);
     return {
       ...point,
+      observedQuality: point.quality,
+      observedLowerQuality: point.lowerQuality,
+      observedUpperQuality: point.upperQuality,
       quality,
       lowerQuality: Math.min(quality, clamp01(lowerFit[index])),
       upperQuality: Math.max(quality, clamp01(upperFit[index]))
@@ -408,6 +411,10 @@ export function createSizeQualityFrontier(model, {
       .filter(point => point.bitrate >= minimumEvidenceBitrate)
       .map(point => ({
         ...point,
+        fittedQuality: point.quality,
+        quality: point.observedQuality ?? point.quality,
+        lowerQuality: point.observedLowerQuality ?? point.lowerQuality,
+        upperQuality: point.observedUpperQuality ?? point.upperQuality,
         targetBytes: targetBytesForVideoBitrate(point.bitrate, budget)
       })),
     evaluateTargetBytes,

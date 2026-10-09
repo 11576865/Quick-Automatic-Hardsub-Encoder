@@ -7,6 +7,21 @@ import {
 } from './size-frontier-ui.js';
 import { createSizeQualityFrontier, fitRateDistortionModel } from './rate-distortion-model.js';
 
+test('observation markers retain raw quality when isotonic fitting changes it', () => {
+  const model = fitRateDistortionModel([
+    {sampleBitrate:1e6,averageSsim:.99,ssim:.98,sampleMeasurements:[{ssim:.98},{ssim:1}]},
+    {sampleBitrate:2e6,averageSsim:.89,ssim:.88,sampleMeasurements:[{ssim:.88},{ssim:.90}]}
+  ]);
+  const frontier = createSizeQualityFrontier(model,{durationSeconds:60});
+  const plot = buildSizeFrontierPlot(frontier);
+  assert.equal(model.points[0].quality,model.points[1].quality);
+  assert.deepEqual(plot.evidencePoints.map(p=>p.quality),[.99,.89]);
+  assert.ok(plot.qualityMin<=.88 && plot.qualityMax>=1,
+    'Raw scene spread must remain visible even outside the fitted envelope');
+  assert.ok(plot.evidencePoints[0].upperY<=plot.evidencePoints[0].y);
+  assert.ok(plot.evidencePoints[0].lowerY>=plot.evidencePoints[0].y);
+});
+
 function frontierFixture() {
   const model = fitRateDistortionModel([
     {

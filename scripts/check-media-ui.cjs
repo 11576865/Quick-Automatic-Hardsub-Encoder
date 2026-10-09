@@ -8,6 +8,7 @@ const {spawn}=require('node:child_process');
   let ready=false;for(let attempt=0;attempt<100;attempt++){try{if((await fetch('http://127.0.0.1:4179/')).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,200));}
   if(!ready)throw Error('Vite startup timeout: '+startupLog);
   browser=await chromium.launch({headless:true});
+  await require('./check-curve-design.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-calibration-lifecycle.cjs')(browser,'http://127.0.0.1:4179');
 
   // Exercise the real browser refresh boundary for Windows Native. The launch
