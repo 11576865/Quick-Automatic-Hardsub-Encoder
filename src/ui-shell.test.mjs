@@ -568,3 +568,10 @@ test('budgeted paired refinement is attached after codec and resolution comparis
  assert.match(main,/配对追加测量未发布/);
  assert.match(main,/sourceScope:sourceEvidenceKey\(state\.media/);
 });
+
+test('guided sample ingress refuses missing or falsified elapsed timing evidence',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/const elapsed=parseMeasuredNumber\(sample\?\.elapsedSeconds\)/);
+ assert.match(main,/!\(elapsed>0\)/);
+ assert.match(main,/elapsedSeconds: elapsed/);
+});

@@ -4464,14 +4464,15 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
     const ssim=parseMeasuredQuality(sample?.ssim);
     const measuredDuration=parseMeasuredNumber(sample?.duration);
     const videoBytes=parseMeasuredNumber(sample?.totalVideoBytes);
-    if(ssim===null||!(measuredDuration>0)||!(videoBytes>0))
-      throw new Error(codec.toUpperCase()+' 未取得有效 SSIM、时长或视频包字节数');
+    const elapsed=parseMeasuredNumber(sample?.elapsedSeconds);
+    if(ssim===null||!(measuredDuration>0)||!(videoBytes>0)||!(elapsed>0))
+      throw new Error(codec.toUpperCase()+' 未取得有效 SSIM、时长、视频包字节数或编码耗时');
     results.push({
       start,
       ssim,
       bitrate: videoBytes * 8 / measuredDuration,
       mediaSeconds: measuredDuration,
-      elapsedSeconds: Math.max(0.001, Number(sample.elapsedSeconds || 0))
+      elapsedSeconds: elapsed
     });
   }
 
