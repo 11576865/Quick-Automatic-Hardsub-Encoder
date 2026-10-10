@@ -975,7 +975,7 @@ function Invoke-SceneRiskProbe($Body) {
         $from=$start.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
         $span=$duration.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
         $stats=Join-Path $work 'risk.stats'
-        $filter='fps=2,scale=160:90:flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file=risk.stats'
+        $filter="fps=2,scale=w='max(2,trunc(iw*min(1,320/max(iw,ih))/2)*2)':h='max(2,trunc(ih*min(1,320/max(iw,ih))/2)*2)':flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file=risk.stats"
         $watch=[Diagnostics.Stopwatch]::StartNew()
         $run=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -nostdin -loglevel error -ss '+$from+
             ' -t '+$span+' -i '+(Quote-NativeArg $video)+

@@ -216,7 +216,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Risk input fixture failed'}
           Push-Location $work
           try {
-            & ffmpeg -hide_banner -nostdin -loglevel error -ss 0 -t 2 -i $source -an -sn -vf 'fps=2,scale=160:90:flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file=risk.stats' -f null NUL
+            & ffmpeg -hide_banner -nostdin -loglevel error -ss 0 -t 2 -i $source -an -sn -vf "fps=2,scale=w='max(2,trunc(iw*min(1,320/max(iw,ih))/2)*2)':h='max(2,trunc(ih*min(1,320/max(iw,ih))/2)*2)':flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file=risk.stats" -f null NUL
             if($LASTEXITCODE -ne 0){throw 'Scene analysis FFmpeg filter failed'}
           }finally{Pop-Location}
           $stats=Join-Path $work 'risk.stats'
@@ -233,6 +233,10 @@ jobs:
       - name: Contrast real FFmpeg scene-risk fixtures and production selection
         shell: powershell
         run: node scripts/check-scene-risk-ffmpeg.mjs
+
+      - name: Compare true grain/motion CRF quality and bounded scene risk
+        shell: powershell
+        run: node scripts/check-risk-codec-ffmpeg.mjs
 
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell

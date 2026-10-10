@@ -4,7 +4,7 @@ import { fitRateDistortionModel } from './rate-distortion-model.js';
 import { createMultiBranchFrontier } from './compression-decision.js';
 import { planPairedRefinement,appendMatchedSceneObservation } from './calibration-refinement.js';
 
-const starts=[10,35,60],fingerprint='paired-scene-strata-v1:2:10.000,35.000,60.000';
+const starts=[10,35,60],fingerprint='paired-scene-strata-v2:2:10.000,35.000,60.000';
 const scope='same-media:common-reference';
 function point(codec,crf,rate,ssim,seconds=1) {
  const ss=[...starts].map(start=>({start,ssim,bitrate:rate,duration:2,elapsedSeconds:seconds}));
