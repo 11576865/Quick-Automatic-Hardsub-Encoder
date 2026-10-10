@@ -564,7 +564,7 @@ test('budgeted paired refinement is attached after codec and resolution comparis
  assert.match(main,/appendMatchedSceneObservation/);
  assert.match(main,/if\(proposals\.length!==branches\.length/);
  assert.match(main,/originalFingerprint:plan\.previousFingerprint/);
- assert.match(main,/if\(!check\.ok\)throw Error/);
+ assert.match(main,/if\(!check\.ok \|\| check\.evaluateTargetBytes\(targetBytes\)\.status/);
  assert.match(main,/配对追加测量未发布/);
  assert.match(main,/sourceScope:sourceEvidenceKey\(state\.media/);
 });
