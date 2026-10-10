@@ -4650,8 +4650,7 @@ async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedA
   }
   const proposals=[];
   const scenePlan={
-    ...samplePlan,starts:plan.starts,fingerprint:plan.fingerprint,
-    timeoutSeconds:Math.max(2,Math.ceil(plan.estimatedSeconds))
+    ...samplePlan,starts:plan.starts,fingerprint:plan.fingerprint
   };
   try{
     for(const branch of plan.branches){
@@ -4661,8 +4660,11 @@ async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedA
       $('qualityCalibrationResult').textContent=
         '正在核验高风险配对窗口 '+plan.starts[0].toFixed(1)+'s · '+branch.id+
         ' · CRF '+branch.crf+'（同一位置依次测试所有分支）';
+      const remaining=Math.max(0,budget-elapsed);
+      const oneProbePlan={...scenePlan,timeoutSeconds:Math.max(2,
+        Math.ceil(Math.min(remaining,branch.estimatedSeconds*1.5)))};
       const latest=await evaluateQualityCandidate(branch.codec,branch.crf,
-        branch.preset,target,branch.outputSize,scenePlan);
+        branch.preset,target,branch.outputSize,oneProbePlan);
       if((performance.now()-stageStartedAt)/1000>budget+2)
         throw Error('实际追加测量超过软预算，拒绝发布不完整组');
       const updated=appendMatchedSceneObservation(branch.point,latest,{
@@ -4688,7 +4690,8 @@ async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedA
       durationSeconds:Number(state.media.duration),
       audioBitrate:estimatedSizeBudgetAudioBitrate(),
       reservePercent:4,containerReservePercent:1,
-      fixedReserveBytes:256*1024,minimumVideoBitrate:150000
+      fixedReserveBytes:256*1024,minimumVideoBitrate:150000,
+      incumbentId:frontier.incumbentId,hysteresisSsim:.003
     });
     if(!check.ok)throw Error('更新后的候选不再具有共同的实测体积区间');
     for(const p of proposals){
