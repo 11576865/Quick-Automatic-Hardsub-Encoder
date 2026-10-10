@@ -238,6 +238,10 @@ jobs:
         shell: powershell
         run: node scripts/check-risk-codec-ffmpeg.mjs
 
+      - name: Measure actual codec frontier crossover on matched motion and grain
+        shell: powershell
+        run: node scripts/check-real-codec-frontier-ffmpeg.mjs
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
