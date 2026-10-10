@@ -226,6 +226,10 @@ jobs:
              $text -notmatch 'lavfi.signalstats.YDIF=[0-9.]+'){
             throw 'Risk analysis failed to capture luma and frame-difference evidence'
           }
+      - name: Decode real dark, motion and temporal-noise risk fixtures
+        shell: powershell
+        run: node scripts/check-scene-risk-fixtures.mjs
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
