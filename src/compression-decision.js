@@ -86,7 +86,8 @@ export function createMultiBranchFrontier(branches, {
       bestMeasuredId:winner.id,handoff:!!(incumbent && chosen.id!==incumbent.id),
       qualityGainOverIncumbent:incumbent?winner.conservativeQuality-incumbent.conservativeQuality:null,
       alternatives:ordered.map(c=>({id:c.id,quality:c.prediction.quality,
-        lowerQuality:c.prediction.lowerQuality,videoBitrate:c.videoBitrate}))
+        lowerQuality:c.prediction.lowerQuality,upperQuality:c.prediction.upperQuality,
+        videoBitrate:c.videoBitrate}))
     };
   }
   const evidencePoints=prepared.flatMap(({id,frontier})=>

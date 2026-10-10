@@ -74,6 +74,7 @@ export function selectPairedSceneWindows({
   const windows=best.slice(0,maxWindows).sort((a,b)=>a.start-b.start);
   return {ok:true,version:SCENE_PLAN_VERSION,
     starts:windows.map(x=>x.start),windows,
+    candidates:scored,
     probedWindows:validProbes.size,candidateWindows:scored.length,
     riskAware:validProbes.size>=Math.min(3,starts.length),
     // Every branch must receive the exact same starts and metric version.
