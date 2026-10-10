@@ -20,7 +20,7 @@ test('high motion, dark and busy subtitle windows displace uniform picks without
  assert.equal(p.starts.length,3);
  assert.ok(p.starts.includes(starts[1]));
  assert.ok(p.starts.includes(starts[4]));
- assert.equal(p.fingerprint.includes('paired-scene-strata-v1'),true);
+ assert.equal(p.fingerprint.includes('paired-scene-strata-v2'),true);
  const again=selectPairedSceneWindows({durationSeconds:120,probes,subtitleEvents:dense});
  assert.deepEqual(again,p);
 });

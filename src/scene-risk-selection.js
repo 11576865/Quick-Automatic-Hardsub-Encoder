@@ -1,6 +1,6 @@
 // Bounded risk-aware selection. This is a heuristic, NOT a statistical
 // confidence interval and not a guarantee that rare difficult scenes were found.
-export const SCENE_PLAN_VERSION='paired-scene-strata-v1';
+export const SCENE_PLAN_VERSION='paired-scene-strata-v2';
 function finite(x){return typeof x==='number'&&Number.isFinite(x)?x:null;}
 function clamp(x){return Math.max(0,Math.min(1,x));}
 export function sceneProbeStarts(duration,windowSeconds=2) {

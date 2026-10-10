@@ -167,7 +167,7 @@ Windows Native 精确短样现对**编码进程**另设超时：超过传入的�
 
 ## Scene-stratified paired sample planner (Windows Native, stage P1)
 
-Windows Native guided CQ calibration first runs a **time-limited, decoded low-resolution source-risk probe** on selected timeline regions (FFmpeg signalstats + scene-change metadata). It uses frame-to-frame luma change, scene-change signal, dark-scene luminance and contrast, combined with the ASS subtitle event overlap, to choose **one high-priority window per time stratum**. All compared codec or output-resolution branches use the **same exact sample starts and duration**, captured with `paired-scene-strata-v1` provenance. Unsupported FFmpeg filters, short sources or exhausted cost budget degrade explicitly to deterministic time strata; a missing probe is never counted as a measured low-risk scene.
+Windows Native guided CQ calibration first runs a **time-limited, decoded low-resolution source-risk probe** on selected timeline regions (FFmpeg signalstats + scene-change metadata). It uses frame-to-frame luma change, scene-change signal, dark-scene luminance and contrast, combined with the ASS subtitle event overlap, to choose **one high-priority window per time stratum**. All compared codec or output-resolution branches use the **same exact sample starts and duration**, captured with `paired-scene-strata-v2` provenance. Unsupported FFmpeg filters, short sources or exhausted cost budget degrade explicitly to deterministic time strata; a missing probe is never counted as a measured low-risk scene.
 
 This is a lightweight heuristic, not exhaustive scene search, VMAF, grain detection, motion vectors or a statistical P10 guarantee. Existing compression evidence records lack a sampling-plan dimension, so the new paired-plan trial results deliberately remain **session-only**, rather than masquerading as reusable fixed-position samples. Single-source CQ evidence collected by other workflows retains its original separate identity. Real difficult-scene inputs and real GPU/long-form acceptance remain pending.
 
@@ -176,3 +176,9 @@ This is a lightweight heuristic, not exhaustive scene search, VMAF, grain detect
 多编码器或多分辨率的首轮模型建立后，决策层在**当前目标体积**（未选定时取共同实测预算区间中点）判断是否值得用剩余校准预算追加一个共同窗口：候选观测质量范围相互覆盖、未测试时间窗口存在、所有分支的 CRF 实测位置与版本完全一致、且基于已观测耗时预测整组测量仍可负担，才会安排一次追加。追加窗口优先取已测预检中风险评分较高的未测时间层。所有分支的**每一个已测试 CRF 点**都必须对同一新增窗口完成编码，所有点由相同场景集生成仍有重叠证据的 R-D 模型后，才会**原子性发布**新的单张上包络；任何失败或超时都保留上一组完整证据。
 
 对比反馈显示追加前后的推荐配置（即使没有变化，也会标明未改变）。此次策略属于以观测差距驱动的**启发式测试调度**，不是经过概率模型校准的预期后悔度（Expected Regret）最小化，也不是统计置信度声明。短视频/慢编码器可能因剩余时间不足而不启动追加。GPU、实际复杂素材及整片验收仍应执行独立现场测试。
+
+## 动态噪声的实际编码质量回归（Windows CI，2026-10-10）
+
+以前的 160×90 场景预检会模糊高频动态噪声：在单个四秒 synthetic FFV1 片段的两个配对窗口中，运动与噪声的低清 `YDIF` 很接近，但使用 `libx264 -preset medium -crf 28` 时，实测 SSIM 分别约 0.986 与 0.929。以 **SSIM 0.970** 为目标，测完运动窗口可采用 CRF 28；加入噪声窗口后只有 CRF 22 达标。该现象是**实际编码质量档位**的反转，而非跨 codec 或跨分辨率最优分支的证明。
+
+场景预检调整为**最长边不超过 320 像素、保持宽高比、偶数像素尺寸**的双线性缩放，以保留更多高频变化信号。更新采样合同版本为 `paired-scene-strata-v2`，旧 v1 证据不得与 v2 混用。Windows CI 使用 FFmpeg/FFprobe 对同一源素材生成两个参考窗口、编码、测量真实 SSIM 和视频包字节数，并验证噪声下实际质量决策的变化。过滤器成本可能略增，每窗 FFmpeg 超时仍生效。实际影视/游戏画面、HDR/VFR 与 GPU 长片仍待现场验收。

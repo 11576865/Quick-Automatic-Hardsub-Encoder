@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {normalizedSceneRisk,sceneProbeStarts,selectPairedSceneWindows}
+import {SCENE_PLAN_VERSION,normalizedSceneRisk,sceneProbeStarts,selectPairedSceneWindows}
   from '../src/scene-risk-selection.js';
 
 const ffmpeg=process.env.FFMPEG_PATH||'ffmpeg';
@@ -50,7 +50,7 @@ try{
     if(item.filter)options.push('-vf',item.filter);
     run([...options,'-an','-c:v','ffv1',item.id+'.mkv']);
     run(['-i',item.id+'.mkv','-an','-sn','-vf',
-      'fps=2,scale=160:90:flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file='+item.id+'.stats',
+      "fps=2,scale=w='max(2,trunc(iw*min(1,320/max(iw,ih))/2)*2)':h='max(2,trunc(ih*min(1,320/max(iw,ih))/2)*2)':flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file="+item.id+'.stats',
       '-f','null','-']);
     signals[item.id]=metadata(readFileSync(join(dir,item.id+'.stats'),'utf8'));
     const score=normalizedSceneRisk(signals[item.id]);
@@ -77,7 +77,7 @@ try{
   assert.equal(planned.riskAware,true);
   assert.deepEqual(planned.starts,[starts[1],starts[3],starts[4]],
     'Decoded risk and subtitle overlap should displace static scene windows');
-  assert.ok(planned.fingerprint.startsWith('paired-scene-strata-v1:2:'),
+  assert.ok(planned.fingerprint.startsWith(SCENE_PLAN_VERSION+':2:'),
     'Selection must preserve scene-plan provenance');
   const fallback=selectPairedSceneWindows({...args,probes:[]});
   assert.equal(fallback.riskAware,false,'Absent measurements must not be called measured risk');

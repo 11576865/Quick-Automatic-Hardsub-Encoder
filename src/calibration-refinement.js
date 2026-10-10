@@ -1,6 +1,6 @@
 // Refinement chooses an affordable, paired, previously unobserved scene.
 // Observed sample extrema are NOT confidence bounds or statistical VOI.
-import { refinementOpportunity } from './scene-risk-selection.js';
+import { refinementOpportunity, SCENE_PLAN_VERSION } from './scene-risk-selection.js';
 
 const number=x=>typeof x==='number'&&Number.isFinite(x)?x:null;
 const near=(a,b)=>Math.abs(a-b)<.003;
@@ -106,6 +106,6 @@ export function appendMatchedSceneObservation(point,newPoint,{
     sampleBitrate:sum('bitrate')/values.length,
     sampleCount:values.length,encodeSpeed:elapsed>0?seconds/elapsed:0,
     sampleMeasurements:values,sampleFingerprint:nextFingerprint,
-    samplePlanVersion:'paired-scene-strata-v1',riskRefined:true
+    samplePlanVersion:SCENE_PLAN_VERSION,riskRefined:true
   };
 }
