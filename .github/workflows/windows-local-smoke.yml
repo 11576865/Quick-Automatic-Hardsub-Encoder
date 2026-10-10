@@ -246,6 +246,10 @@ jobs:
         shell: powershell
         run: node scripts/check-guided-full-budget-ffmpeg.mjs
 
+      - name: Exercise real guided Windows Native two-pass and strict byte ceiling
+        shell: powershell
+        run: ./scripts/check-guided-budget-native.ps1
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
