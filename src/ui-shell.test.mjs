@@ -575,3 +575,13 @@ test('guided sample ingress refuses missing or falsified elapsed timing evidence
  assert.match(main,/!\(elapsed>0\)/);
  assert.match(main,/elapsedSeconds: elapsed/);
 });
+
+test('guided size target distinguishes CQ samples from formal VBR and actual file bytes',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/CQ 短样预测 SSIM/);
+ assert.match(main,/正式目标码率使用单遍 VBR/);
+ assert.match(main,/CQ 短样曲线/);
+ assert.match(main,/CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM/);
+ assert.match(main,/可能明显超出预算/);
+ assert.match(main,/actualBytes>projection\.budgetBytes/);
+});

@@ -1219,10 +1219,11 @@ function renderSizeFrontier() {
     readout.innerHTML =
       '<strong>' + escapeHtml(formatBytes(plot.selected.targetBytes)) + '</strong>' +
       ' · 视频 ' + escapeHtml(formatBitrate(plot.selected.videoBitrate)) +
-      ' · 预计 SSIM ' + Number(plot.selected.quality).toFixed(5) +
+      ' · CQ 短样预测 SSIM ' + Number(plot.selected.quality).toFixed(5) +
       ' <span class="size-frontier-band-copy">样本范围 ' +
       Number(plot.selected.lowerQuality).toFixed(5) + '–' +
       Number(plot.selected.upperQuality).toFixed(5) + '</span>' +
+      ' · 正式目标码率使用单遍 VBR；此 CQ 曲线不能保证最终体积或整片质量' +
       (Number.isFinite(marginal)
         ? ' · 每翻倍视频码率约 +' + Number(marginal).toFixed(4) + ' SSIM'
         : '')+
@@ -4172,9 +4173,9 @@ function renderPlanOptions() {
       param = 'CRF ' + plan.crf + ' · preset ' + plan.preset;
     } else if (plan?.mode === 'budget-rate') {
       param = plan.frontierPrediction
-        ? '实测曲线 · ' + formatBytes(plan.sizeCeiling) +
+        ? 'CQ 短样曲线 · ' + formatBytes(plan.sizeCeiling) +
           ' · ' + formatBitrate(plan.targetVideoBitrate) +
-          ' · SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
+          ' · CQ 样本 SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
         : '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
     } else if (
       available &&
@@ -4260,7 +4261,8 @@ function updateChosenSummary() {
       frontierHtml +
       '。规划体积约 ' + formatBytes(plan.plannedBytes) +
       '，预算边界 ' + formatBytes(plan.sizeCeiling) +
-      '。这是参数规划值，不承诺最终字节数严格命中。' + historyHtml;
+      '。正式输出采用单遍目标码率，可能明显超出预算；CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM。'+
+      '这是参数规划值，不承诺最终字节数严格命中。' + historyHtml;
   }
 }
 

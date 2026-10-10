@@ -242,6 +242,10 @@ jobs:
         shell: powershell
         run: node scripts/check-real-codec-frontier-ffmpeg.mjs
 
+      - name: Verify guided target-size full-encode accuracy and practical SSIM
+        shell: powershell
+        run: node scripts/check-guided-full-budget-ffmpeg.mjs
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |

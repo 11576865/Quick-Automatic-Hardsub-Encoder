@@ -182,3 +182,11 @@ This is a lightweight heuristic, not exhaustive scene search, VMAF, grain detect
 以前的 160×90 场景预检会模糊高频动态噪声：在单个四秒 synthetic FFV1 片段的两个配对窗口中，运动与噪声的低清 `YDIF` 很接近，但使用 `libx264 -preset medium -crf 28` 时，实测 SSIM 分别约 0.986 与 0.929。以 **SSIM 0.970** 为目标，测完运动窗口可采用 CRF 28；加入噪声窗口后只有 CRF 22 达标。该现象是**实际编码质量档位**的反转，而非跨 codec 或跨分辨率最优分支的证明。
 
 场景预检调整为**最长边不超过 320 像素、保持宽高比、偶数像素尺寸**的双线性缩放，以保留更多高频变化信号。更新采样合同版本为 `paired-scene-strata-v2`，旧 v1 证据不得与 v2 混用。Windows CI 使用 FFmpeg/FFprobe 对同一源素材生成两个参考窗口、编码、测量真实 SSIM 和视频包字节数，并验证噪声下实际质量决策的变化。过滤器成本可能略增，每窗 FFmpeg 超时仍生效。实际影视/游戏画面、HDR/VFR 与 GPU 长片仍待现场验收。
+
+## 引导式目标体积：CQ 短样与正式 VBR 输出差异（Windows CI）
+
+新增 `scripts/check-guided-full-budget-ffmpeg.mjs` 真实软件编码验收：用同一 6 秒 FFV1 合成源及 ASS 字幕制作渲染后的权威参考画面；取配对短样，以 `libx264 -preset medium`、CRF 18/22/26/30 形成项目现有的 R-D 模型和体积映射。再按固定 **2 Mbps** 目标，分别执行与 Windows Native 软件 VBR 参数同类的单遍 `-b:v` 及两遍 `-b:v` 正式整段编码。使用 FFprobe 和 FFmpeg 验证容器字节、视频包字节、输出尺寸、时长、整段 SSIM、耗时及体积偏差。两种输出都应达到这个受控例子规定的 SSIM 0.95 下限。
+
+目标码率乘时长只给出规划的视频字节数，**不等于 Matroska 的精确文件大小上限**。在高动态噪声下，单遍平均码率可能明显超标；两遍编码会额外耗时，也不保证逐字节命中目标。本 PR 仅增加**对照与真实验证**，不悄悄更改 Windows Native 正式压制的单遍执行策略。原有单张曲线和当前配置摘要补充明确信息：CQ 短样 SSIM **不等于**正式单遍 VBR 的整段质量证明，用户选定目标字节数也不代表输出必定在上限内。若必须严格限定体积，仍需另行设计可见的高精度预算方案与完整成品校验。
+
+合成软件例子不能代替真实 NVENC、7 小时素材、HDR/VFR、复杂字幕和用户设备的 FIELD-PENDING 验收（#77）。
