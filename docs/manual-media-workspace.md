@@ -170,3 +170,9 @@ Windows Native 精确短样现对**编码进程**另设超时：超过传入的�
 Windows Native guided CQ calibration first runs a **time-limited, decoded low-resolution source-risk probe** on selected timeline regions (FFmpeg signalstats + scene-change metadata). It uses frame-to-frame luma change, scene-change signal, dark-scene luminance and contrast, combined with the ASS subtitle event overlap, to choose **one high-priority window per time stratum**. All compared codec or output-resolution branches use the **same exact sample starts and duration**, captured with `paired-scene-strata-v1` provenance. Unsupported FFmpeg filters, short sources or exhausted cost budget degrade explicitly to deterministic time strata; a missing probe is never counted as a measured low-risk scene.
 
 This is a lightweight heuristic, not exhaustive scene search, VMAF, grain detection, motion vectors or a statistical P10 guarantee. Existing compression evidence records lack a sampling-plan dimension, so the new paired-plan trial results deliberately remain **session-only**, rather than masquerading as reusable fixed-position samples. Single-source CQ evidence collected by other workflows retains its original separate identity. Real difficult-scene inputs and real GPU/long-form acceptance remain pending.
+
+## 按目标体积追加高风险配对测量（Windows Native）
+
+多编码器或多分辨率的首轮模型建立后，决策层在**当前目标体积**（未选定时取共同实测预算区间中点）判断是否值得用剩余校准预算追加一个共同窗口：候选观测质量范围相互覆盖、未测试时间窗口存在、所有分支的 CRF 实测位置与版本完全一致、且基于已观测耗时预测整组测量仍可负担，才会安排一次追加。追加窗口优先取已测预检中风险评分较高的未测时间层。所有分支对同一窗口编码完成并生成仍有重叠证据的 R-D 模型后，才会**原子性发布**新的单张上包络；任何失败或超时都保留上一组完整证据。
+
+对比反馈显示追加前后的推荐配置（即使没有变化，也会标明未改变）。此次策略属于以观测差距驱动的**启发式测试调度**，不是经过概率模型校准的预期后悔度（Expected Regret）最小化，也不是统计置信度声明。短视频/慢编码器可能因剩余时间不足而不启动追加。GPU、实际复杂素材及整片验收仍应执行独立现场测试。

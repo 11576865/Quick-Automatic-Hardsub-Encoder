@@ -93,10 +93,13 @@ export function refinementOpportunity({candidates,budgetRemainingSeconds,nextPai
     evidence.push({id:item.id,lowerQuality:lo,upperQuality:hi});
   }
   evidence.sort((a,b)=>b.lowerQuality-a.lowerQuality);
-  const best=evidence[0],second=evidence[1];
-  if(second.upperQuality+margin<best.lowerQuality)
+  const best=evidence[0],challengers=evidence.slice(1);
+  const maxChallengerUpper=Math.max(...challengers.map(c=>c.upperQuality));
+  if(maxChallengerUpper+margin<best.lowerQuality)
     return {refine:false,reason:'robust-dominance',leaderId:best.id};
   return {refine:true,reason:'overlapping-observed-ranges',leaderId:best.id,
-    // Decision could reverse within observed spread. Not a probabilistic regret.
-    uncertaintyGap:Math.max(0,second.upperQuality-best.lowerQuality)};
+    // A lower-ranked branch can still reverse the decision when its upper
+    // observed quality reaches the leader's conservative lower bound.
+    // This is NOT a probability distribution or an expected-regret estimate.
+    uncertaintyGap:Math.max(0,maxChallengerUpper-best.lowerQuality)};
 }

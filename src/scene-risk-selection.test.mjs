@@ -44,3 +44,13 @@ test('observed decision ambiguity may justify another affordable paired probe',(
   {id:'A',lowerQuality:.990,upperQuality:.995},{id:'B',lowerQuality:.95,upperQuality:.96}
  ],budgetRemainingSeconds:12,nextPairedCostSeconds:6}).reason,'robust-dominance');
 });
+
+test('do not incorrectly declare dominance when third branch has wide observed risk',()=>{
+ const comparison=refinementOpportunity({candidates:[
+  {id:'A',lowerQuality:.97,upperQuality:.975},
+  {id:'B',lowerQuality:.94,upperQuality:.95},
+  {id:'C',lowerQuality:.91,upperQuality:.992}
+ ],budgetRemainingSeconds:20,nextPairedCostSeconds:5});
+ assert.equal(comparison.refine,true);
+ assert.equal(comparison.leaderId,'A');
+});
