@@ -353,7 +353,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(main, /persistCompressionEvidence/);
   assert.match(main, /currentSourceEvidenceKey/);
   assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
-  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null, outputSize = null\)/);
+  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null, outputSize = null, samplePlan = null\)/);
   assert.match(main, /sampleMeasurements: results\.map/);
   assert.doesNotMatch(main, /reusableSourceQualityByCrf/);
 
