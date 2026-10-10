@@ -556,3 +556,22 @@ test('guided calibration shares scene-risk preflight positions across competing 
  assert.match(bridge,/if\(\[bool\]\$o\.sceneRiskOnly\)/);
  assert.match(bridge,/signalstats,scdet=threshold=10/);
 });
+
+test('budgeted paired refinement is attached after codec and resolution comparisons',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/runBudgetedPairedRefinement\(\{mode:'resolution',samplePlan,budget/);
+ assert.match(main,/runBudgetedPairedRefinement\(\{mode:'codec',samplePlan,budget/);
+ assert.match(main,/appendMatchedSceneObservation/);
+ assert.match(main,/if\(proposals\.length!==branches\.length/);
+ assert.match(main,/originalFingerprint:plan\.previousFingerprint/);
+ assert.match(main,/if\(!check\.ok \|\| check\.evaluateTargetBytes\(targetBytes\)\.status/);
+ assert.match(main,/配对追加测量未发布/);
+ assert.match(main,/sourceScope:sourceEvidenceKey\(state\.media/);
+});
+
+test('guided sample ingress refuses missing or falsified elapsed timing evidence',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/const elapsed=parseMeasuredNumber\(sample\?\.elapsedSeconds\)/);
+ assert.match(main,/!\(elapsed>0\)/);
+ assert.match(main,/elapsedSeconds: elapsed/);
+});

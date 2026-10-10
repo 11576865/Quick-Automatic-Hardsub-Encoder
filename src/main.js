@@ -18,6 +18,7 @@ import { createMultiBranchFrontier, calibrationTimeBudget, calibrationShouldCont
 import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
 import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
 import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from './scene-risk-selection.js';
+import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -4422,7 +4423,8 @@ async function preparePairedQualitySamplePlan() {
   log('配对场景采样 '+plan.fingerprint+
     ' · 视频复杂度预检 '+plan.probedWindows+'/'+plan.candidateWindows+
     ' · '+(plan.riskAware?'场景风险辅助选择':'仅时间分层/字幕提示，非完整内容分析'));
-  return {...plan,source,subtitleSnapshot,windowSeconds:seconds};
+  return {...plan,source,subtitleSnapshot,windowSeconds:seconds,
+    preflightElapsedSeconds:(performance.now()-started)/1000};
 }
 
 async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, outputSize = null, samplePlan = null) {
@@ -4453,7 +4455,8 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
       outputWidth:outputSize?.width||0,outputHeight:outputSize?.height||0,
       referenceWidth:outputSize?.width ? Number(state.media?.width||0):0,
       referenceHeight:outputSize?.height ? Number(state.media?.height||0):0,
-      timeoutSeconds:Math.max(2,Math.ceil((calibrationTimeBudget(Number(state.media?.duration||0))||120)/Math.max(1,starts.length)))
+      timeoutSeconds:samplePlan?.timeoutSeconds ??
+        Math.max(2,Math.ceil((calibrationTimeBudget(Number(state.media?.duration||0))||120)/Math.max(1,starts.length)))
     }, shiftAssForPreview(originalAss, start));
 
     if(samplePlan && samplePlan.source!==currentSourceEvidenceKey())
@@ -4461,14 +4464,15 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
     const ssim=parseMeasuredQuality(sample?.ssim);
     const measuredDuration=parseMeasuredNumber(sample?.duration);
     const videoBytes=parseMeasuredNumber(sample?.totalVideoBytes);
-    if(ssim===null||!(measuredDuration>0)||!(videoBytes>0))
-      throw new Error(codec.toUpperCase()+' 未取得有效 SSIM、时长或视频包字节数');
+    const elapsed=parseMeasuredNumber(sample?.elapsedSeconds);
+    if(ssim===null||!(measuredDuration>0)||!(videoBytes>0)||!(elapsed>0))
+      throw new Error(codec.toUpperCase()+' 未取得有效 SSIM、时长、视频包字节数或编码耗时');
     results.push({
       start,
       ssim,
       bitrate: videoBytes * 8 / measuredDuration,
       mediaSeconds: measuredDuration,
-      elapsedSeconds: Math.max(0.001, Number(sample.elapsedSeconds || 0))
+      elapsedSeconds: elapsed
     });
   }
 
@@ -4610,6 +4614,127 @@ async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSi
   };
 }
 
+// Optional second pass: only measured, same-position extra evidence may alter
+// the single envelope. Incomplete batches never update any public branch model.
+async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedAt,target,sourceScope}){
+  const frontier=currentSizeFrontier();
+  if(frontier?.kind!=='multi-branch'){
+    log('配对追加测量未执行：尚无共同体积证据。');
+    return {published:false,reason:'no-common-evidence'};
+  }
+  const entries=mode==='resolution'
+    ? Object.values(state.resolutionRateDistortionModels).filter(x=>x.model?.ok)
+    : Object.entries(state.rateDistortionModels).filter(([,model])=>model?.ok)
+        .map(([codec,model])=>({
+          id:codec,codec,preset:state.qualityCalibration[codec]?.preset,
+          model,testedPoints:state.qualityCalibration[codec]?.testedPoints,
+          sampleFingerprint:samplePlan.fingerprint,sourceScope
+        }));
+  const branches=entries.map(x=>({
+    id:x.id,codec:x.codec,preset:x.preset,testedPoints:x.testedPoints,
+    sampleFingerprint:x.sampleFingerprint,sourceScope:x.sourceScope,
+    outputSize:mode==='resolution'?{
+      id:x.resolutionId,width:x.outputWidth,height:x.outputHeight
+    }:null
+  }));
+  const targetBytes=Number(state.sizeBudgetTargetBytes)>0
+    ?Number(state.sizeBudgetTargetBytes)
+    :Math.sqrt(frontier.minimumEvidenceTargetBytes*frontier.maximumEvidenceTargetBytes);
+  const plan=planPairedRefinement({
+    frontier,targetBytes,branches,samplePlan,budgetSeconds:budget,
+    spentSeconds:(performance.now()-stageStartedAt)/1000
+  });
+  if(!plan.refine){
+    log('配对追加测量不执行：'+plan.reason+
+      '（可能是预算不足、已明显领先、样本不配对或未测区域不足）。');
+    return {published:false,reason:plan.reason};
+  }
+  const proposals=[];
+  const scenePlan={
+    ...samplePlan,starts:plan.starts,fingerprint:plan.fingerprint
+  };
+  try{
+    for(const branch of plan.branches){
+      const measured=new Map();
+      for(const step of branch.points){
+        const elapsed=(performance.now()-stageStartedAt)/1000;
+        if(elapsed+step.estimatedSeconds>budget)
+          throw Error('追加实测预算已耗尽，整组结果不采用');
+        $('qualityCalibrationResult').textContent=
+          '正在核验高风险配对窗口 '+plan.starts[0].toFixed(1)+'s · '+branch.id+
+          ' · CRF '+step.crf+'（所有已测 CRF 和分支均须补测）';
+        const remaining=Math.max(0,budget-elapsed);
+        const oneProbePlan={...scenePlan,timeoutSeconds:Math.max(2,
+          Math.ceil(Math.min(remaining,step.estimatedSeconds*1.5)))};
+        const latest=await evaluateQualityCandidate(branch.codec,step.crf,
+          branch.preset,target,branch.outputSize,oneProbePlan);
+        if((performance.now()-stageStartedAt)/1000>budget+2)
+          throw Error('实际追加测量超过软预算，拒绝发布不完整组');
+        const updated=appendMatchedSceneObservation(step.point,latest,{
+          start:plan.starts[0],originalFingerprint:plan.previousFingerprint,
+          nextFingerprint:plan.fingerprint
+        });
+        if(!updated)throw Error('追加样本与原校准来源、编码参数或位置不一致');
+        measured.set(step.point,updated);
+      }
+      const old=entries.find(x=>x.id===branch.id);
+      if(!old||measured.size!==old.testedPoints.length)
+        throw Error('部分 CRF 未补测，禁止混合场景样本集');
+      const testedPoints=old.testedPoints.map(p=>measured.get(p));
+      if(testedPoints.some(p=>!p||p.sampleFingerprint!==plan.fingerprint))
+        throw Error('追加实测未形成完整的同场景模型');
+      const model=fitRateDistortionModel(testedPoints);
+      if(!model.ok)throw Error('追加样本使模型无效');
+      proposals.push({id:branch.id,model,testedPoints});
+    }
+    if(proposals.length!==branches.length ||
+      samplePlan.source!==currentSourceEvidenceKey() ||
+      samplePlan.subtitleSnapshot!==(state.activeAssText||state.assText))
+      throw Error('追加测量不完整或来源已变化');
+    // Before publishing, require a valid new *common* measured budget domain.
+    const check=createMultiBranchFrontier(proposals.map(x=>({
+      id:x.id,model:x.model,measurementScope:sourceScope+
+        (mode==='resolution'?':'+COMMON_REFERENCE_METRIC:'')
+    })),{
+      durationSeconds:Number(state.media.duration),
+      audioBitrate:estimatedSizeBudgetAudioBitrate(),
+      reservePercent:4,containerReservePercent:1,
+      fixedReserveBytes:256*1024,minimumVideoBitrate:150000,
+      incumbentId:frontier.incumbentId,hysteresisSsim:.003
+    });
+    if(!check.ok || check.evaluateTargetBytes(targetBytes).status!=='within-evidence')
+      throw Error('更新后的候选不再覆盖本次目标体积的共同实测区间');
+    for(const p of proposals){
+      if(mode==='resolution'){
+        const record=state.resolutionRateDistortionModels[p.id];
+        record.model=p.model;
+        record.testedPoints=p.testedPoints;
+        record.sampleFingerprint=plan.fingerprint;
+        if(record.resolutionId==='source'){
+          state.rateDistortionModels[record.codec]=p.model;
+        }
+      }else{
+        state.rateDistortionModels[p.id]=p.model;
+        state.qualityCalibration[p.id].testedPoints=p.testedPoints;
+      }
+    }
+    const after=check.evaluateTargetBytes(targetBytes);
+    const old=frontier.evaluateTargetBytes(targetBytes);
+    log('配对追加实测已完成：窗口 '+plan.starts[0].toFixed(1)+
+      ' 秒；'+proposals.length+' 分支共同更新；'+
+      '此预算原建议 '+old.branchId+'，复核后 '+after.branchId+
+      '。观测跨度不是统计置信区间。');
+    renderPlanOptions();
+    return {published:true,previous:old.branchId,current:after.branchId,
+      start:plan.starts[0],costEstimate:plan.estimatedSeconds};
+  }catch(error){
+    // Pending models were local. Keep the previously complete, matched set.
+    log('配对追加测量未发布：'+error.message+
+      '。原有完整配对证据保留，未混用局部样本。');
+    return {published:false,reason:'incomplete-paired-batch'};
+  }
+}
+
 function chooseEfficiencyCalibration(calibrations) {
   const candidates = calibrations.filter(x => x?.meetsTarget && x.sampleBitrate > 0);
   if (!candidates.length) return null;
@@ -4645,6 +4770,7 @@ async function runResolutionCalibration() {
   const budget=calibrationTimeBudget(Number(state.media.duration))||120;
   const eachBudget=Math.max(8,budget/candidates.length);
   const records=[];
+  const stageStartedAt=performance.now();
   updateQualityCalibrationControls();
   try{
     const samplePlan=await preparePairedQualitySamplePlan();
@@ -4657,6 +4783,7 @@ async function runResolutionCalibration() {
         state.resolutionRateDistortionModels[id]={
           id,codec,resolutionId:size.id,outputWidth:size.width,outputHeight:size.height,
           label:size.label,model,preset:evidence.preset,
+          testedPoints:evidence.testedPoints,sampleFingerprint:samplePlan.fingerprint,
           metric:COMMON_REFERENCE_METRIC,sourceScope
         };
         if(size.id==='source'){
@@ -4673,12 +4800,20 @@ async function runResolutionCalibration() {
     }
     state.sizeEnvelopeEnabled=Object.values(state.resolutionRateDistortionModels)
       .filter(b=>b.model?.ok).length>=2;
+    const refinement=state.sizeEnvelopeEnabled
+      ?await runBudgetedPairedRefinement({mode:'resolution',samplePlan,budget,
+        stageStartedAt,target,sourceScope})
+      :null;
     const frontier=currentSizeFrontier();
     $('qualityCalibrationResult').textContent=
       '同源公共参考 SSIM：'+records.map(x=>x.id+(x.ok?' '+x.pointCount+' 点':' 失败：'+x.error)).join('；')+
       '。'+(frontier?.kind==='multi-branch'
         ? '已形成共同实测区间的单张跨分辨率上包络曲线。'
-        : '无充分重叠证据，保留单配置曲线；不推断最优分辨率。');
+        : '无充分重叠证据，保留单配置曲线；不推断最优分辨率。')+
+      (refinement?.published
+        ? '高风险追加实测：'+refinement.previous+' → '+refinement.current+
+          '（'+refinement.start.toFixed(1)+' 秒，同位置完成全分支测量）'
+        : refinement?'追加测量未发布：'+refinement.reason+'。':'');
   }finally{
     state.qualityCalibrationBusy=false;
     updateQualityCalibrationControls();
@@ -4715,6 +4850,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
   const codecs = goal === 'efficiency'||compareForSize ? available : [state.selectedCodec];
   const budget=calibrationTimeBudget(Number(state.media?.duration||0));
   const budgetPerCodec=budget && compareForSize ? Math.max(8,budget/codecs.length) : budget;
+  const stageStartedAt=performance.now();
 
   state.qualityCalibrationBusy = true;
   if (goal === 'efficiency'||compareForSize) {
@@ -4764,8 +4900,15 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
 
     state.sizeEnvelopeEnabled=compareForSize &&
       codecs.filter(id=>state.rateDistortionModels[id]?.ok).length>=2;
+    const refinement=state.sizeEnvelopeEnabled
+      ?await runBudgetedPairedRefinement({mode:'codec',samplePlan,budget,
+        stageStartedAt,target,sourceScope:sourceEvidenceKey(state.media,state.video?.name,
+          Number(state.video?.size||0))+':'+currentRuntimeEvidenceKey()})
+      :null;
     const values = codecs.map(codec => state.qualityCalibration[codec]);
-    const efficient = goal === 'efficiency'
+    // Explicit size comparisons must not silently switch encoder merely
+    // because the current dropdown goal happens to be efficiency.
+    const efficient = goal === 'efficiency' && !compareForSize
       ? chooseEfficiencyCalibration(values)
       : null;
 
@@ -4788,7 +4931,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
         '</div>';
     }).join('');
 
-    const conclusion = goal === 'efficiency'
+    const conclusion = goal === 'efficiency' && !compareForSize
       ? (
           efficient
             ? '<div class="quality-efficiency-pick"><strong>等质量压缩效率选择：</strong>' +
@@ -4800,9 +4943,15 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
 
     $('qualityCalibrationResult').innerHTML =
       '<div class="quality-calibration-results">' +
+      '<small>首轮校准观测（追加风险测量后的最终选项以更新的单张曲线为准）：</small>' +
       resultRows +
       conclusion +
-      '<small>SSIM 以相同字幕渲染后的源画面为参考；最多取两个约 2 秒代表性片段中的较低分数作为校准值。它仍不是整片质量保证。</small>' +
+      '<small>SSIM 使用已配对的场景时间窗口，初始最多三组短样；风险预检无法保证发现全部困难场景。'+
+      (refinement?.published
+        ? '已完成同位置追加实测：'+escapeHtml(refinement.previous)+' → '+
+          escapeHtml(refinement.current)+'。'
+        : refinement?'追加测量未发布：'+escapeHtml(refinement.reason)+'。':'')+
+      '曲线观测跨度并非统计置信区间，短样质量不保证整片。</small>' +
       '</div>';
 
     renderPlanOptions();
