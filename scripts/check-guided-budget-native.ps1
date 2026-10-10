@@ -76,7 +76,10 @@ try {
     }
     Write-Host ("$policy result="+$result.state+" encoder="+$started.encoder+" bytes="+$result.outputBytes+
       " saw-pass1="+$seenPass1+" saw-pass2="+$seenPass2)
-    if(-not $seenPass1 -or -not $seenPass2){throw "$policy two-pass progress states were not visible"}
+    # A 2-second first pass may complete before HTTP status polling starts.
+    # A successful second pass requires the first-pass stats on disk; the
+    # observable stage-2 status and complete output are authoritative here.
+    if(-not $seenPass2){throw "$policy second-pass status was never observed"}
   }
   Test-PolicyRun 'two-pass' 0 $false
   Test-PolicyRun 'strict-ceiling' 1024 $true
