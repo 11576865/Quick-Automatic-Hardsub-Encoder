@@ -353,7 +353,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(main, /persistCompressionEvidence/);
   assert.match(main, /currentSourceEvidenceKey/);
   assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
-  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null\)/);
+  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null, outputSize = null\)/);
   assert.match(main, /sampleMeasurements: results\.map/);
   assert.doesNotMatch(main, /reusableSourceQualityByCrf/);
 
@@ -521,4 +521,21 @@ test('final verified output reports predicted vs actual size without claiming pe
  assert.match(source,/体积误差/);
  assert.match(source,/已超出目标体积上限/);
  assert.match(source,/sizeComparison:projection/);
+});
+
+test('guided multi-resolution calibration keeps output scale, SSIM reference and execution branch aligned',async()=>{
+ const [main,bridge]=await Promise.all([
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(main,/id="compareResolutionFrontierBtn"/);
+ assert.match(main,/runResolutionCalibration\(/);
+ assert.match(main,/COMMON_REFERENCE_METRIC/);
+ assert.match(main,/resolutionRateDistortionModels/);
+ assert.match(main,/referenceWidth:outputSize\?\.width/);
+ assert.match(main,/outputWidth:plan\.outputWidth\|\|0/);
+ assert.match(main,/state\.guidedOutputSize=resolution\.outputWidth>0/);
+ assert.match(bridge,/scale='\+\$ReferenceWidth\+':'\+\$ReferenceHeight/);
+ assert.match(bridge,/Guided output resolution differs from adopted calibration branch/);
+ assert.match(bridge,/scale='\+\$outW\+':'\+\$outH\+':flags=bicubic/);
 });

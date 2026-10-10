@@ -16,6 +16,7 @@ import { buildSizeFrontierPlot, evidenceFractionForTargetBytes, targetBytesAtEvi
 import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 import { createMultiBranchFrontier, calibrationTimeBudget, calibrationShouldContinue } from './compression-decision.js';
 import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
+import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -75,6 +76,8 @@ const state = {
   benchmarks: {},
   qualityCalibration: {},
   rateDistortionModels: {},
+  resolutionRateDistortionModels: {},
+  guidedOutputSize: null,
   sizeEnvelopeEnabled: false,
   qualityExplorationPoints: {},
   sizeBudgetTargetBytes: null,
@@ -347,6 +350,7 @@ app.innerHTML = `
               <div class="size-frontier-actions">
                 <button id="calibrateSizeFrontierBtn" class="plan-interaction" type="button">生成当前编码器曲线</button>
                 <button id="compareSizeFrontierBtn" class="plan-interaction secondary" type="button">比较可用编码器</button>
+                <button id="compareResolutionFrontierBtn" class="plan-interaction secondary" type="button">比较当前编码器分辨率</button>
               </div>
             </div>
             <div id="sizeFrontierEmpty" class="size-frontier-empty note">尚无当前编码器的 R-D 模型。仍可使用下方手动倍率预算。</div>
@@ -1037,23 +1041,37 @@ function currentSizeFrontier(codec = null) {
     durationSeconds:Number(state.media.duration),audioBitrate:estimatedSizeBudgetAudioBitrate(),
     reservePercent:4,containerReservePercent:1,fixedReserveBytes:256*1024,minimumVideoBitrate:150000
   };
+  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
+    ':'+currentRuntimeEvidenceKey();
+  const resolutionChoices=Object.values(state.resolutionRateDistortionModels)
+    .filter(x=>x.model?.ok && x.metric===COMMON_REFERENCE_METRIC &&
+      x.sourceScope===sourceScope);
   if(codec===null && state.sizeEnvelopeEnabled) {
-    const scope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
-      ':'+currentRuntimeEvidenceKey();
-    const branches=['h264','h265','av1']
-      .filter(id=>state.softwareEncoders[id]!==false && state.rateDistortionModels[id]?.ok)
-      .map(id=>({id,model:state.rateDistortionModels[id],
-        preset:state.qualityCalibration[id]?.preset||profileFor(id,'balanced').preset,
-        measurementScope:scope}));
+    const useRes=resolutionChoices.length>=2;
+    const branches=useRes
+      ? resolutionChoices.map(x=>({id:x.id,model:x.model,preset:x.preset,
+        measurementScope:sourceScope+':'+COMMON_REFERENCE_METRIC}))
+      : ['h264','h265','av1']
+        .filter(id=>state.softwareEncoders[id]!==false && state.rateDistortionModels[id]?.ok)
+        .map(id=>({id,model:state.rateDistortionModels[id],
+          preset:state.qualityCalibration[id]?.preset||profileFor(id,'balanced').preset,
+          measurementScope:sourceScope}));
     if(branches.length>=2) {
+      const incumbentId=useRes
+        ? state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source')
+        : state.selectedCodec;
       const envelope=createMultiBranchFrontier(branches,{
-        ...budget,incumbentId:state.selectedCodec,hysteresisSsim:.003
+        ...budget,incumbentId,hysteresisSsim:.003
       });
       if(envelope.ok)return envelope;
     }
   }
   const selected=codec||state.selectedCodec||chooseDefaultCodec('sizeBudget');
-  const model=selected?state.rateDistortionModels?.[selected]:null;
+  const sizeId=state.guidedOutputSize?.id;
+  const scaledModel=sizeId && codec===selected
+    ? state.resolutionRateDistortionModels[selected+'@'+sizeId] : null;
+  const model=scaledModel?.model?.ok && scaledModel.sourceScope===sourceScope
+    ? scaledModel.model : selected?state.rateDistortionModels?.[selected]:null;
   if(!model?.ok)return null;
   const frontier=createSizeQualityFrontier(model,budget);
   return frontier?.ok?frontier:null;
@@ -1095,14 +1113,16 @@ function renderSizeFrontier() {
   const empty = $('sizeFrontierEmpty');
   const readout = $('sizeFrontierReadout');
   const button = $('calibrateSizeFrontierBtn');
-  const compare=$('compareSizeFrontierBtn'), branchAction=$('adoptSizeFrontierBranchBtn');
+  const compare=$('compareSizeFrontierBtn'),
+    compareResolution=$('compareResolutionFrontierBtn'),branchAction=$('adoptSizeFrontierBranchBtn');
   if (!panel || !svg || !wrap || !empty || !readout || !button) return;
 
   const goal = $('encodeGoal')?.value || 'balanced';
   const codec = state.selectedCodec || chooseDefaultCodec(goal);
   const model = codec ? state.rateDistortionModels?.[codec] : null;
-  const multiReady=state.sizeEnvelopeEnabled &&
-    Object.values(state.rateDistortionModels).filter(m=>m?.ok).length>=2;
+  const multiReady=state.sizeEnvelopeEnabled && (
+    Object.values(state.rateDistortionModels).filter(m=>m?.ok).length>=2 ||
+    Object.values(state.resolutionRateDistortionModels).filter(x=>x.model?.ok).length>=2);
   const nativeOnly = !state.nativeBackend?.available;
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
   const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
@@ -1121,6 +1141,9 @@ function renderSizeFrontier() {
       ? '刷新当前编码器曲线'
       : '生成当前编码器曲线';
   if(compare)compare.disabled=button.disabled;
+  if(compareResolution)compareResolution.disabled=button.disabled ||
+    state.nativeBackend?.backend!=='windows-native' ||
+    guidedResolutionCandidates(state.media||{}).length<2;
   if(branchAction){branchAction.classList.add('hidden');branchAction.disabled=true;}
 
   const label = codec ? codec.toUpperCase() : '当前编码器';
@@ -1170,7 +1193,7 @@ function renderSizeFrontier() {
   wrap.classList.remove('hidden');
   $('sizeFrontierSubtitle').textContent = frontier.kind==='multi-branch'
     ? frontier.branchIds.map(id=>id.toUpperCase()).join(' / ')+
-      ' · 仅在相同参考画面与共同实测预算区间内形成上包络，不作外推。'
+      ' · 统一源尺寸参考画面 SSIM；仅在共同实测体积区间内形成上包络。'
     : label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。';
   $('sizeFrontierMin').textContent = formatBytes(frontier.minimumEvidenceTargetBytes);
   $('sizeFrontierMax').textContent = formatBytes(frontier.maximumEvidenceTargetBytes);
@@ -1203,14 +1226,16 @@ function renderSizeFrontier() {
         : '')+
       (frontier.kind==='multi-branch'
         ? ' · 建议 '+escapeHtml(String(plot.selected.branchId||'').toUpperCase())+
-          (plot.selected.branchId!==state.selectedCodec?'（未采用，执行方案不变）':'（已选择）')
+          (plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source') &&
+            plot.selected.branchId!==state.selectedCodec?'（未采用，执行方案不变）':'（已选择）')
         : '');
     if(branchAction && frontier.kind==='multi-branch' && plot.selected.branchId &&
-      plot.selected.branchId!==state.selectedCodec){
+      plot.selected.branchId!==state.selectedCodec &&
+      plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source')){
       branchAction.dataset.codec=plot.selected.branchId;
       branchAction.disabled=state.qualityCalibrationBusy||state.operationBusy;
       branchAction.classList.remove('hidden');
-      branchAction.textContent='采用推荐编码器 '+plot.selected.branchId.toUpperCase();
+      branchAction.textContent='采用推荐配置 '+plot.selected.branchId.toUpperCase();
     }
   } else if (directBytes > 0) {
     const evaluation = frontier.evaluateTargetBytes(directBytes);
@@ -1483,13 +1508,22 @@ document.addEventListener('change', event => {
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('calibrateSizeFrontierBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('compareSizeFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true})));
+$('compareResolutionFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true,compareResolution:true})));
 $('adoptSizeFrontierBranchBtn').addEventListener('click',()=>{
   const frontier=currentSizeFrontier();
   const recommendation=frontier?.evaluateTargetBytes(Number(state.sizeBudgetTargetBytes||0));
   if(state.operationBusy||state.qualityCalibrationBusy||frontier?.kind!=='multi-branch'||
     recommendation?.status!=='within-evidence'||!recommendation.branchId||
     recommendation.branchId===state.selectedCodec)return;
-  selectCodec(recommendation.branchId);
+  const resolution=state.resolutionRateDistortionModels[recommendation.branchId];
+  if(resolution) {
+    state.selectedCodec=resolution.codec;
+    state.guidedOutputSize=resolution.outputWidth>0
+      ? {id:resolution.resolutionId,width:resolution.outputWidth,height:resolution.outputHeight}
+      : null;
+    renderPlanOptions();
+    refreshGuidedContainerDecision();
+  } else selectCodec(recommendation.branchId);
 });
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
 $('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
@@ -4019,6 +4053,8 @@ function chooseDefaultCodec(goal) {
 function invalidateQualityCalibration() {
   state.qualityCalibration = {};
   state.rateDistortionModels = {};
+  state.resolutionRateDistortionModels = {};
+  state.guidedOutputSize = null;
   state.sizeEnvelopeEnabled = false;
   state.qualityExplorationPoints = {};
   state.sizeBudgetTargetBytes = null;
@@ -4300,6 +4336,7 @@ function renderSelectedTestResult() {
 function selectCodec(codec) {
   if (state.operationBusy) return;
   state.selectedCodec = codec;
+  state.guidedOutputSize = null;
   renderPlanOptions();
   refreshGuidedContainerDecision();
 }
@@ -4335,7 +4372,7 @@ function qualitySampleStarts(duration) {
   return distinct.slice(0, 2);
 }
 
-async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
+async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, outputSize = null) {
   // Two seconds reduces keyframe/GOP overhead bias compared with the tiny
   // diagnostic benchmark while keeping repeated AV1 calibration tolerable.
   const duration = Math.min(2.0, Math.max(1.2, Number(state.media?.duration || 2.0) / 20));
@@ -4353,6 +4390,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
       crf,
       preset,
       targetVideoBitrate: 0,
+      outputWidth:outputSize?.width||0,outputHeight:outputSize?.height||0,
+      referenceWidth:outputSize?.width ? Number(state.media?.width||0):0,
+      referenceHeight:outputSize?.height ? Number(state.media?.height||0):0,
       timeoutSeconds:Math.max(2,Math.ceil((calibrationTimeBudget(Number(state.media?.duration||0))||120)/Math.max(1,starts.length)))
     }, shiftAssForPreview(originalAss, start));
 
@@ -4394,7 +4434,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
     }))
   };
 
-  await persistCompressionEvidence(qualityEvidenceRecord({
+  // Resized evidence is session-only: the existing persistent evidence key
+  // does not carry output resolution and common-reference metric identity.
+  if(!outputSize?.width) await persistCompressionEvidence(qualityEvidenceRecord({
     media: state.media,
     sourceName: state.video?.name || state.media?.sourceName || '',
     sourceSize: Number(state.video?.size || state.media?.size || 0),
@@ -4415,7 +4457,7 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
   return summary;
 }
 
-async function calibrateCodecQuality(codec, target, budgetSeconds=null) {
+async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSize=null) {
   const range = qualityCrfRange(codec);
   const preset = profileFor(codec, 'balanced').preset;
   let low = range.min;
@@ -4435,17 +4477,20 @@ async function calibrateCodecQuality(codec, target, budgetSeconds=null) {
     if (tested.has(crf)) return tested.get(crf);
     $('qualityCalibrationResult').textContent =
       '正在校准 ' + codec.toUpperCase() +
+      (outputSize?.id?' / '+outputSize.id:'')+
       ' · CRF ' + crf +
       ' · 目标 SSIM ' + target.toFixed(3) + '…';
-    const result = await evaluateQualityCandidate(codec, crf, preset, target);
+    const result = await evaluateQualityCandidate(codec, crf, preset, target,outputSize);
     tested.set(crf, result);
-    if (!state.qualityExplorationPoints[codec]) state.qualityExplorationPoints[codec]=[];
-    state.qualityExplorationPoints[codec].push({
-      ...result, qualitySetting:crf,
-      iteration:state.qualityExplorationPoints[codec].length+1,
-      meetsTarget:result.ssim>=target
-    });
-    renderQualityExploration();
+    if(!outputSize || outputSize.id==='source') {
+      if (!state.qualityExplorationPoints[codec]) state.qualityExplorationPoints[codec]=[];
+      state.qualityExplorationPoints[codec].push({
+        ...result, qualitySetting:crf,
+        iteration:state.qualityExplorationPoints[codec].length+1,
+        meetsTarget:result.ssim>=target
+      });
+      renderQualityExploration();
+    }
     if (!bestQuality || result.ssim > bestQuality.ssim) bestQuality = result;
     log(
       '目标质量校准 ' + codec.toUpperCase() +
@@ -4515,7 +4560,69 @@ function chooseEfficiencyCalibration(calibrations) {
   })[0];
 }
 
-async function runQualityCalibration({compareForSize=false}={}) {
+async function runResolutionCalibration() {
+  const codec=state.selectedCodec||chooseDefaultCodec('sizeBudget');
+  const candidates=guidedResolutionCandidates(state.media||{});
+  if(!state.nativeBackend?.available||state.nativeBackend?.backend!=='windows-native'||
+     state.nativeJobId||state.qualityCalibrationBusy||
+     !codec||state.softwareEncoders[codec]===false||candidates.length<2) {
+    $('qualityCalibrationResult').textContent='当前无法安全开展跨分辨率实测；需要 Windows Native、可用编码器和至少两档合法尺寸。';
+    return;
+  }
+  const target=Number($('qualityTarget')?.value||.985);
+  if(!(target>0&&target<1))return;
+  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
+    ':'+currentRuntimeEvidenceKey();
+  state.qualityCalibrationBusy=true;
+  state.sizeEnvelopeEnabled=false;
+  state.resolutionRateDistortionModels={};
+  state.guidedOutputSize=null;
+  const budget=calibrationTimeBudget(Number(state.media.duration))||120;
+  const eachBudget=Math.max(8,budget/candidates.length);
+  const records=[];
+  updateQualityCalibrationControls();
+  try{
+    for(const size of candidates) {
+      const id=codec+'@'+size.id;
+      try{
+        const evidence=await calibrateCodecQuality(codec,target,eachBudget,size);
+        const model=fitRateDistortionModel(evidence.testedPoints||[]);
+        if(!model.ok)throw Error('有效实测点不足两个，不能构建体积—质量曲线');
+        state.resolutionRateDistortionModels[id]={
+          id,codec,resolutionId:size.id,outputWidth:size.width,outputHeight:size.height,
+          label:size.label,model,preset:evidence.preset,
+          metric:COMMON_REFERENCE_METRIC,sourceScope
+        };
+        if(size.id==='source'){
+          state.qualityCalibration[codec]=evidence;
+          state.rateDistortionModels[codec]=model;
+        }
+        records.push({id,ok:true,pointCount:model.points.length});
+        log('统一参考尺寸校准 '+id+' 成功：'+model.points.length+' 个码率观测点');
+      }catch(error){
+        records.push({id,ok:false,error:error.message});
+        log('统一参考尺寸校准 '+id+' 失败：'+error.message);
+      }
+      renderPlanOptions();
+    }
+    state.sizeEnvelopeEnabled=Object.values(state.resolutionRateDistortionModels)
+      .filter(b=>b.model?.ok).length>=2;
+    const frontier=currentSizeFrontier();
+    $('qualityCalibrationResult').textContent=
+      '同源公共参考 SSIM：'+records.map(x=>x.id+(x.ok?' '+x.pointCount+' 点':' 失败：'+x.error)).join('；')+
+      '。'+(frontier?.kind==='multi-branch'
+        ? '已形成共同实测区间的单张跨分辨率上包络曲线。'
+        : '无充分重叠证据，保留单配置曲线；不推断最优分辨率。');
+  }finally{
+    state.qualityCalibrationBusy=false;
+    updateQualityCalibrationControls();
+    renderPlanOptions();
+    refreshBenchmarkEnabled();
+  }
+}
+
+async function runQualityCalibration({compareForSize=false,compareResolution=false}={}) {
+  if(compareResolution)return runResolutionCalibration();
   if (!state.nativeBackend?.available) {
     alert('目标质量校准当前只在 Native 模式可用。');
     return;
@@ -4547,6 +4654,8 @@ async function runQualityCalibration({compareForSize=false}={}) {
   if (goal === 'efficiency'||compareForSize) {
     state.qualityCalibration = {};
     state.rateDistortionModels = {};
+    state.resolutionRateDistortionModels = {};
+    state.guidedOutputSize = null;
     state.qualityExplorationPoints = {};
     state.sizeEnvelopeEnabled = false;
   } else {
@@ -5249,6 +5358,7 @@ async function runNativeEncode() {
     crf: plan.crf,
     preset: plan.preset,
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+    outputWidth:plan.outputWidth||0,outputHeight:plan.outputHeight||0,
     expectedDuration: Number(state.media.duration || 0),
     expectedAudioTracks: audioSettings.audio === 'none' ? 0 : sourceAudioTracks,
     audio: audioSettings.audio,
@@ -5628,7 +5738,9 @@ function buildEncodePlan(codec) {
     sourceVideoBitrate,
     audioBitRate,
     budgetSource: directBudgetBytes > 0 ? 'frontier' : 'multiplier',
-    frontierPrediction
+    frontierPrediction,
+    outputWidth:state.guidedOutputSize?.width||0,
+    outputHeight:state.guidedOutputSize?.height||0
   };
 }
 
