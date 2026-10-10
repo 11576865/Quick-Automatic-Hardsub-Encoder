@@ -1,0 +1,45 @@
+{
+  "packet_version": 1,
+  "packet_id": "ci-11576865-Quick-Automatic-Hardsub-Encoder-38033309361-1",
+  "status": "pending",
+  "record_type": "ci_failure",
+  "title": "Windows local smoke: failure",
+  "summary": "Tracked CI workflow did not complete successfully. Source adapter captured failed job/step evidence when available.",
+  "source_repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "source_event": "workflow_run",
+  "source_ref": "feat/guided-budget-policy-verified-output",
+  "source_sha": "b400f95d5cd297c813af46f8358dbe05d5a0a5cd",
+  "source_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38033309361",
+  "created_at": "2026-10-10T07:08:39+00:00",
+  "dedupe_key": "workflow_run:11576865/Quick-Automatic-Hardsub-Encoder:38033309361:1",
+  "routing_hints": [
+    "architecture",
+    "interface-grammar",
+    "operations",
+    "red-reason",
+    "reliability"
+  ],
+  "evidence": {
+    "workflow": "Windows local smoke",
+    "run_id": "38033309361",
+    "run_attempt": "1",
+    "conclusion": "failure",
+    "trigger_event": "pull_request",
+    "failed_jobs": [
+      {
+        "id": 114158521442,
+        "name": "windows",
+        "conclusion": "failure"
+      }
+    ],
+    "failed_steps": [
+      {
+        "job": "windows",
+        "number": 19,
+        "name": "Exercise real guided Windows Native two-pass and strict byte ceiling",
+        "conclusion": "failure"
+      }
+    ],
+    "capture_error": ""
+  }
+}
