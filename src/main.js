@@ -4896,7 +4896,9 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
           Number(state.video?.size||0))+':'+currentRuntimeEvidenceKey()})
       :null;
     const values = codecs.map(codec => state.qualityCalibration[codec]);
-    const efficient = goal === 'efficiency'
+    // Explicit size comparisons must not silently switch encoder merely
+    // because the current dropdown goal happens to be efficiency.
+    const efficient = goal === 'efficiency' && !compareForSize
       ? chooseEfficiencyCalibration(values)
       : null;
 
@@ -4919,7 +4921,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
         '</div>';
     }).join('');
 
-    const conclusion = goal === 'efficiency'
+    const conclusion = goal === 'efficiency' && !compareForSize
       ? (
           efficient
             ? '<div class="quality-efficiency-pick"><strong>等质量压缩效率选择：</strong>' +
@@ -4931,6 +4933,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
 
     $('qualityCalibrationResult').innerHTML =
       '<div class="quality-calibration-results">' +
+      '<small>首轮校准观测（追加风险测量后的最终选项以更新的单张曲线为准）：</small>' +
       resultRows +
       conclusion +
       '<small>SSIM 使用已配对的场景时间窗口，初始最多三组短样；风险预检无法保证发现全部困难场景。'+
