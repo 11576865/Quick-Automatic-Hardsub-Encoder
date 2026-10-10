@@ -234,6 +234,10 @@ jobs:
         shell: powershell
         run: node scripts/check-scene-risk-ffmpeg.mjs
 
+      - name: Compare true grain/motion CRF quality and bounded scene risk
+        shell: powershell
+        run: node scripts/check-risk-codec-ffmpeg.mjs
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
