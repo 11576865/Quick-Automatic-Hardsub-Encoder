@@ -1201,6 +1201,31 @@ function Start-MediaTaskJob($Body) {
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
 }
 
+function Resolve-GuidedBudgetPolicy($Request,$Profile) {
+    $policy=[string]$Request.sizeBudgetPolicy
+    if(-not $policy){$policy='best-effort'}
+    if($policy -notin @('best-effort','two-pass','strict-ceiling')){
+        throw 'Unknown guided size-budget execution policy.'
+    }
+    if([string]$Request.mode -ne 'budget-rate'){
+        if($policy -ne 'best-effort'){throw 'Two-pass size strategy is only valid for budget-rate jobs.'}
+        return [pscustomobject]@{Policy='best-effort';TwoPass=$false;Strict=$false;Ceiling=0L}
+    }
+    $twoPass=$policy -ne 'best-effort'
+    if($twoPass -and (-not $Profile -or [string]$Profile.Encoder -ne 'libx264')){
+        throw 'Two-pass guided size mode requires explicit Windows Native libx264 software encoding.'
+    }
+    $ceiling=0L
+    if($policy -eq 'strict-ceiling'){
+        $value=0L
+        if(-not [long]::TryParse([string]$Request.sizeCeilingBytes,[ref]$value) -or $value -le 0){
+            throw 'Strict byte-ceiling mode requires a positive whole-container byte limit.'
+        }
+        $ceiling=$value
+    }
+    return [pscustomobject]@{Policy=$policy;TwoPass=$twoPass;Strict=($policy -eq 'strict-ceiling');Ceiling=$ceiling}
+}
+
 function Start-EncodeJob($Body) {
     if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
@@ -1215,8 +1240,23 @@ function Start-EncodeJob($Body) {
     $outputExtension=if([string]$request.outputExtension){[string]$request.outputExtension}else{'mkv'}
     if($outputFormat -notin @('matroska','mp4')){throw 'Unsupported output container format.'}
     if(($outputFormat -eq 'matroska' -and $outputExtension -ne 'mkv') -or ($outputFormat -eq 'mp4' -and $outputExtension -ne 'mp4')){throw 'Output container format/extension mismatch.'}
-    $profile=Get-PreferredEncoder ([string]$request.codec)
+    $requestedPolicy=[string]$request.sizeBudgetPolicy
+    if(-not $requestedPolicy){$requestedPolicy='best-effort'}
+    if($requestedPolicy -in @('two-pass','strict-ceiling')){
+        if([string]$request.codec -ne 'h264'){
+            throw 'Two-pass guided size strategy supports only H.264; no implicit codec switch.'
+        }
+        # Explicit opt-in overrides NVENC preference; never silently run
+        # a one-pass hardware encoder for a requested software two-pass job.
+        $profile=@($script:Capabilities.Encoders |
+            Where-Object { $_.Key -eq 'libx264' -and $_.Available } |
+            Select-Object -First 1)[0]
+        if(-not $profile){throw 'Software libx264 is unavailable; requested two-pass mode cannot run.'}
+    }else{
+        $profile=Get-PreferredEncoder ([string]$request.codec)
+    }
     if(-not $profile){throw 'No available Windows Native encoder for this codec.'}
+    $budgetPolicy=Resolve-GuidedBudgetPolicy $request $profile
     $jobId=[guid]::NewGuid().ToString('N')
     $work=New-BridgeWorkDir ("quick-hardsub-job-$jobId-")
     Stage-BridgeAssets $work ([string]$Body.assText)
@@ -1255,11 +1295,22 @@ function Start-EncodeJob($Body) {
         ($outW % 2) -or ($outH % 2))){throw 'Invalid guided output size.'}
     $videoFilter='ass=subtitle.ass:fontsdir=fonts'
     if($scaled){$videoFilter+=',scale='+$outW+':'+$outH+':flags=bicubic'}
-    $args='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -sn -vf "'+$videoFilter+'" '+$encArgs+$audioArgs+$containerArgs+' -f '+$outputFormat+' '+(Quote-NativeArg $outputFile)
+    $inputArgs='-hide_banner -nostdin -loglevel error -y -progress progress.txt -i '+(Quote-NativeArg $video)+' -map 0:v:0 -sn -vf "'+$videoFilter+'" '+$encArgs
+    $secondArgs=$inputArgs+$audioArgs+
+        $(if($budgetPolicy.TwoPass){' -pass 2 -passlogfile guided-budget'}else{''})+
+        $containerArgs+' -f '+$outputFormat+' '+(Quote-NativeArg $outputFile)
+    $args=if($budgetPolicy.TwoPass){
+        # Both passes use the exact same source, subtitle/font filter, resolution,
+        # software encoder, preset and target video bitrate. First pass has no
+        # audio and no publishable output. All paths are private to $work.
+        $inputArgs+' -an -pass 1 -passlogfile guided-budget -f null NUL'
+    }else{$secondArgs}
     $started=Start-BridgeTool $script:Ffmpeg $args $work
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
         Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware;ActualStart=0;Task=$null;Request=$request;SourceProbe=$null
+        SizeBudgetPolicy=$budgetPolicy.Policy;StrictBudget=[bool]$budgetPolicy.Strict;BudgetCeiling=[long]$budgetPolicy.Ceiling
+        Phase=if($budgetPolicy.TwoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
         StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
     }
@@ -1380,20 +1431,30 @@ function Get-JobStatus([string]$JobId) {
             if($line){$timeMs=([double]($line-replace'^out_time_ms=',''))/1000}
         }
         $progress=if($j.Duration -gt 0){[Math]::Min(0.99,[Math]::Max(0,$timeMs/1000/$j.Duration))}else{0}
-        if($j.Task -and $j.Task.twoPass){$progress=if($j.Phase -eq 1){$progress*.5}else{.5+$progress*.5}}
+        if(($j.Task -and $j.Task.twoPass) -or ($j.Request -and $j.SizeBudgetPolicy -in @('two-pass','strict-ceiling'))){
+            $progress=if($j.Phase -eq 1){$progress*.5}else{.5+$progress*.5}
+        }
         $elapsed=((Get-Date)-$p.StartTime).TotalSeconds
         $speed=if($elapsed -gt 0){($timeMs/1000)/$elapsed}else{0}
-        return [pscustomobject]@{ok=$true;state=if($j.Cancelled){'cancelling'}else{'encoding'};progress=$progress;timeMs=$timeMs;duration=$j.Duration;speed=$speed;encoder=$j.Encoder;hardware=$j.Hardware;actualStart=$j.ActualStart}
+        return [pscustomobject]@{ok=$true;state=if($j.Cancelled){'cancelling'}else{'encoding'};progress=$progress;timeMs=$timeMs;duration=$j.Duration;speed=$speed;encoder=$j.Encoder;hardware=$j.Hardware;actualStart=$j.ActualStart;pass=$j.Phase;totalPasses=if(($j.Task -and $j.Task.twoPass) -or ($j.Request -and $j.SizeBudgetPolicy -in @('two-pass','strict-ceiling'))){2}else{1}}
     }
     $processKey=([string]$p.Id)+':'+([string]$p.StartTime.Ticks)
     if([string]$j.TimedProcessKey -ne $processKey){
         $j.EncodeSeconds += [Math]::Max(.001,($p.ExitTime-$p.StartTime).TotalSeconds)
         $j.TimedProcessKey=$processKey
     }
-    if($j.Task -and $j.Task.twoPass -and $j.Phase -eq 1 -and -not $j.Cancelled -and $p.ExitCode -eq 0){
+    if((($j.Task -and $j.Task.twoPass) -or ($j.Request -and $j.SizeBudgetPolicy -in @('two-pass','strict-ceiling'))) -and
+        $j.Phase -eq 1 -and -not $j.Cancelled -and $p.ExitCode -eq 0){
         $p.Dispose();Remove-Item -LiteralPath $j.Progress -Force -ErrorAction SilentlyContinue
-        $j.Started=Start-BridgeTool $script:Ffmpeg $j.SecondArgs $j.Work;$j.Phase=2
-        return Get-JobStatus $JobId
+        try{
+            $j.Started=Start-BridgeTool $script:Ffmpeg $j.SecondArgs $j.Work
+            $j.Phase=2
+            return Get-JobStatus $JobId
+        }catch{
+            $j.State='failed';$j.Error='Second-pass launch failed: '+$_.Exception.Message
+            Remove-Item -LiteralPath $j.Output -Force -ErrorAction SilentlyContinue
+            return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
+        }
     }
     if(-not $j.Finalized){
         $j.Finalized=$true
@@ -1434,6 +1495,18 @@ function Get-JobStatus([string]$JobId) {
                         if($scan.ExitCode -ne 0){throw 'Output packet scan failed.'}
                     }catch{$j.State='failed';$j.Error=$_.Exception.Message}
                 }
+            }
+        }
+        # A strict ceiling is an actual *container byte* acceptance gate,
+        # not a bitrate prediction. On miss, leave no staged file available
+        # to Export-Job; existing user exports are never modified.
+        if($j.State -eq 'completed' -and -not $j.Task -and $j.StrictBudget){
+            $actual=(Get-Item -LiteralPath $j.Output).Length
+            if($actual -gt $j.BudgetCeiling){
+                $j.State='failed'
+                $j.Error='Strict container byte ceiling exceeded: actual '+$actual+
+                    ' bytes > limit '+$j.BudgetCeiling+' bytes. No output exported; retry is not automatic.'
+                Remove-Item -LiteralPath $j.Output -Force -ErrorAction SilentlyContinue
             }
         }
         $p.Dispose()

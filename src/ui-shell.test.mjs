@@ -579,9 +579,33 @@ test('guided sample ingress refuses missing or falsified elapsed timing evidence
 test('guided size target distinguishes CQ samples from formal VBR and actual file bytes',async()=>{
  const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
  assert.match(main,/CQ 短样预测 SSIM/);
- assert.match(main,/正式目标码率使用单遍 VBR/);
+ assert.match(main,/体积策略/);
+ assert.match(main,/快速单遍目标码率/);
  assert.match(main,/CQ 短样曲线/);
  assert.match(main,/CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM/);
  assert.match(main,/可能明显超出预算/);
  assert.match(main,/actualBytes>projection\.budgetBytes/);
+});
+
+test('guided size budget explicitly records execution policy and byte ceiling',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/id="guidedSizeBudgetPolicy"/);
+ assert.match(main,/value="best-effort"/);
+ assert.match(main,/value="two-pass"/);
+ assert.match(main,/value="strict-ceiling"/);
+ assert.match(main,/resolveGuidedSizePolicy/);
+ assert.match(main,/sizeBudgetPolicy:executionPolicy\.policy/);
+ assert.match(main,/sizeBudgetPolicy:plan\.sizeBudgetPolicy\|\|'best-effort'/);
+ assert.match(main,/sizeCeilingBytes:plan\.mode==='budget-rate'\?plan\.sizeCeiling:0/);
+ assert.match(main,/totalPasses>1/);
+ assert.match(main,/成品超出预算会失败且不可导出/);
+});
+
+test('two-pass software execution cannot inherit CQ/NVENC quality and speed predictions',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/executionPolicy\.policy==='best-effort'\s*\? currentSizeFrontier\(codec\) : null/);
+ assert.match(main,/sizeBudgetPolicy!=='best-effort'/);
+ assert.match(main,/containerReserveBytes,/);
+ assert.match(main,/严格字节上限已核验/);
+ assert.match(main,/Strict container byte ceiling exceeded/);
 });
