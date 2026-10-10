@@ -6830,3 +6830,10 @@ body.ui-phone .size-frontier-scale span:nth-child(2) {
 .size-frontier-chart-wrap {overflow-x:auto;overscroll-behavior-x:contain}
 .size-frontier-chart {min-width:560px}
 
+
+/* Guided target-size execution policy (one choice; preserve single R-D chart). */
+.size-accuracy-control{display:flex;flex-direction:column;gap:7px;margin-top:15px;}
+.size-accuracy-control strong{font-size:.86rem;font-weight:600;color:var(--text);}
+.size-accuracy-control select{width:100%;max-width:660px;background:var(--surface-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+.size-accuracy-control select:focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px;}
+#guidedSizeBudgetPolicyHelp{margin-top:8px;line-height:1.6;}

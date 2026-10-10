@@ -19,6 +19,7 @@ import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js
 import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
 import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from './scene-risk-selection.js';
 import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
+import { resolveGuidedSizePolicy } from './guided-size-policy.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -381,6 +382,15 @@ app.innerHTML = `
             </div>
           </details>
           <div id="sizeBudgetDetail" class="plan-value-detail plan-slider-feedback">选择视频后显示对应的实际字节上限。</div>
+          <label class="size-accuracy-control" for="guidedSizeBudgetPolicy">
+            <strong>体积执行策略</strong>
+            <select id="guidedSizeBudgetPolicy" class="plan-interaction" aria-describedby="guidedSizeBudgetPolicyHelp">
+              <option value="best-effort">快速单遍 · 尽量接近预算（默认）</option>
+              <option value="two-pass">较高精度 · 软件 H.264 两遍编码</option>
+              <option value="strict-ceiling">验证字节上限 · 软件 H.264 两遍；超限不导出</option>
+            </select>
+          </label>
+          <div id="guidedSizeBudgetPolicyHelp" class="note">快速模式可能明显超预算；两遍模式仅支持 Windows Native 软件 H.264，会占用更多完整编码时间。严格模式超限时失败，不自动重试或替换原文件。</div>
         </div>
       </div>
     </div>
@@ -1223,7 +1233,8 @@ function renderSizeFrontier() {
       ' <span class="size-frontier-band-copy">样本范围 ' +
       Number(plot.selected.lowerQuality).toFixed(5) + '–' +
       Number(plot.selected.upperQuality).toFixed(5) + '</span>' +
-      ' · 正式目标码率使用单遍 VBR；此 CQ 曲线不能保证最终体积或整片质量' +
+      ' · 体积策略 '+escapeHtml($('guidedSizeBudgetPolicy').selectedOptions[0]?.textContent||'快速单遍')+
+      '；CQ 短样质量不能保证正式输出体积或整片质量' +
       (Number.isFinite(marginal)
         ? ' · 每翻倍视频码率约 +' + Number(marginal).toFixed(4) + ' SSIM'
         : '')+
@@ -1315,6 +1326,14 @@ function updateSizeBudgetPreview() {
     );
   });
   setSliderProgress(range);
+  if($('guidedSizeBudgetPolicy')){
+    const policy=$('guidedSizeBudgetPolicy').value;
+    $('guidedSizeBudgetPolicyHelp').textContent=policy==='strict-ceiling'
+      ? '严格上限：使用 Windows Native 软件 H.264 两遍编码，完成后核对实际容器字节数；超限则拒绝导出并保留原文件，不自动重试。'
+      : policy==='two-pass'
+        ? '较高精度：使用 Windows Native 软件 H.264 两遍编码，消耗更多完整编码时间；仍可能超过字节预算。'
+        : '快速单遍：优先使用当前可用编码器（可能为 NVENC）；目标码率只作规划，可能明显偏离文件上限。';
+  }
   renderSizeFrontier();
 }
 
@@ -1425,6 +1444,9 @@ $('qualityTargetRange').addEventListener('input', updateQualityTargetPreview);
 $('qualityTargetRange').addEventListener('change', commitQualityTarget);
 $('sizeBudgetRange').addEventListener('input', updateSizeBudgetPreview);
 $('sizeBudgetRange').addEventListener('change', commitSizeBudget);
+$('guidedSizeBudgetPolicy').addEventListener('change',()=>{
+  updateSizeBudgetPreview();renderPlanOptions();refreshBenchmarkEnabled();
+});
 
 $('sizeFrontierChart').addEventListener('pointerdown', event => {
   const targetBytes = sizeFrontierTargetFromPointer(event);
@@ -4108,6 +4130,7 @@ function updateQualityCalibrationControls() {
   }
   $('qualityTarget').disabled = controlsLocked;
   $('encodeGoal').disabled = controlsLocked;
+  $('guidedSizeBudgetPolicy').disabled=controlsLocked;
   if ($('qualityTargetRange')) $('qualityTargetRange').disabled = controlsLocked;
   if ($('qualityAutoCodec')) $('qualityAutoCodec').disabled = controlsLocked;
   document.querySelectorAll('.plan-mode-tab').forEach(button => { button.disabled = controlsLocked; });
@@ -4177,6 +4200,8 @@ function renderPlanOptions() {
           ' · ' + formatBitrate(plan.targetVideoBitrate) +
           ' · CQ 样本 SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
         : '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
+    } else if (goal === 'sizeBudget' && !plan && $('guidedSizeBudgetPolicy').value!=='best-effort') {
+      param='所选体积精度策略仅支持 Windows Native 软件 H.264';
     } else if (
       available &&
       (goal === 'targetQuality' || goal === 'efficiency') &&
@@ -4222,7 +4247,9 @@ function updateChosenSummary() {
       $('chosenSummary').textContent =
         '该模式需要先运行“实测校准目标质量”，校准完成后才会生成正式 CRF 参数。';
     } else {
-      $('chosenSummary').textContent = '当前方案无法生成安全参数。';
+      $('chosenSummary').textContent = goal==='sizeBudget' && $('guidedSizeBudgetPolicy').value!=='best-effort'
+        ? '当前体积策略仅支持 Windows Native 软件 H.264；请选 H.264 或切换快速单遍。'
+        : '当前方案无法生成安全参数。';
     }
     return;
   }
@@ -4261,8 +4288,13 @@ function updateChosenSummary() {
       frontierHtml +
       '。规划体积约 ' + formatBytes(plan.plannedBytes) +
       '，预算边界 ' + formatBytes(plan.sizeCeiling) +
-      '。正式输出采用单遍目标码率，可能明显超出预算；CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM。'+
-      '这是参数规划值，不承诺最终字节数严格命中。' + historyHtml;
+      (plan.sizeBudgetPolicy==='best-effort'
+        ? '。快速单遍目标码率，可能明显超出预算。'
+        : plan.sizeBudgetPolicy==='two-pass'
+          ? '。软件 H.264 两遍编码，提高体积逼近精度但增加耗时，不保证精确命中。'
+          : '。严格字节上限：软件 H.264 两遍编码，成品超出预算会失败且不可导出；不自动重试。')+
+      'CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM。'+
+      '这是参数规划值，只有严格策略执行成功才代表成品经过上限验证。' + historyHtml;
   }
 }
 
@@ -5576,6 +5608,8 @@ async function runNativeEncode() {
     crf: plan.crf,
     preset: plan.preset,
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+    sizeBudgetPolicy:plan.sizeBudgetPolicy||'best-effort',
+    sizeCeilingBytes:plan.mode==='budget-rate'?plan.sizeCeiling:0,
     outputWidth:plan.outputWidth||0,outputHeight:plan.outputHeight||0,
     expectedDuration: Number(state.media.duration || 0),
     expectedAudioTracks: audioSettings.audio === 'none' ? 0 : sourceAudioTracks,
@@ -5629,7 +5663,8 @@ async function runNativeEncode() {
   state.nativeCompletedJob = null;
   state.nativeJobProjection = plan.mode==='budget-rate' ? {
     jobId:started.jobId,plannedBytes:Number(plan.plannedBytes||0),
-    budgetBytes:Number(plan.sizeCeiling||0),codec:plan.codec
+    budgetBytes:Number(plan.sizeCeiling||0),codec:plan.codec,
+    policy:plan.sizeBudgetPolicy||'best-effort'
   } : null;
   localStorage.setItem('nativeEncodeJobId', started.jobId);
   $('encodeBtn').disabled = true;
@@ -5646,7 +5681,10 @@ async function runNativeEncode() {
     'Native 正式压制：' + state.selectedCodec.toUpperCase() +
     ' · ' + container.key.toUpperCase() +
     ' · 音频 ' + audioSettings.audio.toUpperCase() +
-    ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
+    ' · ' + (plan.mode === 'budget-rate'
+      ? (plan.sizeBudgetPolicy==='best-effort'?'单遍预算码率':
+        plan.sizeBudgetPolicy==='strict-ceiling'?'两遍严格字节上限':'软件 H.264 两遍目标码率')
+      : 'CRF 质量') +
     ' · job=' + started.jobId
   );
 
@@ -5695,11 +5733,15 @@ async function monitorNativeJob(jobId) {
         : liveSpeed > 0
           ? liveSpeed
           : historySpeed;
+      const totalPasses=Math.max(1,Number(status.totalPasses||1));
+      const pass=Math.max(1,Math.min(totalPasses,Number(status.pass||1)));
       const remain = predictionSpeed > 0
-        ? Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec) / predictionSpeed
+        ? (Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec)+
+           Math.max(0,totalPasses-pass)*Number(status.duration || state.media?.duration || 0)) / predictionSpeed
         : null;
       $('liveEta').textContent =
-        nativePlatformName() + ' · ' + (progress * 100).toFixed(1) + '%' +
+        nativePlatformName() + (totalPasses>1?' · 第 '+pass+'/'+totalPasses+' 遍':'') +
+        ' · ' + (progress * 100).toFixed(1) + '%' +
         (liveSpeed > 0 ? ' · 当前 ' + liveSpeed.toFixed(2) + '× realtime' : '') +
         (historySpeed > 0 && liveWeight < 1 ? ' · 本机历史参与预测' : '') +
         (remain != null ? ' · 预计剩余 ' + formatDuration(remain) : '');
@@ -5917,6 +5959,13 @@ function buildEncodePlan(codec) {
       ? directBudgetBytes
       : state.video.size * manualMultiplier
   );
+  const executionPolicy=resolveGuidedSizePolicy({
+    mode:'budget-rate',codec,
+    backend:state.nativeBackend?.backend||'',
+    policy:$('guidedSizeBudgetPolicy')?.value||'best-effort',
+    ceilingBytes:sizeCeiling
+  });
+  if(!executionPolicy.ok)return null;
   const multiplier = state.video.size > 0 ? sizeCeiling / state.video.size : manualMultiplier;
   const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
   const containerReserveBytes = Math.max(256 * 1024, Math.floor(safeBudgetBytes * 0.01));
@@ -5956,6 +6005,7 @@ function buildEncodePlan(codec) {
     sourceVideoBitrate,
     audioBitRate,
     budgetSource: directBudgetBytes > 0 ? 'frontier' : 'multiplier',
+    sizeBudgetPolicy:executionPolicy.policy,
     frontierPrediction,
     outputWidth:state.guidedOutputSize?.width||0,
     outputHeight:state.guidedOutputSize?.height||0

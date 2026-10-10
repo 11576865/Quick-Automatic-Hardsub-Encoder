@@ -585,3 +585,17 @@ test('guided size target distinguishes CQ samples from formal VBR and actual fil
  assert.match(main,/可能明显超出预算/);
  assert.match(main,/actualBytes>projection\.budgetBytes/);
 });
+
+test('guided size budget explicitly records execution policy and byte ceiling',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/id="guidedSizeBudgetPolicy"/);
+ assert.match(main,/value="best-effort"/);
+ assert.match(main,/value="two-pass"/);
+ assert.match(main,/value="strict-ceiling"/);
+ assert.match(main,/resolveGuidedSizePolicy/);
+ assert.match(main,/sizeBudgetPolicy:executionPolicy\.policy/);
+ assert.match(main,/sizeBudgetPolicy:plan\.sizeBudgetPolicy\|\|'best-effort'/);
+ assert.match(main,/sizeCeilingBytes:plan\.mode==='budget-rate'\?plan\.sizeCeiling:0/);
+ assert.match(main,/totalPasses>1/);
+ assert.match(main,/成品超出预算会失败且不可导出/);
+});
