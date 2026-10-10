@@ -230,6 +230,10 @@ jobs:
         shell: powershell
         run: node scripts/check-scene-risk-fixtures.mjs
 
+      - name: Contrast real FFmpeg scene-risk fixtures and production selection
+        shell: powershell
+        run: node scripts/check-scene-risk-ffmpeg.mjs
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
