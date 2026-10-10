@@ -28,7 +28,9 @@ export function planPairedRefinement({
       !b.codec||!b.preset||!b.sourceScope||
       b.sampleFingerprint!==samplePlan.fingerprint)
       return {refine:false,reason:'stale-or-incomplete-evidence'};
-    const expected=Number(alternative.videoBitrate);
+    // A fitted curve has to be evaluated on one common sample population.
+    // Only resampling a selected CRF would mix 3-scene and 4-scene quality
+    // points in one regression and fabricate a coherent full R-D frontier.
     const candidates=b.testedPoints.filter(p=>{
       const samples=p?.sampleMeasurements;
       return Number.isInteger(p?.crf) && number(p?.sampleBitrate)>0 &&
@@ -38,16 +40,20 @@ export function planPairedRefinement({
         samples.every(goodSample) &&
         samples.every((s,i)=>near(s.start,samplePlan.starts[i]));
     });
-    if(!candidates.length)return {refine:false,reason:'unmatched-sample-windows'};
-    const point=[...candidates].sort((a,b)=>
-      Math.abs(Math.log(a.sampleBitrate/expected))-
-      Math.abs(Math.log(b.sampleBitrate/expected)))[0];
-    const meanCost=point.sampleMeasurements.reduce((s,x)=>s+x.elapsedSeconds,0)/
-      point.sampleMeasurements.length;
-    if(!(meanCost>0))return {refine:false,reason:'unknown-next-cost'};
+    if(candidates.length!==b.testedPoints.length ||
+      new Set(candidates.map(p=>p.crf)).size!==candidates.length)
+      return {refine:false,reason:'unmatched-sample-windows'};
+    const points=[];
+    for(const point of candidates){
+      const meanCost=point.sampleMeasurements.reduce((s,x)=>s+x.elapsedSeconds,0)/
+        point.sampleMeasurements.length;
+      if(!(meanCost>0))return {refine:false,reason:'unknown-next-cost'};
+      points.push({point,crf:point.crf,estimatedSeconds:Math.max(.1,meanCost*1.4)});
+    }
     selected.push({
-      id:b.id,codec:b.codec,preset:b.preset,crf:point.crf,outputSize:b.outputSize||null,
-      sourceScope:b.sourceScope,point,estimatedSeconds:Math.max(.1,meanCost*1.4)
+      id:b.id,codec:b.codec,preset:b.preset,outputSize:b.outputSize||null,
+      sourceScope:b.sourceScope,points,
+      estimatedSeconds:points.reduce((sum,x)=>sum+x.estimatedSeconds,0)
     });
   }
   if(new Set(selected.map(x=>x.id)).size!==selected.length ||

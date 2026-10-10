@@ -31,28 +31,32 @@ test('schedule an affordable paired extra scene when measured ranges overlap',()
  assert.equal(p.starts[0],85);
  assert.deepEqual(p.branches.map(x=>x.id),['A','B']);
  assert.ok(p.estimatedSeconds>0);
+ assert.equal(p.branches.flatMap(x=>x.points).length,4,
+   'Every observed CRF point in every branch must receive the extra scene');
  assert.ok(p.fingerprint.includes('85.000'));
 });
 test('same-scene risk evidence can reverse the conservative codec recommendation',()=>{
  const args=inputs();
  const p=planPairedRefinement(args);
  assert.equal(args.frontier.evaluateTargetBytes(args.targetBytes).branchId,'A');
- const newA={...A[0],sampleMeasurements:[{start:85,ssim:.84,bitrate:1000000,
-   duration:2,elapsedSeconds:2}]};
- const newB={...B[0],sampleMeasurements:[{start:85,ssim:.97,bitrate:1000000,
-   duration:2,elapsedSeconds:2}]};
- const a=appendMatchedSceneObservation(A[0],newA,{
-   start:85,originalFingerprint:fingerprint,nextFingerprint:p.fingerprint});
- const b=appendMatchedSceneObservation(B[0],newB,{
-   start:85,originalFingerprint:fingerprint,nextFingerprint:p.fingerprint});
- assert.ok(a&&b);
- const after=frontier([a,A[1]],[b,B[1]]);
+ const appendAll=(list,ssimValues)=>list.map((point,index)=>
+   appendMatchedSceneObservation(point,{...point,sampleMeasurements:[{
+     start:85,ssim:ssimValues[index],bitrate:point.sampleBitrate,
+     duration:2,elapsedSeconds:2
+   }]},{
+     start:85,originalFingerprint:fingerprint,nextFingerprint:p.fingerprint
+   }));
+ const refinedA=appendAll(A,[.84,.87]);
+ const refinedB=appendAll(B,[.97,.98]);
+ assert.ok([...refinedA,...refinedB].every(x=>x?.sampleMeasurements.length===4));
+ const after=frontier(refinedA,refinedB);
  assert.equal(after.ok,true);
  assert.equal(after.evaluateTargetBytes(args.targetBytes).branchId,'B');
 });
 test('rejects unaffordable, stale, unpaired or malformed data',()=>{
  const args=inputs();
  assert.equal(planPairedRefinement({...args,spentSeconds:64}).reason,'budget-exhausted');
+ assert.equal(planPairedRefinement({...args,budgetSeconds:19}).reason,'budget-exhausted');
  assert.equal(planPairedRefinement({...args,branches:args.branches.map(b=>({...b,sampleFingerprint:'old'}))}).reason,'stale-or-incomplete-evidence');
  assert.equal(planPairedRefinement({...args,samplePlan:{...args.samplePlan,candidates:[]}}).reason,'no-unmeasured-window');
  assert.equal(appendMatchedSceneObservation(A[0],{...A[0],sampleMeasurements:[

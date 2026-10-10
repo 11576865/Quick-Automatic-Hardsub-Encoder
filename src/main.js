@@ -4655,26 +4655,34 @@ async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedA
   };
   try{
     for(const branch of plan.branches){
-      const elapsed=(performance.now()-stageStartedAt)/1000;
-      if(elapsed+branch.estimatedSeconds>budget)
-        throw Error('追加实测预算已耗尽，整组结果不采用');
-      $('qualityCalibrationResult').textContent=
-        '正在核验高风险配对窗口 '+plan.starts[0].toFixed(1)+'s · '+branch.id+
-        ' · CRF '+branch.crf+'（同一位置依次测试所有分支）';
-      const remaining=Math.max(0,budget-elapsed);
-      const oneProbePlan={...scenePlan,timeoutSeconds:Math.max(2,
-        Math.ceil(Math.min(remaining,branch.estimatedSeconds*1.5)))};
-      const latest=await evaluateQualityCandidate(branch.codec,branch.crf,
-        branch.preset,target,branch.outputSize,oneProbePlan);
-      if((performance.now()-stageStartedAt)/1000>budget+2)
-        throw Error('实际追加测量超过软预算，拒绝发布不完整组');
-      const updated=appendMatchedSceneObservation(branch.point,latest,{
-        start:plan.starts[0],originalFingerprint:plan.previousFingerprint,
-        nextFingerprint:plan.fingerprint
-      });
-      if(!updated)throw Error('追加样本与原校准来源、编码参数或位置不一致');
+      const measured=new Map();
+      for(const step of branch.points){
+        const elapsed=(performance.now()-stageStartedAt)/1000;
+        if(elapsed+step.estimatedSeconds>budget)
+          throw Error('追加实测预算已耗尽，整组结果不采用');
+        $('qualityCalibrationResult').textContent=
+          '正在核验高风险配对窗口 '+plan.starts[0].toFixed(1)+'s · '+branch.id+
+          ' · CRF '+step.crf+'（所有已测 CRF 和分支均须补测）';
+        const remaining=Math.max(0,budget-elapsed);
+        const oneProbePlan={...scenePlan,timeoutSeconds:Math.max(2,
+          Math.ceil(Math.min(remaining,step.estimatedSeconds*1.5)))};
+        const latest=await evaluateQualityCandidate(branch.codec,step.crf,
+          branch.preset,target,branch.outputSize,oneProbePlan);
+        if((performance.now()-stageStartedAt)/1000>budget+2)
+          throw Error('实际追加测量超过软预算，拒绝发布不完整组');
+        const updated=appendMatchedSceneObservation(step.point,latest,{
+          start:plan.starts[0],originalFingerprint:plan.previousFingerprint,
+          nextFingerprint:plan.fingerprint
+        });
+        if(!updated)throw Error('追加样本与原校准来源、编码参数或位置不一致');
+        measured.set(step.point,updated);
+      }
       const old=entries.find(x=>x.id===branch.id);
-      const testedPoints=old.testedPoints.map(p=>p===branch.point?updated:p);
+      if(!old||measured.size!==old.testedPoints.length)
+        throw Error('部分 CRF 未补测，禁止混合场景样本集');
+      const testedPoints=old.testedPoints.map(p=>measured.get(p));
+      if(testedPoints.some(p=>!p||p.sampleFingerprint!==plan.fingerprint))
+        throw Error('追加实测未形成完整的同场景模型');
       const model=fitRateDistortionModel(testedPoints);
       if(!model.ok)throw Error('追加样本使模型无效');
       proposals.push({id:branch.id,model,testedPoints});
@@ -4694,7 +4702,8 @@ async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedA
       fixedReserveBytes:256*1024,minimumVideoBitrate:150000,
       incumbentId:frontier.incumbentId,hysteresisSsim:.003
     });
-    if(!check.ok)throw Error('更新后的候选不再具有共同的实测体积区间');
+    if(!check.ok || check.evaluateTargetBytes(targetBytes).status!=='within-evidence')
+      throw Error('更新后的候选不再覆盖本次目标体积的共同实测区间');
     for(const p of proposals){
       if(mode==='resolution'){
         const record=state.resolutionRateDistortionModels[p.id];
