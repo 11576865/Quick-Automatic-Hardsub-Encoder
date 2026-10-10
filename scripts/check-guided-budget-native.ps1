@@ -80,10 +80,33 @@ try {
     # A successful second pass requires the first-pass stats on disk; the
     # observable stage-2 status and complete output are authoritative here.
     if(-not $seenPass2){throw "$policy second-pass status was never observed"}
+    return [string]$started.jobId
   }
-  Test-PolicyRun 'two-pass' 0 $false
-  Test-PolicyRun 'strict-ceiling' 1024 $true
-  Test-PolicyRun 'strict-ceiling' 5000000 $false
+  Test-PolicyRun 'two-pass' 0 $false | Out-Null
+  Test-PolicyRun 'strict-ceiling' 1024 $true | Out-Null
+  $tamperId=Test-PolicyRun 'strict-ceiling' 5000000 $false
+  # A prior completed status is NOT authorization to export an arbitrarily
+  # modified staged file. Enlarge it after success, then re-query and export.
+  $stages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$tamperId+"-*"))
+  if($stages.Count -ne 1){throw "Expected one private staging folder for $tamperId"}
+  $stagedFile=Join-Path $stages[0].FullName 'output.mkv'
+  if(-not(Test-Path -LiteralPath $stagedFile)){throw 'Strict completed staged output missing'}
+  $handle=[IO.File]::OpenWrite($stagedFile)
+  try{$handle.SetLength(5000001L)}finally{$handle.Dispose()}
+  $stale=Invoke-RestMethod -Method Get -Uri "$hostUrl/api/jobs/$tamperId" -Headers $headers -TimeoutSec 15
+  if($stale.state -ne 'failed' -or $stale.error -notmatch 'Strict container byte ceiling exceeded'){
+    throw "Mutated completed strict output was accepted: $($stale|ConvertTo-Json -Compress)"
+  }
+  if(Test-Path -LiteralPath $stagedFile){throw 'Oversized strict stage was not removed'}
+  $exportBlocked=$false
+  try {
+    $exportBody=@{suggestedName='must-not-export.mkv'}|ConvertTo-Json -Compress
+    Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$tamperId/export" -Headers $headers -ContentType 'application/json' -Body $exportBody -TimeoutSec 15 | Out-Null
+  } catch {
+    $exportBlocked=$true
+  }
+  if(-not $exportBlocked){throw 'Failed strict job unexpectedly reached save/export'}
+  Write-Host ('Post-completion stage tamper rejected; export blocked: '+$tamperId)
 }finally{
   try{if($bridge -and -not $bridge.HasExited){Stop-Process -Id $bridge.Id -Force}}catch{}
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

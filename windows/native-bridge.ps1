@@ -1402,6 +1402,29 @@ function Ensure-CompletedJobHistory($Job) {
     }
 }
 
+function Test-GuidedStrictBudget($Job) {
+    # The completed state is only valid while its private staged *container*
+    # stays within the user's explicit ceiling. An earlier successful check
+    # cannot authorize a later, modified output or an export copy.
+    if(-not $Job.StrictBudget -or $Job.Task){return $true}
+    $limit=[long]$Job.BudgetCeiling
+    $actual=0L
+    if(Test-Path -LiteralPath $Job.Output -PathType Leaf){
+        $actual=[long](Get-Item -LiteralPath $Job.Output).Length
+    }
+    if($limit -gt 0 -and $actual -gt 0 -and $actual -le $limit){return $true}
+    $Job.State='failed'
+    $Job.Error=if($actual -gt $limit){
+        'Strict container byte ceiling exceeded: actual '+$actual+
+        ' bytes > limit '+$limit+' bytes. No output exported; retry is not automatic.'
+    }else{
+        'Strict container byte verification failed: staged output missing, empty or invalid ceiling.'
+    }
+    Remove-Item -LiteralPath $Job.Output -Force -ErrorAction SilentlyContinue
+    Write-BridgeLog ('Strict size guard rejected job '+$Job.Id+': '+$Job.Error) 'WARN'
+    return $false
+}
+
 function Get-JobStatus([string]$JobId) {
     if(-not $script:Jobs.ContainsKey($JobId)){return [pscustomobject]@{ok=$false;error='Unknown Windows Native job id.'}}
     $j=$script:Jobs[$JobId]
@@ -1410,6 +1433,9 @@ function Get-JobStatus([string]$JobId) {
     # disposed Process handle. Export-Job intentionally re-reads status after
     # encoding has finished, so terminal snapshots are resolved first.
     if($j.State -eq 'completed'){
+        if(-not(Test-GuidedStrictBudget $j)){
+            return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
+        }
         Ensure-CompletedJobHistory $j
         if(-not(Test-Path -LiteralPath $j.Output -PathType Leaf) -or (Get-Item -LiteralPath $j.Output).Length -le 0){
             $j.State='failed';$j.Error='Verified output staging file is missing.'
@@ -1500,14 +1526,8 @@ function Get-JobStatus([string]$JobId) {
         # A strict ceiling is an actual *container byte* acceptance gate,
         # not a bitrate prediction. On miss, leave no staged file available
         # to Export-Job; existing user exports are never modified.
-        if($j.State -eq 'completed' -and -not $j.Task -and $j.StrictBudget){
-            $actual=(Get-Item -LiteralPath $j.Output).Length
-            if($actual -gt $j.BudgetCeiling){
-                $j.State='failed'
-                $j.Error='Strict container byte ceiling exceeded: actual '+$actual+
-                    ' bytes > limit '+$j.BudgetCeiling+' bytes. No output exported; retry is not automatic.'
-                Remove-Item -LiteralPath $j.Output -Force -ErrorAction SilentlyContinue
-            }
+        if($j.State -eq 'completed' -and $j.StrictBudget){
+            [void](Test-GuidedStrictBudget $j)
         }
         $p.Dispose()
         if($j.State -eq 'completed'){Ensure-CompletedJobHistory $j}
@@ -1534,10 +1554,31 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     $name=if($SuggestedName){$SuggestedName}else{$j.SuggestedName}
     $dest=Show-NativeSaveFileDialog $filter $ext $name
     if(-not $dest){return [pscustomobject]@{ok=$false;jobId=$JobId;error='Save cancelled.'}}
+    # Native save dialogs are modal: the original status check may be stale
+    # by the time the user chooses a destination.
+    $status=Get-JobStatus $JobId
+    if($status.state -ne 'completed'){throw 'Staged job became invalid while choosing the export destination.'}
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
     $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
-    Copy-Item -LiteralPath $j.Output -Destination $temp -Force
-    Publish-VerifiedOutput $temp $dest
+    try{
+        Copy-Item -LiteralPath $j.Output -Destination $temp -Force
+        if($j.StrictBudget){
+            # The private job can change while the copy is being made.
+            # Re-check source and copied container bytes before publish.
+            $status=Get-JobStatus $JobId
+            if($status.state -ne 'completed'){throw 'Strict staged output changed during export copy.'}
+            $copiedBytes=[long](Get-Item -LiteralPath $temp).Length
+            if($copiedBytes -le 0 -or $copiedBytes -gt [long]$j.BudgetCeiling -or
+                $copiedBytes -ne [long]$status.outputBytes){
+                throw 'Strict copied container bytes exceed ceiling or differ from verified staged output.'
+            }
+        }
+        Publish-VerifiedOutput $temp $dest
+    }finally{
+        if(Test-Path -LiteralPath $temp -PathType Leaf){
+            Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+        }
+    }
     return [pscustomobject]@{ok=$true;jobId=$JobId;bytes=(Get-Item -LiteralPath $dest).Length;path=$dest}
 }
 
