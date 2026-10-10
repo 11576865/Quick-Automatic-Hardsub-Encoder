@@ -202,3 +202,5 @@ This is a lightweight heuristic, not exhaustive scene search, VMAF, grain detect
 两个新增两遍策略暂时**只接受 Windows Native 软件 H.264**；用户选择 H.265、AV1 或其他后端时立即拒绝生成执行计划并解释原因，不隐式换编码器或降级为单遍。视频长、源片复杂时两遍成本可能很高，默认从不启用。
 
 Windows CI 使用实际 Windows Native localhost 桥和 FFmpeg 合成视频执行：两遍成功、严格限额失败（无法导出）以及严格限额成功（多次状态读取仍然有效）。该测试**不是**用户设备上的 NVENC/HDR/VFR、复杂字幕或多小时长片现场验收；这些依然在 #77 FIELD-PENDING。
+
+**证据隔离补充：** 先前 CQ 曲线可能是 Native 首选 NVENC 编码器的样本；主动选择软件 `libx264` 两遍后，该旧曲线不能被用来推断此次正式编码的 SSIM 或速度，执行摘要只保留预算/实际参数信息。图表仍是同一张供观察的 CQ 曲线，并标明其对不同编码器模式不可直接迁移；若要对比正式两遍质量，需独立进行编码输出与相同字幕参考下的验证。正式两遍进度以其实际 pass 计，不使用旧的单遍历史速度估算。

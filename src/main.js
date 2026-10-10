@@ -1234,7 +1234,7 @@ function renderSizeFrontier() {
       Number(plot.selected.lowerQuality).toFixed(5) + '–' +
       Number(plot.selected.upperQuality).toFixed(5) + '</span>' +
       ' · 体积策略 '+escapeHtml($('guidedSizeBudgetPolicy').selectedOptions[0]?.textContent||'快速单遍')+
-      '；CQ 短样质量不能保证正式输出体积或整片质量' +
+      '；该曲线是 CQ 短样观测；较高精度两遍若使用不同软件编码器不沿用该曲线作正式 SSIM 预测' +
       (Number.isFinite(marginal)
         ? ' · 每翻倍视频码率约 +' + Number(marginal).toFixed(4) + ' SSIM'
         : '')+
@@ -4254,7 +4254,8 @@ function updateChosenSummary() {
     return;
   }
 
-  const history = localPredictionForPlan(plan);
+  const history = plan.sizeBudgetPolicy && plan.sizeBudgetPolicy!=='best-effort'
+    ? null : localPredictionForPlan(plan);
   const historyHtml = history
     ? ' <span class="note">本机历史 ' + history.samples + ' 次 · 中位速度 ' +
       history.speed.toFixed(2) + '× realtime · 预计编码阶段约 ' +
@@ -4288,6 +4289,9 @@ function updateChosenSummary() {
       frontierHtml +
       '。规划体积约 ' + formatBytes(plan.plannedBytes) +
       '，预算边界 ' + formatBytes(plan.sizeCeiling) +
+      ' · 来源 '+(plan.budgetSource==='frontier'?'所选曲线目标':'源片倍率')+
+      ' · 预估音频 '+formatBitrate(plan.audioBitRate)+
+      ' · 容器预留 '+formatBytes(plan.containerReserveBytes)+
       (plan.sizeBudgetPolicy==='best-effort'
         ? '。快速单遍目标码率，可能明显超出预算。'
         : plan.sizeBudgetPolicy==='two-pass'
@@ -5671,7 +5675,8 @@ async function runNativeEncode() {
   $('cancelEncodeBtn').classList.remove('hidden');
   $('cancelEncodeBtn').disabled = false;
   $('progressBar').style.width = '1%';
-  const localPrediction = localPredictionForPlan(plan);
+  const localPrediction = plan.sizeBudgetPolicy && plan.sizeBudgetPolicy!=='best-effort'
+    ? null : localPredictionForPlan(plan);
   $('liveEta').textContent = localPrediction
     ? nativePlatformName() + ' 任务已创建 · 本机历史预计编码约 ' +
       formatDuration(localPrediction.etaSeconds) +
@@ -5725,7 +5730,8 @@ async function monitorNativeJob(jobId) {
       const liveSpeed = Number(status.speed || 0);
       const timeSec = Number(status.timeMs || 0) / 1000;
       const currentPlan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
-      const history = localPredictionForPlan(currentPlan);
+      const history = currentPlan?.sizeBudgetPolicy && currentPlan.sizeBudgetPolicy!=='best-effort'
+        ? null : localPredictionForPlan(currentPlan);
       const historySpeed = Number(history?.speed || 0);
       const liveWeight = Math.max(0, Math.min(1, timeSec / 30));
       const predictionSpeed = liveSpeed > 0 && historySpeed > 0
@@ -5774,7 +5780,9 @@ async function monitorNativeJob(jobId) {
         (Number.isFinite(sizeError)
           ? ' · 规划 '+formatBytes(projection.plannedBytes)+
             ' · 体积误差 '+(sizeError>=0?'+':'')+sizeError.toFixed(1)+'%'+
-            (actualBytes>projection.budgetBytes?' · 已超出目标体积上限':' · 未超过目标上限')
+            (projection?.policy==='strict-ceiling'
+              ? ' · 严格字节上限已核验'
+              : actualBytes>projection.budgetBytes?' · 已超出目标体积上限':' · 未超过目标上限')
           : '') +
         ' · packet 扫描 + 完整解码验证通过 · 点击“保存成品”选择保存位置';
       $('encodeBtn').disabled = false;
@@ -5803,7 +5811,9 @@ async function monitorNativeJob(jobId) {
       syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '0%';
-      $('liveEta').textContent = 'Native 压制失败。';
+      $('liveEta').textContent = String(status.error||'').includes('Strict container byte ceiling exceeded')
+        ? '严格预算核验失败：成品容器字节数超出上限；未导出新文件。'
+        : 'Native 压制失败。';
       $('encodeBtn').disabled = false;
       log('Native 压制失败：' + (status.error || status.message || '未知错误'));
       alert('Native 压制失败：' + (status.error || status.message || '未知错误'));
@@ -5984,7 +5994,11 @@ function buildEncodePlan(codec) {
       : Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent))
   );
   const plannedBytes = Math.round(((targetVideoBitrate + audioBitRate) * media.duration / 8) + containerReserveBytes);
-  const frontier = directBudgetBytes > 0 ? currentSizeFrontier(codec) : null;
+  // The CQ curve may have been measured on preferred NVENC, whereas explicit
+  // two-pass is software libx264. Do not carry incompatible sample SSIM into
+  // a software formal encode's chosen-plan quality prediction.
+  const frontier = directBudgetBytes > 0 && executionPolicy.policy==='best-effort'
+    ? currentSizeFrontier(codec) : null;
   const frontierEvaluation = frontier?.evaluateTargetBytes(sizeCeiling) || null;
   const frontierPrediction = frontierEvaluation?.status === 'within-evidence'
     ? frontierEvaluation.prediction
@@ -5999,6 +6013,7 @@ function buildEncodePlan(codec) {
     multiplier,
     sizeCeiling,
     safeBudgetBytes,
+    containerReserveBytes,
     plannedBytes,
     targetVideoBitrate,
     ceilingVideoBitrate,

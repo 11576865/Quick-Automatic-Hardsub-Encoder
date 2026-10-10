@@ -600,3 +600,12 @@ test('guided size budget explicitly records execution policy and byte ceiling',a
  assert.match(main,/totalPasses>1/);
  assert.match(main,/成品超出预算会失败且不可导出/);
 });
+
+test('two-pass software execution cannot inherit CQ/NVENC quality and speed predictions',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/executionPolicy\.policy==='best-effort'\s*\? currentSizeFrontier\(codec\) : null/);
+ assert.match(main,/sizeBudgetPolicy!=='best-effort'/);
+ assert.match(main,/containerReserveBytes,/);
+ assert.match(main,/严格字节上限已核验/);
+ assert.match(main,/Strict container byte ceiling exceeded/);
+});
