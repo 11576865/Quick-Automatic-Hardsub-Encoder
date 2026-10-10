@@ -6,7 +6,8 @@ const number=x=>typeof x==='number'&&Number.isFinite(x)?x:null;
 const near=(a,b)=>Math.abs(a-b)<.003;
 const goodSample=s=>number(s?.start)!==null && number(s?.ssim)!==null &&
   s.ssim>=0 && s.ssim<=1 && number(s?.bitrate)>0 &&
-  number(s?.duration)>0 && number(s?.elapsedSeconds)>=0;
+  number(s?.duration)>0 && number(s?.elapsedSeconds)!==null &&
+  s.elapsedSeconds>=0;
 export function planPairedRefinement({
   frontier,targetBytes,branches,samplePlan,spentSeconds,budgetSeconds,
   hysteresis=.003
@@ -31,6 +32,8 @@ export function planPairedRefinement({
     const candidates=b.testedPoints.filter(p=>{
       const samples=p?.sampleMeasurements;
       return Number.isInteger(p?.crf) && number(p?.sampleBitrate)>0 &&
+        p.codec===b.codec && p.preset===b.preset &&
+        p.sampleFingerprint===samplePlan.fingerprint &&
         Array.isArray(samples)&&samples.length===samplePlan.starts.length &&
         samples.every(goodSample) &&
         samples.every((s,i)=>near(s.start,samplePlan.starts[i]));

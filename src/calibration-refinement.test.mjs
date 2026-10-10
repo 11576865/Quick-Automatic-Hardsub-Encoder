@@ -59,3 +59,14 @@ test('rejects unaffordable, stale, unpaired or malformed data',()=>{
    {start:85,ssim:false,bitrate:1e6,duration:2,elapsedSeconds:1}
  ]},{start:85,originalFingerprint:fingerprint,nextFingerprint:'new'}),null);
 });
+
+test('strict paired observations reject absent elapsed time and mismatched point provenance',()=>{
+ const extra={...A[0],sampleMeasurements:[{
+  start:85,ssim:.95,bitrate:1e6,duration:2,elapsedSeconds:null
+ }]};
+ assert.equal(appendMatchedSceneObservation(A[0],extra,{
+  start:85,originalFingerprint:fingerprint,nextFingerprint:'new'}),null);
+ const argumentsWithStalePoints=inputs(
+  A.map(p=>({...p,sampleFingerprint:'older-plan'})),B);
+ assert.equal(planPairedRefinement(argumentsWithStalePoints).reason,'unmatched-sample-windows');
+});
