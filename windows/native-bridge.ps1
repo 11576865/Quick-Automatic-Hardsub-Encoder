@@ -958,10 +958,73 @@ function Get-PacketStats([string]$File) {
     return [pscustomobject]@{count=$count;bytes=$bytes}
 }
 
+# Low-cost, time-limited decoded scene scan, never a quality measurement.
+function Invoke-SceneRiskProbe($Body) {
+    $o=$Body.options
+    $video=Get-SelectedPath 'video'
+    if(-not $video){throw 'No video selected.'}
+    $start=[double]$o.start
+    $duration=[double]$o.duration
+    if([double]::IsNaN($start) -or $start -lt 0 -or
+        [double]::IsNaN($duration) -or $duration -lt 0.5 -or $duration -gt 3) {
+        throw 'Invalid scene risk scan range.'
+    }
+    $timeout=if($o.timeoutSeconds){[Math]::Max(2,[Math]::Min(8,[double]$o.timeoutSeconds))}else{3}
+    $work=New-BridgeWorkDir 'quick-risk-probe-'
+    try {
+        $from=$start.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
+        $span=$duration.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
+        $stats=Join-Path $work 'risk.stats'
+        $filter='fps=2,scale=160:90:flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file=risk.stats'
+        $watch=[Diagnostics.Stopwatch]::StartNew()
+        $run=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -nostdin -loglevel error -ss '+$from+
+            ' -t '+$span+' -i '+(Quote-NativeArg $video)+
+            ' -an -sn -vf "'+$filter+'" -f null NUL') $work $timeout
+        $watch.Stop()
+        if($run.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $stats)){
+            throw ('Scene risk probe failed: '+[string]$run.StdErr)
+        }
+        $data=@{luma=@();dif=@();low=@();high=@();cut=@()}
+        foreach($line in (Get-Content -LiteralPath $stats)){
+            if($line -notmatch '^lavfi\.(?:signalstats|scd)\.(YAVG|YDIF|YLOW|YHIGH|score)=(?<number>[0-9]+(?:\.[0-9]+)?)$') {continue}
+            $kind=$Matches[1]
+            $value=0.0
+            if(-not [double]::TryParse($Matches['number'],
+                [Globalization.NumberStyles]::Float,
+                [Globalization.CultureInfo]::InvariantCulture,[ref]$value)){continue}
+            switch($kind){
+                'YAVG' {$data.luma+= $value}
+                'YDIF' {$data.dif+= $value}
+                'YLOW' {$data.low+= $value}
+                'YHIGH' {$data.high+= $value}
+                'score' {$data.cut+= $value}
+            }
+        }
+        if(-not $data.luma.Count){throw 'Scene risk signalstats returned no valid frames.'}
+        $meanLuma=($data.luma | Measure-Object -Average).Average
+        $meanDiff=if($data.dif.Count){($data.dif | Measure-Object -Average).Average}else{0.0}
+        $maxScene=if($data.cut.Count){($data.cut | Measure-Object -Maximum).Maximum}else{0.0}
+        $contrast=0.0
+        if($data.low.Count -eq $data.high.Count -and $data.low.Count){
+            $sum=0.0
+            for($i=0;$i -lt $data.low.Count;$i++){$sum+=$data.high[$i]-$data.low[$i]}
+            $contrast=$sum/$data.low.Count
+        }
+        return [pscustomobject]@{
+            ok=$true;requestId=[string]$Body.requestId;sceneRiskOnly=$true
+            start=$start;duration=$duration;frameCount=$data.luma.Count
+            meanLuma=[double]$meanLuma;meanYdif=[double]$meanDiff
+            peakScene=[double]$maxScene;meanContrast=[double]$contrast
+            elapsedSeconds=[double]$watch.Elapsed.TotalSeconds
+        }
+    }finally{Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue}
+}
+
 function Invoke-Sample($Body) {
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     $o=$Body.options
+    if([bool]$o.sceneRiskOnly){return Invoke-SceneRiskProbe $Body}
     $requestedEncoder=[string]$o.encoder
     if($requestedEncoder){
         $allowedEncoders=@()

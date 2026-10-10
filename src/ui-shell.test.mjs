@@ -353,7 +353,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(main, /persistCompressionEvidence/);
   assert.match(main, /currentSourceEvidenceKey/);
   assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
-  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null, outputSize = null\)/);
+  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null, outputSize = null, samplePlan = null\)/);
   assert.match(main, /sampleMeasurements: results\.map/);
   assert.doesNotMatch(main, /reusableSourceQualityByCrf/);
 
@@ -538,4 +538,21 @@ test('guided multi-resolution calibration keeps output scale, SSIM reference and
  assert.match(bridge,/scale='\+\$ReferenceWidth\+':'\+\$ReferenceHeight/);
  assert.match(bridge,/Guided output resolution differs from adopted calibration branch/);
  assert.match(bridge,/scale='\+\$outW\+':'\+\$outH\+':flags=bicubic/);
+});
+
+test('guided calibration shares scene-risk preflight positions across competing branches',async()=>{
+ const [main,bridge]=await Promise.all([
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(main,/preparePairedQualitySamplePlan/);
+ assert.match(main,/const samplePlan=await preparePairedQualitySamplePlan\(\)/);
+ assert.match(main,/calibrateCodecQuality\(codec,target,eachBudget,size,samplePlan\)/);
+ assert.match(main,/calibrateCodecQuality\(codec, target, budgetPerCodec,null,samplePlan\)/);
+ assert.match(main,/samplePlan\?\.starts \|\| qualitySampleStarts\(duration\)/);
+ assert.match(main,/sampleFingerprint:samplePlan\?\.fingerprint/);
+ assert.match(main,/if\(!outputSize\?\.width && !samplePlan\)/);
+ assert.match(bridge,/function Invoke-SceneRiskProbe/);
+ assert.match(bridge,/if\(\[bool\]\$o\.sceneRiskOnly\)/);
+ assert.match(bridge,/signalstats,scdet=threshold=10/);
 });

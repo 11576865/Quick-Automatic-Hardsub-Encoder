@@ -17,6 +17,7 @@ import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './cu
 import { createMultiBranchFrontier, calibrationTimeBudget, calibrationShouldContinue } from './compression-decision.js';
 import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
 import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
+import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from './scene-risk-selection.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -4372,15 +4373,74 @@ function qualitySampleStarts(duration) {
   return distinct.slice(0, 2);
 }
 
-async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, outputSize = null) {
+// Called once per comparative run and shared by ALL competing branches.
+// A preflight failure degrades to a visibly time-stratified plan, not to
+// invented risk measurements. Probes are bounded, and source changes abort.
+async function preparePairedQualitySamplePlan() {
+  const seconds=Math.min(2,Math.max(1.2,Number(state.media?.duration||2)/20));
+  const total=Number(state.media?.duration||0);
+  const seekable=state.nativeInputProbe?.seekable!==false;
+  const spots=sceneProbeStarts(total,seconds);
+  const source=currentSourceEvidenceKey();
+  const subtitleSnapshot=state.activeAssText||state.assText;
+  const probes=[];
+  const limit=calibrationTimeBudget(total);
+  const riskBudget=Math.min(15,Math.max(0,(limit||0)*.20));
+  // At 3s maximum FFmpeg-process time per probe, a tiny source cannot be
+  // required to spend multiple seconds examining scenes before encoding.
+  const maxProbes=seekable && total>=20 ? Math.min(spots.length,Math.floor(riskBudget/3)) : 0;
+  const order=[0,2,4,1,3,5];
+  const started=performance.now();
+  for(const index of order.slice(0,maxProbes)){
+    const start=spots[index];if(start===undefined)continue;
+    if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot)
+      throw Error('场景预检期间输入或字幕已改变，旧证据不可使用。');
+    if((performance.now()-started)/1000+2>riskBudget)break;
+    try{
+      const measured=await requestNativeSample({
+        sceneRiskOnly:true,start,duration:seconds,timeoutSeconds:3
+      },'');
+      if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot)
+        throw Error('场景预检期间输入或字幕已改变，旧证据不可使用。');
+      if(Number(measured?.frameCount)>0)probes.push({
+        start,meanLuma:parseMeasuredNumber(measured.meanLuma),
+        meanYdif:parseMeasuredNumber(measured.meanYdif),
+        peakScene:parseMeasuredNumber(measured.peakScene),
+        meanContrast:parseMeasuredNumber(measured.meanContrast)
+      });
+    }catch(error){
+      if(currentSourceEvidenceKey()!==source)throw error;
+      log('场景风险探测不可用，改用配对的时间分层采样：'+error.message);
+      break;
+    }
+  }
+  const plan=selectPairedSceneWindows({
+    durationSeconds:total,windowSeconds:seconds,probes,
+    subtitleEvents:state.assInfo?.events||[],seekable,maxWindows:3
+  });
+  if(!plan.ok)throw Error('无法生成有界配对采样计划：'+plan.reason);
+  log('配对场景采样 '+plan.fingerprint+
+    ' · 视频复杂度预检 '+plan.probedWindows+'/'+plan.candidateWindows+
+    ' · '+(plan.riskAware?'场景风险辅助选择':'仅时间分层/字幕提示，非完整内容分析'));
+  return {...plan,source,subtitleSnapshot,windowSeconds:seconds};
+}
+
+async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, outputSize = null, samplePlan = null) {
   // Two seconds reduces keyframe/GOP overhead bias compared with the tiny
   // diagnostic benchmark while keeping repeated AV1 calibration tolerable.
   const duration = Math.min(2.0, Math.max(1.2, Number(state.media?.duration || 2.0) / 20));
-  const starts = qualitySampleStarts(duration);
+  const starts = samplePlan?.starts || qualitySampleStarts(duration);
   const originalAss = state.activeAssText || state.assText;
+  if(samplePlan && (samplePlan.source!==currentSourceEvidenceKey() ||
+    samplePlan.subtitleSnapshot!==originalAss)) throw Error('配对采样源证据已失效');
+  if(samplePlan && samplePlan.windowSeconds!==duration)
+    throw Error('配对采样窗口长度不一致');
   const results = [];
 
   for (const start of starts) {
+    if(samplePlan && (samplePlan.source!==currentSourceEvidenceKey() ||
+      samplePlan.subtitleSnapshot!==(state.activeAssText||state.assText)))
+      throw Error('配对采样源证据已失效');
     const sample = await requestNativeSample({
       codec,
       start,
@@ -4396,6 +4456,8 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
       timeoutSeconds:Math.max(2,Math.ceil((calibrationTimeBudget(Number(state.media?.duration||0))||120)/Math.max(1,starts.length)))
     }, shiftAssForPreview(originalAss, start));
 
+    if(samplePlan && samplePlan.source!==currentSourceEvidenceKey())
+      throw Error('Native 样本返回后源已改变，拒绝旧证据');
     const ssim=parseMeasuredQuality(sample?.ssim);
     const measuredDuration=parseMeasuredNumber(sample?.duration);
     const videoBytes=parseMeasuredNumber(sample?.totalVideoBytes);
@@ -4425,6 +4487,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
       : 0,
     encodeSpeed: totalWall > 0 ? totalMedia / totalWall : 0,
     sampleCount: results.length,
+    samplePlanVersion:samplePlan?.version||'legacy-2-timestamps',
+    sampleFingerprint:samplePlan?.fingerprint||'legacy',
+    riskAware:samplePlan?.riskAware===true,
     sampleMeasurements: results.map(item => ({
       start: item.start,
       duration: item.mediaSeconds,
@@ -4436,7 +4501,7 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
 
   // Resized evidence is session-only: the existing persistent evidence key
   // does not carry output resolution and common-reference metric identity.
-  if(!outputSize?.width) await persistCompressionEvidence(qualityEvidenceRecord({
+  if(!outputSize?.width && !samplePlan) await persistCompressionEvidence(qualityEvidenceRecord({
     media: state.media,
     sourceName: state.video?.name || state.media?.sourceName || '',
     sourceSize: Number(state.video?.size || state.media?.size || 0),
@@ -4457,7 +4522,7 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
   return summary;
 }
 
-async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSize=null) {
+async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSize=null, samplePlan=null) {
   const range = qualityCrfRange(codec);
   const preset = profileFor(codec, 'balanced').preset;
   let low = range.min;
@@ -4480,7 +4545,7 @@ async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSi
       (outputSize?.id?' / '+outputSize.id:'')+
       ' · CRF ' + crf +
       ' · 目标 SSIM ' + target.toFixed(3) + '…';
-    const result = await evaluateQualityCandidate(codec, crf, preset, target,outputSize);
+    const result = await evaluateQualityCandidate(codec, crf, preset, target,outputSize,samplePlan);
     tested.set(crf, result);
     if(!outputSize || outputSize.id==='source') {
       if (!state.qualityExplorationPoints[codec]) state.qualityExplorationPoints[codec]=[];
@@ -4582,10 +4647,11 @@ async function runResolutionCalibration() {
   const records=[];
   updateQualityCalibrationControls();
   try{
+    const samplePlan=await preparePairedQualitySamplePlan();
     for(const size of candidates) {
       const id=codec+'@'+size.id;
       try{
-        const evidence=await calibrateCodecQuality(codec,target,eachBudget,size);
+        const evidence=await calibrateCodecQuality(codec,target,eachBudget,size,samplePlan);
         const model=fitRateDistortionModel(evidence.testedPoints||[]);
         if(!model.ok)throw Error('有效实测点不足两个，不能构建体积—质量曲线');
         state.resolutionRateDistortionModels[id]={
@@ -4668,9 +4734,10 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
   refreshBenchmarkEnabled();
 
   try {
+    const samplePlan=await preparePairedQualitySamplePlan();
     for (const codec of codecs) {
       try {
-        state.qualityCalibration[codec] = await calibrateCodecQuality(codec, target, budgetPerCodec);
+        state.qualityCalibration[codec] = await calibrateCodecQuality(codec, target, budgetPerCodec,null,samplePlan);
         const rdModel = fitRateDistortionModel(state.qualityCalibration[codec].testedPoints || []);
         state.rateDistortionModels[codec] = rdModel.ok ? rdModel : null;
         if (rdModel.ok) {

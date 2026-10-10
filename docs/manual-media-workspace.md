@@ -164,3 +164,9 @@ Windows Native 精确短样现对**编码进程**另设超时：超过传入的�
 切换分辨率与编码器都必须明确点击“采用推荐配置”；正式 Windows Guided 输出带对应缩放参数，成品完成前使用 FFprobe 校验视频分辨率是否等于采用的配置。缩放分支的校准证据仅限当前会话，**不得写入原有不含输出尺寸维度的跨会话 CQ 缓存**。
 
 注意：这个 SSIM 是统一参考尺寸的技术代理，不是视觉体验的通用真值；目前还没有真实 720p/1080p 与不同编解码组合的可复现交叉点现场验收，更未覆盖不同帧率或 HDR。两秒短样与软预算可能无法为慢编码器产生两个有效模型点，界面必须解释证据不足而不是外推。
+
+## Scene-stratified paired sample planner (Windows Native, stage P1)
+
+Windows Native guided CQ calibration first runs a **time-limited, decoded low-resolution source-risk probe** on selected timeline regions (FFmpeg signalstats + scene-change metadata). It uses frame-to-frame luma change, scene-change signal, dark-scene luminance and contrast, combined with the ASS subtitle event overlap, to choose **one high-priority window per time stratum**. All compared codec or output-resolution branches use the **same exact sample starts and duration**, captured with `paired-scene-strata-v1` provenance. Unsupported FFmpeg filters, short sources or exhausted cost budget degrade explicitly to deterministic time strata; a missing probe is never counted as a measured low-risk scene.
+
+This is a lightweight heuristic, not exhaustive scene search, VMAF, grain detection, motion vectors or a statistical P10 guarantee. Existing compression evidence records lack a sampling-plan dimension, so the new paired-plan trial results deliberately remain **session-only**, rather than masquerading as reusable fixed-position samples. Single-source CQ evidence collected by other workflows retains its original separate identity. Real difficult-scene inputs and real GPU/long-form acceptance remain pending.

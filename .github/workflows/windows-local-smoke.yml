@@ -202,6 +202,30 @@ jobs:
               (Get-Content -Raw -LiteralPath $ssimLog) -notmatch 'All:[0-9.]+') {
             throw 'Reduced candidate cannot be scored against the original-size reference.'
           }
+      - name: Bounded risk-statistics probe uses decoded video, not encoder predictions
+        shell: powershell
+        run: |
+          $bridge=Get-Content -Raw './windows/native-bridge.ps1'
+          foreach($needed in @('function Invoke-SceneRiskProbe','sceneRiskOnly','signalstats,scdet=threshold=10','metadata=print:file=risk.stats','Invoke-BridgeTool $script:Ffmpeg')) {
+            if(-not $bridge.Contains($needed)){throw "Risk preflight wiring is missing: $needed"}
+          }
+          $work=Join-Path $env:RUNNER_TEMP 'paired-scene-risk'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $source=Join-Path $work 'fixture.mkv'
+          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=4' -c:v libx264 -preset ultrafast $source
+          if($LASTEXITCODE -ne 0){throw 'Risk input fixture failed'}
+          Push-Location $work
+          try {
+            & ffmpeg -hide_banner -nostdin -loglevel error -ss 0 -t 2 -i $source -an -sn -vf 'fps=2,scale=160:90:flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file=risk.stats' -f null NUL
+            if($LASTEXITCODE -ne 0){throw 'Scene analysis FFmpeg filter failed'}
+          }finally{Pop-Location}
+          $stats=Join-Path $work 'risk.stats'
+          if(-not(Test-Path $stats)){throw 'Risk analysis produced no metadata file'}
+          $text=Get-Content -Raw -LiteralPath $stats
+          if($text -notmatch 'lavfi.signalstats.YAVG=[0-9.]+' -or
+             $text -notmatch 'lavfi.signalstats.YDIF=[0-9.]+'){
+            throw 'Risk analysis failed to capture luma and frame-difference evidence'
+          }
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
