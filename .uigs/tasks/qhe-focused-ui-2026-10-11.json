@@ -3,7 +3,7 @@
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
   "status": "PR #99 queued multi-copy feature; browser integration and preparation-race bounded repair pushed; latest-head CI Pending",
-  "current_bounded_work_unit": "PR #99 actual Chromium queue UI rendered; browser smoke first reached completed batch then failed test-only page.evaluate closure previousRuns. Repair passes value explicitly. In addition reserve async batch ownership before media preparation to prevent duplicate runs or competing mode changes.",
+  "current_bounded_work_unit": "PR #99 queue batch prepared synchronously before async media probe; browser scope bug fixed. Extend Windows local smoke path triggers to src/media-workspace.js and src/clip-queue.js for Native-facing UI changes; register clip queue helper as visual capture dependency.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -94,7 +94,7 @@
   "external_validation": {
     "frontend": "previous head failed test JS scope ReferenceError in final queue result assertion; next head Pending",
     "playwright": "first head reached post-batch result check; 390px Chromium queue capture reviewed; full acceptance Pending fix",
-    "windows_smoke": "Pending first queue branch CI",
+    "windows_smoke": "Windows smoke not scheduled on initial queue head due path filter; trigger scope repair submitted; latest-head Windows CI Pending.",
     "uigs": "First latest head succeeded 38140978551; repair head Pending",
     "android_device": "not-run",
     "production_visual_review": "Actual 390px screenshot from Frontend run 38141137190 shows two queue intervals and action controls, no horizontal overflow observed; must still verify next-head"
