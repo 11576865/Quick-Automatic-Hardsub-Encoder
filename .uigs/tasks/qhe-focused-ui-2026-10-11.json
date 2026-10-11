@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "Studio v3 editor-style workbench committed; latest-head CI/visual Pending",
-  "current_bounded_work_unit": "PR #97 screenshot audit revealed major desktop non-hardsub regression: copy/transcode manual editor was mounted beneath narrow source shelf. Reparent the original editor to the central manual slot and add per-mode browser geometry tests.",
+  "status": "Studio v3 merged / exact-head automated CI and Chromium visuals verified / device field validation Pending",
+  "current_bounded_work_unit": "PR #97 merged after correcting transcode/copy editor placement; screenshot evidence confirms all modes use the intended studio composition.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -54,28 +54,37 @@
     {
       "summary": "One bounded UI regression repair: all modes share central editor slot; prevent premature desktop hardsub audio controls; Playwright tests check desktop transcode/copy and phone reachability",
       "head_state": "new validation pending"
+    },
+    {
+      "summary": "Studio v3 source/viewer/inspector architecture and mode-specific central editor fix",
+      "pr": 97,
+      "head": "e5964e9dda37cbbfa77197bba6e192eea694567b",
+      "merge_commit": "a502c7258dc07e81c1722e1ef3e93052e039992d",
+      "frontend_run": 38134035730,
+      "windows_smoke_run": 38134035725,
+      "uigs_run": 38134035779,
+      "visual_artifact_id": 11700645709
     }
   ],
   "next_units": [
-    "Review exact latest-head CI and desktop/mobile browser capture",
-    "Fix actionable regressions as a bounded work unit",
-    "Physical Android, Windows GPU/HDR/long-form acceptance separately Pending"
+    "Test real Android system fonts/safe area/touch and assistive technology on device",
+    "Collect observed UX issues before further layout changes",
+    "Keep GPU/HDR/VFR and long-video field validation under QHE #77"
   ],
-  "branch": "design/qhe-compressor-inspired-workspace-20261011",
-  "pull_request_url": "",
-  "latest_durable_commit": "68b3e9cb854286deedf291e5f87b38e55e76e9fa",
+  "branch": "main",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/97",
+  "latest_durable_commit": "a502c7258dc07e81c1722e1ef3e93052e039992d",
   "external_validation": {
-    "frontend": "PR #97 original head passed; repair head Pending",
-    "playwright": "PR #97 original head passed hardsub geometry only; per-mode repair tests Pending",
-    "windows_smoke": "original head in progress at initial read; repair head Pending",
-    "uigs": "pending",
+    "frontend": "passed exact PR #97 repair head e5964e9d; workflow 38134035730",
+    "playwright": "passed desktop 1280px all three modes, 320px phone reachability, existing responsive matrix; run 38134035730",
+    "windows_smoke": "passed exact repair head; workflow 38134035725 (CI runner, not physical GPU)",
+    "uigs": "passed exact repair head; workflow 38134035779",
     "android_device": "not-run",
-    "production_visual_review": "Original PR #97 actual Chromium screenshot reviewed; copy mode editor collapsed to source shelf. Corrected layout not yet visually verified."
+    "production_visual_review": "reviewed actual Chromium desktop hard-sub, transcode and copy screenshots; repair artifact 11700645709; physical device not tested"
   },
   "blockers": [
-    "PR #97 new repair CI and copy/transcode screenshots Pending",
-    "Physical Android device not tested",
-    "GPU/HDR/VFR long-form #77 Pending"
+    "Physical Android font scaling, accessibility, system safe area and touch remain untested",
+    "Real Windows GPU/HDR/VFR/long-form QHE #77 still FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }
