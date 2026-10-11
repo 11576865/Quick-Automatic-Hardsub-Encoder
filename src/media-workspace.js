@@ -36,7 +36,7 @@ export function mountMediaWorkspace(hooks) {
   <p class="note media-time-format-note">支持 MM:SS.mmm / HH:MM:SS.mmm</p>
   <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="媒体剪辑时间轴">
     <div class="media-waveform-heading">
-      <div><strong>剪辑时间轴</strong><span id="taskWaveformStatus">尚未分析 · 用于选择源素材时间范围；有音频时显示波形，无损剪切额外显示关键帧</span></div>
+      <div><strong>剪辑时间轴</strong><span id="taskWaveformStatus">尚未分析 · 可显示波形和关键帧</span></div>
       <button type="button" id="taskWaveformLoad" class="secondary">分析时间轴</button>
     </div>
     <div class="media-timeline-legend" aria-label="时间轴图例">
@@ -1368,10 +1368,10 @@ export function mountMediaWorkspace(hooks) {
     const title = hardsub ? '硬字幕压制工作区' : transcode ? '纯视频转码工作区' : '视频流复制 / 快速剪辑工作区';
     const eyebrow = hardsub ? 'HARDSUB · PARAMETERS' : transcode ? 'TRANSCODE' : 'STREAM PLAN · COPY';
     const description = hardsub
-      ? '直接控制编码器、质量、帧率、尺寸、滤镜、音轨与封装。执行前仍沿用同一字幕预检与真实 libass 预览门槛。'
+      ? 'ASS 预检与编码参数。'
       : transcode
-        ? '只处理视频、音频与封装；字幕输入不会参与编码链路。所有编码器与画面参数由当前任务显式决定。'
-        : '所选视频流保持 Stream Copy；音频可独立复制、转码或关闭，视频 / 音频 / 软字幕可分别使用完整时间轴或 IN/OUT。';
+        ? '视频与音频编码参数。'
+        : '无损复制与时间范围。';
 
     section.querySelector('#mediaWorkspaceTitle').textContent = title;
     section.querySelector('#mediaWorkspaceEyebrow').textContent = eyebrow;
@@ -1381,19 +1381,19 @@ export function mountMediaWorkspace(hooks) {
 
     const heroSubtitle = document.querySelector('#heroSubtitle');
     if (heroSubtitle) heroSubtitle.textContent = hardsub
-      ? '预检 · 真实预览 · 选方案 · 正式压制'
+      ? '硬字幕 · libass · 编码'
       : transcode
-        ? '媒体检查 · 参数配置 · 试压比较 · 输出验证'
-        : '媒体检查 · 流选择 · 独立时间策略 · 输出验证';
+        ? '视频转码 · 质量 · 输出'
+        : '无损剪切 · 流映射';
 
     const inputHeading = document.querySelector('#inputCard .card-heading h2');
     const inputDeck = document.querySelector('#inputCard .card-heading p');
     if (inputHeading) inputHeading.textContent = hardsub ? '准备硬字幕素材' : transcode ? '准备转码素材' : '准备剪切素材';
     if (inputDeck) inputDeck.textContent = hardsub
-      ? '选择视频、ASS 与可选字体。'
+      ? '视频 · ASS · 字体'
       : transcode
-        ? '选择视频；ASS 与字体不会进入转码链路。'
-        : '选择视频；剪切直接复制压缩数据，不需要 ASS 或字体。';
+        ? '选择视频'
+        : '选择视频 · 不重编码';
 
     for (const id of ['preflightCard','subtitleCard','planCard','encodeCard','taskOverviewRail']) {
       document.querySelector('#'+id)?.classList.toggle('media-mode-suppressed', !hardsub);
@@ -1482,11 +1482,11 @@ export function mountMediaWorkspace(hooks) {
     document.querySelectorAll('.input-ass,.input-font').forEach(el=>el.classList.toggle('hidden',get('operation').value!=='hardsub'));
     section.querySelector('#taskModeHint').textContent=copy
       ? (get('videoRange').value==='trim'
-        ? '视频 Stream Copy：IN 是请求起点，主选视频流决定向前定位的关键帧；音频时间轴和音频编码策略独立。'
-        : '视频保持完整 Stream Copy；IN/OUT 仍可单独作用于音频或软字幕，音频也可以显式转码。')
+        ? '无损剪切：IN 可能提前对齐关键帧；音频可独立处理。'
+        : '视频完整复制；音频与软字幕可单独剪切。')
       : mode==='hardsub'
-        ? '硬字幕分支：字幕、字体与真实 libass 预览属于这一分支；编码完成后与其他任务共享封装、验证和保存出口。'
-        : '纯视频转码分支：时间轴用于选择源素材的转码范围与定位源帧；不是转码前后质量对比。不会要求 ASS，也不会静默替换你选择的编码器。';
+        ? '硬字幕需要 ASS 与 libass 真实预览。'
+        : '纯转码不需要 ASS；不会自动更换编码器。';
     renderContainerDecision(null);
     renderKeyframeLane();
     syncOutputVerificationAvailability();

@@ -131,7 +131,7 @@ app.innerHTML = `
     <span id="runtimeModeBadge" class="runtime-mode-badge">WEB / WASM</span>
     <div class="runtime-mode-copy">
       <strong id="runtimeModeTitle">浏览器后端</strong>
-      <span id="runtimeModeDetail">由当前浏览器读取文件并运行 FFmpeg WebAssembly；单个视频建议不超过 1 GB。</span>
+      <span id="runtimeModeDetail">浏览器 FFmpeg/WASM · 建议 ≤ 1 GB</span>
     </div>
   </section>
 
@@ -2289,21 +2289,21 @@ function renderRuntimeIdentity() {
   if (windowsNative) {
     if (badge) badge.textContent = 'WINDOWS NATIVE';
     if (title) title.textContent = 'Windows 本机后端已连接';
-    if (detail) detail.textContent = '系统 FFmpeg / FFprobe 直接读取本机文件；可使用 CPU 与通过运行探测的 NVIDIA NVENC。刷新页面会继续连接本次 Bridge 会话。';
+    if (detail) detail.textContent = '本机 FFmpeg · NVENC 按运行探测 · 刷新页面会继续连接本次 Bridge 会话。';
     if (kicker) kicker.textContent = 'WINDOWS NATIVE WORKBENCH';
     if (heroTitle) heroTitle.textContent = 'Windows Native';
     if (heroDetail) heroDetail.textContent = 'localhost Bridge 已连接';
   } else if (androidNative) {
     if (badge) badge.textContent = 'ANDROID NATIVE';
     if (title) title.textContent = 'Android 原生后端';
-    if (detail) detail.textContent = '通过 SAF 与 FFmpegKitNext 在设备本地处理；正式任务由原生服务持有。';
+    if (detail) detail.textContent = '设备本地处理 · SAF · 原生任务服务';
     if (kicker) kicker.textContent = 'ANDROID NATIVE WORKBENCH';
     if (heroTitle) heroTitle.textContent = 'Android Native';
     if (heroDetail) heroDetail.textContent = '原生 FFmpegKitNext';
   } else {
     if (badge) badge.textContent = 'WEB / WASM';
     if (title) title.textContent = '浏览器后端';
-    if (detail) detail.textContent = '由当前浏览器读取文件并运行 FFmpeg WebAssembly；单个视频建议不超过 1 GB。';
+    if (detail) detail.textContent = '浏览器 FFmpeg/WASM · 建议 ≤ 1 GB';
     if (kicker) kicker.textContent = 'WEB MEDIA WORKBENCH';
     if (heroTitle) heroTitle.textContent = '浏览器 / WASM';
     if (heroDetail) heroDetail.textContent = '文件留在当前浏览器';
