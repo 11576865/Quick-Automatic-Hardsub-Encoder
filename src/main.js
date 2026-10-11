@@ -1821,6 +1821,7 @@ function detectNativeBackend() {
             state.video = { name: item.name, size: Number(item.size || 0), windowsNative: true };
             state.nativeInputProbe = null;
             invalidateAnalysis({ clearVideoMetadata: true });
+            notifyMediaInfoChanged();
             $('videoMeta').textContent = item.name + ' · ' + formatBytes(Number(item.size || 0)) + ' · Windows Native';
             $('videoMeta').className = '';
             globalThis.NativeHardsub?.probeSelectedVideo?.();
@@ -3131,6 +3132,7 @@ async function recoverWindowsNativeVideoSelection() {
       lastModified: Number(info.lastModified || 0),
       type: 'video/x-windows-native-selection'
     };
+    notifyMediaInfoChanged();
     $('videoMeta').textContent = state.video.name + ' · ' + formatBytes(state.video.size) + ' · Windows Native 已恢复';
     $('videoMeta').className = '';
     if ($('videoWebPicker')) $('videoWebPicker').textContent = '更换视频';

@@ -107,3 +107,15 @@ body.ui-desktop .production-controls #mediaWorkspace {
   min-width:0;
   width:100%;
 }
+
+
+/* Do not show a bright action when no selected and probed video exists. */
+.media-action-dock #taskRun:disabled[data-input-requirement="video"],
+.media-action-dock #taskRun:disabled[data-input-requirement="probe"] {
+  opacity:1;
+  background:#24313c!important;
+  border-color:#3b4d5b!important;
+  color:#becbd6!important;
+  box-shadow:none!important;
+  cursor:not-allowed;
+}
