@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Replace QHE's verbose legacy visual presentation with a focused real Web/Windows/Android shared UI, preserving all task and native functionality.",
-  "status": "Studio v2 merged / CI and Chromium screenshot verified / physical-device Pending",
-  "current_bounded_work_unit": "PR #95 implemented a second, task-first real UI redraw; all final workflows passed; browser screenshot confirmed 320px phone intake and production state.",
+  "status": "Studio v2 plus phone accessibility follow-up merged; physical-device acceptance pending",
+  "current_bounded_work_unit": "PR #96 merged after successful frontend/Playwright and UIGS CI; reviewed 320px normal and 150% text screenshots and visible keyboard file-picker focus.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -37,27 +37,35 @@
       "frontend_run": 38131737590,
       "windows_smoke_run": 38131737587,
       "uigs_run": 38131737624
+    },
+    {
+      "summary": "PR #96 phone readability, duplicate runtime identity and keyboard picker focus; 320px Chromium and 150% root-font browser checks passed",
+      "pr": 96,
+      "head": "39529fd498e7836af82ac8ccd253bacd6736adf8",
+      "merge_commit": "bbc2576ebf4ffef2bf70c806ba17a86e48615b83",
+      "frontend_run": 38132443862,
+      "uigs_run": 38132443859
     }
   ],
   "next_units": [
-    "Physical Android UI accessibility, font scaling, safe-area and touch acceptance",
-    "Check additional screen dimensions and task-onboarding feedback if observed",
-    "Keep physical GPU/long-form HDR/VFR acceptance separately under #77"
+    "Validate physical Android UI with OS font scaling, screen reader, safe areas and touch",
+    "Consider further code changes only for observed UX or accessibility regressions",
+    "Keep physical GPU/HDR/VFR/long-film acceptance under #77"
   ],
   "branch": "main",
-  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/95",
-  "latest_durable_commit": "52963c91fc0c3ec3674c8ce55c316428b3eb5a1d",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/96",
+  "latest_durable_commit": "bbc2576ebf4ffef2bf70c806ba17a86e48615b83",
   "external_validation": {
-    "frontend": "passed #95 38131737590",
-    "playwright": "passed 320–1280px viewport matrix and studio task-first stage checks",
-    "windows_smoke": "passed #95 38131737587 (synthetic runner; not physical GPU)",
-    "uigs": "passed #95 38131737624",
+    "frontend": "passed #96 38132443862",
+    "playwright": "passed #96 320px at normal and 150% root font; focus outline and no horizontal overflow",
+    "windows_smoke": "not rerun on #96 (CSS/test only); earlier #95 smoke passed 38131737587",
+    "uigs": "passed #96 38132443859",
     "android_device": "not-run",
-    "production_visual_review": "actual Chromium desktop 1280px and phone 320px intake/production screenshots reviewed; not physical Android"
+    "production_visual_review": "reviewed actual Chromium 320px normal and 150% root-font + produce screenshots; physical Android not tested"
   },
   "blockers": [
-    "Physical Android device validation not run",
-    "Physical Windows GPU/HDR/long-film #77 remains FIELD-PENDING"
+    "Physical Android OS device tests and accessibility sign-off not run",
+    "Real Windows GPU/HDR/long-film #77 remains FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }
