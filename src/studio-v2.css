@@ -314,3 +314,22 @@ body.ui-phone .card-heading h2 {font-size:1rem;}
 @media (prefers-reduced-motion:reduce) {
   .media-mode-switcher button,.plan-mode-tab {transition:none;}
 }
+
+/* Guided hard-sub has a separate phone Prepare → Produce ownership boundary.
+   Audio/output options are not actionable before that stage. Transcode/Copy
+   keep their single-stage editing workflow unaffected. */
+body.ui-phone[data-media-operation="hardsub"][data-mobile-stage="prepare"] #sharedMediaOutputMount {
+  display:none !important;
+}
+/* Unify source-picker emphasis. The source type remains a readable label,
+   not a competing blue / purple / green CTA palette. */
+body.ui-phone .input-card .file-row .file-picker-trigger,
+body.ui-phone .input-card .file-row .native-picker-button {
+  background:#192c3a !important;
+  border:1px solid rgba(111,190,223,.38) !important;
+  color:#dbf1fa !important;
+}
+body.ui-phone .input-card .file-row .file-picker-trigger:hover,
+body.ui-phone .input-card .file-row .native-picker-button:hover {
+  background:#244356 !important;
+}

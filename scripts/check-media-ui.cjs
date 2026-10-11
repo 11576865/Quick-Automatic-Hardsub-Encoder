@@ -95,6 +95,8 @@ const {spawn}=require('node:child_process');
         throw Error('Installation tutorials obscure the phone task before inputs: '+JSON.stringify(studio));
       if(studio.mode.top>studio.work.top+140)
         throw Error('Mode selection no longer starts the phone task: '+JSON.stringify(studio));
+      if(await viewportPage.locator('#sharedMediaOutputMount').isVisible())
+        throw Error('Unprepared phone hard-sub shows audio/export policy before production stage');
     }else if(width<=1180) {
       if(layout.shell!=='tablet'||layout.gridDisplay!=='grid')
         throw Error('Tablet grid was lost at '+width+': '+JSON.stringify(layout));
@@ -116,6 +118,9 @@ const {spawn}=require('node:child_process');
     document.querySelector('[data-hardsub-strategy="guided"]')?.click();
     ['subtitleCard','planCard','encodeCard'].forEach(id=>document.getElementById(id)?.classList.remove('hidden'));
   });
+  if(!await viewportPage.locator('#sharedMediaOutputMount').isVisible())
+    throw Error('Audio policy was not restored for phone hard-sub production');
+  await viewportPage.screenshot({path:'media-workspace-studio-produce-320.png',fullPage:true});
   const narrowTabs=await viewportPage.locator('#planCard .plan-mode-tab').evaluateAll(nodes=>
     nodes.map(el=>{const r=el.getBoundingClientRect();return {x:r.left,right:r.right,height:r.height,visible:getComputedStyle(el).display!=='none'};}));
   if(narrowTabs.length!==3||narrowTabs.some(x=>!x.visible||x.x<0||x.right>320.5||x.height<44))

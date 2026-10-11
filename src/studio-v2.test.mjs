@@ -13,6 +13,7 @@ test('studio v2 uses real operation controls and defers runtime tutorials',async
   assert.match(css,/body\.ui-phone \.media-mode-switcher\s*\{[^}]*grid-template-columns:repeat\(3,minmax\(0,1fr\)\) !important/);
   assert.match(css,/body\.ui-phone \.mobile-runtime-help\s*\{[^}]*display:block !important/);
   assert.match(css,/body\.ui-phone \.support-rail\s*\{display:none/);
+  assert.match(css,/body\.ui-phone\[data-media-operation="hardsub"\]\[data-mobile-stage="prepare"\] #sharedMediaOutputMount/);
   assert.match(css,/\.preview-wrap\s*\{[^}]*aspect-ratio:16 \/ 9/);
   assert.match(css,/\.encode-card #encodeBtn/);
   for(const [mode,accessibleName,visibleLabel] of [
