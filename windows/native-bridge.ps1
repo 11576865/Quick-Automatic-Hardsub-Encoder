@@ -1310,6 +1310,7 @@ function Start-EncodeJob($Body) {
         Id=$jobId;Work=$work;Output=$output;Progress=$progress;Started=$started
         Duration=[double]$request.expectedDuration;Encoder=$profile.Encoder;Hardware=[bool]$profile.Hardware;ActualStart=0;Task=$null;Request=$request;SourceProbe=$null
         SizeBudgetPolicy=$budgetPolicy.Policy;StrictBudget=[bool]$budgetPolicy.Strict;BudgetCeiling=[long]$budgetPolicy.Ceiling
+        StrictVerifiedHash='';StrictVerifiedWriteTicks=0L;VerifiedOutputDuration=0.0
         Phase=if($budgetPolicy.TwoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
         StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
@@ -1469,9 +1470,29 @@ function Test-GuidedOutputStreams($Job) {
     }
     $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -nostdin -i '+(Quote-NativeArg $Job.Output)+' -map 0:v -map 0:a? -c copy -f null -')
     if($scan.ExitCode -ne 0){throw 'Guided output packet scan failed.'}
+    $Job.VerifiedOutputDuration=$outputDuration
 }
 
-function Test-GuidedStrictBudget($Job) {
+function Get-GuidedContainerFingerprint([string]$Path) {
+    # Stream the file through PowerShell/.NET SHA-256; no whole-file buffering.
+    # Reject a container modified while its fingerprint was being calculated.
+    $before=Get-Item -LiteralPath $Path -ErrorAction Stop
+    if($before.Length -le 0){throw 'Container fingerprint source is empty.'}
+    $hash=(Get-FileHash -LiteralPath $Path -Algorithm SHA256 -ErrorAction Stop).Hash
+    $after=Get-Item -LiteralPath $Path -ErrorAction Stop
+    if($before.Length -ne $after.Length -or
+        $before.LastWriteTimeUtc.Ticks -ne $after.LastWriteTimeUtc.Ticks){
+        throw 'Container changed while computing its fingerprint.'
+    }
+    if(-not $hash){throw 'Container fingerprint is missing.'}
+    return [pscustomobject]@{
+        Hash=[string]$hash
+        Length=[long]$after.Length
+        WriteTicks=[long]$after.LastWriteTimeUtc.Ticks
+    }
+}
+
+function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
     # The completed state is only valid while its private staged *container*
     # stays within the user's explicit ceiling. An earlier successful check
     # cannot authorize a later, modified output or an export copy.
@@ -1481,7 +1502,39 @@ function Test-GuidedStrictBudget($Job) {
     if(Test-Path -LiteralPath $Job.Output -PathType Leaf){
         $actual=[long](Get-Item -LiteralPath $Job.Output).Length
     }
-    if($limit -gt 0 -and $actual -gt 0 -and $actual -le $limit){return $true}
+    if($limit -gt 0 -and $actual -gt 0 -and $actual -le $limit){
+        try{
+            if($CaptureEvidence){
+                # Initial terminal verification: bind the approved staged bytes
+                # to the same content later copied into the user's destination.
+                $fingerprint=Get-GuidedContainerFingerprint $Job.Output
+                if($fingerprint.Length -ne $actual){throw 'Container size changed after byte-ceiling validation.'}
+                $Job.StrictVerifiedHash=$fingerprint.Hash
+                $Job.StrictVerifiedWriteTicks=$fingerprint.WriteTicks
+            }else{
+                if(-not $Job.StrictVerifiedHash){throw 'The completed strict job has no verified content fingerprint.'}
+                $file=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+                # Avoid re-reading a multi-hour movie during every status poll.
+                # Changes to length are handled above; changed write stamps
+                # trigger a cryptographic re-check before retaining completion.
+                if([long]$file.LastWriteTimeUtc.Ticks -ne [long]$Job.StrictVerifiedWriteTicks){
+                    $fingerprint=Get-GuidedContainerFingerprint $Job.Output
+                    if($fingerprint.Hash -ne $Job.StrictVerifiedHash){
+                        throw 'Previously verified staged container content has changed.'
+                    }
+                    $Job.StrictVerifiedWriteTicks=$fingerprint.WriteTicks
+                }
+            }
+            return $true
+        }catch{
+            $Job.State='failed'
+            $Job.Error='Strict container content fingerprint verification failed: '+$_.Exception.Message
+            Remove-Item -LiteralPath $Job.Output -Force -ErrorAction SilentlyContinue
+            Clear-IncompleteJobStaging $Job
+            Write-BridgeLog ('Strict content guard rejected job '+$Job.Id+': '+$Job.Error) 'WARN'
+            return $false
+        }
+    }
     $Job.State='failed'
     $Job.Error=if($actual -gt $limit){
         'Strict container byte ceiling exceeded: actual '+$actual+
@@ -1506,13 +1559,20 @@ function Get-JobStatus([string]$JobId) {
         if(-not(Test-GuidedStrictBudget $j)){
             return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
         }
-        Ensure-CompletedJobHistory $j
         if(-not(Test-Path -LiteralPath $j.Output -PathType Leaf) -or (Get-Item -LiteralPath $j.Output).Length -le 0){
             $j.State='failed';$j.Error='Verified output staging file is missing.'
+            Clear-IncompleteJobStaging $j
             return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
         }
-        $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
-        $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
+        Ensure-CompletedJobHistory $j
+        if(-not $j.Task -and [double]$j.VerifiedOutputDuration -gt 0){
+            # The guided full-output probe already established duration.
+            # Avoid redundant FFprobe launches on long-movie status polls.
+            $outputDuration=[double]$j.VerifiedOutputDuration
+        }else{
+            $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
+            $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
+        }
         return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
@@ -1602,7 +1662,7 @@ function Get-JobStatus([string]$JobId) {
         # not a bitrate prediction. On miss, leave no staged file available
         # to Export-Job; existing user exports are never modified.
         if($j.State -eq 'completed' -and $j.StrictBudget){
-            [void](Test-GuidedStrictBudget $j)
+            [void](Test-GuidedStrictBudget $j $true)
         }
         $p.Dispose()
         Clear-IncompleteJobStaging $j
@@ -1612,8 +1672,14 @@ function Get-JobStatus([string]$JobId) {
         elseif($j.State -eq 'failed'){Write-BridgeLog ("Job "+$JobId+" failed: "+$j.Error) 'ERROR'}
     }
     if($j.State -eq 'completed'){
-        $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
-        $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
+        if(-not $j.Task -and [double]$j.VerifiedOutputDuration -gt 0){
+            # The guided full-output probe already established duration.
+            # Avoid redundant FFprobe launches on long-movie status polls.
+            $outputDuration=[double]$j.VerifiedOutputDuration
+        }else{
+            $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
+            $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
+        }
         return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
@@ -1647,6 +1713,12 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
             if($copiedBytes -le 0 -or $copiedBytes -gt [long]$j.BudgetCeiling -or
                 $copiedBytes -ne [long]$status.outputBytes){
                 throw 'Strict copied container bytes exceed ceiling or differ from verified staged output.'
+            }
+            # Match the approved bytes, not just their length.
+            $copiedFingerprint=Get-GuidedContainerFingerprint $temp
+            if($copiedFingerprint.Length -ne $copiedBytes -or
+                $copiedFingerprint.Hash -ne $j.StrictVerifiedHash){
+                throw 'Strict copied container fingerprint differs from verified staged output.'
             }
         }
         Publish-VerifiedOutput $temp $dest
