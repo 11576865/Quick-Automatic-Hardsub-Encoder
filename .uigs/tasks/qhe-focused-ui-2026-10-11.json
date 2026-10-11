@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "qhe-focused-ui-2026-10-11",
+  "goal": "Replace QHE's verbose legacy visual presentation with a focused real Web/Windows/Android shared UI, preserving all task and native functionality.",
+  "status": "Pending External Validation",
+  "current_bounded_work_unit": "Desktop primary canvas + compact status rail, less static and dynamically restored explanatory copy, manual architecture progressive disclosure, responsive CSS and source-contract test.",
+  "completed_units": [
+    {
+      "summary": "Remove orphan preview modal/mobile tutorial CSS",
+      "pr": 92,
+      "merge_commit": "4a2d473cd3575fb21f67fb2f744bab8df0607055"
+    },
+    {
+      "summary": "Focused workbench layout and concise copy with existing IDs/controls retained",
+      "commit": "8377148ce2cc5e0025748c6dc54ac176beafb5f2"
+    },
+    {
+      "summary": "Shorten runtime re-rendered descriptions and operation-specific hints",
+      "commit": "2ab6146b81399d9daa8933f39f6aaaa267bb45a9"
+    }
+  ],
+  "next_units": [
+    "Review current PR #93 latest-head Frontend, Playwright, Windows smoke, UIGS evidence checks.",
+    "Review desktop and phone screenshots/production visual evidence before claiming full UI acceptance.",
+    "If validation identifies an actionable regression, perform a bounded repair without changing Native process state or safety warnings."
+  ],
+  "branch": "design/focused-media-workbench-20261011",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/93",
+  "latest_durable_commit": "2ab6146b81399d9daa8933f39f6aaaa267bb45a9",
+  "external_validation": {
+    "frontend": "pending",
+    "playwright": "pending",
+    "windows_smoke": "pending",
+    "uigs": "pending",
+    "android_device": "not-run",
+    "production_visual_review": "pending"
+  },
+  "blockers": [
+    "No verified latest-head CI yet",
+    "No production desktop/phone visual sign-off",
+    "Real Windows long-film/GPU field acceptance remains QHE #77"
+  ],
+  "updated_at": "2026-10-11"
+}
