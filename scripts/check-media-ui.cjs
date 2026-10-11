@@ -79,6 +79,22 @@ const {spawn}=require('node:child_process');
       throw Error('Horizontal overflow at '+width+'px: '+JSON.stringify(layout));
     if(width<=640) {
       if(layout.shell!=='phone')throw Error('Phone shell mismatch at '+width+': '+layout.shell);
+      const studio=await viewportPage.evaluate(()=>{
+        const rect=el=>el?.getBoundingClientRect();
+        const mode=document.querySelector('.media-mode-switcher');
+        const help=document.querySelector('.mobile-runtime-help');
+        const work=document.querySelector('.workspace-layout');
+        const nav=[...mode.querySelectorAll('[data-media-mode]')].map(button=>{
+          const r=rect(button);return {text:button.querySelector('strong')?.textContent,pressed:button.getAttribute('aria-pressed'),left:r.left,right:r.right,height:r.height};
+        });
+        return {mode:rect(mode),work:rect(work),help:rect(help),helpVisible:getComputedStyle(help).display!=='none',nav};
+      });
+      if(studio.nav.length!==3||studio.nav.some(btn=>btn.left<0||btn.right>width+.5||btn.height<44))
+        throw Error('Studio phone mode controls are clipped: '+JSON.stringify(studio));
+      if(studio.helpVisible && studio.help.top<studio.work.bottom-3)
+        throw Error('Installation tutorials obscure the phone task before inputs: '+JSON.stringify(studio));
+      if(studio.mode.top>studio.work.top+140)
+        throw Error('Mode selection no longer starts the phone task: '+JSON.stringify(studio));
     }else if(width<=1180) {
       if(layout.shell!=='tablet'||layout.gridDisplay!=='grid')
         throw Error('Tablet grid was lost at '+width+': '+JSON.stringify(layout));
@@ -93,6 +109,8 @@ const {spawn}=require('node:child_process');
     }
   }
   await viewportPage.setViewportSize({width:320,height:720});
+  await viewportPage.waitForFunction(()=>document.documentElement.dataset.uiShell==='phone');
+  await viewportPage.screenshot({path:'media-workspace-studio-intake-320.png',fullPage:true});
   await viewportPage.evaluate(()=>{
     document.body.dataset.mobileStage='produce';
     document.querySelector('[data-hardsub-strategy="guided"]')?.click();
