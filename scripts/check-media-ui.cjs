@@ -187,6 +187,10 @@ const {spawn}=require('node:child_process');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
   await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('[data-hardsub-strategy="guided"]').click();});
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Goal-controlled hardsub exposes parameter controls on mobile');
+  const phonePlanTabs=await page.locator('#planCard .plan-mode-tab').evaluateAll(tabs=>
+    tabs.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width,visible:getComputedStyle(el).display!=='none'};}));
+  if(phonePlanTabs.length!==3||phonePlanTabs.some(t=>!t.visible||t.left<-1||t.right>390.5||t.width<80))
+    throw Error('Phone guided strategy hides or clips one of three goal choices: '+JSON.stringify(phonePlanTabs));
   await page.screenshot({path:'media-workspace-hardsub-goal-mobile.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');

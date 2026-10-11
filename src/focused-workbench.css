@@ -219,3 +219,20 @@ body.ui-phone .card-heading p {display:none;}
 .media-output-audio-details > summary {cursor:pointer;font-size:.7rem;color:var(--focus-muted);}
 .media-output-audio-details > .task-grid {margin-top:11px;}
 body.ui-phone .media-output-core-grid {grid-template-columns:minmax(0,1fr);}
+
+/* Show every guided plan on a phone; no hidden horizontal-only third target. */
+body.ui-phone .plan-mode-tabs {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;
+  overflow:visible;
+}
+body.ui-phone .plan-mode-tab {
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  padding:8px 4px;
+  white-space:normal;
+}
+body.ui-phone .plan-mode-tab strong {font-size:.75rem;}
+body.ui-phone .plan-mode-tab small {display:none;}

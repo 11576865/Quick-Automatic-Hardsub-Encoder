@@ -31,6 +31,7 @@ test('focused workbench preserves native bindings and progressive disclosure', a
   assert.ok(main.indexOf('id="sharedMediaOutputMount"')<main.indexOf('id="encodeCard"'));
   assert.match(css,/body\.ui-desktop \.production-region\s*\{display:grid;grid-template-columns:minmax\(0,1fr\)/);
   assert.match(css,/body\.ui-phone \.hardsub-strategy-switcher/);
+  assert.match(css,/body\.ui-phone \.plan-mode-tabs\s*\{\s*display:grid;\s*grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/);
   assert.match(css,/body\.windows-native-connected\.ui-desktop \.platform-rail\s*\{display:none !important/);
   assert.doesNotMatch(main,/两种方式共享同一份素材、预检、真实 libass 预览与输出验证/);
   assert.doesNotMatch(workspace,/<p class="note media-decision-hint">先决定编码格式/);
