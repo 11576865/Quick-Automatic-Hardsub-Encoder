@@ -154,6 +154,39 @@ try {
   }
   if(-not $exportBlocked){throw 'Failed strict job unexpectedly reached save/export'}
   Write-Host ('Post-completion stage tamper rejected; export blocked: '+$tamperId)
+  # This case stays BELOW the ceiling and keeps the exact byte count. The
+  # earlier size-only checks could not detect a rewritten container here.
+  $equalId=Test-PolicyRun 'strict-ceiling' 5000000 $false 'copy' 2
+  $equalStages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$equalId+"-*"))
+  if($equalStages.Count -ne 1){throw "Expected one equal-size stage for $equalId"}
+  $equalFile=Join-Path $equalStages[0].FullName 'output.mkv'
+  $oldInfo=Get-Item -LiteralPath $equalFile
+  $oldLength=[long]$oldInfo.Length
+  $oldWrite=$oldInfo.LastWriteTimeUtc
+  $stream=[IO.File]::Open($equalFile,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+  try {
+    if($stream.Length -lt 100){throw 'Equal-length fixture is unexpectedly short'}
+    $stream.Position=64
+    $oldByte=$stream.ReadByte()
+    if($oldByte -lt 0){throw 'Cannot read staged byte'}
+    $stream.Position=64
+    $stream.WriteByte([byte]($oldByte -bxor 1))
+  }finally{$stream.Dispose()}
+  [IO.File]::SetLastWriteTimeUtc($equalFile,$oldWrite.AddSeconds(5))
+  if((Get-Item -LiteralPath $equalFile).Length -ne $oldLength){
+    throw 'Equal-length corruption fixture modified the byte count'
+  }
+  $equalStatus=Invoke-RestMethod -Method Get -Uri "$hostUrl/api/jobs/$equalId" -Headers $headers -TimeoutSec 15
+  if($equalStatus.state -ne 'failed' -or $equalStatus.error -notmatch 'fingerprint verification failed'){
+    throw "Equal-length stage tamper escaped strict content guard: $($equalStatus|ConvertTo-Json -Compress)"
+  }
+  if(Test-Path -LiteralPath $equalFile){throw 'Corrupted equal-length strict stage was not removed'}
+  $equalBlocked=$false
+  try {
+    Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$equalId/export" -Headers $headers -ContentType 'application/json' -Body $exportBody -TimeoutSec 15 | Out-Null
+  } catch {$equalBlocked=$true}
+  if(-not $equalBlocked){throw 'Equal-length tampered strict job unexpectedly exported'}
+  Write-Host ('Equal-length stage tamper rejected; export blocked: '+$equalId)
 }finally{
   try{if($bridge -and -not $bridge.HasExited){Stop-Process -Id $bridge.Id -Force}}catch{}
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue

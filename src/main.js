@@ -5797,7 +5797,7 @@ async function monitorNativeJob(jobId) {
               ? ' · 严格字节上限已核验'
               : actualBytes>projection.budgetBytes?' · 已超出目标体积上限':' · 未超过目标上限')
           : '') +
-        ' · packet 扫描 + 完整解码验证通过 · 点击“保存成品”选择保存位置';
+        ' · 流结构与 packet 完整性检查通过（未进行完整逐帧解码） · 点击“保存成品”选择保存位置';
       $('encodeBtn').disabled = false;
       $('encodeBtn').textContent = '保存成品';
       loadLocalBenchmarkHistory();
