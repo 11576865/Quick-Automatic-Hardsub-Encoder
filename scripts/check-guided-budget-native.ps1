@@ -4,7 +4,7 @@ $ErrorActionPreference='Stop'
 $work=Join-Path $env:RUNNER_TEMP ('guided-budget-policy-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work -Force | Out-Null
 $source=Join-Path $work 'input.mkv'
-& ffmpeg -hide_banner -nostdin -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=2' -c:v ffv1 $source
+& ffmpeg -hide_banner -nostdin -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=2' -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=2' -f lavfi -i 'sine=frequency=880:sample_rate=48000:duration=2' -map 0:v -map 1:a -map 2:a -c:v ffv1 -c:a pcm_s16le -shortest $source
 if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $source)){throw 'Guided native fixture failed'}
 $port=8897
 $hostUrl="http://127.0.0.1:$port"
@@ -40,12 +40,12 @@ try {
     if(Test-Path $stderr){Get-Content -Raw $stderr|Write-Host}
     throw 'Guided bridge failed to start'
   }
-  function Test-PolicyRun([string]$policy,[long]$ceiling,[bool]$shouldFail){
+  function Test-PolicyRun([string]$policy,[long]$ceiling,[bool]$shouldFail,[string]$audioMode='none',[int]$audioTracks=0){
     $body=@{
       request=@{codec='h264';mode='budget-rate';preset='medium';crf=23
         targetVideoBitrate=350000;sizeBudgetPolicy=$policy;sizeCeilingBytes=$ceiling
         outputWidth=0;outputHeight=0;expectedDuration=2.0
-        audio='none';outputFormat='matroska';outputExtension='mkv'
+        audio=$audioMode;expectedAudioTracks=$audioTracks;outputFormat='matroska';outputExtension='mkv'
         suggestedName="guided-$policy.mkv"}
       assText=$subtitle
     }|ConvertTo-Json -Depth 8 -Compress
@@ -82,9 +82,10 @@ try {
     if(-not $seenPass2){throw "$policy second-pass status was never observed"}
     return [string]$started.jobId
   }
-  Test-PolicyRun 'two-pass' 0 $false | Out-Null
+  # Real two-pass remux must preserve both selected source audio tracks.
+  Test-PolicyRun 'two-pass' 0 $false 'copy' 2 | Out-Null
   Test-PolicyRun 'strict-ceiling' 1024 $true | Out-Null
-  $tamperId=Test-PolicyRun 'strict-ceiling' 5000000 $false
+  $tamperId=Test-PolicyRun 'strict-ceiling' 5000000 $false 'copy' 2
   # A prior completed status is NOT authorization to export an arbitrarily
   # modified staged file. Enlarge it after success, then re-query and export.
   $stages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$tamperId+"-*"))
