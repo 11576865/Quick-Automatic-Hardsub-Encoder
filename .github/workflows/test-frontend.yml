@@ -52,6 +52,7 @@ jobs:
       - run: node --test src/transcode-curves.test.mjs src/transcode-calibration-panel.test.mjs
       - run: node --test src/native-job-monitor.test.mjs
       - run: node src/ui-shell.test.mjs
+      - run: node --test src/studio-v2.test.mjs
       - run: node src/uigs-visual-capture.test.mjs
       - run: node --test src/media-workspace-ui.test.mjs
       - run: node --test src/guided-audio-wiring.test.mjs

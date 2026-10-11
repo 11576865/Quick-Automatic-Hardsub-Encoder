@@ -1,0 +1,335 @@
+/* QHE Studio v2: application UI, not a static visual concept.
+   The source, plan, and encode modules retain their existing IDs/state owner. */
+:root {
+  --studio-ink: #eaf1fa;
+  --studio-subtle: #97a8ba;
+  --studio-surface: #101923;
+  --studio-deep: #090f17;
+  --studio-edge: rgba(161,190,220,.17);
+  --studio-accent: #6fc9e7;
+}
+body {background:var(--studio-deep);color:var(--studio-ink);}
+.app-shell {width:min(1488px,calc(100% - 36px));padding-top:13px;}
+.app-header {
+  position:relative;
+  padding:17px 21px 12px;
+  border:0;
+  border-bottom:1px solid var(--studio-edge);
+  border-radius:0;
+  background:transparent;
+}
+.app-header-main {gap:16px;}
+.app-mark {
+  width:39px;height:39px;
+  border-radius:12px;
+  color:#07171b;
+  background:linear-gradient(145deg,#c2f8ed,#5cbbd7);
+  font-weight:900;
+}
+#runtimeKicker {color:var(--studio-accent);font-size:.61rem;letter-spacing:.13em;}
+#runtimeWorkbenchTitle {
+  font-size:clamp(1.42rem,2vw,1.92rem);
+  font-weight:760;
+  letter-spacing:-.045em;
+  color:var(--studio-ink);
+}
+.app-header .hero-subtitle {margin-top:8px;font-size:.71rem;color:var(--studio-subtle);}
+.app-header .workflow-strip {
+  margin-top:16px;
+  padding-top:11px;
+  border-top:1px solid var(--studio-edge);
+  gap:10px;
+}
+.app-header .workflow-strip span {font-size:.68rem;opacity:.83;}
+.hero-state {border:1px solid var(--studio-edge);background:#101b25;box-shadow:none;}
+.runtime-mode-banner {
+  border:0;
+  border-radius:0;
+  border-bottom:1px solid var(--studio-edge);
+  background:transparent;
+  margin:0 0 17px;
+  padding:10px 5px;
+}
+.runtime-mode-badge {border-radius:6px;}
+/* Workbench modules: quieter surfaces and stronger typographic hierarchy. */
+.card {
+  border:1px solid var(--studio-edge);
+  border-radius:11px;
+  background:var(--studio-surface);
+  box-shadow:none;
+}
+.card-heading {gap:12px;margin-bottom:15px;}
+.card-heading h2,
+.hardsub-control-head h2 {
+  font-size:1.1rem;
+  letter-spacing:-.028em;
+  font-weight:740;
+  color:var(--studio-ink);
+}
+.card-heading p {font-size:.68rem;color:var(--studio-subtle);}
+.step-no {
+  width:26px;height:26px;min-width:26px;
+  background:#1d2e3b;
+  color:#9bddf0;
+  border-radius:6px;
+  font-size:.62rem;
+}
+.media-mode-switcher {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;
+  padding:4px;
+  margin:0 0 12px;
+  border:1px solid var(--studio-edge);
+  border-radius:9px;
+  background:#101923;
+}
+.media-mode-switcher button {
+  min-height:56px;
+  border:1px solid transparent;
+  border-radius:7px;
+  padding:8px 13px;
+  background:transparent;
+  gap:9px;
+}
+.media-mode-switcher button[aria-pressed="true"] {
+  border-color:rgba(107,203,232,.35);
+  background:#213546;
+  box-shadow:inset 0 -2px 0 var(--studio-accent);
+}
+.media-mode-switcher .media-mode-index {
+  width:30px;height:30px;
+  background:#182633;
+  border:0;
+  border-radius:6px;
+  font-size:.55rem;
+}
+.media-mode-switcher strong {font-weight:720;font-size:.8rem;}
+.media-mode-switcher small {font-size:.61rem;}
+.workflow-main {gap:11px;}
+.setup-region,.production-region,.production-controls {gap:11px;}
+.input-card {padding:18px;}
+.input-card > .grid.two {gap:0;}
+.input-card .file-row {
+  position:relative;
+  min-height:87px;
+  padding:12px 15px;
+  border-radius:0;
+  border:0;
+  border-bottom:1px solid var(--studio-edge);
+  background:transparent;
+}
+.input-card .file-row:nth-child(odd) {border-right:1px solid var(--studio-edge);}
+.input-card .file-row label:not(.file-picker-trigger):not(.font-persist-check) {
+  font-size:.7rem;
+  color:var(--studio-subtle);
+}
+.input-card .file-picker-trigger,.input-card .native-picker-button {
+  background:#1a2b39;
+  border:1px solid rgba(117,170,203,.35);
+  color:#dbedf8;
+  border-radius:6px;
+  padding-inline:10px;
+}
+.input-card .file-row small {
+  color:#a7b9ca;
+  font-size:.66rem;
+  overflow-wrap:anywhere;
+}
+.input-card .action-row {margin-top:16px;}
+.input-card #analyze {min-width:188px;min-height:45px;font-size:.79rem;}
+.input-card .input-engine #backendSummary {font-size:.67rem;line-height:1.6;}
+.env-card {border:0;border-bottom:1px solid var(--studio-edge);background:transparent;padding:0 11px;}
+.preflight-card {background:#111e28;}
+.preview-card {
+  padding:16px 17px;
+  border-color:rgba(108,191,218,.3);
+  background:#111b25;
+}
+.preview-card .card-heading {margin-bottom:12px;}
+.preview-wrap {
+  width:100%;max-width:none;
+  min-height:0;
+  aspect-ratio:16 / 9;
+  border-radius:7px;
+  background:#050a10;
+  overflow:hidden;
+}
+.preview-placeholder {
+  min-height:0;
+  width:100%;height:100%;
+  display:grid;place-items:center;
+  color:#768fa3;
+  font-size:.78rem;
+  background:radial-gradient(ellipse at 50% 40%,#111c27,#05090e 72%);
+}
+.preview-sample-rail {min-width:0;}
+.hardsub-control-deck {padding:12px 15px;background:#111a24;}
+.hardsub-control-head {align-items:center;}
+.hardsub-control-head p {display:none;}
+.hardsub-control-badge {display:none;}
+.hardsub-strategy-switcher {gap:7px;}
+.hardsub-strategy-switcher button {
+  min-height:54px;
+  padding:10px 14px;
+  border-radius:7px;
+  background:#14232e;
+}
+.hardsub-strategy-switcher strong {font-size:.83rem;}
+.hardsub-strategy-switcher small {font-size:.61rem;}
+.hardsub-strategy-kicker {display:none;}
+.plan-card {padding:18px 17px;}
+.plan-mode-tabs {gap:0;padding:3px;background:#0c151e;border-radius:8px;}
+.plan-mode-tab {
+  min-height:47px;
+  padding:8px 12px;
+  border-radius:6px;
+}
+.plan-mode-tab strong {font-size:.8rem;}
+.plan-mode-tab small {display:none;}
+.plan-mode-tab[aria-pressed="true"],.plan-mode-tab.selected {
+  background:#223747;
+  box-shadow:inset 0 -2px 0 #75cde6;
+}
+.plan-controls {gap:12px;}
+.plan-mode-panel {padding-block:10px;}
+.plan-slider-head {margin-bottom:11px;}
+.plan-slider-head strong {font-size:.83rem;}
+#quickPresetDetail,#qualityTargetDetail,#sizeBudgetDetail {font-size:.72rem;}
+#sourceAnchor,#chosenSummary {
+  padding:9px 11px;
+  border-left:2px solid #497c9a;
+  background:#0b1520;
+  border-radius:0 5px 5px 0;
+}
+.media-output-policy {border-color:var(--studio-edge);background:#111b24;}
+.media-output-policy-heading {gap:6px;}
+.media-output-core-grid {gap:12px;}
+.encode-card {
+  position:relative;
+  padding:17px;
+  border-color:rgba(93,184,142,.34);
+  background:#10211e;
+}
+.encode-card .card-heading {margin-bottom:6px;}
+.encode-card #liveEta {font-size:.71rem;line-height:1.4;}
+.encode-card #encodeBtn {
+  min-height:50px;
+  border-radius:7px;
+  font-weight:780;
+  box-shadow:none;
+}
+.encode-card .progress {height:7px;border-radius:6px;}
+.task-overview-card {padding:15px;}
+.task-overview-head h2 {font-size:.9rem;font-weight:740;}
+.task-overview-group {border-top:1px solid var(--studio-edge);padding-block:12px;}
+.task-overview-group h3 {font-size:.64rem;letter-spacing:.09em;}
+.task-overview-group dd {font-size:.71rem;}
+.support-rail {gap:12px;}
+.platform-rail {gap:7px;}
+.platform-rail-heading {padding:0 2px;}
+.platform-rail-heading h2 {font-size:.72rem;letter-spacing:.04em;color:var(--studio-subtle);}
+.platform-rail .platform-card,.platform-rail .app-card {padding:12px;border-radius:8px;}
+.platform-rail .platform-actions > * {min-height:39px;}
+.log-card {border-color:var(--studio-edge);background:transparent;}
+/* On phones: first show the task and its real actions, tutorials are still
+   present but no longer delay access to the mode and video pickers. */
+body.ui-phone .app-shell {width:100%;padding:0 12px 24px;}
+body.ui-phone .app-header {padding:12px 4px 9px;border-radius:0;}
+body.ui-phone #runtimeWorkbenchTitle {font-size:1.14rem;}
+body.ui-phone .app-mark {width:31px;height:31px;border-radius:8px;}
+body.ui-phone .runtime-mode-banner {margin:0 0 10px;min-height:33px;padding:7px 4px;}
+body.ui-phone .workspace-layout {
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr);
+  grid-template-areas:"main";
+  gap:10px;
+  margin-top:0;
+}
+body.ui-phone .workflow-main {grid-area:main;gap:9px;}
+body.ui-phone .support-rail {display:none;}
+body.ui-phone .mobile-runtime-help {
+  display:block !important;
+  margin:16px 0 0;
+  border:1px solid var(--studio-edge);
+  background:#0d1821;
+}
+body.ui-phone .media-mode-switcher {
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:3px;
+  margin:0 0 7px;
+  padding:3px;
+}
+body.ui-phone .media-mode-switcher button {
+  min-width:0;
+  min-height:49px;
+  padding:8px 4px;
+  display:flex;
+  justify-content:center;
+  text-align:center;
+  border-radius:6px;
+}
+body.ui-phone .media-mode-switcher .media-mode-index,
+body.ui-phone .media-mode-switcher small {display:none;}
+body.ui-phone .media-mode-switcher strong {font-size:.85rem;white-space:nowrap;}
+body.ui-phone .input-card,
+body.ui-phone .preview-card,
+body.ui-phone .plan-card,
+body.ui-phone .encode-card {padding:12px;}
+body.ui-phone .input-card .file-row {
+  border:0;
+  border-bottom:1px solid var(--studio-edge);
+  min-height:0;
+  padding:11px 3px;
+}
+body.ui-phone .input-card .file-row:nth-child(odd){border-right:0;}
+body.ui-phone .input-card > .grid.two {grid-template-columns:minmax(0,1fr) !important;}
+body.ui-phone .input-card #analyze {width:100%;min-height:46px;}
+body.ui-phone .preview-wrap {aspect-ratio:16/10;min-height:160px;}
+body.ui-phone .preview-placeholder {font-size:.7rem;padding:12px;}
+body.ui-phone .hardsub-control-deck {padding:12px;}
+body.ui-phone .hardsub-strategy-switcher {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+body.ui-phone .hardsub-strategy-switcher button {min-height:52px;padding:8px;}
+body.ui-phone .plan-mode-tabs {
+  display:grid !important;
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  gap:2px;
+}
+body.ui-phone .plan-mode-tab {min-height:46px;padding:8px 2px;}
+body.ui-phone .plan-mode-tab strong {font-size:.75rem;}
+body.ui-phone .encode-card #encodeBtn {width:100%;min-height:50px;}
+body.ui-phone .card-heading h2 {font-size:1rem;}
+@media (max-width:350px) {
+  body.ui-phone .app-shell {padding-inline:8px;}
+  body.ui-phone .input-card,
+  body.ui-phone .plan-card,
+  body.ui-phone .preview-card,
+  body.ui-phone .encode-card {padding:10px;}
+  body.ui-phone .media-mode-switcher button {min-height:48px;}
+  body.ui-phone .plan-mode-tab strong {font-size:.7rem;}
+}
+@media (prefers-reduced-motion:reduce) {
+  .media-mode-switcher button,.plan-mode-tab {transition:none;}
+}
+
+/* Guided hard-sub has a separate phone Prepare → Produce ownership boundary.
+   Audio/output options are not actionable before that stage. Transcode/Copy
+   keep their single-stage editing workflow unaffected. */
+body.ui-phone[data-media-operation="hardsub"][data-mobile-stage="prepare"] #sharedMediaOutputMount {
+  display:none !important;
+}
+/* Unify source-picker emphasis. The source type remains a readable label,
+   not a competing blue / purple / green CTA palette. */
+body.ui-phone .input-card .file-row .file-picker-trigger,
+body.ui-phone .input-card .file-row .native-picker-button {
+  background:#192c3a !important;
+  border:1px solid rgba(111,190,223,.38) !important;
+  color:#dbf1fa !important;
+}
+body.ui-phone .input-card .file-row .file-picker-trigger:hover,
+body.ui-phone .input-card .file-row .native-picker-button:hover {
+  background:#244356 !important;
+}

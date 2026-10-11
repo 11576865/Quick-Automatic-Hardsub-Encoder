@@ -3,6 +3,7 @@ import { mountMediaWorkspace } from './media-workspace.js';
 import { outputFileName, resolveOutputContainer } from './media-container.js';
 import './style.css';
 import './focused-workbench.css';
+import './studio-v2.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
@@ -512,6 +513,13 @@ app.innerHTML = `
     </div>
   </div>
 </div>`;
+
+// Runtime tutorials are a secondary route, not a full-screen obstacle
+// before users can even reach video/ASS selection on a narrow phone.
+// Move the same DOM node without duplicating controls or their event owners.
+const runtimeHelp = app.querySelector('.mobile-runtime-help');
+const workArea = app.querySelector('.workspace-layout');
+if (runtimeHelp && workArea) workArea.after(runtimeHelp);
 
 const $ = id => document.getElementById(id);
 
