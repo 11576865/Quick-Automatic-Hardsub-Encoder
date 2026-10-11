@@ -1580,6 +1580,7 @@ export function mountMediaWorkspace(hooks) {
 
   for (const button of modeButtons) {
     button.addEventListener('click', () => {
+      if(busy||hooks.busy()||clipBatchRunning)return;
       const nextMode=button.dataset.mediaMode;
       if(get('operation').value!==nextMode)markCompletedAsPrevious('operation');
       get('operation').value = nextMode;
@@ -1678,6 +1679,118 @@ export function mountMediaWorkspace(hooks) {
     renderPlanSummary(task);
     return {task,media};
   };
+  // Queue export reuses the existing compile/validate/run/save hooks. Never
+  // launch the next Native job while a save dialog for this job is pending.
+  const saveQueuedResult=async result=>{
+    let listener=null;
+    const nativeOutcome=result.jobId?new Promise((resolve,reject)=>{
+      listener=event=>{
+        const data=event.detail||{};
+        if(data.jobId!==result.jobId)return;
+        window.removeEventListener('quick-hardsub-native-export-result',listener);
+        listener=null;
+        if(data.ok)resolve(data);
+        else reject(Error(data.error||'本机导出未完成'));
+      };
+      window.addEventListener('quick-hardsub-native-export-result',listener);
+    }):null;
+    try{
+      const saved=await Promise.resolve(hooks.save(result));
+      if(saved?.ok===false)throw Error(saved.error||'保存失败');
+      if(saved?.pending){
+        if(!nativeOutcome)throw Error('无法确认成品保存完成，批量任务已暂停');
+        await nativeOutcome;
+      }
+    }finally{
+      if(listener)window.removeEventListener('quick-hardsub-native-export-result',listener);
+    }
+  };
+  section.querySelector('#taskStopClips').onclick=()=>{
+    if(!clipBatchRunning||clipBatchStopRequested)return;
+    clipBatchStopRequested=true;
+    showClipMessage('停止请求已记录；若已打开系统保存对话框，请先完成或取消该对话框。');
+    if(clipBatchCurrent?.state==='running')hooks.cancel();
+    syncClipQueue();
+  };
+  section.querySelector('#taskExportClips').onclick=async()=>{
+    if(clipBatchRunning||busy||hooks.busy())return;
+    let current=null,phase='prepare';
+    try{
+      if(!clips.length)throw Error('请先加入至少一个片段');
+      if(clipSourceKey!==clipSource()||!clipSource())throw Error('视频已变化，请重新建立片段列表');
+      if(!clipMedia())throw Error('请先读取视频参数');
+      const settings=read();
+      validateQueuedCopySettings(settings);
+      if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
+        throw Error('先保存或处理上一任务的成品，避免批量剪切覆盖未保存的结果');
+      const media=await hooks.prepare('copy');
+      if(!media)throw Error('未能读取当前视频参数');
+      // Validate all pending ranges before running the first irreversible export.
+      const pending=clips.map((clip,index)=>({clip,index}))
+        .filter(({clip})=>clip.state!=='saved');
+      const tasks=pending.map(({clip,index})=>{
+        const raw={...settings,start:clip.startText,end:clip.endText};
+        return {clip,index,task:compileTask(raw,media)};
+      });
+      if(!tasks.length){showClipMessage('全部片段已导出。');syncClipQueue();return;}
+      for(const {task} of tasks)await hooks.validate?.(task);
+      busy=true;clipBatchRunning=true;clipBatchStopRequested=false;
+      hooks.setBusy(true);
+      for(const element of form.elements)element.disabled=true;
+      for(const button of modeButtons)button.disabled=true;
+      section.querySelector('#taskStopClips').disabled=false;
+      setTaskState('preparing');
+      syncClipQueue();
+      for(const item of tasks){
+        if(clipBatchStopRequested)break;
+        current=item;clipBatchCurrent=item.clip;phase='run';
+        item.clip.state='running';
+        activeTask=item.task;taskStartedAt=performance.now();
+        section.querySelector('#taskProgress').value=0;
+        section.querySelector('#taskPercent').textContent='0%';
+        showClipMessage('正在处理片段 '+(item.index+1)+' / '+clips.length+'：'+item.clip.startText+' → '+item.clip.endText);
+        setTaskState('encoding');syncClipQueue();
+        const result=await hooks.run(item.task,media,(fraction,message,meta)=>updateTaskProgress(fraction,message,meta));
+        if(!result?.verified)throw Error('该片段尚未通过成品验证');
+        if(clipBatchStopRequested)break;
+        // The output is unique even for repeated same-source clips.
+        completed={...result,name:clipOutputName(result.name,item.index+1)};
+        completedStale=false;lastReport=null;
+        section.querySelector('#taskProgress').value=1;
+        section.querySelector('#taskPercent').textContent='100%';
+        setTaskState('verified');
+        phase='save';item.clip.state='saving';syncClipQueue();
+        showClipMessage('片段 '+(item.index+1)+' 已完成，正在分别保存成品…');
+        setTaskState('saving');
+        await saveQueuedResult(completed);
+        item.clip.state='saved';
+        setTaskState('saved');
+        showClipMessage('已导出 '+clips.filter(c=>c.state==='saved').length+' / '+clips.length+' 段。');
+        syncClipQueue();
+      }
+      if(clipBatchStopRequested){
+        showClipMessage('批量任务已停止；已成功保存的片段仍然保留。');
+        if(!completed||section.dataset.taskState==='encoding')setTaskState('idle');
+      }else if(clips.every(c=>c.state==='saved')){
+        showClipMessage('全部 '+clips.length+' 个独立片段已导出。实际无损起点可能按关键帧调整。');
+      }
+    }catch(err){
+      if(current){
+        current.clip.state='failed';
+        setTaskState(phase==='save'?'save_failed':isCancellationError(err)?'idle':'failed');
+      }
+      showClipMessage('片段 '+(current?current.index+1:'队列')+' 未完成：'+err.message+'。已导出的片段不会撤销；可重试未完成片段。');
+      hooks.log?.(err.stack||err.message);
+    }finally{
+      clipBatchCurrent=null;clipBatchRunning=false;clipBatchStopRequested=false;
+      busy=false;hooks.setBusy(false);
+      for(const element of form.elements)element.disabled=false;
+      for(const button of modeButtons)button.disabled=false;
+      section.querySelector('#taskCancel').disabled=true;
+      updateMode();updateRate();syncTaskActions();syncClipQueue();
+    }
+  };
+
   section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('当前方案验证通过，可以直接开始；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};
   section.querySelector('#taskSave').onclick=async()=>{
