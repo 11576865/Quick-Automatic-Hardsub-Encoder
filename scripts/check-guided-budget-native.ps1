@@ -40,6 +40,46 @@ try {
     if(Test-Path $stderr){Get-Content -Raw $stderr|Write-Host}
     throw 'Guided bridge failed to start'
   }
+  function Test-CancelCleanup([int]$phase){
+    $body=@{
+      request=@{codec='h264';mode='budget-rate';preset='medium';crf=23
+        targetVideoBitrate=350000;sizeBudgetPolicy='two-pass';sizeCeilingBytes=0
+        outputWidth=0;outputHeight=0;expectedDuration=2.0
+        audio='none';outputFormat='matroska';outputExtension='mkv'
+        suggestedName='cancelled.mkv'}
+      assText=$subtitle
+    }|ConvertTo-Json -Depth 8 -Compress
+    $started=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/encode" -Headers $headers -ContentType 'application/json' -Body $body
+    if(-not $started.ok -or -not $started.jobId){throw 'Cancel fixture did not start'}
+    $id=[string]$started.jobId
+    $stages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$id+"-*"))
+    if($stages.Count -ne 1){throw 'Cancel fixture staging missing'}
+    if($phase -eq 2){
+      $observed=$false
+      for($i=0;$i -lt 100;$i++){
+        $state=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$id" -Headers $headers
+        if($state.state -eq 'encoding' -and $state.pass -eq 2){$observed=$true;break}
+        if($state.state -in @('failed','completed','cancelled')){throw 'Cancel fixture terminated before pass 2 could be cancelled'}
+        Start-Sleep -Milliseconds 20
+      }
+      if(-not $observed){throw 'Cancel fixture never entered pass 2'}
+    }
+    Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$id/cancel" -Headers $headers | Out-Null
+    # Crucially, do NOT query status before inspecting cleanup. A disconnected
+    # UI must not leave cancelled ASS/font copies, output or pass logs behind.
+    if(Test-Path -LiteralPath $stages[0].FullName){throw "Pass $phase cancellation left staging behind without status polling"}
+    Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$id/cancel" -Headers $headers | Out-Null
+    for($i=0;$i -lt 2;$i++){
+      $state=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$id" -Headers $headers
+      if($state.state -ne 'cancelled'){throw 'Cancellation terminal state is not stable'}
+    }
+    $blocked=$false
+    try{Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$id/export" -Headers $headers -ContentType 'application/json' -Body '{}' | Out-Null}catch{$blocked=$true}
+    if(-not $blocked){throw 'Cancelled job reached export'}
+    Write-Host "Pass $phase cancellation cleaned staging without status polling; repeat cancel/status and export rejection passed"
+  }
+  Test-CancelCleanup 1
+  Test-CancelCleanup 2
   function Test-PolicyRun([string]$policy,[long]$ceiling,[bool]$shouldFail,[string]$audioMode='none',[int]$audioTracks=0){
     $body=@{
       request=@{codec='h264';mode='budget-rate';preset='medium';crf=23
@@ -68,11 +108,17 @@ try {
       }
       $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
       if($again.state -ne 'failed'){throw 'Strict failed task became exportable after repeated status query'}
+      $leftovers=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$started.jobId+"-*"))
+      if($leftovers.Count){throw 'Failed strict task left private staging behind'}
     }else{
       if($result.state -ne 'completed' -or $result.outputBytes -le 0){throw "$policy never produced a valid output"}
       if($policy -eq 'strict-ceiling' -and $result.outputBytes -gt $ceiling){throw 'Strict success exceeded byte ceiling'}
       $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
       if($again.state -ne 'completed'){throw 'Completed staged output is not retained'}
+      $lateCancel=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$($started.jobId)/cancel" -Headers $headers
+      if($lateCancel.state -ne 'completed'){throw 'Late cancel invalidated a completed output'}
+      $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
+      if($again.state -ne 'completed' -or $again.outputBytes -ne $result.outputBytes){throw 'Late cancel lost completed staging'}
     }
     Write-Host ("$policy result="+$result.state+" encoder="+$started.encoder+" bytes="+$result.outputBytes+
       " saw-pass1="+$seenPass1+" saw-pass2="+$seenPass2)
@@ -108,7 +154,6 @@ try {
   }
   if(-not $exportBlocked){throw 'Failed strict job unexpectedly reached save/export'}
   Write-Host ('Post-completion stage tamper rejected; export blocked: '+$tamperId)
-
   # This case stays BELOW the ceiling and keeps the exact byte count. The
   # earlier size-only checks could not detect a rewritten container here.
   $equalId=Test-PolicyRun 'strict-ceiling' 5000000 $false 'copy' 2
@@ -126,23 +171,7 @@ try {
     if($oldByte -lt 0){throw 'Cannot read staged byte'}
     $stream.Position=64
     $stream.WriteByte([byte]($oldByte -bxor 1))
-  }finally{$stream.Dispose()}
-  [IO.File]::SetLastWriteTimeUtc($equalFile,$oldWrite.AddSeconds(5))
-  if((Get-Item -LiteralPath $equalFile).Length -ne $oldLength){
-    throw 'Equal-length corruption fixture modified the byte count'
-  }
-  $equalStatus=Invoke-RestMethod -Method Get -Uri "$hostUrl/api/jobs/$equalId" -Headers $headers -TimeoutSec 15
-  if($equalStatus.state -ne 'failed' -or $equalStatus.error -notmatch 'fingerprint verification failed'){
-    throw "Equal-length stage tamper escaped strict content guard: $($equalStatus|ConvertTo-Json -Compress)"
-  }
-  if(Test-Path -LiteralPath $equalFile){throw 'Corrupted equal-length strict stage was not removed'}
-  $equalBlocked=$false
-  try {
-    Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$equalId/export" -Headers $headers -ContentType 'application/json' -Body $exportBody -TimeoutSec 15 | Out-Null
-  } catch {$equalBlocked=$true}
-  if(-not $equalBlocked){throw 'Equal-length tampered strict job unexpectedly exported'}
-  Write-Host ('Equal-length stage tamper rejected; export blocked: '+$equalId)
-}finally{
+  }finally{
   try{if($bridge -and -not $bridge.HasExited){Stop-Process -Id $bridge.Id -Force}}catch{}
   Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }

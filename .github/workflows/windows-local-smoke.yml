@@ -3,12 +3,16 @@ on:
   push:
     paths:
       - 'windows/**'
+      - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'src/main.js'
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
   pull_request:
     paths:
       - 'windows/**'
+      - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'src/main.js'
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
@@ -246,6 +250,9 @@ jobs:
         shell: powershell
         run: node scripts/check-guided-full-budget-ffmpeg.mjs
 
+      - name: Verify real process cancellation across both passes and transition gap
+        shell: powershell
+        run: ./scripts/check-native-cancel-lifecycle.ps1
       - name: Exercise real guided Windows Native two-pass and strict byte ceiling
         shell: powershell
         run: ./scripts/check-guided-budget-native.ps1
