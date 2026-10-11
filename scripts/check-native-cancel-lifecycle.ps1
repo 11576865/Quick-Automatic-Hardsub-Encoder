@@ -18,19 +18,37 @@ New-Item -ItemType Directory -Path $root | Out-Null
 $saved=Join-Path $root 'previous-export.mkv'
 [IO.File]::WriteAllText($saved,'previous-valid-export')
 try{
-  foreach($case in @('active-pass1','between-passes','active-pass2')){
+  foreach($case in @('active-pass1','between-passes','active-pass2','exit-during-kill')){
     $work=Join-Path $root $case
     New-Item -ItemType Directory -Path (Join-Path $work 'fonts') -Force | Out-Null
     foreach($file in @('subtitle.ass','fonts/fixture.ttf','guided-budget-0.log','task-pass-0.log','output.mkv')){
       [IO.File]::WriteAllText((Join-Path $work $file),'private-staging')
     }
-    $args=if($case -eq 'between-passes'){'-version'}else{
+    $args=if($case -in @('between-passes','exit-during-kill')){'-version'}else{
       '-hide_banner -nostdin -loglevel error -re -f lavfi -i testsrc2=size=64x64:rate=10 -t 20 -f null -'
     }
     $started=Start-BridgeTool $script:Ffmpeg $args $work
-    if($case -eq 'between-passes'){
+    if($case -in @('between-passes','exit-during-kill')){
       if(-not $started.Process.WaitForExit(10000) -or $started.Process.ExitCode -ne 0){throw 'Boundary process did not exit successfully'}
     }elseif($started.Process.HasExited){throw 'Active cancellation fixture exited too early'}
+    if($case -eq 'exit-during-kill'){
+      # Model the one stale HasExited observation before Kill throws. Exit
+      # confirmation/timing/disposal still use the actual exited FFmpeg handle.
+      $real=$started.Process
+      $raced=[pscustomobject]@{Inner=$real;FirstObservation=$true}
+      $raced | Add-Member ScriptProperty HasExited {
+        if($this.FirstObservation){$this.FirstObservation=$false;return $false}
+        return $this.Inner.HasExited
+      }
+      foreach($property in @('Id','StartTime','ExitTime','ExitCode')){
+        $getter=[scriptblock]::Create('return $this.Inner.'+$property)
+        $raced | Add-Member ScriptProperty $property $getter
+      }
+      $raced | Add-Member ScriptMethod Kill {throw 'Process already exited during Kill'}
+      $raced | Add-Member ScriptMethod WaitForExit {param($timeout) return $this.Inner.WaitForExit($timeout)}
+      $raced | Add-Member ScriptMethod Dispose {$this.Inner.Dispose()}
+      $started.Process=$raced
+    }
     $job=[pscustomobject]@{Id=$case;Work=$work;Output=(Join-Path $work 'output.mkv');Started=$started
       State='encoding';Cancelled=$false;Finalized=$false;Task=$null;Request=@{}
       SizeBudgetPolicy='two-pass';StrictBudget=$false;Phase=if($case -eq 'active-pass2'){2}else{1}
