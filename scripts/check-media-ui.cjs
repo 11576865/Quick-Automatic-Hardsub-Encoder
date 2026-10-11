@@ -66,12 +66,29 @@ const {spawn}=require('node:child_process');
     throw Error('Focused desktop workspace did not resolve to a two-column workbench: '+JSON.stringify(focusedDesktop));
   if(focusedDesktop.railWidth<190||focusedDesktop.railWidth>300)
     throw Error('Focused desktop overview rail is outside intended compact width: '+focusedDesktop.railWidth);
+  const supportStack=await page.evaluate(()=>{
+    const overview=document.querySelector('#taskOverviewRail').getBoundingClientRect();
+    const runtime=document.querySelector('.platform-rail').getBoundingClientRect();
+    return {gap:runtime.top-overview.bottom,overviewRight:overview.right,runtimeRight:runtime.right};
+  });
+  if(supportStack.gap<0||supportStack.gap>26)
+    throw Error('Desktop runtime entry is stranded below an empty grid row: '+JSON.stringify(supportStack));
+  if(Math.abs(supportStack.overviewRight-supportStack.runtimeRight)>3)
+    throw Error('Supporting cards are misaligned: '+JSON.stringify(supportStack));
   if(await page.locator('.media-workflow-notes').count()!==1)
     throw Error('Manual task architecture must remain available in a single disclosure');
 
   if((await page.locator('#runtimeModeBadge').textContent()).trim()!=='WEB / WASM')throw Error('Browser runtime identity is not visibly labeled');
   if(await page.locator('#workflowStrip span').count()!==5)throw Error('Hardsub workflow strip does not expose five semantic stages');
   await page.evaluate(()=>['subtitleCard','planCard','encodeCard'].forEach(id=>document.querySelector('#'+id)?.classList.remove('hidden')));
+  if(!await page.evaluate(()=>{
+    const plan=document.querySelector('#planCard');
+    const output=document.querySelector('#sharedMediaOutputMount');
+    const encode=document.querySelector('#encodeCard');
+    return !!(plan&&output&&encode&&
+      (plan.compareDocumentPosition(output)&Node.DOCUMENT_POSITION_FOLLOWING)&&
+      (output.compareDocumentPosition(encode)&Node.DOCUMENT_POSITION_FOLLOWING));
+  }))throw Error('Guided audio/output choices must follow the encode plan and precede execution');
   if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Guided hardsub does not expose the copied-audio playback warning');
   if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('转为 AAC'))throw Error('Guided copied-audio warning lacks the AAC recovery action');
   await page.selectOption('[name=audio]','aac');

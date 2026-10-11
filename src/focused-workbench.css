@@ -155,22 +155,31 @@ body {background:var(--focus-base);}
 .media-workspace-heading p,.media-mode-hint {font-size:.68rem;}
 .media-workspace .media-decision-hint {font-size:.68rem;}
 .media-workspace .media-time-format-note {font-size:.65rem;}
+/* One supporting column, not two independent grid rows beside a tall main. */
+.support-rail {display:contents;}
 body.ui-desktop .workspace-layout {
   display:grid;
   grid-template-columns:minmax(0,1fr) minmax(220px,254px);
-  grid-template-areas:"main overview" "main runtime";
+  grid-template-areas:"main support";
   align-items:start;
-  gap:12px 16px;
+  gap:16px;
 }
 body.ui-desktop .workflow-main {grid-area:main;min-width:0;}
-body.ui-desktop .task-overview-rail {
-  grid-area:overview;
-  display:block;
-  position:sticky;
-  top:14px;
-  z-index:1;
+body.ui-desktop .support-rail {
+  grid-area:support;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  align-content:start;
+  gap:11px;
+  min-width:0;
 }
-body.ui-desktop .platform-rail {grid-area:runtime;display:grid;grid-template-columns:minmax(0,1fr);}
+body.ui-desktop .task-overview-rail {
+  grid-area:auto;
+  display:block;
+  position:static;
+  min-width:0;
+}
+body.ui-desktop .platform-rail {grid-area:auto;display:grid;grid-template-columns:minmax(0,1fr);}
 body.windows-native-connected.ui-desktop .platform-rail {display:none !important;}
 body.ui-desktop .production-region {display:grid;grid-template-columns:minmax(0,1fr);gap:10px;}
 body.ui-desktop .preview-workspace {
@@ -179,6 +188,7 @@ body.ui-desktop .preview-workspace {
   gap:10px;
 }
 body.ui-desktop .input-card > .grid.two {grid-template-columns:repeat(2,minmax(0,1fr));}
+body.ui-desktop .input-card .input-engine {grid-column:auto;align-self:stretch;}
 body.ui-tablet .workspace-layout {display:block;}
 body.ui-tablet .task-overview-rail {display:none;}
 body.ui-phone .app-shell {width:min(100% - 16px,640px);padding-top:7px;}

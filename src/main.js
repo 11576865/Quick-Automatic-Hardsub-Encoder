@@ -297,7 +297,6 @@ app.innerHTML = `
       </button>
     </div>
   </section>
-  <div id="sharedMediaOutputMount"></div>
   <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>目标与编码器</p></div></div>
@@ -412,6 +411,7 @@ app.innerHTML = `
     </details>
   </section>
 
+  <div id="sharedMediaOutputMount"></div>
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">05</span><div><h2>执行与验证</h2><p>编码 · 校验 · 导出</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
@@ -430,6 +430,7 @@ app.innerHTML = `
     <div id="log" class="log">Quick-Automatic-Hardsub-Encoder v0.2.0\n</div>
   </details>
     </main>
+    <div class="support-rail">
     <aside id="taskOverviewRail" class="task-overview-rail" aria-label="任务概览">
       <section class="card task-overview-card">
         <div class="task-overview-head">
@@ -508,6 +509,7 @@ app.innerHTML = `
         </details>
       </section>
     </aside>
+    </div>
   </div>
 </div>`;
 
@@ -2377,8 +2379,8 @@ function applyPlatformPresentation() {
   if (nativeMode) {
     if (hero) {
       hero.textContent = windowsNative
-        ? '在现代 Web UI 中直接调用 Windows 系统 FFmpeg、CPU 与 NVIDIA NVENC 完成字幕预检、测试与硬字幕压制。'
-        : '在设备本地使用 Android 原生 FFmpeg 完成 ASS 字幕预检、字体检查、真实预览、编码测试与 H.264 / H.265 / AV1 硬字幕压制。';
+        ? 'Windows 本地处理 · FFmpeg / NVENC'
+        : 'Android 本地处理 · FFmpegKitNext';
     }
     if (appTitle) appTitle.textContent = windowsNative ? 'Windows Native' : '应用与更新';
     if (videoLabel) videoLabel.textContent = windowsNative ? '视频（Windows 原生文件选择器）' : '视频（通过 Android 系统文件选择器读取）';
@@ -2390,7 +2392,7 @@ function applyPlatformPresentation() {
   } else {
     if (hero) {
       hero.textContent =
-        '一种在浏览器本地运行，自动完成 ASS 字幕预检、字体检查、编码比较与 H.264 / H.265 / AV1 硬字幕压制的快捷工具。';
+        '浏览器本地处理 · 硬压 / 转码 / 剪切';
     }
     if (appTitle) appTitle.textContent = 'Android 应用';
     if (videoLabel) videoLabel.textContent = '视频（网页≤ 1 GB）';

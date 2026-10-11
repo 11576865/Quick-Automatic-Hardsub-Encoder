@@ -20,7 +20,11 @@ test('focused workbench preserves native bindings and progressive disclosure', a
   assert.match(workspace,/<details class="media-workflow-notes"><summary>处理方式说明<\/summary>/);
   assert.match(workspace,/<div class="media-mode-explainer media-mode-explainer-copy"/);
   assert.match(css,/body\.ui-desktop \.workspace-layout\s*\{\s*display:grid/);
-  assert.match(css,/grid-template-areas:"main overview" "main runtime"/);
+  assert.match(main,/class="support-rail"/);
+  assert.match(css,/grid-template-areas:"main support"/);
+  assert.match(css,/body\.ui-desktop \.support-rail\s*\{\s*grid-area:support/);
+  assert.ok(main.indexOf('id="planCard"')<main.indexOf('id="sharedMediaOutputMount"'));
+  assert.ok(main.indexOf('id="sharedMediaOutputMount"')<main.indexOf('id="encodeCard"'));
   assert.match(css,/body\.ui-desktop \.production-region\s*\{display:grid;grid-template-columns:minmax\(0,1fr\)/);
   assert.match(css,/body\.ui-phone \.hardsub-strategy-switcher/);
   assert.match(css,/body\.windows-native-connected\.ui-desktop \.platform-rail\s*\{display:none !important/);
