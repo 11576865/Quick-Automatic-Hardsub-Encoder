@@ -3,7 +3,7 @@
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
   "status": "Studio v3 merged; manual task source/probe gating follow-up submitted, exact-head CI Pending",
-  "current_bounded_work_unit": "Fix real desktop Copy/Transcode 'Start' action visually and interactively enabled with no selected/probed source; preserve prior completed artifact recovery, cancel and Native Bridge state.",
+  "current_bounded_work_unit": "PR #98 submitted: Studio v3 start-action readiness now follows actual selected video and probed media. Exact latest PR head CI/screenshots Pending; branch and code checkpoint are durable.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -76,8 +76,8 @@
     "Do not change backend / field acceptance"
   ],
   "branch": "fix/qhe-studio-source-readiness-action-20261011",
-  "pull_request_url": "",
-  "latest_durable_commit": "54cd4a92009425e0c3b099db117f4d4c23cd3b6a",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/98",
+  "latest_durable_commit": "6eda22a36bcfedbb5a647296958c85c1aec337fe",
   "external_validation": {
     "frontend": "Pending source-readiness follow-up",
     "playwright": "Pending source absent -> selected/unprobed -> probed sequence",
