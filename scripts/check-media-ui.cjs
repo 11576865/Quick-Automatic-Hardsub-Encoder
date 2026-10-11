@@ -54,6 +54,21 @@ const {spawn}=require('node:child_process');
   await page.goto('http://127.0.0.1:4179/');
   await page.locator('#mediaWorkspace').waitFor({state:'attached'});
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub still exposes the precise parameter workspace');
+  // The focused desktop composition is not just an imported stylesheet:
+  // verify the actual browser's layout and the task rail's footprint.
+  const focusedDesktop=await page.locator('.workspace-layout').evaluate(el=>{
+    const layout=getComputedStyle(el);
+    const rail=document.querySelector('.task-overview-rail');
+    return {display:layout.display,columns:layout.gridTemplateColumns,
+      railWidth:rail?.getBoundingClientRect().width||0};
+  });
+  if(focusedDesktop.display!=='grid'||focusedDesktop.columns.split(' ').length!==2)
+    throw Error('Focused desktop workspace did not resolve to a two-column workbench: '+JSON.stringify(focusedDesktop));
+  if(focusedDesktop.railWidth<190||focusedDesktop.railWidth>300)
+    throw Error('Focused desktop overview rail is outside intended compact width: '+focusedDesktop.railWidth);
+  if(await page.locator('.media-workflow-notes').count()!==1)
+    throw Error('Manual task architecture must remain available in a single disclosure');
+
   if((await page.locator('#runtimeModeBadge').textContent()).trim()!=='WEB / WASM')throw Error('Browser runtime identity is not visibly labeled');
   if(await page.locator('#workflowStrip span').count()!==5)throw Error('Hardsub workflow strip does not expose five semantic stages');
   await page.evaluate(()=>['subtitleCard','planCard','encodeCard'].forEach(id=>document.querySelector('#'+id)?.classList.remove('hidden')));
@@ -66,6 +81,13 @@ const {spawn}=require('node:child_process');
   await page.screenshot({path:'media-workspace-hardsub-goal-desktop.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace');
+  if(await page.locator('.media-workflow-notes').evaluate(el=>el.open))
+    throw Error('Verbose task architecture is expanded in the default manual editor');
+  await page.locator('.media-workflow-notes > summary').click();
+  if(!await page.locator('.media-workflow-notes .media-branch-map').isVisible())
+    throw Error('Manual task architecture is not discoverable when requested');
+  await page.locator('.media-workflow-notes > summary').click();
+
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
   await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());

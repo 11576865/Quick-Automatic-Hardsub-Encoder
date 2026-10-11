@@ -167,7 +167,7 @@ export function mountMediaWorkspace(hooks) {
     <p id="taskPlanNote">检查方案后开始执行。</p>
     <div class="button-row task-plan-actions"><button type="button" id="taskLoadPreset" class="secondary">恢复推荐方案</button><button type="button" id="taskInspect" class="secondary">验证当前方案</button></div>
   </section>
-  <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">先选编码器与质量，其他参数按需展开。</p><div class="task-grid media-core-decision-grid">
+  <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">不确定时直接保留推荐方案；其他参数按需展开。</p><div class="task-grid media-core-decision-grid">
   ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
   ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ（通常越低越保真）','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
   ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}
@@ -1486,7 +1486,7 @@ export function mountMediaWorkspace(hooks) {
         : '视频完整复制；音频与软字幕可单独剪切。')
       : mode==='hardsub'
         ? '硬字幕需要 ASS 与 libass 真实预览。'
-        : '纯转码不需要 ASS；不会自动更换编码器。';
+        : '转码时间轴不是转码前后质量对比；不需要 ASS，也不会自动换编码器。';
     renderContainerDecision(null);
     renderKeyframeLane();
     syncOutputVerificationAvailability();
