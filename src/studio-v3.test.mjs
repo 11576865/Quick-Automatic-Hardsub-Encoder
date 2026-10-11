@@ -10,6 +10,8 @@ test('professional workbench composes real source, media viewer and inspector',a
   assert.match(main,/id="studioModeDock" class="studio-mode-dock"/);
   assert.match(main,/id="studioEmptyStage"/);
   assert.match(media,/if \(modeDock\) modeDock.append\(modeNav\)/);
+  assert.match(media,/if \(manualMount && section.parentElement !== manualMount\) manualMount.append\(section\)/);
+  assert.match(css,/\.production-region:has\(#subtitleCard\.hidden\) #sharedMediaOutputMount/);
   assert.match(media,/modeNav\.remove\(\)/);
   assert.match(css,/grid-template-areas:"source stage" "check stage" "log log"/);
   assert.match(css,/body\.ui-desktop \.preview-workspace/);

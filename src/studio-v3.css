@@ -94,3 +94,16 @@ body.ui-phone .preview-wrap{aspect-ratio:16/10;}
   body.ui-desktop .workspace-layout{grid-template-columns:minmax(0,1fr) 215px;gap:10px;}
   body.ui-desktop .preview-sample-rail{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
+
+/* Empty hardsub viewer must not show audio/container controls as if a source
+   were already ready. This is only an unprepared desktop hardsub state. */
+body.ui-desktop[data-media-operation="hardsub"]
+  .production-region:has(#subtitleCard.hidden) #sharedMediaOutputMount {
+  display:none!important;
+}
+/* The same live editor occupies the central work surface for all three modes. */
+body.ui-desktop .production-controls #hardsubManualMount,
+body.ui-desktop .production-controls #mediaWorkspace {
+  min-width:0;
+  width:100%;
+}

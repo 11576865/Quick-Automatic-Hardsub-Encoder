@@ -134,9 +134,34 @@ const {spawn}=require('node:child_process');
   if(professionalLayout.inspector.left<professionalLayout.viewer.right+7)
     throw Error('Inspector overlaps the media workspace: '+JSON.stringify(professionalLayout));
   await viewportPage.screenshot({path:'media-workspace-studio-v3-desktop.png',fullPage:true});
+  // A desktop screenshot revealed the previously untested transcode/copy
+  // editor had been reparented under the 250px source shelf, leaving the
+  // central stage empty. The real editor must use the central work surface.
+  for(const mode of ['transcode','copy']){
+    await viewportPage.locator('#studioModeDock [data-media-mode="'+mode+'"]').click();
+    const modeGeometry=await viewportPage.evaluate(()=>{
+      const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect();return r?{left:r.left,right:r.right,width:r.width,top:r.top}:null;};
+      const editor=document.querySelector('#mediaWorkspace');
+      return {source:rect('#inputCard'),editor:rect('#mediaWorkspace'),parent:editor?.parentElement?.id,
+        visible:!!editor&&getComputedStyle(editor).display!=='none'};
+    });
+    if(!modeGeometry.visible||modeGeometry.parent!=='hardsubManualMount'||
+       modeGeometry.editor.left<modeGeometry.source.right+8||
+       modeGeometry.editor.width<400)
+      throw Error('Desktop '+mode+' editor collapsed into source shelf: '+JSON.stringify(modeGeometry));
+    await viewportPage.screenshot({path:'media-workspace-studio-v3-'+mode+'-desktop.png',fullPage:true});
+  }
+  await viewportPage.locator('#studioModeDock [data-media-mode="hardsub"]').click();
+
 
   await viewportPage.setViewportSize({width:320,height:720});
   await viewportPage.waitForFunction(()=>document.documentElement.dataset.uiShell==='phone');
+  for(const mode of ['transcode','copy']){
+    await viewportPage.locator('#studioModeDock [data-media-mode="'+mode+'"]').click();
+    if(!await viewportPage.locator('#mediaWorkspace').isVisible())
+      throw Error('Phone '+mode+' editor became unreachable after central mounting');
+  }
+  await viewportPage.locator('#studioModeDock [data-media-mode="hardsub"]').click();
   const phoneLegibility=await viewportPage.evaluate(()=>{
     const size=s=>parseFloat(getComputedStyle(document.querySelector(s)).fontSize);
     const header=document.querySelector('.app-header .hero-state');

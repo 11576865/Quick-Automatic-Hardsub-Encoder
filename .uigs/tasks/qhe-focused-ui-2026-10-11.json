@@ -3,7 +3,7 @@
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
   "status": "Studio v3 editor-style workbench committed; latest-head CI/visual Pending",
-  "current_bounded_work_unit": "Move the live media-mode nav into a top-level segmented toolbar. Recompose desktop source shelf, independent large viewer/plan column and quiet status inspector. Preserve tablet and phone stage semantics.",
+  "current_bounded_work_unit": "PR #97 screenshot audit revealed major desktop non-hardsub regression: copy/transcode manual editor was mounted beneath narrow source shelf. Reparent the original editor to the central manual slot and add per-mode browser geometry tests.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -50,6 +50,10 @@
       "summary": "Studio v3 editor-style layout based on Compressor/HandBrake/Linear, source-side navigation reparent and accessible empty preview stage",
       "branch": "design/qhe-compressor-inspired-workspace-20261011",
       "commit": "68b3e9cb854286deedf291e5f87b38e55e76e9fa"
+    },
+    {
+      "summary": "One bounded UI regression repair: all modes share central editor slot; prevent premature desktop hardsub audio controls; Playwright tests check desktop transcode/copy and phone reachability",
+      "head_state": "new validation pending"
     }
   ],
   "next_units": [
@@ -61,17 +65,17 @@
   "pull_request_url": "",
   "latest_durable_commit": "68b3e9cb854286deedf291e5f87b38e55e76e9fa",
   "external_validation": {
-    "frontend": "pending new v3 head",
-    "playwright": "pending v3 desktop composition/screenshot",
-    "windows_smoke": "not rerun on #96 (CSS/test only); earlier #95 smoke passed 38131737587",
+    "frontend": "PR #97 original head passed; repair head Pending",
+    "playwright": "PR #97 original head passed hardsub geometry only; per-mode repair tests Pending",
+    "windows_smoke": "original head in progress at initial read; repair head Pending",
     "uigs": "pending",
     "android_device": "not-run",
-    "production_visual_review": "pending current v3 Chromium captures; older v2 confirmed only"
+    "production_visual_review": "Original PR #97 actual Chromium screenshot reviewed; copy mode editor collapsed to source shelf. Corrected layout not yet visually verified."
   },
   "blockers": [
-    "Studio v3 screenshots and CI not yet available",
-    "Physical Android font/touch/OS safety areas unverified",
-    "Real Windows GPU/HDR/VFR long-film #77 Pending"
+    "PR #97 new repair CI and copy/transcode screenshots Pending",
+    "Physical Android device not tested",
+    "GPU/HDR/VFR long-form #77 Pending"
   ],
   "updated_at": "2026-10-11"
 }

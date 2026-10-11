@@ -1447,7 +1447,12 @@ export function mountMediaWorkspace(hooks) {
         outputPolicyAnchor.after(outputPolicy);
       }
     } else {
-      if (inputCard && section.previousElementSibling !== inputCard) inputCard.after(section);
+      // All operations share the central editor slot. Keeping transcode/copy
+      // next to #inputCard confines the full timeline and codec form to the
+      // narrow source shelf in Studio v3's desktop three-zone layout.
+      // Preserve original nodes/events and the phone prepare-stage semantic.
+      if (manualMount && section.parentElement !== manualMount) manualMount.append(section);
+      else if (!manualMount && inputCard && section.previousElementSibling !== inputCard) inputCard.after(section);
       if (outputPolicy && outputPolicy.parentElement !== form) outputPolicyAnchor.after(outputPolicy);
     }
 
