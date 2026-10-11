@@ -3,6 +3,7 @@ import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { audioCopyPlaybackWarning } from './media-container.js';
 import { mountTranscodeCurves } from './transcode-calibration-panel.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
+import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-queue.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
 
@@ -93,6 +94,19 @@ export function mountMediaWorkspace(hooks) {
       <button type="button" id="taskKeyframeNext" class="secondary media-timeline-keyframe-only" hidden>后一关键帧 →</button>
       <button type="button" id="taskKeyframeSnapStart" class="secondary media-timeline-keyframe-only" hidden>将 IN 对齐关键帧</button>
       <label class="media-waveform-zoom">缩放 <input id="taskWaveformZoom" type="range" min="1" max="12" step="1" value="1" aria-label="剪辑时间轴缩放"></label>
+    </div>
+  </section>
+  <section id="taskClipQueuePanel" class="media-clip-queue" hidden aria-label="多片段无损剪切">
+    <div class="media-clip-queue-header">
+      <div><strong>多片段剪切</strong><span>可选 · 每段分别导出，不拼接</span></div>
+      <button id="taskAddClip" type="button" class="secondary">加入片段</button>
+    </div>
+    <ol id="taskClipQueueList" aria-label="待导出片段"></ol>
+    <p id="taskClipQueueStatus" role="status">设置 IN / OUT 后加入片段。实际起点可能受关键帧约束。</p>
+    <div class="media-clip-queue-actions">
+      <button id="taskExportClips" type="button" disabled>导出全部</button>
+      <button id="taskStopClips" type="button" class="secondary" hidden>停止批量</button>
+      <button id="taskClearClips" type="button" class="secondary" disabled>清空</button>
     </div>
   </section>
   <div id="taskFrameFullscreen" class="media-frame-lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="taskFrameFullscreenTitle">
@@ -280,6 +294,86 @@ export function mountMediaWorkspace(hooks) {
   });
   get('quality').addEventListener('input', syncQualityRange);
   let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
+  const clips=[],clipList=section.querySelector('#taskClipQueueList');
+  const clipPanel=section.querySelector('#taskClipQueuePanel');
+  const clipMessage=section.querySelector('#taskClipQueueStatus');
+  let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null;
+  const clipSource=()=>hooks.videoIdentity?.()||'';
+  const clipMedia=()=>hooks.mediaSnapshot?.()||null;
+  const showClipMessage=text=>{clipMessage.textContent=text;};
+  const syncClipQueue=()=>{
+    const copy=get('operation').value==='copy',locked=clipBatchRunning||busy||hooks.busy();
+    clipPanel.hidden=!copy;
+    clipList.replaceChildren();
+    clips.forEach((clip,index)=>{
+      const item=document.createElement('li');
+      const description=document.createElement('div');
+      const title=document.createElement('strong');
+      title.textContent='片段 '+String(index+1).padStart(2,'0');
+      const range=document.createElement('span');
+      range.textContent=clip.startText+' → '+clip.endText+' · '+clip.duration.toFixed(2)+' 秒';
+      const state=document.createElement('small');
+      state.textContent={queued:'待导出',running:'处理中',saving:'正在保存',saved:'已导出',failed:'失败'}[clip.state]||'待导出';
+      description.append(title,range,state);
+      const use=document.createElement('button');
+      use.type='button';use.className='secondary';use.textContent='载入';
+      use.dataset.clipAction='load';use.dataset.clipIndex=String(index);use.disabled=locked;
+      const del=document.createElement('button');
+      del.type='button';del.className='secondary';del.textContent='删除';
+      del.dataset.clipAction='remove';del.dataset.clipIndex=String(index);del.disabled=locked;
+      item.append(description,use,del);clipList.append(item);
+    });
+    section.querySelector('#taskAddClip').disabled=locked||!clipSource()||!clipMedia()||clips.length>=50;
+    section.querySelector('#taskExportClips').disabled=locked||!clips.some(c=>c.state!=='saved')||!clipSource()||!clipMedia();
+    section.querySelector('#taskClearClips').disabled=locked||!clips.length;
+    section.querySelector('#taskStopClips').hidden=!clipBatchRunning;
+    section.querySelector('#taskStopClips').disabled=!clipBatchRunning||clipBatchStopRequested;
+    section.querySelector('#taskExportClips').textContent=clips.some(c=>c.state==='saved')?'导出剩余':'导出全部';
+  };
+  const clearClipQueueOnSourceChange=()=>{
+    if(!clips.length||clipBatchRunning)return;
+    const key=clipSource();
+    if(key===clipSourceKey)return;
+    clips.length=0;clipSourceKey='';
+    showClipMessage('视频已更换，旧视频的片段列表已清空。');
+  };
+  section.querySelector('#taskAddClip').onclick=()=>{
+    try{
+      if(busy||hooks.busy())return;
+      const source=clipSource(),media=clipMedia();
+      if(!source||!media)throw Error('先选择视频并读取视频参数');
+      validateQueuedCopySettings(read());
+      const clip=makeQueuedClip(get('start').value,get('end').value,media);
+      if(clipSourceKey&&clipSourceKey!==source)throw Error('视频已更换，请重新建立片段列表');
+      if(clips.some(c=>c.start===clip.start&&c.end===clip.end))throw Error('这个 IN / OUT 片段已经加入');
+      if(clips.length>=50)throw Error('单次最多加入 50 个片段');
+      clipSourceKey=source;clips.push({...clip,state:'queued'});
+      showClipMessage('已加入 '+clips.length+' 段。每段将单独保存；无损实际 IN 可能前移到关键帧。');
+      syncClipQueue();
+    }catch(err){showClipMessage(err.message);}
+  };
+  clipList.addEventListener('click',event=>{
+    if(clipBatchRunning||busy||hooks.busy())return;
+    const btn=event.target.closest('button[data-clip-action]');
+    if(!btn)return;
+    const index=Number(btn.dataset.clipIndex),clip=clips[index];
+    if(!clip)return;
+    if(btn.dataset.clipAction==='remove'){
+      clips.splice(index,1);
+      if(!clips.length)clipSourceKey='';
+      showClipMessage(clips.length?'已删除片段。':'队列已清空；可继续单段剪切。');
+      syncClipQueue();return;
+    }
+    get('start').value=clip.startText;get('end').value=clip.endText;
+    for(const field of [get('start'),get('end')])field.dispatchEvent(new Event('change',{bubbles:true}));
+    showClipMessage('已载入片段 '+(index+1)+' 的 IN / OUT，可修改后重新加入。');
+  });
+  section.querySelector('#taskClearClips').onclick=()=>{
+    if(clipBatchRunning||busy||hooks.busy())return;
+    clips.length=0;clipSourceKey='';
+    showClipMessage('队列已清空；现有单段剪切仍可使用。');
+    syncClipQueue();
+  };
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
   let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='',timelineFrameGeneration=0;
@@ -1500,6 +1594,7 @@ export function mountMediaWorkspace(hooks) {
     syncModeChrome(mode);
     section.querySelector('#taskEncoding').disabled=copy;
     document.querySelectorAll('.input-ass,.input-font').forEach(el=>el.classList.toggle('hidden',get('operation').value!=='hardsub'));
+    syncClipQueue();
     section.querySelector('#taskModeHint').textContent=copy
       ? (get('videoRange').value==='trim'
         ? '无损剪切：IN 可能提前对齐关键帧；音频可独立处理。'
@@ -1547,7 +1642,7 @@ export function mountMediaWorkspace(hooks) {
     updateRate();
     syncAudioPlaybackWarning();
   };
-  const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); };
+  const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
