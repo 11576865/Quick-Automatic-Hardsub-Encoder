@@ -782,6 +782,64 @@ const {spawn}=require('node:child_process');
   if(!await page.locator('#taskExportClips').isDisabled())
     throw Error('Already-exported queue still offers duplicate batch run');
 
+
+  // A verified Native clip that fails at Save must survive for a save-only
+  // retry; no new stream-copy encode is allowed during the pending save.
+  await page.evaluate(()=>{
+    const set=(name,value)=>{
+      const field=document.querySelector('[name='+name+']');
+      field.value=value;
+      field.dispatchEvent(new Event('change',{bubbles:true}));
+    };
+    set('start','3:00');set('end','5:05');
+  });
+  await page.click('#taskAddClip');
+  if(await page.locator('#taskClipQueueList li').count()!==3)
+    throw Error('Third interval not queued for save failure regression');
+  const encodesBeforeFailure=await page.evaluate(()=>window.taskRuns.length);
+  await page.click('#taskExportClips');
+  await page.waitForFunction(()=>{
+    const rows=[...document.querySelectorAll('#taskClipQueueList li small')];
+    return rows.at(-1)?.textContent==='正在保存';
+  });
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{
+    detail:{ok:false,jobId:'ui-smoke-job',error:'simulated native disk failure'}
+  })));
+  await page.waitForFunction(()=>{
+    const rows=[...document.querySelectorAll('#taskClipQueueList li small')];
+    return rows.at(-1)?.textContent==='待重试保存';
+  });
+  if(await page.evaluate(()=>window.taskRuns.length)!==encodesBeforeFailure+1)
+    throw Error('Save failure unexpectedly launched another clip job');
+  if(!await page.locator('#taskRun').isDisabled()||!await page.locator('#taskExportClips').isDisabled())
+    throw Error('Unpublished clip output can be overwritten by another run');
+  await page.evaluate(()=>document.querySelector('#mediaTaskForm').requestSubmit());
+  if(await page.evaluate(()=>window.taskRuns.length)!==encodesBeforeFailure+1)
+    throw Error('Direct form submit overwrote a verified unpublished clip');
+  if(await page.locator('#taskClipQueueList button[data-clip-action="retry-save"]').count()!==1)
+    throw Error('Failed Native save has no clip-specific save-only retry');
+  if(!(await page.locator('#taskClipQueueStatus').textContent()).includes('重试保存'))
+    throw Error('Failed Native save lacked recovery guidance');
+  const encodedBeforeRetry=await page.evaluate(()=>window.taskRuns.length);
+  await page.locator('#taskClipQueueList button[data-clip-action="retry-save"]').click();
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{
+    detail:{ok:true,jobId:'not-the-current-job',path:'C:\\wrong.mkv'}
+  })));
+  if(await page.locator('#mediaWorkspace').getAttribute('data-task-state')!=='saving')
+    throw Error('Unrelated Native save result incorrectly completed clip retry');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{
+    detail:{ok:true,jobId:'ui-smoke-job',path:'C:\\recovered-clip03.mkv'}
+  })));
+  await page.waitForFunction(()=>{
+    const rows=[...document.querySelectorAll('#taskClipQueueList li small')];
+    return rows.length===3&&rows.every(row=>row.textContent==='已导出');
+  });
+  if(await page.evaluate(()=>window.taskRuns.length)!==encodedBeforeRetry)
+    throw Error('Retry Save re-encoded a verified clip');
+  if(!await page.locator('#taskExportClips').isDisabled())
+    throw Error('Successfully recovered queue still wants a duplicate export');
+
   if(errors.length)throw Error(errors.join('\n'));
   console.log('Desktop/mobile UI, mode gating, preset preservation: passed');
  }finally{await browser?.close();server.kill();}

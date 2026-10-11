@@ -297,12 +297,12 @@ export function mountMediaWorkspace(hooks) {
   const clips=[],clipList=section.querySelector('#taskClipQueueList');
   const clipPanel=section.querySelector('#taskClipQueuePanel');
   const clipMessage=section.querySelector('#taskClipQueueStatus');
-  let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null;
+  let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null,clipAwaitingSave=null;
   const clipSource=()=>hooks.videoIdentity?.()||'';
   const clipMedia=()=>hooks.mediaSnapshot?.()||null;
   const showClipMessage=text=>{clipMessage.textContent=text;};
   const syncClipQueue=()=>{
-    const copy=get('operation').value==='copy',locked=clipBatchRunning||busy||hooks.busy();
+    const copy=get('operation').value==='copy',locked=clipBatchRunning||busy||hooks.busy()||section.dataset.taskState==='saving';
     clipPanel.hidden=!copy;
     clipList.replaceChildren();
     clips.forEach((clip,index)=>{
@@ -313,35 +313,52 @@ export function mountMediaWorkspace(hooks) {
       const range=document.createElement('span');
       range.textContent=clip.startText+' → '+clip.endText+' · '+clip.duration.toFixed(2)+' 秒';
       const state=document.createElement('small');
-      state.textContent={queued:'待导出',running:'处理中',saving:'正在保存',saved:'已导出',failed:'失败'}[clip.state]||'待导出';
+      state.textContent={queued:'待导出',running:'处理中',saving:'正在保存',saved:'已导出',save_failed:'待重试保存',failed:'失败'}[clip.state]||'待导出';
       description.append(title,range,state);
       const use=document.createElement('button');
-      use.type='button';use.className='secondary';use.textContent='载入';
-      use.dataset.clipAction='load';use.dataset.clipIndex=String(index);use.disabled=locked;
+      use.type='button';use.className='secondary';
+      use.textContent=clipAwaitingSave===clip?'重试保存':'载入';
+      use.dataset.clipAction=clipAwaitingSave===clip?'retry-save':'load';
+      use.dataset.clipIndex=String(index);
+      use.disabled=locked||(!!clipAwaitingSave&&clipAwaitingSave!==clip);
       const del=document.createElement('button');
       del.type='button';del.className='secondary';del.textContent='删除';
-      del.dataset.clipAction='remove';del.dataset.clipIndex=String(index);del.disabled=locked;
+      del.dataset.clipAction='remove';del.dataset.clipIndex=String(index);del.disabled=locked||!!clipAwaitingSave;
       item.append(description,use,del);clipList.append(item);
     });
-    section.querySelector('#taskAddClip').disabled=locked||!clipSource()||!clipMedia()||clips.length>=50;
-    section.querySelector('#taskExportClips').disabled=locked||!clips.some(c=>c.state!=='saved')||!clipSource()||!clipMedia();
-    section.querySelector('#taskClearClips').disabled=locked||!clips.length;
+    section.querySelector('#taskAddClip').disabled=locked||!!clipAwaitingSave||!clipSource()||!clipMedia()||clips.length>=50;
+    section.querySelector('#taskExportClips').disabled=locked||!!clipAwaitingSave||!clips.some(c=>c.state!=='saved')||!clipSource()||!clipMedia();
+    section.querySelector('#taskClearClips').disabled=locked||!!clipAwaitingSave||!clips.length;
     section.querySelector('#taskStopClips').hidden=!clipBatchRunning;
     section.querySelector('#taskStopClips').disabled=!clipBatchRunning||clipBatchStopRequested;
     section.querySelector('#taskExportClips').textContent=clips.some(c=>c.state==='saved')?'导出剩余':'导出全部';
   };
   const clearClipQueueOnSourceChange=()=>{
-    if(!clips.length||clipBatchRunning)return;
+    if(!clips.length||clipBatchRunning||clipAwaitingSave)return;
     const key=clipSource();
     if(key===clipSourceKey)return;
     clips.length=0;clipSourceKey='';
     showClipMessage('视频已更换，旧视频的片段列表已清空。');
+  };
+  const settlePendingClipSave=(saved)=>{
+    if(!clipAwaitingSave)return;
+    const clip=clipAwaitingSave;
+    clip.state=saved?'saved':'save_failed';
+    if(saved){
+      clipAwaitingSave=null;
+      showClipMessage('片段成品已保存；可以继续导出剩余片段。');
+      clearClipQueueOnSourceChange();
+    }else{
+      showClipMessage('成品仍保留，点击对应片段“重试保存”，不必重新剪切。');
+    }
+    syncClipQueue();
   };
   section.querySelector('#taskAddClip').onclick=()=>{
     try{
       if(busy||hooks.busy())return;
       const source=clipSource(),media=clipMedia();
       if(!source||!media)throw Error('先选择视频并读取视频参数');
+      if(clipAwaitingSave)throw Error('请先重试保存上一片段的成品');
       validateQueuedCopySettings(read());
       const clip=makeQueuedClip(get('start').value,get('end').value,media);
       if(clipSourceKey&&clipSourceKey!==source)throw Error('视频已更换，请重新建立片段列表');
@@ -358,6 +375,11 @@ export function mountMediaWorkspace(hooks) {
     if(!btn)return;
     const index=Number(btn.dataset.clipIndex),clip=clips[index];
     if(!clip)return;
+    if(btn.dataset.clipAction==='retry-save'){
+      if(clipAwaitingSave===clip)section.querySelector('#taskSave').click();
+      return;
+    }
+    if(clipAwaitingSave)return;
     if(btn.dataset.clipAction==='remove'){
       clips.splice(index,1);
       if(!clips.length)clipSourceKey='';
@@ -369,7 +391,7 @@ export function mountMediaWorkspace(hooks) {
     showClipMessage('已载入片段 '+(index+1)+' 的 IN / OUT，可修改后重新加入。');
   });
   section.querySelector('#taskClearClips').onclick=()=>{
-    if(clipBatchRunning||busy||hooks.busy())return;
+    if(clipBatchRunning||busy||hooks.busy()||clipAwaitingSave)return;
     clips.length=0;clipSourceKey='';
     showClipMessage('队列已清空；现有单段剪切仍可使用。');
     syncClipQueue();
@@ -1375,7 +1397,7 @@ export function mountMediaWorkspace(hooks) {
         : stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
     save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
     save.disabled=busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
-    run.disabled=busy||stateName==='saving'||!!requirement;
+    run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave;
     section.dataset.completedStale=previousResult?'true':'false';
   };
   const setTaskState = next => {
@@ -1440,13 +1462,16 @@ export function mountMediaWorkspace(hooks) {
       setTaskState('saved');
       status('成品已保存'+(data.path?' · '+data.path:'')+(data.bytes?' · '+formatSize(Number(data.bytes)):'')+'。');
       hooks.log?.('成品保存完成。');
+      settlePendingClipSave(true);
     }else if(String(data.error||'').toLowerCase().includes('cancel')){
       setTaskState('verified');
       status('已取消保存；成品仍已验证，可再次点击“保存成品”。');
+      settlePendingClipSave(false);
     }else{
       setTaskState('save_failed');
       status('保存失败：'+(data.error||'未知错误')+'。已验证成品仍保留在当前 Native 会话，可直接重试保存，无需重新压制。');
       hooks.log?.('成品保存失败：'+(data.error||'未知错误'));
+      settlePendingClipSave(false);
     }
   };
   window.addEventListener('quick-hardsub-native-export-result',nativeExportListener);
@@ -1580,7 +1605,7 @@ export function mountMediaWorkspace(hooks) {
 
   for (const button of modeButtons) {
     button.addEventListener('click', () => {
-      if(busy||hooks.busy()||clipBatchRunning)return;
+      if(busy||hooks.busy()||clipBatchRunning||clipAwaitingSave)return;
       const nextMode=button.dataset.mediaMode;
       if(get('operation').value!==nextMode)markCompletedAsPrevious('operation');
       get('operation').value = nextMode;
@@ -1721,6 +1746,7 @@ export function mountMediaWorkspace(hooks) {
       if(!clipMedia())throw Error('请先读取视频参数');
       const settings=read();
       validateQueuedCopySettings(settings);
+      if(clipAwaitingSave)throw Error('先重试保存未导出的片段成品，避免重新剪切');
       if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
         throw Error('先保存或处理上一任务的成品，避免批量剪切覆盖未保存的结果');
       // Reserve task ownership before await: no duplicate bulk runs, mode
@@ -1779,10 +1805,22 @@ export function mountMediaWorkspace(hooks) {
       }
     }catch(err){
       if(current){
-        current.clip.state='failed';
-        setTaskState(phase==='save'?'save_failed':isCancellationError(err)?'idle':'failed');
+        if(phase==='save'&&completed?.verified){
+          // The copy job succeeded. Keep its verified output and offer a
+          // save-only retry, without launching FFmpeg a second time.
+          current.clip.state='save_failed';
+          clipAwaitingSave=current.clip;
+          setTaskState('save_failed');
+        }else{
+          current.clip.state='failed';
+          setTaskState(isCancellationError(err)?'idle':'failed');
+        }
       }
-      showClipMessage('片段 '+(current?current.index+1:'队列')+' 未完成：'+err.message+'。已导出的片段不会撤销；可重试未完成片段。');
+      if(current&&phase==='save'&&completed?.verified){
+        showClipMessage('片段 '+(current.index+1)+' 保存未完成：'+err.message+'。已验证成品仍保留；点击“重试保存”，无需重新剪切。');
+      }else{
+        showClipMessage('片段 '+(current?current.index+1:'队列')+' 未完成：'+err.message+'。已导出的片段不会撤销；可重试未完成片段。');
+      }
       hooks.log?.(err.stack||err.message);
     }finally{
       clipBatchCurrent=null;clipBatchRunning=false;clipBatchStopRequested=false;
@@ -1797,23 +1835,28 @@ export function mountMediaWorkspace(hooks) {
   section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('当前方案验证通过，可以直接开始；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};
   section.querySelector('#taskSave').onclick=async()=>{
-    if(!completed)return;
+    if(!completed||clipBatchRunning||busy||hooks.busy()||section.dataset.taskState==='saving')return;
     setTaskState('saving');
+    syncClipQueue();
     status('正在打开保存位置；取消选择不会丢失已验证成品。');
     try{
       const result=await Promise.resolve(hooks.save(completed));
       if(result?.pending)return;
       if(result?.ok===false)throw Error(result.error||'保存失败');
       setTaskState('saved');
+      settlePendingClipSave(true);
       status(result?.kind==='browser-download'?'已交给浏览器保存。':'成品已保存。');
     }catch(e){
       setTaskState('save_failed');
+      settlePendingClipSave(false);
       status('保存失败：'+e.message+'。已验证成品仍可直接重试保存，无需重新压制。');
       hooks.log?.(e.stack||e.message);
     }
   };
   form.onsubmit=async e=>{
-    e.preventDefault();if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
+    e.preventDefault();
+    if(clipAwaitingSave){status('先重试保存已验证的片段成品，避免重新剪切或覆盖。');return;}
+    if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
     busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
     section.querySelector('#taskReport').disabled=true;
     section.querySelector('#taskProgress').value=0;
