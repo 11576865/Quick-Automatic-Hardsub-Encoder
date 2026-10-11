@@ -3,7 +3,7 @@
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
   "status": "PR #98 source readiness merged and verified; copy multi-segment batch queue committed, latest-head CI Pending",
-  "current_bounded_work_unit": "Optional lossless Stream Copy queue adds source-bound IN/OUT items, individual clip filenames, sequential copy jobs, and waits for asynchronous Native export confirmation before next clip. Existing single clip remains unchanged.",
+  "current_bounded_work_unit": "PR #99 created for optional multi-clip Stream Copy; implementation, Node unit tests and Playwright browser/native-save-ack regressions are committed. Latest-head CI Pending.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -89,8 +89,8 @@
     "Physical Native save-dialog and long-video GPU acceptance remain separate"
   ],
   "branch": "feat/qhe-copy-segment-queue-20261011",
-  "pull_request_url": "",
-  "latest_durable_commit": "45ecda37d69ee874ef11bab3c848ced04ff6d7c0",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/99",
+  "latest_durable_commit": "4267293a7f814c91ec354053eca40d57a109b4a7",
   "external_validation": {
     "frontend": "Pending first queue branch CI",
     "playwright": "Pending mock Native save-ack and distinct export names test",
