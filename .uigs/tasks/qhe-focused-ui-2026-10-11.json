@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "PR #99 queued multi-copy feature; browser integration and preparation-race bounded repair pushed; latest-head CI Pending",
-  "current_bounded_work_unit": "PR #99 queue batch prepared synchronously before async media probe; browser scope bug fixed. Extend Windows local smoke path triggers to src/media-workspace.js and src/clip-queue.js for Native-facing UI changes; register clip queue helper as visual capture dependency.",
+  "status": "Studio v3 plus multi-clip Stream Copy queue merged; exact feature-head CI green and 390px Chromium reviewed / physical Native field acceptance Pending",
+  "current_bounded_work_unit": "PR #99 optional Stream Copy queue safely merged: independent IN/OUT jobs, source-bound state, unique names, serial Native jobId-matched export handoff, and retained single-clip flow.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -81,28 +81,38 @@
       "summary": "Copy multi-clip queue, per-clip edit/remove/clear, sequential browser/Native export handoff, error/cancel fences and browser regression scenario",
       "branch": "feat/qhe-copy-segment-queue-20261011",
       "state": "external validation Pending"
+    },
+    {
+      "summary": "PR #99 Stream Copy optional multi-clip queue merged",
+      "pr": 99,
+      "head": "4bcd835d762ac9d18a38f5eea6884a8fc803bb23",
+      "merge_commit": "6a7820560caf0eaac11b11c53f384718625f7015",
+      "frontend_run": 38142116055,
+      "windows_smoke_run": 38142116010,
+      "uigs_run": 38142116077,
+      "visual_review": "390px real Chromium queue screenshot artifact 11702799151"
     }
   ],
   "next_units": [
-    "Check first queue branch CI and visual screenshots",
-    "Fix any clearly caused regression within one repair generation",
-    "Physical Native save-dialog and long-video GPU acceptance remain separate"
+    "Exercise real Windows Native batch file-picker export and Android SAF sequential save on devices",
+    "Observe real source keyframe boundary alignment and queue cancellation / failed-save retry on long videos",
+    "Keep GPU/HDR/VFR and long-form Windows #77 field work pending independently"
   ],
-  "branch": "feat/qhe-copy-segment-queue-20261011",
+  "branch": "main",
   "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/99",
-  "latest_durable_commit": "4267293a7f814c91ec354053eca40d57a109b4a7",
+  "latest_durable_commit": "6a7820560caf0eaac11b11c53f384718625f7015",
   "external_validation": {
-    "frontend": "previous head failed test JS scope ReferenceError in final queue result assertion; next head Pending",
-    "playwright": "first head reached post-batch result check; 390px Chromium queue capture reviewed; full acceptance Pending fix",
-    "windows_smoke": "Windows smoke not scheduled on initial queue head due path filter; trigger scope repair submitted; latest-head Windows CI Pending.",
-    "uigs": "First latest head succeeded 38140978551; repair head Pending",
+    "frontend": "passed exact PR #99 feature head 4bcd835d: run 38142116055",
+    "playwright": "passed prior head a635c66f and final head 4bcd835d: two independent clip range tasks/names, Native export ack barrier, 320-1280 viewport smoke",
+    "windows_smoke": "passed exact PR #99 head 4bcd835d: run 38142116010; CI environment only, not physical save dialog",
+    "uigs": "passed exact PR #99 head 4bcd835d: run 38142116077",
     "android_device": "not-run",
-    "production_visual_review": "Actual 390px screenshot from Frontend run 38141137190 shows two queue intervals and action controls, no horizontal overflow observed; must still verify next-head"
+    "production_visual_review": "actual Chromium queue screenshot at 390px examined (previous success run 38141977192 artifact 11702799151), panel and 2 rows fit viewport; physical Android untested"
   },
   "blockers": [
-    "Latest feature repair exact-head CI and screenshot acceptance Pending",
-    "Physical Android SAF Native dialog tests unrun",
-    "Windows hardware GPU/HDR/long-film #77 FIELD-PENDING"
+    "Real Windows Native and Android SAF sequential save-dialog device acceptance not run",
+    "Physical Android accessibility and system font/safe area not run",
+    "Windows GPU/HDR/VFR/long-form issue #77 FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }
