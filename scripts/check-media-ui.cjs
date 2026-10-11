@@ -764,13 +764,13 @@ const {spawn}=require('node:child_process');
     const rows=[...document.querySelectorAll('#taskClipQueueList li small')];
     return rows.length===2&&rows.every(row=>row.textContent==='已导出');
   });
-  const result=await page.evaluate(()=>({
-    tasks:window.taskRuns.slice(previousRuns).map(task=>({
+  const result=await page.evaluate(beforeBatch=>({
+    tasks:window.taskRuns.slice(beforeBatch).map(task=>({
       operation:task.operation,start:task.start,end:task.end,
       videoRange:task.videoRange,audioRange:task.audioRange
     })),
     names:window.clipExportRequests.map(row=>row.name)
-  }));
+  }),previousRuns);
   if(result.tasks.length!==2||result.names.length!==2||
      result.tasks.some(task=>task.operation!=='copy'||task.videoRange!=='trim'||task.audioRange!=='trim')||
      result.tasks[0].start!==0||result.tasks[0].end!==125||

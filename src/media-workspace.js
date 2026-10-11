@@ -1723,6 +1723,14 @@ export function mountMediaWorkspace(hooks) {
       validateQueuedCopySettings(settings);
       if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
         throw Error('先保存或处理上一任务的成品，避免批量剪切覆盖未保存的结果');
+      // Reserve task ownership before await: no duplicate bulk runs, mode
+      // changes or one-off submissions while Native input preparation awaits.
+      busy=true;clipBatchRunning=true;clipBatchStopRequested=false;
+      hooks.setBusy(true);
+      for(const element of form.elements)element.disabled=true;
+      for(const button of modeButtons)button.disabled=true;
+      setTaskState('preparing');
+      syncClipQueue();
       const media=await hooks.prepare('copy');
       if(!media)throw Error('未能读取当前视频参数');
       // Validate all pending ranges before running the first irreversible export.
@@ -1734,12 +1742,7 @@ export function mountMediaWorkspace(hooks) {
       });
       if(!tasks.length){showClipMessage('全部片段已导出。');syncClipQueue();return;}
       for(const {task} of tasks)await hooks.validate?.(task);
-      busy=true;clipBatchRunning=true;clipBatchStopRequested=false;
-      hooks.setBusy(true);
-      for(const element of form.elements)element.disabled=true;
-      for(const button of modeButtons)button.disabled=true;
       section.querySelector('#taskStopClips').disabled=false;
-      setTaskState('preparing');
       syncClipQueue();
       for(const item of tasks){
         if(clipBatchStopRequested)break;

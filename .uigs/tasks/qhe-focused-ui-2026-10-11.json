@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "PR #99 implementation and latest-head CI red source-test regression repaired; revalidation Pending",
-  "current_bounded_work_unit": "First PR #99 CI red in Studio v3 source contract only: an overly exact mediaInfoListener regex did not allow added clip source invalidation / queue refresh. Adjusted test to assert all required refresh behaviors; latest repair head external CI Pending.",
+  "status": "PR #99 queued multi-copy feature; browser integration and preparation-race bounded repair pushed; latest-head CI Pending",
+  "current_bounded_work_unit": "PR #99 actual Chromium queue UI rendered; browser smoke first reached completed batch then failed test-only page.evaluate closure previousRuns. Repair passes value explicitly. In addition reserve async batch ownership before media preparation to prevent duplicate runs or competing mode changes.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -92,17 +92,17 @@
   "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/99",
   "latest_durable_commit": "4267293a7f814c91ec354053eca40d57a109b4a7",
   "external_validation": {
-    "frontend": "First head failed source regex expectation (src/studio-v3.test.mjs), code behavior not yet browser-tested; exact repair head Pending",
-    "playwright": "Not reached on first head; exact repair head Pending",
+    "frontend": "previous head failed test JS scope ReferenceError in final queue result assertion; next head Pending",
+    "playwright": "first head reached post-batch result check; 390px Chromium queue capture reviewed; full acceptance Pending fix",
     "windows_smoke": "Pending first queue branch CI",
     "uigs": "First latest head succeeded 38140978551; repair head Pending",
     "android_device": "not-run",
-    "production_visual_review": "New queue screenshots not yet produced by first source-test-red CI; Pending"
+    "production_visual_review": "Actual 390px screenshot from Frontend run 38141137190 shows two queue intervals and action controls, no horizontal overflow observed; must still verify next-head"
   },
   "blockers": [
-    "New exact-head Frontend/Playwright and screenshot review Pending after bounded test repair",
-    "Physical Android Native SAF save-dialog not tested",
-    "Windows GPU/HDR/VFR long-film FIELD-PENDING"
+    "Latest feature repair exact-head CI and screenshot acceptance Pending",
+    "Physical Android SAF Native dialog tests unrun",
+    "Windows hardware GPU/HDR/long-film #77 FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }
