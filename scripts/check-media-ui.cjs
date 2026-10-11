@@ -186,7 +186,7 @@ const {spawn}=require('node:child_process');
       log:()=>{},
       cancel:()=>{window.taskCancelRequested=true;},
       save:()=>({pending:true}),
-      prepare:async()=>({duration:2181.384,fps:60,audioTracks:1,formatName:'mov,mp4,m4a,3gp,3g2,mj2',sourceName:'ui.mp4',videoCodec:'h264',audioCodec:'aac',audioCodecs:['aac']}),
+      prepare:async()=>window.mockAudioMedia,
       frame:async options=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',time:Number(options?.time||0),width:Number(options?.width||720)}),
       waveform:async options=>({
         url:Number(window.mockAudioMedia.audioTracks||0)>0?'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=':null,
@@ -409,6 +409,55 @@ const {spawn}=require('node:child_process');
   await page.click('#taskRun');
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='verified');
   if(await page.locator('#taskSave').isDisabled())throw Error('Successful rerun after failure did not restore save handoff');
+
+  // Restore the original smoke's independent scenario boundary: all its
+  // existing assertions run with the original single-video input fixture.
+  // Only the final add-on E2E mutates the mock into a two-stream source.
+  await page.evaluate(()=>{
+    window.mockAudioMedia={
+      ...window.mockAudioMedia,
+      videoTracks:2,
+      videoStreams:[
+        {ordinal:0,codec:'h264',width:1920,height:1080,fps:60,pixelFormat:'yuv420p',bitDepth:8,unsafeColorPipeline:false},
+        {ordinal:1,codec:'h264',width:1280,height:720,fps:30,pixelFormat:'yuv420p',bitDepth:8,unsafeColorPipeline:false}
+      ]
+    };
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
+
+  // Isolated final Browser E2E: prove user-facing multi-stream/time-policy controls compile into
+  // the exact task handed to the execution hook, rather than only existing in DOM.
+  await page.evaluate(()=>{
+    const set=(name,value)=>{
+      const control=document.querySelector('[name='+name+']');
+      control.value=value;
+      control.dispatchEvent(new Event(control.tagName==='SELECT'?'change':'input',{bubbles:true}));
+      if(control.tagName!=='SELECT')control.dispatchEvent(new Event('change',{bubbles:true}));
+    };
+    set('operation','transcode');
+    set('videoStreams','0,1');
+    set('videoRange','trim');
+    set('audio','copy');
+    set('audioTrack','all');
+    set('audioRange','full');
+    set('start','0:01');
+    set('end','0:03');
+    set('rateMode','quality');
+  });
+  if(!(await page.locator('#taskPlanOutput').textContent()).includes('视频 #0 / #1'))throw Error('Multi-video UI summary did not preserve selected stream set');
+  const planNote=await page.locator('#taskPlanNote').textContent();
+  if(!planNote.includes('视频IN/OUT') || !planNote.includes('音频完整'))throw Error('Independent video/audio time policy is not visible in plan summary');
+  await page.click('#taskRun');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='verified');
+  const uiStreamPlanTask=await page.evaluate(()=>window.taskRuns.at(-1));
+  if(JSON.stringify(uiStreamPlanTask.videoStreams)!=='[0,1]')throw Error('UI multi-video selection did not reach compiled task: '+JSON.stringify(uiStreamPlanTask.videoStreams));
+  if(uiStreamPlanTask.expectedVideoTracks!==2)throw Error('Compiled UI task lost multi-video output count');
+  if(uiStreamPlanTask.videoRange!=='trim' || uiStreamPlanTask.audioRange!=='full')throw Error('Independent UI time policies did not reach compiled task');
+  if(uiStreamPlanTask.expectedVideoDuration!==2 || Math.abs(uiStreamPlanTask.expectedAudioDuration-2181.384)>.001)throw Error('Compiled UI task produced wrong independent stream durations: '+JSON.stringify({video:uiStreamPlanTask.expectedVideoDuration,audio:uiStreamPlanTask.expectedAudioDuration}));
+  if(uiStreamPlanTask.outputArgs.filter((x,i,a)=>x==='-map' && /^1:v:[01]$/.test(a[i+1]||'')).length!==2)throw Error('Compiled UI task did not map both selected video streams from trimmed input');
+  if(!uiStreamPlanTask.outputArgs.some((x,i,a)=>x==='-map' && a[i+1]==='0:a?'))throw Error('Compiled UI task did not map audio from full source input');
+
+
 
   if(errors.length)throw Error(errors.join('\n'));
   console.log('Desktop/mobile UI, mode gating, preset preservation: passed');
