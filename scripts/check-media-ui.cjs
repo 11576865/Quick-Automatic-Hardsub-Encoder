@@ -49,6 +49,64 @@ const {spawn}=require('node:child_process');
   await windowsPage.screenshot({path:'media-workspace-windows-native-desktop.png',fullPage:true});
   await windowsPage.close();
 
+
+  // An independent responsive page prevents viewport state from spilling into
+  // the long guided/manual task smoke. Audit real computed layout, not CSS text.
+  const viewportPage=await browser.newPage({viewport:{width:320,height:720}});
+  await viewportPage.goto('http://127.0.0.1:4179/');
+  await viewportPage.locator('#mediaWorkspace').waitFor({state:'attached'});
+  for (const width of [320,390,640,768,919,920,1024,1180,1280]) {
+    await viewportPage.setViewportSize({width,height:800});
+    const expectedShell=width<=640?'phone':width<=1180?'tablet':'desktop';
+    await viewportPage.waitForFunction(expected=>document.documentElement.dataset.uiShell===expected,expectedShell);
+    const layout=await viewportPage.evaluate(()=>{
+      const rect=selector=>document.querySelector(selector)?.getBoundingClientRect();
+      const workspace=document.querySelector('.workspace-layout');
+      const overview=document.querySelector('#taskOverviewRail');
+      return {
+        shell:document.documentElement.dataset.uiShell,
+        gridDisplay:getComputedStyle(workspace).display,
+        gridColumns:getComputedStyle(workspace).gridTemplateColumns,
+        viewport:innerWidth,
+        scrollWidth:document.documentElement.scrollWidth,
+        main:rect('.workflow-main'),
+        runtime:rect('.platform-rail'),
+        overview:rect('#taskOverviewRail'),
+        overviewVisible:overview&&getComputedStyle(overview).display!=='none'
+      };
+    });
+    if(layout.scrollWidth>width+1)
+      throw Error('Horizontal overflow at '+width+'px: '+JSON.stringify(layout));
+    if(width<=640) {
+      if(layout.shell!=='phone')throw Error('Phone shell mismatch at '+width+': '+layout.shell);
+    }else if(width<=1180) {
+      if(layout.shell!=='tablet'||layout.gridDisplay!=='grid')
+        throw Error('Tablet grid was lost at '+width+': '+JSON.stringify(layout));
+      if(layout.runtime.top>layout.main.top+1)
+        throw Error('Tablet runtime entry fell below main work area at '+width+': '+JSON.stringify(layout));
+      if(width<920 && layout.overviewVisible)
+        throw Error('Compact tablet should not reserve a competing summary column');
+      if(width>=920 && (!layout.overviewVisible||layout.overview.left<=layout.main.right-5))
+        throw Error('Wide tablet overview not visible alongside task: '+JSON.stringify(layout));
+    }else if(layout.shell!=='desktop'||layout.gridDisplay!=='grid'){
+      throw Error('Desktop composition lost at '+width+': '+JSON.stringify(layout));
+    }
+  }
+  await viewportPage.setViewportSize({width:320,height:720});
+  await viewportPage.evaluate(()=>{
+    document.body.dataset.mobileStage='produce';
+    document.querySelector('[data-hardsub-strategy="guided"]')?.click();
+    ['subtitleCard','planCard','encodeCard'].forEach(id=>document.getElementById(id)?.classList.remove('hidden'));
+  });
+  const narrowTabs=await viewportPage.locator('#planCard .plan-mode-tab').evaluateAll(nodes=>
+    nodes.map(el=>{const r=el.getBoundingClientRect();return {x:r.left,right:r.right,height:r.height,visible:getComputedStyle(el).display!=='none'};}));
+  if(narrowTabs.length!==3||narrowTabs.some(x=>!x.visible||x.x<0||x.right>320.5||x.height<44))
+    throw Error('320px guided task modes are clipped or too short: '+JSON.stringify(narrowTabs));
+  await viewportPage.screenshot({path:'media-workspace-guided-phone-320.png',fullPage:true});
+  await viewportPage.setViewportSize({width:1024,height:768});
+  await viewportPage.screenshot({path:'media-workspace-tablet-1024.png',fullPage:true});
+  await viewportPage.close();
+
   const page=await browser.newPage({viewport:{width:1280,height:900}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:4179/');
