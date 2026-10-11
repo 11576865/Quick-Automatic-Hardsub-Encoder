@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "PR #98 source readiness merged and verified; copy multi-segment batch queue committed, latest-head CI Pending",
-  "current_bounded_work_unit": "PR #99 created for optional multi-clip Stream Copy; implementation, Node unit tests and Playwright browser/native-save-ack regressions are committed. Latest-head CI Pending.",
+  "status": "PR #99 implementation and latest-head CI red source-test regression repaired; revalidation Pending",
+  "current_bounded_work_unit": "First PR #99 CI red in Studio v3 source contract only: an overly exact mediaInfoListener regex did not allow added clip source invalidation / queue refresh. Adjusted test to assert all required refresh behaviors; latest repair head external CI Pending.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -92,17 +92,17 @@
   "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/99",
   "latest_durable_commit": "4267293a7f814c91ec354053eca40d57a109b4a7",
   "external_validation": {
-    "frontend": "Pending first queue branch CI",
-    "playwright": "Pending mock Native save-ack and distinct export names test",
+    "frontend": "First head failed source regex expectation (src/studio-v3.test.mjs), code behavior not yet browser-tested; exact repair head Pending",
+    "playwright": "Not reached on first head; exact repair head Pending",
     "windows_smoke": "Pending first queue branch CI",
-    "uigs": "Pending first queue branch CI",
+    "uigs": "First latest head succeeded 38140978551; repair head Pending",
     "android_device": "not-run",
-    "production_visual_review": "Pending actual queue screenshot"
+    "production_visual_review": "New queue screenshots not yet produced by first source-test-red CI; Pending"
   },
   "blockers": [
-    "New queue exact-head automated and visual validation Pending",
-    "Physical Android SAF / Windows Native dialog not tested on a device",
-    "GPU/HDR/long-form #77 remains FIELD-PENDING"
+    "New exact-head Frontend/Playwright and screenshot review Pending after bounded test repair",
+    "Physical Android Native SAF save-dialog not tested",
+    "Windows GPU/HDR/VFR long-film FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }
