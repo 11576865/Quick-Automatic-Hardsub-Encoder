@@ -1,0 +1,238 @@
+/* Focused QHE workbench: source > preview > plan > execute.
+   Native lifecycle, disabled controls and mobile stage state remain authoritative. */
+:root {
+  --focus-base:#0b1118;
+  --focus-panel:#151e28;
+  --focus-edge:rgba(147,180,213,.16);
+  --focus-muted:#93a2b4;
+}
+body {background:var(--focus-base);}
+.app-shell {width:min(1480px,calc(100% - 32px));padding-block:16px 42px;}
+.app-header {
+  padding:15px 18px 12px;
+  border:1px solid var(--focus-edge);
+  border-radius:13px;
+  background:#121b25;
+  box-shadow:none;
+}
+.app-header-main {align-items:center;gap:14px;}
+.app-mark {width:37px;height:37px;border-radius:9px;box-shadow:none;}
+.app-brand {gap:12px;}
+#runtimeWorkbenchTitle {font-size:clamp(1.07rem,1.5vw,1.46rem);line-height:1.16;letter-spacing:-.024em;}
+#runtimeKicker {font-size:.58rem;letter-spacing:.1em;opacity:.68;}
+.app-header .hero-subtitle {margin:5px 0 0;font-size:.66rem;opacity:.72;}
+.hero-state {
+  padding:6px 10px;
+  border:1px solid var(--focus-edge);
+  border-radius:8px;
+  background:#19232e;
+}
+.app-header .workflow-strip {
+  margin-top:11px;
+  padding-top:9px;
+  border-top:1px solid var(--focus-edge);
+  gap:6px;
+}
+.runtime-mode-banner {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin:9px 0 13px;
+  padding:6px 11px;
+  min-height:38px;
+  border:1px solid var(--focus-edge);
+  border-left:2px solid #79baf1;
+  border-radius:9px;
+  background:#121b25;
+  box-shadow:none;
+}
+.runtime-mode-copy {display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 9px;}
+.runtime-mode-copy strong {font-size:.7rem;white-space:nowrap;}
+.runtime-mode-copy span {font-size:.65rem;line-height:1.4;}
+.card {
+  border:1px solid var(--focus-edge);
+  border-radius:12px;
+  background:var(--focus-panel);
+  box-shadow:none;
+}
+.workflow-main,.workflow-main > * {min-width:0;}
+.card-heading {align-items:center;gap:10px;margin-bottom:12px;}
+.card-heading h2,.hardsub-control-head h2 {font-size:1.0rem;}
+.card-heading p {font-size:.66rem;opacity:.66;}
+.step-no {min-width:26px;width:26px;height:26px;border-radius:7px;font-size:.62rem;}
+.setup-region,.production-region,.production-controls {gap:10px;}
+.input-card {padding:16px;}
+.input-card > .grid.two {gap:9px;}
+.input-card .file-row {
+  min-height:0;
+  min-width:0;
+  padding:10px 11px;
+  border:1px solid var(--focus-edge);
+  border-radius:8px;
+  background:#111923;
+  box-shadow:none;
+}
+.input-card .file-row small {font-size:.65rem;line-height:1.3;color:var(--focus-muted);}
+.input-card .file-picker-trigger,.input-card .native-picker-button {border-radius:7px;}
+.input-card .action-row {margin-top:10px;}
+.input-card #analyze {min-height:43px;min-width:160px;}
+.env-card {padding:0 12px;background:#111923;}
+.env-card .env-details > summary {min-height:39px;padding:8px 0;}
+.preflight-card {padding:10px 14px;}
+.preflight-card > details > summary {min-height:35px;}
+.preview-card {padding:16px;border-color:rgba(121,186,241,.24);}
+.preview-wrap {max-width:none;min-height:225px;border-radius:9px;background:#080e15;}
+.preview-placeholder {
+  min-height:225px;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  text-align:center;
+  color:var(--focus-muted);
+}
+.preview-workspace {align-items:start;}
+.hardsub-control-deck {padding:13px 15px;gap:10px;}
+.hardsub-control-head {align-items:center;}
+.hardsub-control-head p {font-size:.66rem;margin-top:3px;}
+.hardsub-control-badge {opacity:.6;font-size:.58rem;}
+.hardsub-strategy-switcher {gap:8px;}
+.hardsub-strategy-switcher button {
+  min-height:66px;
+  padding:10px 13px;
+  border-radius:8px;
+  background:#17212d;
+}
+.hardsub-strategy-switcher small {margin-top:3px;font-size:.65rem;}
+.hardsub-strategy-kicker {font-size:.54rem;opacity:.6;}
+.plan-card,.encode-card {padding:15px;}
+.plan-mode-tabs {gap:7px;}
+.plan-mode-tab {min-height:52px;padding:9px 10px;border-radius:8px;}
+.plan-mode-tab strong {font-size:.78rem;}
+.plan-mode-tab small {font-size:.62rem;}
+.plan-controls {gap:10px;}
+#sourceAnchor,#chosenSummary {margin:8px 0;}
+.encode-card {border-color:rgba(121,208,166,.25);}
+.encode-card #liveEta {font-size:.73rem;line-height:1.5;}
+.encode-card #encodeBtn {min-height:44px;}
+.encode-card .progress {height:6px;margin-top:12px;}
+.log-card {margin-top:8px;}
+.task-overview-card {padding:13px;}
+.task-overview-head {margin-bottom:9px;}
+.task-overview-head h2 {font-size:.87rem;}
+.task-overview-head p {font-size:.63rem;}
+.task-overview-group {padding-block:9px;border-top:1px solid var(--focus-edge);}
+.task-overview-group h3 {font-size:.63rem;margin:0 0 7px;color:var(--focus-muted);}
+.task-overview-group dl {margin:0;}
+.task-overview-group dt {font-size:.65rem;}
+.task-overview-group dd {font-size:.69rem;min-width:0;overflow-wrap:anywhere;}
+.platform-rail {align-content:start;gap:8px;}
+.platform-rail-heading {padding:0 2px 3px;}
+.platform-rail-heading h2 {font-size:.75rem;}
+.platform-rail-heading p {display:none;}
+.platform-rail .platform-card,.platform-rail .app-card {padding:11px 12px;border-radius:9px;box-shadow:none;}
+.platform-rail .platform-card-head p {display:none;}
+.platform-rail .platform-card-head h2,.platform-rail .app-card-head h2 {font-size:.74rem;}
+.platform-rail .platform-actions {display:flex;flex-wrap:wrap;gap:6px;}
+.platform-rail .platform-actions > * {min-height:34px;font-size:.65rem;flex:1 1 auto;}
+.platform-rail .app-update-notice {font-size:.62rem;line-height:1.4;}
+.platform-rail .platform-guide {margin-top:7px;}
+.platform-rail .platform-guide > summary {font-size:.66rem;}
+/* Move branch-architecture explanations behind one opt-in disclosure. */
+.media-workflow-notes {
+  margin:3px 0 10px;
+  border:1px solid var(--focus-edge);
+  border-radius:8px;
+  background:#111923;
+}
+.media-workflow-notes > summary {
+  padding:9px 11px;
+  cursor:pointer;
+  color:var(--focus-muted);
+  font-size:.7rem;
+}
+.media-workflow-notes[open] {padding-bottom:9px;}
+.media-workflow-notes > :not(summary) {margin-inline:10px;}
+.media-workspace-heading p,.media-mode-hint {font-size:.68rem;}
+.media-workspace .media-decision-hint {font-size:.68rem;}
+.media-workspace .media-time-format-note {font-size:.65rem;}
+/* One supporting column, not two independent grid rows beside a tall main. */
+.support-rail {display:contents;}
+body.ui-desktop .workspace-layout {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(220px,254px);
+  grid-template-areas:"main support";
+  align-items:start;
+  gap:16px;
+}
+body.ui-desktop .workflow-main {grid-area:main;min-width:0;}
+body.ui-desktop .support-rail {
+  grid-area:support;
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  align-content:start;
+  gap:11px;
+  min-width:0;
+}
+body.ui-desktop .task-overview-rail {
+  grid-area:auto;
+  display:block;
+  position:static;
+  min-width:0;
+}
+body.ui-desktop .platform-rail {grid-area:auto;display:grid;grid-template-columns:minmax(0,1fr);}
+body.windows-native-connected.ui-desktop .platform-rail {display:none !important;}
+body.ui-desktop .production-region {display:grid;grid-template-columns:minmax(0,1fr);gap:10px;}
+body.ui-desktop .preview-workspace {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(112px,155px);
+  gap:10px;
+}
+body.ui-desktop .input-card > .grid.two {grid-template-columns:repeat(2,minmax(0,1fr));}
+body.ui-desktop .input-card .input-engine {grid-column:auto;align-self:stretch;}
+body.ui-tablet .workspace-layout {display:block;}
+body.ui-tablet .task-overview-rail {display:none;}
+body.ui-phone .app-shell {width:min(100% - 16px,640px);padding-top:7px;}
+body.ui-phone .app-header {padding:10px 11px;border-radius:10px;}
+body.ui-phone .app-header .hero-subtitle {display:none;}
+body.ui-phone .runtime-mode-banner {display:grid;padding:7px 9px;gap:6px;}
+body.ui-phone .runtime-mode-copy span {font-size:.61rem;}
+body.ui-phone .input-card,
+body.ui-phone .preview-card,
+body.ui-phone .plan-card,
+body.ui-phone .encode-card {padding:11px;}
+body.ui-phone .input-card .file-row {padding:10px;}
+body.ui-phone .hardsub-control-deck {padding:11px;}
+body.ui-phone .hardsub-strategy-switcher {grid-template-columns:repeat(2,minmax(0,1fr));}
+body.ui-phone .hardsub-strategy-switcher button {min-height:64px;padding:9px;}
+body.ui-phone .hardsub-strategy-switcher small {font-size:.59rem;}
+body.ui-phone .plan-mode-tab {min-height:44px;}
+body.ui-phone .card-heading p {display:none;}
+@media (max-width:410px) {
+  body.ui-phone .hardsub-strategy-switcher {grid-template-columns:1fr;}
+  body.ui-phone .hardsub-strategy-switcher button {min-height:53px;}
+}
+
+/* Keep essential audio/container choices visible; reveal optional audio tuning on demand. */
+#sharedMediaOutputMount:empty {display:none;}
+.media-output-core-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.media-output-audio-details {margin-top:10px;}
+.media-output-audio-details > summary {cursor:pointer;font-size:.7rem;color:var(--focus-muted);}
+.media-output-audio-details > .task-grid {margin-top:11px;}
+body.ui-phone .media-output-core-grid {grid-template-columns:minmax(0,1fr);}
+
+/* Show every guided plan on a phone; no hidden horizontal-only third target. */
+body.ui-phone .plan-mode-tabs {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;
+  overflow:visible;
+}
+body.ui-phone .plan-mode-tab {
+  width:100%;
+  min-width:0;
+  min-height:44px;
+  padding:8px 4px;
+  white-space:normal;
+}
+body.ui-phone .plan-mode-tab strong {font-size:.75rem;}
+body.ui-phone .plan-mode-tab small {display:none;}

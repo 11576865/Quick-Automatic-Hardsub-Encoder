@@ -54,9 +54,50 @@ const {spawn}=require('node:child_process');
   await page.goto('http://127.0.0.1:4179/');
   await page.locator('#mediaWorkspace').waitFor({state:'attached'});
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub still exposes the precise parameter workspace');
+  // The focused desktop composition is not just an imported stylesheet:
+  // verify the actual browser's layout and the task rail's footprint.
+  const focusedDesktop=await page.locator('.workspace-layout').evaluate(el=>{
+    const layout=getComputedStyle(el);
+    const rail=document.querySelector('.task-overview-rail');
+    return {display:layout.display,columns:layout.gridTemplateColumns,
+      railWidth:rail?.getBoundingClientRect().width||0};
+  });
+  if(focusedDesktop.display!=='grid'||focusedDesktop.columns.split(' ').length!==2)
+    throw Error('Focused desktop workspace did not resolve to a two-column workbench: '+JSON.stringify(focusedDesktop));
+  if(focusedDesktop.railWidth<190||focusedDesktop.railWidth>300)
+    throw Error('Focused desktop overview rail is outside intended compact width: '+focusedDesktop.railWidth);
+  const supportStack=await page.evaluate(()=>{
+    const overview=document.querySelector('#taskOverviewRail').getBoundingClientRect();
+    const runtime=document.querySelector('.platform-rail').getBoundingClientRect();
+    return {gap:runtime.top-overview.bottom,overviewRight:overview.right,runtimeRight:runtime.right};
+  });
+  if(supportStack.gap<0||supportStack.gap>26)
+    throw Error('Desktop runtime entry is stranded below an empty grid row: '+JSON.stringify(supportStack));
+  if(Math.abs(supportStack.overviewRight-supportStack.runtimeRight)>3)
+    throw Error('Supporting cards are misaligned: '+JSON.stringify(supportStack));
+  if(await page.locator('.media-workflow-notes').count()!==1)
+    throw Error('Manual task architecture must remain available in a single disclosure');
+
   if((await page.locator('#runtimeModeBadge').textContent()).trim()!=='WEB / WASM')throw Error('Browser runtime identity is not visibly labeled');
   if(await page.locator('#workflowStrip span').count()!==5)throw Error('Hardsub workflow strip does not expose five semantic stages');
   await page.evaluate(()=>['subtitleCard','planCard','encodeCard'].forEach(id=>document.querySelector('#'+id)?.classList.remove('hidden')));
+  if(!await page.evaluate(()=>{
+    const plan=document.querySelector('#planCard');
+    const output=document.querySelector('#sharedMediaOutputMount');
+    const encode=document.querySelector('#encodeCard');
+    return !!(plan&&output&&encode&&
+      (plan.compareDocumentPosition(output)&Node.DOCUMENT_POSITION_FOLLOWING)&&
+      (output.compareDocumentPosition(encode)&Node.DOCUMENT_POSITION_FOLLOWING));
+  }))throw Error('Guided audio/output choices must follow the encode plan and precede execution');
+  if(await page.locator('.media-output-audio-details').evaluate(el=>el.open))
+    throw Error('Detailed audio tuning is expanded by default');
+  if(!await page.locator('.media-output-core-grid [name=audio]').isVisible() ||
+     !await page.locator('.media-output-core-grid [name=outputContainer]').isVisible())
+    throw Error('The primary audio and container controls must remain directly visible');
+  await page.locator('.media-output-audio-details > summary').click();
+  if(!await page.locator('[name=audioBitrate]').isVisible())
+    throw Error('Optional audio bitrate control cannot be revealed');
+  await page.locator('.media-output-audio-details > summary').click();
   if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Guided hardsub does not expose the copied-audio playback warning');
   if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('转为 AAC'))throw Error('Guided copied-audio warning lacks the AAC recovery action');
   await page.selectOption('[name=audio]','aac');
@@ -66,6 +107,13 @@ const {spawn}=require('node:child_process');
   await page.screenshot({path:'media-workspace-hardsub-goal-desktop.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace');
+  if(await page.locator('.media-workflow-notes').evaluate(el=>el.open))
+    throw Error('Verbose task architecture is expanded in the default manual editor');
+  await page.locator('.media-workflow-notes > summary').click();
+  if(!await page.locator('.media-workflow-notes .media-branch-map').isVisible())
+    throw Error('Manual task architecture is not discoverable when requested');
+  await page.locator('.media-workflow-notes > summary').click();
+
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
   await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
@@ -139,6 +187,10 @@ const {spawn}=require('node:child_process');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
   await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('[data-hardsub-strategy="guided"]').click();});
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Goal-controlled hardsub exposes parameter controls on mobile');
+  const phonePlanTabs=await page.locator('#planCard .plan-mode-tab').evaluateAll(tabs=>
+    tabs.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width,visible:getComputedStyle(el).display!=='none'};}));
+  if(phonePlanTabs.length!==3||phonePlanTabs.some(t=>!t.visible||t.left<-1||t.right>390.5||t.width<80))
+    throw Error('Phone guided strategy hides or clips one of three goal choices: '+JSON.stringify(phonePlanTabs));
   await page.screenshot({path:'media-workspace-hardsub-goal-mobile.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');
