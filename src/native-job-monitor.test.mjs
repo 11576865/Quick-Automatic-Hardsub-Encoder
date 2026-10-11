@@ -5,7 +5,7 @@ import test from 'node:test';
 
 test('guided native monitor stops bounded status retries without abandoning job ownership', async () => {
   const source = fs.readFileSync(new URL('./main.js', import.meta.url), 'utf8');
-  const start = source.indexOf('async function monitorNativeJob(jobId)');
+  const start = source.indexOf('async function monitorNativeJob(jobId');
   const end = source.indexOf('async function recoverNativeJob()', start);
   assert(start > 0 && end > start);
 
@@ -99,6 +99,7 @@ test('page refresh paints the recovered two-pass snapshot without a second Bridg
   const context = vm.createContext({
     state, $: element, log() {}, nativePlatformName:()=> 'Windows Native',
     formatDuration:seconds => Math.round(seconds)+'秒',
+    localPredictionForPlan:()=>null,
     syncTaskInputMutationLocks() {}, syncMobileStageNav() {}, setMobileStage() {},
     document:{body:{classList:{contains:()=>false}}},
     sleepMs:()=>new Promise(resolve=>{releasePoll=resolve}),
@@ -145,6 +146,8 @@ test('incomplete or stale recovered progress cannot roll an active task backward
   }};
   const context=vm.createContext({
     state,$:element,log(){},nativePlatformName:()=> 'Windows Native',
+    localPredictionForPlan:()=>null,
+    formatDuration:seconds => Math.round(seconds)+'秒',
     syncTaskInputMutationLocks(){},refreshBenchmarkEnabled(){},
     localStorage:{removeItem(){}},
     sleepMs:async()=>observations.push(element('progressBar').style.width),
