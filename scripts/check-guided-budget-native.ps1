@@ -108,11 +108,17 @@ try {
       }
       $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
       if($again.state -ne 'failed'){throw 'Strict failed task became exportable after repeated status query'}
+      $leftovers=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$started.jobId+"-*"))
+      if($leftovers.Count){throw 'Failed strict task left private staging behind'}
     }else{
       if($result.state -ne 'completed' -or $result.outputBytes -le 0){throw "$policy never produced a valid output"}
       if($policy -eq 'strict-ceiling' -and $result.outputBytes -gt $ceiling){throw 'Strict success exceeded byte ceiling'}
       $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
       if($again.state -ne 'completed'){throw 'Completed staged output is not retained'}
+      $lateCancel=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$($started.jobId)/cancel" -Headers $headers
+      if($lateCancel.state -ne 'completed'){throw 'Late cancel invalidated a completed output'}
+      $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
+      if($again.state -ne 'completed' -or $again.outputBytes -ne $result.outputBytes){throw 'Late cancel lost completed staging'}
     }
     Write-Host ("$policy result="+$result.state+" encoder="+$started.encoder+" bytes="+$result.outputBytes+
       " saw-pass1="+$seenPass1+" saw-pass2="+$seenPass2)
