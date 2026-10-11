@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "PR #99/#100 merged; optional in-place queue editor correction submitted, exact-head CI Pending",
-  "current_bounded_work_unit": "Correct QHE Clip queue '载入' semantics: queued and failed clip can now edit IN/OUT in-place and cancel editing; already saved rows can only be reused as a new clip. Preserve existing Native save-only retry and independent output identities.",
+  "status": "Stream Copy multi-segment queue plus in-place unsaved clip editing merged, latest-head CI green and Chromium queue visual reviewed / physical Native dialog Pending",
+  "current_bounded_work_unit": "PR #101 merged: queued unsaved ranges edit in-place, explicit cancel, completed ranges only reused as new clips; Playwright verified updated compiled range, cancellation and Native save-retry invariants.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -109,28 +109,38 @@
     {
       "summary": "Source-backed queue UI issue: 载入 plus 加入 created duplicate instead of editing row; implement in-place update and immutable saved range reuse with Playwright checks",
       "state": "Pending latest-head CI"
+    },
+    {
+      "summary": "PR #101 queued-clip in-place editing and immutable completed-clip reuse",
+      "pr": 101,
+      "source_head": "dbfad1bc0c7f841fe794ff2920da92eaad770dc2",
+      "merge_commit": "7dd5e12791a5dc27b2706c68f663da1b7abe988a",
+      "frontend_run": 38159643466,
+      "windows_smoke_run": 38159643480,
+      "uigs_run": 38159643511,
+      "visual_artifact_id": 11709509544
     }
   ],
   "next_units": [
-    "Review exact-head Frontend, Windows and UIGS checks and browser screenshot",
-    "Merge if the source/test geometry and runtime paths remain stable",
-    "Field test Android SAF and Windows Native dialogs on physical devices"
+    "Validate physical Windows Native and Android SAF multi-clip save/cancel/retry dialogs with real files",
+    "Check actual keyframe-aligned cut boundaries on device",
+    "Keep GPU/HDR/VFR/long-form field tests under QHE #77"
   ],
-  "branch": "fix/qhe-clip-queue-edit-in-place-20261012",
-  "pull_request_url": "",
-  "latest_durable_commit": "e02b3d2445e752edaeff64f0973cd5286fa8dc93",
+  "branch": "main",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/101",
+  "latest_durable_commit": "7dd5e12791a5dc27b2706c68f663da1b7abe988a",
   "external_validation": {
-    "frontend": "Pending queue in-place edit fix exact-head",
-    "playwright": "Pending edit/cancel/reuse and original Native save retry path",
-    "windows_smoke": "Pending next PR Windows local smoke (media-workspace.js changes trigger workflow)",
-    "uigs": "Pending next PR UIGS Evidence",
+    "frontend": "passed PR #101 exact head dbfad1bc; run 38159643466",
+    "playwright": "passed in-place edit 0:00–2:04, cancellation retains 2:10–2:15, immutable completed re-use, queue/Native save handoff and retry; run 38159643466",
+    "windows_smoke": "passed exact PR #101 source head; run 38159643480 (CI, not physical native dialogs)",
+    "uigs": "passed exact PR #101 source head; run 38159643511",
     "android_device": "not-run",
-    "production_visual_review": "Existing 390px queue screenshot reviewed in PR #100; new active editing screenshot Pending"
+    "production_visual_review": "reviewed actual Chromium 390px queue screenshot from PR #101 media-workspace-screenshots artifact 11709509544; no visible horizontal overflow"
   },
   "blockers": [
-    "In-place edit UI CI and visual capture Pending",
-    "Physical Windows Native / Android SAF save dialogue acceptance Pending",
-    "Real GPU/HDR/VFR long-form #77 FIELD-PENDING"
+    "Physical Windows Native and Android SAF batch save dialogs not field-tested",
+    "Android actual touch/font/accessibility device acceptance pending",
+    "Windows GPU/HDR/VFR long-form QHE #77 remains FIELD-PENDING"
   ],
   "updated_at": "2026-10-12"
 }
