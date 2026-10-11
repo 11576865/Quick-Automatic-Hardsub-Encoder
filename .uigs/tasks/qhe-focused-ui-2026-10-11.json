@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "Studio v3 merged / exact-head automated CI and Chromium visuals verified / device field validation Pending",
-  "current_bounded_work_unit": "PR #97 merged after correcting transcode/copy editor placement; screenshot evidence confirms all modes use the intended studio composition.",
+  "status": "Studio v3 merged; manual task source/probe gating follow-up submitted, exact-head CI Pending",
+  "current_bounded_work_unit": "Fix real desktop Copy/Transcode 'Start' action visually and interactively enabled with no selected/probed source; preserve prior completed artifact recovery, cancel and Native Bridge state.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -64,27 +64,31 @@
       "windows_smoke_run": 38134035725,
       "uigs_run": 38134035779,
       "visual_artifact_id": 11700645709
+    },
+    {
+      "summary": "Source-backed missing-media Start affordance corrected in actual media-workspace.js; three-stage Playwright readiness checks added",
+      "state": "awaiting external CI"
     }
   ],
   "next_units": [
-    "Test real Android system fonts/safe area/touch and assistive technology on device",
-    "Collect observed UX issues before further layout changes",
-    "Keep GPU/HDR/VFR and long-video field validation under QHE #77"
+    "Check one latest-head CI status after PR creation",
+    "Review disabled Copy screenshot if available",
+    "Do not change backend / field acceptance"
   ],
-  "branch": "main",
-  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/97",
-  "latest_durable_commit": "a502c7258dc07e81c1722e1ef3e93052e039992d",
+  "branch": "fix/qhe-studio-source-readiness-action-20261011",
+  "pull_request_url": "",
+  "latest_durable_commit": "54cd4a92009425e0c3b099db117f4d4c23cd3b6a",
   "external_validation": {
-    "frontend": "passed exact PR #97 repair head e5964e9d; workflow 38134035730",
-    "playwright": "passed desktop 1280px all three modes, 320px phone reachability, existing responsive matrix; run 38134035730",
+    "frontend": "Pending source-readiness follow-up",
+    "playwright": "Pending source absent -> selected/unprobed -> probed sequence",
     "windows_smoke": "passed exact repair head; workflow 38134035725 (CI runner, not physical GPU)",
-    "uigs": "passed exact repair head; workflow 38134035779",
+    "uigs": "Pending",
     "android_device": "not-run",
-    "production_visual_review": "reviewed actual Chromium desktop hard-sub, transcode and copy screenshots; repair artifact 11700645709; physical device not tested"
+    "production_visual_review": "PR #97 Copy screenshot shows prematurely enabled green action; fix screenshot Pending"
   },
   "blockers": [
-    "Physical Android font scaling, accessibility, system safe area and touch remain untested",
-    "Real Windows GPU/HDR/VFR/long-form QHE #77 still FIELD-PENDING"
+    "Exact-head frontend, UIGS and screenshot verification Pending",
+    "Physical Android and NVIDIA GPU/long-form remain separate Pending"
   ],
   "updated_at": "2026-10-11"
 }

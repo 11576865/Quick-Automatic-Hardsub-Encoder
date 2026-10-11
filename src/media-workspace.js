@@ -1262,7 +1262,17 @@ export function mountMediaWorkspace(hooks) {
     const stateName=section.dataset.taskState||'idle',run=section.querySelector('#taskRun'),save=section.querySelector('#taskSave');
     const finished=['verified','save_failed','saved'].includes(stateName);
     const previousResult=finished&&completedStale;
-    run.textContent=finished&&!previousResult?'重新压制':runButtonLabel();
+    // The real UI exposes these source/probe hooks; keep synthetic consumers
+    // with omitted hooks compatible with their submit-time validation.
+    const hasSource=typeof hooks.videoIdentity!=='function'||!!hooks.videoIdentity();
+    const hasMedia=typeof hooks.mediaSnapshot!=='function'||!!hooks.mediaSnapshot();
+    const requirement=!hasSource?'video':!hasMedia?'probe':'';
+    run.dataset.inputRequirement=requirement||'ready';
+    run.textContent=requirement==='video'?'先选择视频'
+      :requirement==='probe'?'先读取视频参数'
+      :finished&&!previousResult?'重新压制':runButtonLabel();
+    run.title=requirement==='video'?'从左侧素材区选择视频后继续'
+      :requirement==='probe'?'先点击“读取视频参数”或等待原生媒体探测完成':'';
     run.classList.toggle('task-secondary-action',finished&&!previousResult);
     save.textContent=stateName==='saving'
       ? '正在保存…'
@@ -1271,7 +1281,7 @@ export function mountMediaWorkspace(hooks) {
         : stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
     save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
     save.disabled=busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
-    run.disabled=busy||stateName==='saving';
+    run.disabled=busy||stateName==='saving'||!!requirement;
     section.dataset.completedStale=previousResult?'true':'false';
   };
   const setTaskState = next => {
@@ -1537,7 +1547,7 @@ export function mountMediaWorkspace(hooks) {
     updateRate();
     syncAudioPlaybackWarning();
   };
-  const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); };
+  const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();

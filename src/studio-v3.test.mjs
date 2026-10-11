@@ -13,6 +13,9 @@ test('professional workbench composes real source, media viewer and inspector',a
   assert.match(media,/if \(manualMount && section.parentElement !== manualMount\) manualMount.append\(section\)/);
   assert.match(css,/\.production-region:has\(#subtitleCard\.hidden\) #sharedMediaOutputMount/);
   assert.match(media,/modeNav\.remove\(\)/);
+  assert.match(media,/run\.disabled=busy\|\|stateName==='saving'\|\|!!requirement/);
+  assert.match(media,/mediaInfoListener = \(\) => \{ syncAudioPlaybackWarning\(\); syncVideoStreamInfo\(\); syncTaskActions\(\); \}/);
+  assert.match(css,/\.media-action-dock #taskRun:disabled\[data-input-requirement="video"\]/);
   assert.match(css,/grid-template-areas:"source stage" "check stage" "log log"/);
   assert.match(css,/body\.ui-desktop \.preview-workspace/);
   assert.match(css,/body\.ui-phone \.studio-mode-dock/);

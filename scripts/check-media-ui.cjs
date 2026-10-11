@@ -285,6 +285,9 @@ const {spawn}=require('node:child_process');
   await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Returning to goal-controlled hardsub left the parameter workspace visible');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
+  if(!await page.locator('#taskRun').isDisabled() ||
+     (await page.locator('#taskRun').getAttribute('data-input-requirement'))!=='video')
+    throw Error('Copy shows enabled execution without a selected video');
   await page.screenshot({path:'media-workspace-copy.png',fullPage:true});
   if(!await page.locator('[name=width]').isDisabled())throw Error('Copy controls remain enabled');
   if(await page.locator('.input-ass').isVisible())throw Error('Copy still requests subtitles');
@@ -294,6 +297,8 @@ const {spawn}=require('node:child_process');
   if(await page.inputValue('[name=start]')!=='3:57.25')throw Error('Full-width clock input did not normalize');
   if(await page.locator('#workflowStrip span').count()!==3)throw Error('Transcode workflow strip did not collapse to three stages');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace is not visible');
+  if(!await page.locator('#taskRun').isDisabled())
+    throw Error('Transcode shows enabled execution without a selected video');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
   if((await page.locator('#mediaWorkspaceTitle').textContent()).trim()!=='硬字幕压制工作区')throw Error('Transcode -> hardsub did not restore hardsub chrome');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
@@ -382,6 +387,8 @@ const {spawn}=require('node:child_process');
     window.taskRuns=[];
     window.taskBehavior='normal';
     window.taskCancelRequested=false;
+    window.mockSourcePresent=false;
+    window.mockProbeReady=false;
     window.verifyFrameRequests=[];
     window.mockAudioMedia={
       duration:2181.384,
@@ -398,7 +405,8 @@ const {spawn}=require('node:child_process');
       isWindows:()=>false,
       hasNvenc:()=>false,
       platformKey:()=>({}),
-      mediaSnapshot:()=>window.mockAudioMedia,
+      mediaSnapshot:()=>window.mockProbeReady?window.mockAudioMedia:null,
+      videoIdentity:()=>window.mockSourcePresent?'ui.mp4|8000000|1':'',
       busy:()=>false,
       setBusy:()=>{},
       log:()=>{},
@@ -439,6 +447,23 @@ const {spawn}=require('node:child_process');
     });
   });
 
+  if(!await page.locator('#taskRun').isDisabled() ||
+     (await page.locator('#taskRun').textContent()).trim()!=='先选择视频')
+    throw Error('Run did not require a video in the isolated manual task');
+  await page.evaluate(()=>{
+    window.mockSourcePresent=true;
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
+  if(!await page.locator('#taskRun').isDisabled() ||
+     (await page.locator('#taskRun').textContent()).trim()!=='先读取视频参数')
+    throw Error('Run became enabled before video probing');
+  await page.evaluate(()=>{
+    window.mockProbeReady=true;
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
+  if(await page.locator('#taskRun').isDisabled() ||
+     (await page.locator('#taskRun').textContent()).trim()!=='开始硬字幕压制')
+    throw Error('Run did not enable after video selection and probing');
   if((await page.locator('#taskAudioPlaybackWarning').getAttribute('data-state'))!=='info')throw Error('AAC copy guidance is not rendered as informational');
   if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('AAC · 1 轨 · 192 kb/s'))throw Error('AAC codec-aware guidance does not expose probed audio facts');
   await page.evaluate(()=>{
