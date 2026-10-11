@@ -106,7 +106,13 @@ test('web shell keeps platform guidance but uses compact native workbench layout
   assert.match(main, /class="preview-image"/);
   assert.match(main, /data-codec="' \+ codec \+ '" role="button"/);
   assert.match(css, /\.codec-card\[data-codec\]\s*\{[\s\S]*?cursor:\s*pointer/);
-  assert.match(css, /\.preview-lightbox\s*\{/);
+  // A removed preview modal must not retain inert mobile/safe-area CSS.
+  assert.doesNotMatch(css, /\.preview-lightbox\b/);
+  // Current phone help is a section containing individual <details>, not
+  // the previous <details> wrapper and help-body subtree.
+  assert.doesNotMatch(css, /\.mobile-runtime-help-body\b/);
+  assert.doesNotMatch(css, /body\.ui-mobile \.mobile-runtime-help > summary/);
+  assert.match(css, /body\.ui-phone \.mobile-runtime-help-grid/);
   assert.match(css, /body\.ui-mobile \.preflight-card \.status-item\s*\{[\s\S]*?display:\s*grid[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) minmax\(8\.5rem, auto\)/);
   assert.doesNotMatch(main, /data-range-step="quick"/);
   assert.doesNotMatch(main, /data-range-reset="quick"/);
