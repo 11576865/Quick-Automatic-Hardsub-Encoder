@@ -20,9 +20,9 @@ export function mountMediaWorkspace(hooks) {
   modeNav.className = 'media-mode-switcher';
   modeNav.setAttribute('aria-label', '视频处理工作区');
   modeNav.innerHTML =
-    '<button type="button" data-media-mode="hardsub" aria-pressed="true"><span class="media-mode-index">ASS</span><span><strong>硬字幕压制</strong><small>ASS · libass · 编码</small></span></button>' +
-    '<button type="button" data-media-mode="transcode" aria-pressed="false"><span class="media-mode-index">VIDEO</span><span><strong>纯视频转码</strong><small>编码 · 画面 · 音频</small></span></button>' +
-    '<button type="button" data-media-mode="copy" aria-pressed="false"><span class="media-mode-index">COPY</span><span><strong>视频流复制 / 快速剪辑</strong><small>无损剪切 · 流映射</small></span></button>';
+    '<button type="button" data-media-mode="hardsub" aria-label="硬字幕压制" aria-pressed="true"><span class="media-mode-index">ASS</span><span><strong>硬压</strong><small>ASS · libass</small></span></button>' +
+    '<button type="button" data-media-mode="transcode" aria-label="纯视频转码" aria-pressed="false"><span class="media-mode-index">VIDEO</span><span><strong>转码</strong><small>视频 · 音频</small></span></button>' +
+    '<button type="button" data-media-mode="copy" aria-label="视频流复制与快速剪辑" aria-pressed="false"><span class="media-mode-index">COPY</span><span><strong>剪切</strong><small>Stream Copy</small></span></button>';
   section.innerHTML = `<div class="media-workspace-heading">
     <div>
       <span id="mediaWorkspaceEyebrow" class="media-workspace-eyebrow">HARDSUB</span>
