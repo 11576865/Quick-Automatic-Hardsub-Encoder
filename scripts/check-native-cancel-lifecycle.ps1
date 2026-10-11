@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Path $root | Out-Null
 $saved=Join-Path $root 'previous-export.mkv'
 [IO.File]::WriteAllText($saved,'previous-valid-export')
 try{
-  foreach($case in @('active-pass1','between-passes','active-pass2','exit-during-kill')){
+  foreach($case in @('active-pass1','between-passes','active-pass2','exit-during-kill','stop-failure')){
     $work=Join-Path $root $case
     New-Item -ItemType Directory -Path (Join-Path $work 'fonts') -Force | Out-Null
     foreach($file in @('subtitle.ass','fonts/fixture.ttf','guided-budget-0.log','task-pass-0.log','output.mkv')){
@@ -31,11 +31,11 @@ try{
     if($case -in @('between-passes','exit-during-kill')){
       if(-not $started.Process.WaitForExit(10000) -or $started.Process.ExitCode -ne 0){throw 'Boundary process did not exit successfully'}
     }elseif($started.Process.HasExited){throw 'Active cancellation fixture exited too early'}
-    if($case -eq 'exit-during-kill'){
+    if($case -in @('exit-during-kill','stop-failure')){
       # Model the one stale HasExited observation before Kill throws. Exit
       # confirmation/timing/disposal still use the actual exited FFmpeg handle.
       $real=$started.Process
-      $raced=[pscustomobject]@{Inner=$real;FirstObservation=$true}
+      $raced=[pscustomobject]@{Inner=$real;FirstObservation=($case -eq 'exit-during-kill')}
       $raced | Add-Member ScriptProperty HasExited {
         if($this.FirstObservation){$this.FirstObservation=$false;return $false}
         return $this.Inner.HasExited
@@ -44,7 +44,7 @@ try{
         $getter=[scriptblock]::Create('return $this.Inner.'+$property)
         $raced | Add-Member ScriptProperty $property $getter
       }
-      $raced | Add-Member ScriptMethod Kill {throw 'Process already exited during Kill'}
+      $raced | Add-Member ScriptMethod Kill {throw 'Injected cancellation stop exception'}
       $raced | Add-Member ScriptMethod WaitForExit {param($timeout) return $this.Inner.WaitForExit($timeout)}
       $raced | Add-Member ScriptMethod Dispose {$this.Inner.Dispose()}
       $started.Process=$raced
@@ -56,6 +56,13 @@ try{
       EncodeSeconds=0.0;TimedProcessKey='';Error=''}
     $script:Jobs[$case]=$job
     $cancel=Cancel-EncodeJob $case
+    if($case -eq 'stop-failure'){
+      if($cancel.state -ne 'cancelling' -or -not(Test-Path -LiteralPath $work) -or $real.HasExited){
+        throw 'Unconfirmed stop deleted staging or claimed terminal cancellation'
+      }
+      $real.Kill();$real.WaitForExit()
+      $cancel=Cancel-EncodeJob $case
+    }
     if($cancel.state -ne 'cancelled'){throw "$case did not finalize at cancel ingress"}
     if(Test-Path -LiteralPath $work){throw "$case left private staging"}
     if($job.Phase -ne $(if($case -eq 'active-pass2'){2}else{1})){throw 'Cancellation launched second pass'}

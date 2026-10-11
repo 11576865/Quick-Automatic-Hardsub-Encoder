@@ -1425,11 +1425,17 @@ function Cancel-EncodeJob([string]$JobId) {
     $p=$j.Started.Process
     try {
         if(-not $p.HasExited){$p.Kill()}
+    } catch {
+        # Natural exit can race with Kill. A stop exception is not evidence
+        # that the process is still running; independently confirm exit.
+        Write-BridgeLog ('Encode cancellation stop failed: '+$_.Exception.Message) 'WARN'
+    }
+    try {
         if(-not $p.WaitForExit(3000)){
             return [pscustomobject]@{ok=$true;state='cancelling';jobId=$JobId}
         }
     } catch {
-        Write-BridgeLog ('Encode cancellation stop failed: '+$_.Exception.Message) 'WARN'
+        Write-BridgeLog ('Encode cancellation exit confirmation failed: '+$_.Exception.Message) 'WARN'
         return [pscustomobject]@{ok=$true;state='cancelling';jobId=$JobId}
     }
     # Finalize now: the client may disconnect and never poll again. Cleanup

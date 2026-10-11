@@ -36,6 +36,10 @@
 - [x] Observe the baseline Windows failure at the no-poll cleanup assertion.
 - [x] Add bounded stop/wait/finalize cancellation and cleanup after incomplete terminal finalization.
 - [x] Add completed-state preservation and pass-boundary cancellation checks.
-- [ ] Run Node tests, FFmpeg integration, build and Windows CI. Record exact evidence and limits in the PR.
+- [x] Run Node tests, FFmpeg integration, build and Windows CI. Record exact evidence and limits in the PR.
 
 Evidence: baseline commit `878b0fa`, Windows job `114400708188` failed at `Pass 1 cancellation left staging behind without status polling`. Local baseline: 142 passed/5 skipped Node tests, all 5 FFmpeg integration tests passed, Vite build passed.
+
+Review follow-up: initial implementation `adb1643` passed Windows smoke/runtime and UIGS. Independent review found the natural-exit/Kill exception race. Regression commit `3a4d1fa` failed at `exit-during-kill did not finalize at cancel ingress` in Windows job `114401443259`. The correction confirms process exit independently of Kill success, with a complementary still-running stop-failure case. Final verification is recorded in PR #88.
+
+Deferred review minors: the tiny HTTP fixture requires observing pass two and can be timing-sensitive on faster runners; the direct-process fixtures use dummy staged assets, complemented by actual Bridge encoding; a missing/empty already-completed output defers full private-directory cleanup until a further status/cancel request. Forced termination/restart recovery remains outside this correction.
