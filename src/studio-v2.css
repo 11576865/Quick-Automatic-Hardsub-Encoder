@@ -333,3 +333,54 @@ body.ui-phone .input-card .file-row .file-picker-trigger:hover,
 body.ui-phone .input-card .file-row .native-picker-button:hover {
   background:#244356 !important;
 }
+
+
+/* Accessible phone hierarchy: one backend identity, readable metadata and
+   visible keyboard focus for visually hidden native file inputs. */
+body.ui-phone .app-header .hero-state {display:none;}
+body.ui-phone .runtime-mode-banner {
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px 10px;
+}
+body.ui-phone .runtime-mode-badge {font-size:.7rem;}
+body.ui-phone .runtime-mode-copy {display:flex;flex-wrap:wrap;gap:3px 9px;}
+body.ui-phone .runtime-mode-copy strong {font-size:.8rem;}
+body.ui-phone .runtime-mode-copy span {font-size:.78rem;line-height:1.5;}
+body.ui-phone .media-mode-switcher strong {font-size:.92rem;}
+body.ui-phone .input-card .file-row label:not(.file-picker-trigger):not(.font-persist-check) {
+  font-size:.84rem;
+}
+body.ui-phone .input-card .file-row small,
+body.ui-phone .input-card #backendSummary,
+body.ui-phone .env-card .env-summary,
+body.ui-phone .preflight-card .preflight-status,
+body.ui-phone .preview-placeholder,
+body.ui-phone .plan-card .note,
+body.ui-phone .plan-card .plan-slider-feedback,
+body.ui-phone .encode-card #liveEta,
+body.ui-phone .media-output-policy .media-audio-playback-warning,
+body.ui-phone .media-output-policy .note {
+  font-size:max(.78rem,12px);
+  line-height:1.5;
+}
+body.ui-phone .input-card .file-row .font-persist-check {
+  font-size:.8rem !important;
+  line-height:1.55;
+}
+body.ui-phone .input-card .file-picker-trigger,
+body.ui-phone .input-card .native-picker-button {
+  min-height:44px;
+  font-size:.87rem;
+}
+body.ui-phone .plan-mode-tab strong {font-size:.8rem;}
+@media (max-width:350px) {
+  body.ui-phone .plan-mode-tab strong {font-size:.78rem;}
+}
+/* The source file input is intentionally only 1px and transparent. Without
+   transferring focus, keyboard users cannot see where Tab is. */
+.file-input-control:focus + .file-picker-trigger {
+  outline:3px solid #87d8f2;
+  outline-offset:2px;
+}

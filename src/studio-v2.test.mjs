@@ -14,6 +14,9 @@ test('studio v2 uses real operation controls and defers runtime tutorials',async
   assert.match(css,/body\.ui-phone \.mobile-runtime-help\s*\{[^}]*display:block !important/);
   assert.match(css,/body\.ui-phone \.support-rail\s*\{display:none/);
   assert.match(css,/body\.ui-phone\[data-media-operation="hardsub"\]\[data-mobile-stage="prepare"\] #sharedMediaOutputMount/);
+  assert.match(css,/body\.ui-phone \.app-header \.hero-state\s*\{display:none/);
+  assert.match(css,/\.file-input-control:focus \+ \.file-picker-trigger/);
+  assert.match(css,/body\.ui-phone \.input-card \.file-row small/);
   assert.match(css,/\.preview-wrap\s*\{[^}]*aspect-ratio:16 \/ 9/);
   assert.match(css,/\.encode-card #encodeBtn/);
   for(const [mode,accessibleName,visibleLabel] of [
