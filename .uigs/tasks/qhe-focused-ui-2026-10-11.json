@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "PR #98 one bounded frontend assertion repair pushed; next-head external validation Pending",
-  "current_bounded_work_unit": "PR #98 first CI found test-only label mismatch: actual hardsub manual action is 使用当前参数开始硬压, not 开始硬字幕压制. Correct the assertion without altering product code; Windows smoke first run failed due Chocolatey FFmpeg HTTP 504, external installation infrastructure. Repair head CI pending.",
+  "status": "PR #99 queued multi-copy feature; browser integration and preparation-race bounded repair pushed; latest-head CI Pending",
+  "current_bounded_work_unit": "PR #99 queue batch prepared synchronously before async media probe; browser scope bug fixed. Extend Windows local smoke path triggers to src/media-workspace.js and src/clip-queue.js for Native-facing UI changes; register clip queue helper as visual capture dependency.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -68,28 +68,41 @@
     {
       "summary": "Source-backed missing-media Start affordance corrected in actual media-workspace.js; three-stage Playwright readiness checks added",
       "state": "awaiting external CI"
+    },
+    {
+      "summary": "PR #98 source readiness merged and all exact-head CI passed",
+      "pr": 98,
+      "merge_commit": "3d61d1687de2fb29b573334947096fc2b0c42898",
+      "frontend_run": 38139751577,
+      "windows_smoke_run": 38139751559,
+      "uigs_run": 38139751509
+    },
+    {
+      "summary": "Copy multi-clip queue, per-clip edit/remove/clear, sequential browser/Native export handoff, error/cancel fences and browser regression scenario",
+      "branch": "feat/qhe-copy-segment-queue-20261011",
+      "state": "external validation Pending"
     }
   ],
   "next_units": [
-    "After PR #98 latest-head external validation, complete existing readiness UI merge",
-    "Implement optional stream-copy multi-segment queue as a separate bounded feature",
-    "Keep existing single-clip flow and Native export semantics"
+    "Check first queue branch CI and visual screenshots",
+    "Fix any clearly caused regression within one repair generation",
+    "Physical Native save-dialog and long-video GPU acceptance remain separate"
   ],
-  "branch": "fix/qhe-studio-source-readiness-action-20261011",
-  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/98",
-  "latest_durable_commit": "6eda22a36bcfedbb5a647296958c85c1aec337fe",
+  "branch": "feat/qhe-copy-segment-queue-20261011",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/99",
+  "latest_durable_commit": "4267293a7f814c91ec354053eca40d57a109b4a7",
   "external_validation": {
-    "frontend": "Original head failed: test expectation wrong, not observed product error; repair Pending",
-    "playwright": "Original head halted at readiness label mismatch; repair Pending",
-    "windows_smoke": "Original head failed: Chocolatey FFmpeg install HTTP 504; repair Pending",
-    "uigs": "Pending",
+    "frontend": "previous head failed test JS scope ReferenceError in final queue result assertion; next head Pending",
+    "playwright": "first head reached post-batch result check; 390px Chromium queue capture reviewed; full acceptance Pending fix",
+    "windows_smoke": "Windows smoke not scheduled on initial queue head due path filter; trigger scope repair submitted; latest-head Windows CI Pending.",
+    "uigs": "First latest head succeeded 38140978551; repair head Pending",
     "android_device": "not-run",
-    "production_visual_review": "PR #97 Copy screenshot shows prematurely enabled green action; fix screenshot Pending"
+    "production_visual_review": "Actual 390px screenshot from Frontend run 38141137190 shows two queue intervals and action controls, no horizontal overflow observed; must still verify next-head"
   },
   "blockers": [
-    "Repair-head Frontend, Windows smoke, UIGS CI Pending",
-    "Previous Windows failure: Chocolatey FFmpeg 9.0.2 package endpoint HTTP 504 (external)",
-    "Physical Android/NVIDIA GPU long-video still FIELD-PENDING"
+    "Latest feature repair exact-head CI and screenshot acceptance Pending",
+    "Physical Android SAF Native dialog tests unrun",
+    "Windows hardware GPU/HDR/long-film #77 FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }

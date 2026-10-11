@@ -1753,3 +1753,29 @@ body.media-frame-lightbox-open {
 .media-curve-viewport {width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
 .media-curve-viewport svg {min-width:560px;display:block}
 
+
+
+/* Optional Stream Copy clip queue; single-clip form remains the primary route. */
+.media-clip-queue {
+  display:grid;gap:10px;
+  padding:12px 14px;margin-top:12px;
+  background:#121f2a;border:1px solid rgba(124,174,203,.28);
+  border-radius:9px;
+}
+.media-clip-queue[hidden],.media-clip-queue #taskStopClips[hidden]{display:none!important;}
+.media-clip-queue-header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;}
+.media-clip-queue-header>div{display:grid;gap:3px;}
+.media-clip-queue-header strong{font-size:.85rem;color:#dfebf3;}
+.media-clip-queue-header span{font-size:.73rem;color:#9cafbd;}
+.media-clip-queue button{min-height:42px;}
+.media-clip-queue ol{margin:0;padding:0;display:grid;gap:5px;list-style:none;}
+.media-clip-queue li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:center;padding:8px 9px;border:1px solid rgba(151,183,205,.13);border-radius:7px;background:#0f1922;}
+.media-clip-queue li div{min-width:0;display:flex;flex-wrap:wrap;gap:5px 10px;align-items:baseline;}
+.media-clip-queue li strong{font-size:.76rem;}
+.media-clip-queue li span{font-size:.73rem;color:#c2ceda;overflow-wrap:anywhere;}
+.media-clip-queue li small{font-size:.68rem;color:#96b3c9;}
+.media-clip-queue #taskClipQueueStatus{font-size:.74rem;line-height:1.55;color:#b4c5d3;margin:0;}
+.media-clip-queue-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.media-clip-queue-actions #taskExportClips{min-height:44px;background:#254859;border:1px solid #487889;color:#e1f4fa;font-weight:700;}
+.media-clip-queue-actions #taskExportClips:disabled{background:#24323d;border-color:#354452;color:#94a5b3;}
+@media(max-width:400px){.media-clip-queue{padding:10px}.media-clip-queue li{grid-template-columns:minmax(0,1fr) auto auto;padding:7px 6px;gap:4px}.media-clip-queue li button{padding:6px;min-width:44px}}

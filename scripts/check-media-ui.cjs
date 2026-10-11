@@ -288,6 +288,10 @@ const {spawn}=require('node:child_process');
   if(!await page.locator('#taskRun').isDisabled() ||
      (await page.locator('#taskRun').getAttribute('data-input-requirement'))!=='video')
     throw Error('Copy shows enabled execution without a selected video');
+  if(await page.locator('#taskClipQueuePanel').isHidden())
+    throw Error('Copy mode did not expose the optional multi-segment panel');
+  if(!await page.locator('#taskAddClip').isDisabled())
+    throw Error('Copy queue can be populated before video probe');
   await page.screenshot({path:'media-workspace-copy.png',fullPage:true});
   if(!await page.locator('[name=width]').isDisabled())throw Error('Copy controls remain enabled');
   if(await page.locator('.input-ass').isVisible())throw Error('Copy still requests subtitles');
@@ -297,6 +301,8 @@ const {spawn}=require('node:child_process');
   if(await page.inputValue('[name=start]')!=='3:57.25')throw Error('Full-width clock input did not normalize');
   if(await page.locator('#workflowStrip span').count()!==3)throw Error('Transcode workflow strip did not collapse to three stages');
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Transcode workspace is not visible');
+  if(!await page.locator('#taskClipQueuePanel').isHidden())
+    throw Error('Copy-only clip queue appeared in Transcode mode');
   if(!await page.locator('#taskRun').isDisabled())
     throw Error('Transcode shows enabled execution without a selected video');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
@@ -387,6 +393,8 @@ const {spawn}=require('node:child_process');
     window.taskRuns=[];
     window.taskBehavior='normal';
     window.taskCancelRequested=false;
+    window.clipBatchMockActive=false;
+    window.clipExportRequests=[];
     window.mockSourcePresent=false;
     window.mockProbeReady=false;
     window.verifyFrameRequests=[];
@@ -411,7 +419,13 @@ const {spawn}=require('node:child_process');
       setBusy:()=>{},
       log:()=>{},
       cancel:()=>{window.taskCancelRequested=true;},
-      save:()=>({pending:true}),
+      save:result=>{
+        if(window.clipBatchMockActive){
+          window.clipExportRequests.push({name:result.name,jobId:result.jobId||''});
+          return result.jobId?{pending:true}:{ok:true,kind:'browser-download'};
+        }
+        return {pending:true};
+      },
       prepare:async()=>window.mockAudioMedia,
       frame:async options=>({url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=',time:Number(options?.time||0),width:Number(options?.width||720)}),
       waveform:async options=>({
@@ -441,7 +455,8 @@ const {spawn}=require('node:child_process');
           outputBytes:530000000,
           outputDuration:task.expectedDuration,
           verified:true,
-          ...(task.expectedDuration>100?{jobId:'ui-smoke-job',name:'ui-smoke.'+task.outputExtension}:{})
+          name:'ui-smoke.'+task.outputExtension,
+          ...(task.expectedDuration>100?{jobId:'ui-smoke-job'}:{})
         };
       }
     });
@@ -701,6 +716,71 @@ const {spawn}=require('node:child_process');
   if(!uiStreamPlanTask.outputArgs.some((x,i,a)=>x==='-map' && a[i+1]==='0:a?'))throw Error('Compiled UI task did not map audio from full source input');
 
 
+
+
+  // Queue E2E after all legacy single-job tests: the first long clip emulates
+  // a Native save dialog. No next encoding is allowed before its acknowledgment.
+  await page.click('#taskSave');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{
+    detail:{ok:true,jobId:'ui-smoke-job',path:'C:\\exported.mkv'}
+  })));
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saved');
+  await page.evaluate(()=>{
+    const set=(name,value)=>{
+      const field=document.querySelector('[name='+name+']');field.value=value;
+      field.dispatchEvent(new Event('change',{bubbles:true}));
+    };
+    set('operation','copy');set('videoStreams','0');
+    set('videoRange','trim');set('audioRange','trim');set('subtitleRange','trim');
+    set('start','0:00');set('end','2:05');
+  });
+  if(await page.locator('#taskClipQueuePanel').isHidden())throw Error('Copy queue hidden for prepared source');
+  await page.click('#taskAddClip');
+  if(await page.locator('#taskClipQueueList li').count()!==1)throw Error('Failed to add first clip');
+  await page.evaluate(()=>{
+    const start=document.querySelector('[name=start]'),end=document.querySelector('[name=end]');
+    start.value='2:10';end.value='2:15';
+    start.dispatchEvent(new Event('change',{bubbles:true}));
+    end.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await page.click('#taskAddClip');
+  await page.click('#taskAddClip');
+  if(await page.locator('#taskClipQueueList li').count()!==2)throw Error('Duplicate or missing queued clip');
+  await page.screenshot({path:'media-workspace-copy-segment-queue-390.png',fullPage:true});
+  await page.evaluate(()=>{window.clipBatchMockActive=true;window.clipExportRequests=[];});
+  const previousRuns=await page.evaluate(()=>window.taskRuns.length);
+  await page.click('#taskExportClips');
+  await page.waitForFunction(()=>document.querySelector('#taskClipQueueList li small')?.textContent==='正在保存');
+  await page.waitForTimeout(100);
+  if(await page.evaluate(()=>window.taskRuns.length)!==previousRuns+1)
+    throw Error('Second clip started before first Native save was acknowledged');
+  if(!await page.locator('#taskStopClips').isVisible())
+    throw Error('Batch cancellation affordance missing');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{
+    detail:{ok:true,jobId:'ui-smoke-job',path:'C:\\clip-01.mkv'}
+  })));
+  await page.waitForFunction(()=>{
+    const rows=[...document.querySelectorAll('#taskClipQueueList li small')];
+    return rows.length===2&&rows.every(row=>row.textContent==='已导出');
+  });
+  const result=await page.evaluate(beforeBatch=>({
+    tasks:window.taskRuns.slice(beforeBatch).map(task=>({
+      operation:task.operation,start:task.start,end:task.end,
+      videoRange:task.videoRange,audioRange:task.audioRange
+    })),
+    names:window.clipExportRequests.map(row=>row.name)
+  }),previousRuns);
+  if(result.tasks.length!==2||result.names.length!==2||
+     result.tasks.some(task=>task.operation!=='copy'||task.videoRange!=='trim'||task.audioRange!=='trim')||
+     result.tasks[0].start!==0||result.tasks[0].end!==125||
+     result.tasks[1].start!==130||result.tasks[1].end!==135)
+    throw Error('Queue did not compile separate Stream Copy IN/OUT intervals: '+JSON.stringify(result));
+  if(!result.names[0].includes('-clip-01.')||!result.names[1].includes('-clip-02.')||
+     result.names[0]===result.names[1])
+    throw Error('Queue output names were not unique: '+JSON.stringify(result.names));
+  if(!await page.locator('#taskExportClips').isDisabled())
+    throw Error('Already-exported queue still offers duplicate batch run');
 
   if(errors.length)throw Error(errors.join('\n'));
   console.log('Desktop/mobile UI, mode gating, preset preservation: passed');
