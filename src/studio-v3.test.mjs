@@ -9,6 +9,9 @@ test('professional workbench composes real source, media viewer and inspector',a
   assert.match(main,/import '.\/studio-v3\.css'/);
   assert.match(main,/id="studioModeDock" class="studio-mode-dock"/);
   assert.match(main,/id="studioEmptyStage"/);
+  assert.match(media,/id="taskClipQueuePanel"/);
+  assert.match(media,/saveQueuedResult=async result/);
+  assert.match(media,/clipBatchRunning=true/);
   assert.match(media,/if \(modeDock\) modeDock.append\(modeNav\)/);
   assert.match(media,/if \(manualMount && section.parentElement !== manualMount\) manualMount.append\(section\)/);
   assert.match(css,/\.production-region:has\(#subtitleCard\.hidden\) #sharedMediaOutputMount/);

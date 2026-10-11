@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "PR #98 one bounded frontend assertion repair pushed; next-head external validation Pending",
-  "current_bounded_work_unit": "PR #98 first CI found test-only label mismatch: actual hardsub manual action is 使用当前参数开始硬压, not 开始硬字幕压制. Correct the assertion without altering product code; Windows smoke first run failed due Chocolatey FFmpeg HTTP 504, external installation infrastructure. Repair head CI pending.",
+  "status": "PR #98 source readiness merged and verified; copy multi-segment batch queue committed, latest-head CI Pending",
+  "current_bounded_work_unit": "Optional lossless Stream Copy queue adds source-bound IN/OUT items, individual clip filenames, sequential copy jobs, and waits for asynchronous Native export confirmation before next clip. Existing single clip remains unchanged.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -68,28 +68,41 @@
     {
       "summary": "Source-backed missing-media Start affordance corrected in actual media-workspace.js; three-stage Playwright readiness checks added",
       "state": "awaiting external CI"
+    },
+    {
+      "summary": "PR #98 source readiness merged and all exact-head CI passed",
+      "pr": 98,
+      "merge_commit": "3d61d1687de2fb29b573334947096fc2b0c42898",
+      "frontend_run": 38139751577,
+      "windows_smoke_run": 38139751559,
+      "uigs_run": 38139751509
+    },
+    {
+      "summary": "Copy multi-clip queue, per-clip edit/remove/clear, sequential browser/Native export handoff, error/cancel fences and browser regression scenario",
+      "branch": "feat/qhe-copy-segment-queue-20261011",
+      "state": "external validation Pending"
     }
   ],
   "next_units": [
-    "After PR #98 latest-head external validation, complete existing readiness UI merge",
-    "Implement optional stream-copy multi-segment queue as a separate bounded feature",
-    "Keep existing single-clip flow and Native export semantics"
+    "Check first queue branch CI and visual screenshots",
+    "Fix any clearly caused regression within one repair generation",
+    "Physical Native save-dialog and long-video GPU acceptance remain separate"
   ],
-  "branch": "fix/qhe-studio-source-readiness-action-20261011",
-  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/98",
-  "latest_durable_commit": "6eda22a36bcfedbb5a647296958c85c1aec337fe",
+  "branch": "feat/qhe-copy-segment-queue-20261011",
+  "pull_request_url": "",
+  "latest_durable_commit": "45ecda37d69ee874ef11bab3c848ced04ff6d7c0",
   "external_validation": {
-    "frontend": "Original head failed: test expectation wrong, not observed product error; repair Pending",
-    "playwright": "Original head halted at readiness label mismatch; repair Pending",
-    "windows_smoke": "Original head failed: Chocolatey FFmpeg install HTTP 504; repair Pending",
-    "uigs": "Pending",
+    "frontend": "Pending first queue branch CI",
+    "playwright": "Pending mock Native save-ack and distinct export names test",
+    "windows_smoke": "Pending first queue branch CI",
+    "uigs": "Pending first queue branch CI",
     "android_device": "not-run",
-    "production_visual_review": "PR #97 Copy screenshot shows prematurely enabled green action; fix screenshot Pending"
+    "production_visual_review": "Pending actual queue screenshot"
   },
   "blockers": [
-    "Repair-head Frontend, Windows smoke, UIGS CI Pending",
-    "Previous Windows failure: Chocolatey FFmpeg 9.0.2 package endpoint HTTP 504 (external)",
-    "Physical Android/NVIDIA GPU long-video still FIELD-PENDING"
+    "New queue exact-head automated and visual validation Pending",
+    "Physical Android SAF / Windows Native dialog not tested on a device",
+    "GPU/HDR/long-form #77 remains FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }
