@@ -239,7 +239,9 @@ export function mountMediaWorkspace(hooks) {
   <div class="button-row media-action-dock"><button type="submit" id="taskRun">开始硬字幕压制</button><button type="button" id="taskCancel" class="secondary" disabled>取消</button><button type="button" id="taskReport" class="secondary" disabled>导出任务报告</button><button type="button" id="taskSave" class="secondary" disabled>保存成品</button></div>
   <details class="task-technical-details"><summary>技术详情 · 实际 FFmpeg 命令</summary><pre id="taskCommand" class="task-command" aria-live="polite">等待检查设置。</pre></details>
   </form>`;
-  document.querySelector('#inputCard').before(modeNav);
+  const modeDock = document.querySelector('#studioModeDock');
+  if (modeDock) modeDock.append(modeNav);
+  else document.querySelector('#inputCard').before(modeNav);
   document.querySelector('#inputCard').after(section);
   const form = section.querySelector('form'), get = name => form.elements.namedItem(name);
   const modeButtons = [...modeNav.querySelectorAll('[data-media-mode]')];
@@ -1445,7 +1447,12 @@ export function mountMediaWorkspace(hooks) {
         outputPolicyAnchor.after(outputPolicy);
       }
     } else {
-      if (inputCard && section.previousElementSibling !== inputCard) inputCard.after(section);
+      // All operations share the central editor slot. Keeping transcode/copy
+      // next to #inputCard confines the full timeline and codec form to the
+      // narrow source shelf in Studio v3's desktop three-zone layout.
+      // Preserve original nodes/events and the phone prepare-stage semantic.
+      if (manualMount && section.parentElement !== manualMount) manualMount.append(section);
+      else if (!manualMount && inputCard && section.previousElementSibling !== inputCard) inputCard.after(section);
       if (outputPolicy && outputPolicy.parentElement !== form) outputPolicyAnchor.after(outputPolicy);
     }
 

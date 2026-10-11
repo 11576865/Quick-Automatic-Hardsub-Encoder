@@ -41,7 +41,8 @@
         "src/media-workspace.js",
         "src/media-workspace-ui.css",
         "src/focused-workbench.css",
-        "src/studio-v2.css"
+        "src/studio-v2.css",
+        "src/studio-v3.css"
       ],
       "output_name": "QHE.PREPARE_SHELL.DESKTOP_DARK.png",
       "limitations": [
@@ -83,7 +84,8 @@
         "src/media-workspace.js",
         "src/media-workspace-ui.css",
         "src/focused-workbench.css",
-        "src/studio-v2.css"
+        "src/studio-v2.css",
+        "src/studio-v3.css"
       ],
       "output_name": "QHE.GUIDED_PRODUCE.DESKTOP_DARK.png",
       "limitations": [
@@ -125,7 +127,8 @@
         "src/media-workspace.js",
         "src/media-workspace-ui.css",
         "src/focused-workbench.css",
-        "src/studio-v2.css"
+        "src/studio-v2.css",
+        "src/studio-v3.css"
       ],
       "output_name": "QHE.MEDIA_WORKSPACE.DESKTOP_DARK.png",
       "limitations": [
@@ -167,7 +170,8 @@
         "src/media-workspace.js",
         "src/media-workspace-ui.css",
         "src/focused-workbench.css",
-        "src/studio-v2.css"
+        "src/studio-v2.css",
+        "src/studio-v3.css"
       ],
       "output_name": "QHE.MOBILE_STAGE.PRODUCE_DARK.png",
       "limitations": [
@@ -213,7 +217,8 @@
         "windows/native-bridge.ps1",
         "windows/native-backend.ps1",
         "src/focused-workbench.css",
-        "src/studio-v2.css"
+        "src/studio-v2.css",
+        "src/studio-v3.css"
       ],
       "output_name": "QHE.WINDOWS_NATIVE.RUNTIME_DESKTOP_DARK.png",
       "limitations": [

@@ -4,6 +4,7 @@ import { outputFileName, resolveOutputContainer } from './media-container.js';
 import './style.css';
 import './focused-workbench.css';
 import './studio-v2.css';
+import './studio-v3.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
@@ -135,6 +136,7 @@ app.innerHTML = `
       <span id="runtimeModeDetail">浏览器 FFmpeg/WASM · 建议 ≤ 1 GB</span>
     </div>
   </section>
+  <div id="studioModeDock" class="studio-mode-dock" aria-label="处理模式导航"></div>
 
   <nav id="mobileStageNav" class="mobile-stage-nav" aria-label="移动端任务阶段">
     <button type="button" data-mobile-stage-target="prepare" aria-current="step">
@@ -259,6 +261,10 @@ app.innerHTML = `
   </section>
 
   <div class="adaptive-region production-region">
+  <section id="studioEmptyStage" class="studio-empty-stage" data-mobile-stage-section="produce" aria-label="媒体预览区域">
+    <div class="studio-empty-visual" aria-hidden="true"><span></span></div>
+    <div class="studio-empty-copy"><strong>媒体预览</strong><span>添加视频并完成分析后显示实际画面</span></div>
+  </section>
   <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading preview-card-heading">
       <span class="step-no">03</span>

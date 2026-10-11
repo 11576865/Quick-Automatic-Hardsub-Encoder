@@ -110,8 +110,58 @@ const {spawn}=require('node:child_process');
       throw Error('Desktop composition lost at '+width+': '+JSON.stringify(layout));
     }
   }
+  // Source/media/inspector architecture must be visible in an actual browser.
+  await viewportPage.setViewportSize({width:1280,height:820});
+  await viewportPage.waitForFunction(()=>document.documentElement.dataset.uiShell==='desktop');
+  const professionalLayout=await viewportPage.evaluate(()=>{
+    const rect=selector=>{
+      const r=document.querySelector(selector)?.getBoundingClientRect();
+      return r?{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width}:null;
+    };
+    const stage=document.querySelector('#studioEmptyStage');
+    return {mode:rect('#studioModeDock'),asset:rect('#inputCard'),
+      viewer:rect('#studioEmptyStage'),inspector:rect('#taskOverviewRail'),
+      modeCount:document.querySelectorAll('#studioModeDock [data-media-mode]').length,
+      placeholderVisible:!!stage&&getComputedStyle(stage).display!=='none'};
+  });
+  if(professionalLayout.modeCount!==3||
+     professionalLayout.mode.bottom>professionalLayout.asset.top+1)
+    throw Error('Work mode dock is not ahead of source shelf: '+JSON.stringify(professionalLayout));
+  if(!professionalLayout.placeholderVisible||
+     professionalLayout.viewer.left<professionalLayout.asset.right+8||
+     professionalLayout.viewer.width<410)
+    throw Error('Large video stage is not beside source shelf: '+JSON.stringify(professionalLayout));
+  if(professionalLayout.inspector.left<professionalLayout.viewer.right+7)
+    throw Error('Inspector overlaps the media workspace: '+JSON.stringify(professionalLayout));
+  await viewportPage.screenshot({path:'media-workspace-studio-v3-desktop.png',fullPage:true});
+  // A desktop screenshot revealed the previously untested transcode/copy
+  // editor had been reparented under the 250px source shelf, leaving the
+  // central stage empty. The real editor must use the central work surface.
+  for(const mode of ['transcode','copy']){
+    await viewportPage.locator('#studioModeDock [data-media-mode="'+mode+'"]').click();
+    const modeGeometry=await viewportPage.evaluate(()=>{
+      const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect();return r?{left:r.left,right:r.right,width:r.width,top:r.top}:null;};
+      const editor=document.querySelector('#mediaWorkspace');
+      return {source:rect('#inputCard'),editor:rect('#mediaWorkspace'),parent:editor?.parentElement?.id,
+        visible:!!editor&&getComputedStyle(editor).display!=='none'};
+    });
+    if(!modeGeometry.visible||modeGeometry.parent!=='hardsubManualMount'||
+       modeGeometry.editor.left<modeGeometry.source.right+8||
+       modeGeometry.editor.width<400)
+      throw Error('Desktop '+mode+' editor collapsed into source shelf: '+JSON.stringify(modeGeometry));
+    await viewportPage.screenshot({path:'media-workspace-studio-v3-'+mode+'-desktop.png',fullPage:true});
+  }
+  await viewportPage.locator('#studioModeDock [data-media-mode="hardsub"]').click();
+
+
   await viewportPage.setViewportSize({width:320,height:720});
   await viewportPage.waitForFunction(()=>document.documentElement.dataset.uiShell==='phone');
+  for(const mode of ['transcode','copy']){
+    await viewportPage.locator('#studioModeDock [data-media-mode="'+mode+'"]').click();
+    if(!await viewportPage.locator('#mediaWorkspace').isVisible())
+      throw Error('Phone '+mode+' editor became unreachable after central mounting');
+  }
+  await viewportPage.locator('#studioModeDock [data-media-mode="hardsub"]').click();
   const phoneLegibility=await viewportPage.evaluate(()=>{
     const size=s=>parseFloat(getComputedStyle(document.querySelector(s)).fontSize);
     const header=document.querySelector('.app-header .hero-state');
