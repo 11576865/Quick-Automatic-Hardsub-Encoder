@@ -67,7 +67,7 @@ const {spawn}=require('node:child_process');
         gridColumns:getComputedStyle(workspace).gridTemplateColumns,
         viewport:innerWidth,
         scrollWidth:document.documentElement.scrollWidth,
-        main:rect('#workflowMain'),
+        main:rect('.workflow-main'),
         runtime:rect('.platform-rail'),
         overview:rect('#taskOverviewRail'),
         overviewVisible:overview&&getComputedStyle(overview).display!=='none'
