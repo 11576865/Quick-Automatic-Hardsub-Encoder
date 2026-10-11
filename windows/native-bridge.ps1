@@ -1402,6 +1402,47 @@ function Ensure-CompletedJobHistory($Job) {
     }
 }
 
+function Clear-IncompleteJobStaging($Job) {
+    # Call only after process exit/disposal. Completed staging belongs to the
+    # pending save operation and must survive cancellation retries.
+    if($Job.State -notin @('failed','cancelled')){return}
+    try {
+        if($Job.Work -and (Test-Path -LiteralPath $Job.Work)){
+            Remove-Item -LiteralPath $Job.Work -Recurse -Force -ErrorAction Stop
+        }
+    } catch {
+        Write-BridgeLog ('Incomplete job staging cleanup failed: '+$_.Exception.Message) 'WARN'
+    }
+}
+
+function Cancel-EncodeJob([string]$JobId) {
+    if(-not $script:Jobs.ContainsKey($JobId)){return [pscustomobject]@{ok=$false;error='Unknown Windows Native job id.'}}
+    $j=$script:Jobs[$JobId]
+    if($j.State -in @('completed','failed','cancelled')){return Get-JobStatus $JobId}
+    # Set this before querying status, including the gap after pass one has
+    # exited, so Get-JobStatus cannot launch a cancelled second pass.
+    $j.Cancelled=$true
+    $p=$j.Started.Process
+    try {
+        if(-not $p.HasExited){$p.Kill()}
+    } catch {
+        # Natural exit can race with Kill. A stop exception is not evidence
+        # that the process is still running; independently confirm exit.
+        Write-BridgeLog ('Encode cancellation stop failed: '+$_.Exception.Message) 'WARN'
+    }
+    try {
+        if(-not $p.WaitForExit(3000)){
+            return [pscustomobject]@{ok=$true;state='cancelling';jobId=$JobId}
+        }
+    } catch {
+        Write-BridgeLog ('Encode cancellation exit confirmation failed: '+$_.Exception.Message) 'WARN'
+        return [pscustomobject]@{ok=$true;state='cancelling';jobId=$JobId}
+    }
+    # Finalize now: the client may disconnect and never poll again. Cleanup
+    # must happen after confirmed exit, rather than while FFmpeg owns files.
+    return Get-JobStatus $JobId
+}
+
 function Test-GuidedOutputStreams($Job) {
     # Guided encodes previously checked only the existence of a video header.
     # Enforce the same bounded stream/packet integrity checks as manual tasks
@@ -1449,6 +1490,7 @@ function Test-GuidedStrictBudget($Job) {
         'Strict container byte verification failed: staged output missing, empty or invalid ceiling.'
     }
     Remove-Item -LiteralPath $Job.Output -Force -ErrorAction SilentlyContinue
+    Clear-IncompleteJobStaging $Job
     Write-BridgeLog ('Strict size guard rejected job '+$Job.Id+': '+$Job.Error) 'WARN'
     return $false
 }
@@ -1473,8 +1515,8 @@ function Get-JobStatus([string]$JobId) {
         $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
         return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
-    if($j.State -eq 'cancelled'){return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
-    if($j.State -eq 'failed'){return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}}
+    if($j.State -eq 'cancelled'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
+    if($j.State -eq 'failed'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}}
 
     $p=$j.Started.Process
     if(-not $p.HasExited){
@@ -1507,6 +1549,7 @@ function Get-JobStatus([string]$JobId) {
         }catch{
             $j.State='failed';$j.Error='Second-pass launch failed: '+$_.Exception.Message
             Remove-Item -LiteralPath $j.Output -Force -ErrorAction SilentlyContinue
+            Clear-IncompleteJobStaging $j
             return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
         }
     }
@@ -1562,6 +1605,7 @@ function Get-JobStatus([string]$JobId) {
             [void](Test-GuidedStrictBudget $j)
         }
         $p.Dispose()
+        Clear-IncompleteJobStaging $j
         if($j.State -eq 'completed'){Ensure-CompletedJobHistory $j}
         if($j.State -eq 'completed'){Write-BridgeLog ("Job "+$JobId+" completed · "+$j.Encoder)}
         elseif($j.State -eq 'cancelled'){Write-BridgeLog ("Job "+$JobId+" cancelled") 'WARN'}
@@ -1744,8 +1788,7 @@ function Handle-Request($Request) {
         if($path -match '^/api/jobs/([A-Za-z0-9]+)$' -and $Request.Method -eq 'GET'){Send-HttpJson $Request 200 (Get-JobStatus $Matches[1]);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/cancel$' -and $Request.Method -eq 'POST'){
             $id=$Matches[1]
-            if($script:Jobs.ContainsKey($id)){$j=$script:Jobs[$id];$j.Cancelled=$true;try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
-            Send-HttpJson $Request 200 @{ok=$true};return
+            Send-HttpJson $Request 200 (Cancel-EncodeJob $id);return
         }
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-OutputFrame $Matches[1] $body);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/reference-frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-HardsubReferenceFrame $Matches[1] $body);return}
@@ -1800,7 +1843,9 @@ try{
     }
 }finally{
     try{$listener.Stop()}catch{}
-    foreach($j in $script:Jobs.Values){try{if(-not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}}
+    foreach($j in $script:Jobs.Values){
+        try{if($j.State -eq 'encoding'){[void](Cancel-EncodeJob $j.Id)}else{Clear-IncompleteJobStaging $j}}catch{}
+    }
     foreach($j in $script:ImportJobs.Values){
         try{if($j.State -eq 'importing' -and -not $j.Started.Process.HasExited){$j.Started.Process.Kill()}}catch{}
         try{if($j.Work -and (Test-Path -LiteralPath $j.Work)){Remove-Item -LiteralPath $j.Work -Recurse -Force -ErrorAction SilentlyContinue}}catch{}
