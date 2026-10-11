@@ -57,6 +57,8 @@ const {spawn}=require('node:child_process');
   await viewportPage.locator('#mediaWorkspace').waitFor({state:'attached'});
   for (const width of [320,390,640,768,919,920,1024,1180,1280]) {
     await viewportPage.setViewportSize({width,height:800});
+    const expectedShell=width<=640?'phone':width<=1180?'tablet':'desktop';
+    await viewportPage.waitForFunction(expected=>document.documentElement.dataset.uiShell===expected,expectedShell);
     const layout=await viewportPage.evaluate(()=>{
       const rect=selector=>document.querySelector(selector)?.getBoundingClientRect();
       const workspace=document.querySelector('.workspace-layout');
