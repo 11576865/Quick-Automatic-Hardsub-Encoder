@@ -112,6 +112,41 @@ const {spawn}=require('node:child_process');
   }
   await viewportPage.setViewportSize({width:320,height:720});
   await viewportPage.waitForFunction(()=>document.documentElement.dataset.uiShell==='phone');
+  const phoneLegibility=await viewportPage.evaluate(()=>{
+    const size=s=>parseFloat(getComputedStyle(document.querySelector(s)).fontSize);
+    const header=document.querySelector('.app-header .hero-state');
+    const runtime=document.querySelector('#runtimeModeBanner');
+    return {
+      duplicateHeaderVisible:getComputedStyle(header).display!=='none',
+      runtimeVisible:getComputedStyle(runtime).display!=='none',
+      metadata:size('#videoMeta'),
+      fontInfo:size('#fontMeta'),
+      backend:size('#runtimeModeDetail'),
+      picker:size('#videoWebPicker')
+    };
+  });
+  if(phoneLegibility.duplicateHeaderVisible||!phoneLegibility.runtimeVisible)
+    throw Error('Phone duplicates or hides the backend identity: '+JSON.stringify(phoneLegibility));
+  if(['metadata','fontInfo','backend','picker'].some(key=>phoneLegibility[key]<12))
+    throw Error('Phone critical metadata fell below 12px: '+JSON.stringify(phoneLegibility));
+  const pickerFocus=await viewportPage.evaluate(()=>{
+    document.querySelector('#video').focus();
+    const picker=document.querySelector('#videoWebPicker');
+    const style=getComputedStyle(picker);
+    return {outline:style.outlineStyle,width:style.outlineWidth};
+  });
+  if(pickerFocus.outline==='none'||parseFloat(pickerFocus.width)<2)
+    throw Error('Keyboard-focused video picker has no visible focus indication: '+JSON.stringify(pickerFocus));
+  await viewportPage.evaluate(()=>document.documentElement.style.fontSize='24px');
+  const scaledPhone=await viewportPage.evaluate(()=>{
+    const tabs=[...document.querySelectorAll('.media-mode-switcher [data-media-mode]')];
+    return {overflow:document.documentElement.scrollWidth-innerWidth,
+      tabs:tabs.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,height:r.height};})};
+  });
+  if(scaledPhone.overflow>1||scaledPhone.tabs.some(t=>t.left<0||t.right>320.5||t.height<44))
+    throw Error('150% root font scaling clips the 320px task intake: '+JSON.stringify(scaledPhone));
+  await viewportPage.screenshot({path:'media-workspace-studio-phone-150pct-text.png',fullPage:true});
+  await viewportPage.evaluate(()=>document.documentElement.style.fontSize='');
   await viewportPage.screenshot({path:'media-workspace-studio-intake-320.png',fullPage:true});
   await viewportPage.evaluate(()=>{
     document.body.dataset.mobileStage='produce';
