@@ -20,20 +20,20 @@ export function mountMediaWorkspace(hooks) {
   modeNav.className = 'media-mode-switcher';
   modeNav.setAttribute('aria-label', '视频处理工作区');
   modeNav.innerHTML =
-    '<button type="button" data-media-mode="hardsub" aria-pressed="true"><span class="media-mode-index">ASS</span><span><strong>硬字幕压制</strong><small>预检 / 真实预览 / 方案 / 重编码</small></span></button>' +
-    '<button type="button" data-media-mode="transcode" aria-pressed="false"><span class="media-mode-index">VIDEO</span><span><strong>纯视频转码</strong><small>编码 / 画面 / 帧率 / 音频 / 封装</small></span></button>' +
-    '<button type="button" data-media-mode="copy" aria-pressed="false"><span class="media-mode-index">COPY</span><span><strong>视频流复制 / 快速剪辑</strong><small>视频 Stream Copy / 独立时间范围 / 音频可单独转码</small></span></button>';
+    '<button type="button" data-media-mode="hardsub" aria-pressed="true"><span class="media-mode-index">ASS</span><span><strong>硬字幕压制</strong><small>ASS · libass · 编码</small></span></button>' +
+    '<button type="button" data-media-mode="transcode" aria-pressed="false"><span class="media-mode-index">VIDEO</span><span><strong>纯视频转码</strong><small>编码 · 画面 · 音频</small></span></button>' +
+    '<button type="button" data-media-mode="copy" aria-pressed="false"><span class="media-mode-index">COPY</span><span><strong>视频流复制 / 快速剪辑</strong><small>无损剪切 · 流映射</small></span></button>';
   section.innerHTML = `<div class="media-workspace-heading">
     <div>
       <span id="mediaWorkspaceEyebrow" class="media-workspace-eyebrow">HARDSUB</span>
       <h2 id="mediaWorkspaceTitle">硬字幕压制工作区</h2>
-      <p id="mediaWorkspaceDescription">字幕预检与真实 libass 预览完成后，在这里控制最终视频编码、音频与封装。</p>
+      <p id="mediaWorkspaceDescription">编码与封装</p>
     </div>
     <div class="media-workspace-badges"><span>同一任务格式</span><span>Native / Web</span></div>
   </div>
   <form id="mediaTaskForm">
   <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','视频流复制 / 快速剪辑']])}${input('start','开始时间','例如 3:57.250','0')}${input('end','结束时间','留空表示片尾；例如 5:12.800')}</div>
-  <p class="note media-time-format-note">时间支持秒、小数秒、MM:SS.mmm、HH:MM:SS.mmm；中文全角冒号会自动识别。</p>
+  <p class="note media-time-format-note">支持 MM:SS.mmm / HH:MM:SS.mmm</p>
   <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="媒体剪辑时间轴">
     <div class="media-waveform-heading">
       <div><strong>剪辑时间轴</strong><span id="taskWaveformStatus">尚未分析 · 用于选择源素材时间范围；有音频时显示波形，无损剪切额外显示关键帧</span></div>
@@ -133,6 +133,7 @@ export function mountMediaWorkspace(hooks) {
     </div>
   </div>
   <p id="taskModeHint" class="note media-mode-hint"></p>
+  <details class="media-workflow-notes"><summary>处理方式说明</summary>
   <div class="media-branch-map" aria-label="当前媒体任务结构">
     <span>共享入口 · 源媒体 / 探测</span><b>→</b><strong>当前任务分支</strong><b>→</b><span>共享出口 · 封装 / 执行 / 验证 / 保存</span>
   </div>
@@ -154,6 +155,7 @@ export function mountMediaWorkspace(hooks) {
   <div class="media-mode-explainer media-mode-explainer-copy">
     <strong>视频 Stream Copy</strong><span>所选视频码流不重新编码；若视频使用 IN/OUT，主选视频流决定关键帧切入。音频可保持完整、独立剪辑、复制、转码或关闭。</span>
   </div>
+  </details>
   <section id="taskPlanSummary" class="task-plan-summary" aria-live="polite">
     <div class="task-plan-heading"><span>当前方案</span><strong id="taskPlanTitle">等待选择参数</strong></div>
     <div class="task-plan-facts">
@@ -162,10 +164,10 @@ export function mountMediaWorkspace(hooks) {
       <div><span>质量 / 体积</span><strong id="taskPlanRate">—</strong></div>
       <div><span>输出</span><strong id="taskPlanOutput">—</strong></div>
     </div>
-    <p id="taskPlanNote">先确认这里是否符合你的目的；大多数任务不需要修改下面的详细参数。</p>
+    <p id="taskPlanNote">检查方案后开始执行。</p>
     <div class="button-row task-plan-actions"><button type="button" id="taskLoadPreset" class="secondary">恢复推荐方案</button><button type="button" id="taskInspect" class="secondary">验证当前方案</button></div>
   </section>
-  <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">先决定编码格式、编码器、速度倾向和质量 / 体积目标。不确定时直接保留推荐方案；CRF / CQ 通常数值越低越保真、体积越大。帧率、尺寸、像素格式和编码细节默认沿用源视频或编码器安全默认值，需要时再展开。</p><div class="task-grid media-core-decision-grid">
+  <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">先选编码器与质量，其他参数按需展开。</p><div class="task-grid media-core-decision-grid">
   ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
   ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ（通常越低越保真）','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
   ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}
@@ -190,7 +192,7 @@ export function mountMediaWorkspace(hooks) {
   <p id="taskVideoStreamInfo">读取容器后显示可用视频流。视频流序号按 FFmpeg 的 v:N 顺序，从 0 开始。</p>
   <p>时间策略彼此独立：例如“视频按 IN/OUT、音频保持完整”会只剪视频。主动制造不同时长的流可能改变音画对应关系，这是显式任务语义，不会被自动修正。</p></details>
   <section id="taskOutputPolicy" class="media-output-policy">
-    <div class="media-output-policy-heading"><span>共享出口</span><strong>音频与封装</strong><p>三条任务在这里重新汇合。音频转换必须由用户显式选择；容器不兼容时明确要求调整，不会静默转码。</p></div>
+    <div class="media-output-policy-heading"><span>共享出口</span><strong>音频与封装</strong><p>音频转换需手动选择。</p></div>
     <div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${select('outputContainer','成品容器',[['auto','Auto · 自动选择安全容器'],['keep','保持源容器（可用时）'],['mkv','MKV · Matroska'],['mp4','MP4 · MPEG-4']])}</div>
     <p id="taskAudioPlaybackWarning" class="media-audio-playback-warning" role="status" data-state="warning">注意：复制原音频只保留现有码流。尚未取得源音频 codec；读取视频参数后会显示更具体的播放兼容性提示。如果成品无声，可改为“转为 AAC”。</p>
     <p id="taskContainerDecision" class="note">执行检查后显示实际容器选择及原因。</p>

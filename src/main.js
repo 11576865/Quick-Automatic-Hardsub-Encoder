@@ -2,6 +2,7 @@ import { validateEncoderSupport } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
 import { outputFileName, resolveOutputContainer } from './media-container.js';
 import './style.css';
+import './focused-workbench.css';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
@@ -115,7 +116,7 @@ app.innerHTML = `
         <div><strong id="heroRuntimeTitle">浏览器 / WASM</strong><small id="heroRuntimeDetail">文件留在当前浏览器</small></div>
       </div>
     </div>
-    <p id="heroSubtitle" class="hero-subtitle">预检 · 真实预览 · 选方案 · 开始压制</p>
+    <p id="heroSubtitle" class="hero-subtitle">硬压 · 转码 · 剪切</p>
     <nav id="workflowStrip" class="workflow-strip" aria-label="硬字幕压制流程">
       <span data-workflow-step="assets"><b>01</b>素材</span>
       <span data-workflow-step="preflight"><b>02</b>预检</span>
@@ -190,9 +191,9 @@ app.innerHTML = `
     <main class="workflow-main">
   <div class="adaptive-region setup-region">
   <section id="inputCard" class="card input-card" data-mobile-stage-section="prepare">
-    <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>选择视频；硬字幕模式另需 ASS 和可选字体。</p></div></div>
+    <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>添加输入文件</p></div></div>
     <div class="grid two">
-      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择；视频格式交给 FFprobe 判断。</small></div>
+      <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择视频</small></div>
       <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
       <div class="file-row input-font">
         <label id="fontLabel">字体（可选，可多选）</label>
@@ -200,7 +201,7 @@ app.innerHTML = `
         <label id="fontsWebPicker" class="file-picker-trigger" for="fonts">选择字体文件</label>
         <button id="fontsNativePickerBtn" class="native-picker-button hidden" type="button">选择字体文件</button>
         <label id="fontPersistCheck" class="font-persist-check"><input id="rememberFonts" type="checkbox" checked> 记住本次选择，加入本机常用字体库</label>
-        <small id="fontMeta">未选择；常用字体库会自动参与 ASS 字体匹配。</small>
+        <small id="fontMeta">未选择字体</small>
         <details id="fontLibraryDetails" class="font-library-details">
           <summary id="savedFontsSummary">常用字体库：加载中…</summary>
           <div id="savedFontsList" class="font-library-list"></div>
@@ -260,7 +261,7 @@ app.innerHTML = `
   <section id="subtitleCard" class="card preview-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading preview-card-heading">
       <span class="step-no">03</span>
-      <div><h2>真实字幕预览</h2><p>查看实际 libass 渲染结果。</p></div>
+      <div><h2>真实字幕预览</h2><p>libass 渲染</p></div>
       <button id="previewBtn" class="preview-generate-action action-solid action-cyan" disabled>生成预览</button>
     </div>
     <div class="preview-workspace">
@@ -279,27 +280,27 @@ app.innerHTML = `
     <div class="hardsub-control-head">
       <div>
         <h2>选择控制方式</h2>
-        <p>两种方式共享同一份素材、预检、真实 libass 预览与输出验证；同一时刻只保留一个正式执行入口。</p>
+        <p>自动选参或精确控制</p>
       </div>
       <span class="hardsub-control-badge">HARDSUB</span>
     </div>
     <div id="hardsubStrategySwitcher" class="hardsub-strategy-switcher" role="group" aria-label="硬字幕压制控制方式">
       <button type="button" data-hardsub-strategy="guided" aria-pressed="true">
-        <span class="hardsub-strategy-kicker">GOAL DRIVEN</span>
+        <span class="hardsub-strategy-kicker">GUIDED</span>
         <strong>目标控制</strong>
-        <small>快速预设 / 目标质量 / 目标体积。先表达目标，再由系统映射编码参数。</small>
+        <small>预设 · 质量 · 体积</small>
       </button>
       <button type="button" data-hardsub-strategy="manual" aria-pressed="false">
-        <span class="hardsub-strategy-kicker">PARAMETER DRIVEN</span>
+        <span class="hardsub-strategy-kicker">MANUAL</span>
         <strong>参数控制</strong>
-        <small>直接控制 codec、preset、CRF/CQ、帧率、尺寸、滤镜、音轨与封装。</small>
+        <small>编码器 · 画面 · 音频</small>
       </button>
     </div>
   </section>
   <div id="sharedMediaOutputMount"></div>
   <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>先定义目标，再选择实际可用的编码器与测试路径。</p></div></div>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>目标与编码器</p></div></div>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -308,13 +309,13 @@ app.innerHTML = `
 
     <div class="plan-mode-tabs" role="tablist" aria-label="压制方式">
       <button type="button" class="plan-mode-tab plan-interaction selected" data-plan-mode="quick" aria-pressed="true">
-        <strong>快速预设</strong><small>直接生成参数</small>
+        <strong>快速预设</strong><small>即刻配置</small>
       </button>
       <button type="button" class="plan-mode-tab plan-interaction" data-plan-mode="quality" aria-pressed="false">
-        <strong>目标质量</strong><small>实测后校准</small>
+        <strong>目标质量</strong><small>实测校准</small>
       </button>
       <button type="button" class="plan-mode-tab plan-interaction" data-plan-mode="size" aria-pressed="false">
-        <strong>目标体积</strong><small>按预算反推码率</small>
+        <strong>目标体积</strong><small>体积预算</small>
       </button>
     </div>
 
@@ -412,7 +413,7 @@ app.innerHTML = `
   </section>
 
   <section id="encodeCard" class="card encode-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">05</span><div><h2>执行与验证</h2><p>由实际编码器完成整片任务；结束后验证容器、视频流与输出结果。</p></div></div>
+    <div class="card-heading"><span class="step-no">05</span><div><h2>执行与验证</h2><p>编码 · 校验 · 导出</p></div></div>
     <div id="liveEta" class="note">开始压制后根据 FFmpeg 实际进度动态计算速度与剩余时间。</div>
     <div class="button-row">
       <button id="encodeBtn" class="primary action-solid action-green" disabled>开始硬字幕压制</button>
@@ -432,7 +433,7 @@ app.innerHTML = `
     <aside id="taskOverviewRail" class="task-overview-rail" aria-label="任务概览">
       <section class="card task-overview-card">
         <div class="task-overview-head">
-          <div><h2>任务概览</h2><p>当前文件、预检、预览与压制方案。</p></div>
+          <div><h2>当前任务</h2><p>状态概览</p></div>
           <span id="overviewReadyBadge" class="task-overview-badge">待准备</span>
         </div>
         <div class="task-overview-group">
@@ -462,12 +463,12 @@ app.innerHTML = `
       <div class="platform-rail-heading">
         <div>
           <h2>选择运行方式</h2>
-          <p>网页可直接使用；长任务可切到 Android App 或 Windows 本地。</p>
+          <p>Windows · Android · Web</p>
         </div>
       </div>
       <section id="windowsNativeCard" class="card platform-card windows-card">
         <div class="platform-card-head">
-          <div><div class="platform-eyebrow">WINDOWS NATIVE</div><h2>Windows 本机运行</h2><p class="note">长视频、系统 FFmpeg 与 NVIDIA NVENC。</p></div>
+          <div><div class="platform-eyebrow">WINDOWS NATIVE</div><h2>Windows 本机运行</h2><p class="note">FFmpeg · NVENC</p></div>
           <span class="platform-badge">推荐</span>
         </div>
         <div class="button-row platform-actions">
