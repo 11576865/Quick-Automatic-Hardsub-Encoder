@@ -4002,7 +4002,7 @@ function refreshBenchmarkEnabled() {
   }
 
   $('encodeBtn').textContent = '开始硬字幕压制';
-  if (state.selectedCodec && status.backendReady && !status.previewOk) {
+  if (!state.nativeJobId && !state.nativeCompletedJob && state.selectedCodec && status.backendReady && !status.previewOk) {
     $('liveEta').textContent = state.nativeBackend?.available
       ? '参数已选择；请先生成并验证 Native libass 字幕预览，随后才能正式全片压制。'
       : '参数已选择；字幕预览尚未验证。可以先生成所选方案测试片段，正式全片压制暂时锁定。';
@@ -5709,15 +5709,24 @@ async function runNativeEncode() {
   await monitorNativeJob(started.jobId);
 }
 
-async function monitorNativeJob(jobId) {
+async function monitorNativeJob(jobId, initialStatus = null) {
   const bridge = globalThis.NativeHardsub;
   let statusReadFailures = 0;
+  let pendingStatus = initialStatus;
+  let lastProgress = 0;
   while (state.nativeJobId === jobId) {
     let status;
-    try {
-      status = JSON.parse(await Promise.resolve(bridge.getNativeJobStatus(jobId)));
-    } catch (error) {
-      status = { ok: false, error: error.message };
+    if (pendingStatus) {
+      // Recovery already read an authoritative status. Paint it immediately,
+      // rather than waiting for a redundant request after a page reload.
+      status = pendingStatus;
+      pendingStatus = null;
+    } else {
+      try {
+        status = JSON.parse(await Promise.resolve(bridge.getNativeJobStatus(jobId)));
+      } catch (error) {
+        status = { ok: false, error: error.message };
+      }
     }
 
     if (!status?.ok) {
@@ -5736,8 +5745,18 @@ async function monitorNativeJob(jobId) {
     }
     statusReadFailures = 0;
 
-    const progress = Math.max(0, Math.min(1, Number(status.progress || 0)));
-    $('progressBar').style.width = Math.max(1, progress * 100).toFixed(1) + '%';
+    // A transient missing/stale progress sample must not make an active
+    // long-running job jump backwards (especially after reload or pass changes).
+    // Only a terminal failure/cancellation may intentionally reset the bar.
+    const sample = Number(status.progress);
+    const fallback = status.state === 'validating' ? 0.99 : lastProgress;
+    const measured = status.progress != null && Number.isFinite(sample) && sample >= 0
+      ? sample : fallback;
+    if (!['failed', 'cancelled'].includes(status.state)) {
+      lastProgress = Math.max(lastProgress, Math.min(0.99, measured));
+      $('progressBar').style.width = Math.max(1, lastProgress * 100).toFixed(1) + '%';
+    }
+    const progress = lastProgress;
 
     if (status.state === 'encoding') {
       const liveSpeed = Number(status.speed || 0);
@@ -5879,11 +5898,12 @@ async function recoverNativeJob() {
 
     if (['queued', 'staging', 'encoding', 'validating', 'cancelling'].includes(status.state)) {
       state.nativeJobId = jobId;
+      // Bind the recovered status to this job before starting the next poll.
       syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.remove('hidden');
       $('encodeBtn').disabled = true;
       log('恢复 ' + nativePlatformName() + ' 任务监视：' + jobId);
-      monitorNativeJob(jobId);
+      void monitorNativeJob(jobId, status);
       return;
     }
 
