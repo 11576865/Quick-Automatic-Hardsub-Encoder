@@ -89,6 +89,15 @@ const {spawn}=require('node:child_process');
       (plan.compareDocumentPosition(output)&Node.DOCUMENT_POSITION_FOLLOWING)&&
       (output.compareDocumentPosition(encode)&Node.DOCUMENT_POSITION_FOLLOWING));
   }))throw Error('Guided audio/output choices must follow the encode plan and precede execution');
+  if(await page.locator('.media-output-audio-details').evaluate(el=>el.open))
+    throw Error('Detailed audio tuning is expanded by default');
+  if(!await page.locator('.media-output-core-grid [name=audio]').isVisible() ||
+     !await page.locator('.media-output-core-grid [name=outputContainer]').isVisible())
+    throw Error('The primary audio and container controls must remain directly visible');
+  await page.locator('.media-output-audio-details > summary').click();
+  if(!await page.locator('[name=audioBitrate]').isVisible())
+    throw Error('Optional audio bitrate control cannot be revealed');
+  await page.locator('.media-output-audio-details > summary').click();
   if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Guided hardsub does not expose the copied-audio playback warning');
   if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('转为 AAC'))throw Error('Guided copied-audio warning lacks the AAC recovery action');
   await page.selectOption('[name=audio]','aac');

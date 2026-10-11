@@ -211,3 +211,11 @@ body.ui-phone .card-heading p {display:none;}
   body.ui-phone .hardsub-strategy-switcher {grid-template-columns:1fr;}
   body.ui-phone .hardsub-strategy-switcher button {min-height:53px;}
 }
+
+/* Keep essential audio/container choices visible; reveal optional audio tuning on demand. */
+#sharedMediaOutputMount:empty {display:none;}
+.media-output-core-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.media-output-audio-details {margin-top:10px;}
+.media-output-audio-details > summary {cursor:pointer;font-size:.7rem;color:var(--focus-muted);}
+.media-output-audio-details > .task-grid {margin-top:11px;}
+body.ui-phone .media-output-core-grid {grid-template-columns:minmax(0,1fr);}

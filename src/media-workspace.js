@@ -193,7 +193,10 @@ export function mountMediaWorkspace(hooks) {
   <p>时间策略彼此独立：例如“视频按 IN/OUT、音频保持完整”会只剪视频。主动制造不同时长的流可能改变音画对应关系，这是显式任务语义，不会被自动修正。</p></details>
   <section id="taskOutputPolicy" class="media-output-policy">
     <div class="media-output-policy-heading"><span>共享出口</span><strong>音频与封装</strong><p>音频转换需手动选择。</p></div>
-    <div class="task-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}${select('outputContainer','成品容器',[['auto','Auto · 自动选择安全容器'],['keep','保持源容器（可用时）'],['mkv','MKV · Matroska'],['mp4','MP4 · MPEG-4']])}</div>
+    <div class="task-grid media-output-core-grid">${select('audio','音频策略',[['copy','复制原音频'],['aac','转为 AAC'],['libopus','转为 Opus（需核心支持）'],['none','关闭音频']])}${select('outputContainer','成品容器',[['auto','Auto · 自动选择安全容器'],['keep','保持源容器（可用时）'],['mkv','MKV · Matroska'],['mp4','MP4 · MPEG-4']])}</div>
+    <details class="media-output-audio-details media-advanced-panel"><summary>音频详细设置</summary>
+      <div class="task-grid">${input('audioBitrate','每条输出音轨码率（bit/s）','','128000')}${select('audioChannels','输出声道',[['','保持源声道'],['1','单声道'],['2','双声道'],['6','5.1']])}${select('audioSampleRate','音频采样率',[['','编码器默认'],['48000','48000 Hz'],['44100','44100 Hz']])}</div>
+    </details>
     <p id="taskAudioPlaybackWarning" class="media-audio-playback-warning" role="status" data-state="warning">注意：复制原音频只保留现有码流。尚未取得源音频 codec；读取视频参数后会显示更具体的播放兼容性提示。如果成品无声，可改为“转为 AAC”。</p>
     <p id="taskContainerDecision" class="note">执行检查后显示实际容器选择及原因。</p>
   </section>

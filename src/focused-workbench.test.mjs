@@ -19,6 +19,10 @@ test('focused workbench preserves native bindings and progressive disclosure', a
   }
   assert.match(workspace,/<details class="media-workflow-notes"><summary>处理方式说明<\/summary>/);
   assert.match(workspace,/<div class="media-mode-explainer media-mode-explainer-copy"/);
+  assert.match(workspace,/<div class="task-grid media-output-core-grid">/);
+  assert.match(workspace,/<details class="media-output-audio-details media-advanced-panel"><summary>音频详细设置<\/summary>/);
+  assert.match(workspace,/select\('audio','音频策略'/);
+  assert.match(workspace,/select\('outputContainer','成品容器'/);
   assert.match(css,/body\.ui-desktop \.workspace-layout\s*\{\s*display:grid/);
   assert.match(main,/class="support-rail"/);
   assert.match(css,/grid-template-areas:"main support"/);
