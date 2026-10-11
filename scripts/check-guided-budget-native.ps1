@@ -40,6 +40,46 @@ try {
     if(Test-Path $stderr){Get-Content -Raw $stderr|Write-Host}
     throw 'Guided bridge failed to start'
   }
+  function Test-CancelCleanup([int]$phase){
+    $body=@{
+      request=@{codec='h264';mode='budget-rate';preset='medium';crf=23
+        targetVideoBitrate=350000;sizeBudgetPolicy='two-pass';sizeCeilingBytes=0
+        outputWidth=0;outputHeight=0;expectedDuration=2.0
+        audio='none';outputFormat='matroska';outputExtension='mkv'
+        suggestedName='cancelled.mkv'}
+      assText=$subtitle
+    }|ConvertTo-Json -Depth 8 -Compress
+    $started=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/encode" -Headers $headers -ContentType 'application/json' -Body $body
+    if(-not $started.ok -or -not $started.jobId){throw 'Cancel fixture did not start'}
+    $id=[string]$started.jobId
+    $stages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$id+"-*"))
+    if($stages.Count -ne 1){throw 'Cancel fixture staging missing'}
+    if($phase -eq 2){
+      $observed=$false
+      for($i=0;$i -lt 100;$i++){
+        $state=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$id" -Headers $headers
+        if($state.state -eq 'encoding' -and $state.pass -eq 2){$observed=$true;break}
+        if($state.state -in @('failed','completed','cancelled')){throw 'Cancel fixture terminated before pass 2 could be cancelled'}
+        Start-Sleep -Milliseconds 20
+      }
+      if(-not $observed){throw 'Cancel fixture never entered pass 2'}
+    }
+    Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$id/cancel" -Headers $headers | Out-Null
+    # Crucially, do NOT query status before inspecting cleanup. A disconnected
+    # UI must not leave cancelled ASS/font copies, output or pass logs behind.
+    if(Test-Path -LiteralPath $stages[0].FullName){throw "Pass $phase cancellation left staging behind without status polling"}
+    Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$id/cancel" -Headers $headers | Out-Null
+    for($i=0;$i -lt 2;$i++){
+      $state=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$id" -Headers $headers
+      if($state.state -ne 'cancelled'){throw 'Cancellation terminal state is not stable'}
+    }
+    $blocked=$false
+    try{Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$id/export" -Headers $headers -ContentType 'application/json' -Body '{}' | Out-Null}catch{$blocked=$true}
+    if(-not $blocked){throw 'Cancelled job reached export'}
+    Write-Host "Pass $phase cancellation cleaned staging without status polling; repeat cancel/status and export rejection passed"
+  }
+  Test-CancelCleanup 1
+  Test-CancelCleanup 2
   function Test-PolicyRun([string]$policy,[long]$ceiling,[bool]$shouldFail){
     $body=@{
       request=@{codec='h264';mode='budget-rate';preset='medium';crf=23

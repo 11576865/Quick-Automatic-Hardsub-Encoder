@@ -3,12 +3,14 @@ on:
   push:
     paths:
       - 'windows/**'
+      - 'scripts/check-guided-budget-native.ps1'
       - 'src/main.js'
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
   pull_request:
     paths:
       - 'windows/**'
+      - 'scripts/check-guided-budget-native.ps1'
       - 'src/main.js'
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
