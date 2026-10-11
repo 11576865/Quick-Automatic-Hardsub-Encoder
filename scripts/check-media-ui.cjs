@@ -813,6 +813,9 @@ const {spawn}=require('node:child_process');
     throw Error('Save failure unexpectedly launched another clip job');
   if(!await page.locator('#taskRun').isDisabled()||!await page.locator('#taskExportClips').isDisabled())
     throw Error('Unpublished clip output can be overwritten by another run');
+  await page.evaluate(()=>document.querySelector('#mediaTaskForm').requestSubmit());
+  if(await page.evaluate(()=>window.taskRuns.length)!==encodesBeforeFailure+1)
+    throw Error('Direct form submit overwrote a verified unpublished clip');
   if(await page.locator('#taskClipQueueList button[data-clip-action="retry-save"]').count()!==1)
     throw Error('Failed Native save has no clip-specific save-only retry');
   if(!(await page.locator('#taskClipQueueStatus').textContent()).includes('重试保存'))

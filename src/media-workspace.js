@@ -1816,7 +1816,11 @@ export function mountMediaWorkspace(hooks) {
           setTaskState(isCancellationError(err)?'idle':'failed');
         }
       }
-      showClipMessage('片段 '+(current?current.index+1:'队列')+' 未完成：'+err.message+'。已导出的片段不会撤销；可重试未完成片段。');
+      if(current&&phase==='save'&&completed?.verified){
+        showClipMessage('片段 '+(current.index+1)+' 保存未完成：'+err.message+'。已验证成品仍保留；点击“重试保存”，无需重新剪切。');
+      }else{
+        showClipMessage('片段 '+(current?current.index+1:'队列')+' 未完成：'+err.message+'。已导出的片段不会撤销；可重试未完成片段。');
+      }
       hooks.log?.(err.stack||err.message);
     }finally{
       clipBatchCurrent=null;clipBatchRunning=false;clipBatchStopRequested=false;
@@ -1850,7 +1854,9 @@ export function mountMediaWorkspace(hooks) {
     }
   };
   form.onsubmit=async e=>{
-    e.preventDefault();if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
+    e.preventDefault();
+    if(clipAwaitingSave){status('先重试保存已验证的片段成品，避免重新剪切或覆盖。');return;}
+    if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
     busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
     section.querySelector('#taskReport').disabled=true;
     section.querySelector('#taskProgress').value=0;

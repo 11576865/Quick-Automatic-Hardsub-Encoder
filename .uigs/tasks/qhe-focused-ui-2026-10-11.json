@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "PR #99 merged and green; save-failure recovery fix committed / exact-head CI pending",
-  "current_bounded_work_unit": "Fix queue save-failure recovery: a verified Stream Copy result remains in Native session after save fails but prior queue marked only failed and blocked re-export without per-clip save-only retry. Add state-aware row action, preserve result, avoid re-encode, block conflicting jobs and assert in Chromium.",
+  "status": "PR #100 first Frontend Playwright found real save-error guidance overwrite; fixed UI and added submit overwrite guard, revalidation Pending",
+  "current_bounded_work_unit": "Source-backed Native Save failure recovery: first head reached failed-save row and blocked conflicting execution, but catch replaced retry-save guidance with generic re-encode text. Fixed message by error phase; guarded direct form submit from overwriting verified output. New exact-head CI pending.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -106,17 +106,17 @@
   "pull_request_url": "",
   "latest_durable_commit": "2c4ee1db6513a9778a6a4b08228cc9b93088b910",
   "external_validation": {
-    "frontend": "new queue save-only retry head pending",
-    "playwright": "pending simulated Native export failure => per-row retry => correct-job success; ensure encode run-count unchanged",
-    "windows_smoke": "pending Windows smoke for changed media-workspace.js",
-    "uigs": "pending",
+    "frontend": "first PR #100 head Playwright failed at generic error copy; repaired follow-up CI pending",
+    "playwright": "first head reached failed-save state; after guidance + guarded form submission, latest-head browser retest pending",
+    "windows_smoke": "first PR #100 head Windows smoke in progress when inspected; latest-head pending",
+    "uigs": "first PR #100 head UIGS passed; latest-head pending",
     "android_device": "not-run",
-    "production_visual_review": "PR #99 390px queue screenshots reviewed; new failed-save and retry state pending visual check"
+    "production_visual_review": "Failed-save specific screenshot acceptance pending; code state diagnosed from source and browser test"
   },
   "blockers": [
-    "New queue save failure recovery CI and screenshot Pending",
-    "Physical Android SAF and Windows Native export-dialog field acceptance Pending",
-    "Windows GPU/HDR/VFR/long-form #77 Pending"
+    "PR #100 repair-head exact CI and screenshot Pending",
+    "Physical Native dialog and Android SAF not tested",
+    "GPU/HDR/VFR long-form #77 pending"
   ],
   "updated_at": "2026-10-11"
 }
