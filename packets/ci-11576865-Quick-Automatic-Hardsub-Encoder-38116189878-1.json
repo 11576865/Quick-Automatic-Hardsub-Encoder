@@ -1,0 +1,45 @@
+{
+  "packet_version": 1,
+  "packet_id": "ci-11576865-Quick-Automatic-Hardsub-Encoder-38116189878-1",
+  "status": "pending",
+  "record_type": "ci_failure",
+  "title": "Windows local smoke: failure",
+  "summary": "Tracked CI workflow did not complete successfully. Source adapter captured failed job/step evidence when available.",
+  "source_repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "source_event": "workflow_run",
+  "source_ref": "fix/native-cancel-cleanup",
+  "source_sha": "3a4d1faadfcf5dc364adc1e7f28207e93ea3dcad",
+  "source_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38116189878",
+  "created_at": "2026-10-11T05:53:40+00:00",
+  "dedupe_key": "workflow_run:11576865/Quick-Automatic-Hardsub-Encoder:38116189878:1",
+  "routing_hints": [
+    "architecture",
+    "interface-grammar",
+    "operations",
+    "red-reason",
+    "reliability"
+  ],
+  "evidence": {
+    "workflow": "Windows local smoke",
+    "run_id": "38116189878",
+    "run_attempt": "1",
+    "conclusion": "failure",
+    "trigger_event": "push",
+    "failed_jobs": [
+      {
+        "id": 114401436698,
+        "name": "windows",
+        "conclusion": "failure"
+      }
+    ],
+    "failed_steps": [
+      {
+        "job": "windows",
+        "number": 19,
+        "name": "Verify real process cancellation across both passes and transition gap",
+        "conclusion": "failure"
+      }
+    ],
+    "capture_error": ""
+  }
+}
