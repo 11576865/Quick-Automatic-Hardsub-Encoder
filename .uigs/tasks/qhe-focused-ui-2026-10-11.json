@@ -3,7 +3,7 @@
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
   "status": "Studio v3/Stream Copy queue through PR #101 merged; next bounded queue placement/accessibility fix submitted, latest-head external CI Pending",
-  "current_bounded_work_unit": "Source-backed 390px screenshot reveals optional clip queue appears after ~1500px timeline/keyframe previews; move the existing queue immediately after IN/OUT fields, improve queue touch target min height to 44px, assert 320px 150% root-font fit/order.",
+  "current_bounded_work_unit": "PR #102 open: screenshot-led copy queue placement next to IN/OUT, 44px queue controls and 320px 150%-root-font real browser assertions. Feature tests remain intact; latest-head CI and screenshots Pending.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -131,8 +131,8 @@
     "Physical Android OS text/accessibility/save dialog remains FIELD-PENDING"
   ],
   "branch": "fix/qhe-copy-queue-phone-near-trim-input-20261012",
-  "pull_request_url": "",
-  "latest_durable_commit": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/102",
+  "latest_durable_commit": "3df7c7cccba494ace858a31f4d97847d9e350111",
   "external_validation": {
     "frontend": "Pending new queue placement/head browser CI",
     "playwright": "Pending 390px/320px 150% root-font queue order and touch targets",
