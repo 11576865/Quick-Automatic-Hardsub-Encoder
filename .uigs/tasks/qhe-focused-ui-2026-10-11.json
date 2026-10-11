@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "Studio v3 merged; manual task source/probe gating follow-up submitted, exact-head CI Pending",
-  "current_bounded_work_unit": "PR #98 submitted: Studio v3 start-action readiness now follows actual selected video and probed media. Exact latest PR head CI/screenshots Pending; branch and code checkpoint are durable.",
+  "status": "PR #98 one bounded frontend assertion repair pushed; next-head external validation Pending",
+  "current_bounded_work_unit": "PR #98 first CI found test-only label mismatch: actual hardsub manual action is 使用当前参数开始硬压, not 开始硬字幕压制. Correct the assertion without altering product code; Windows smoke first run failed due Chocolatey FFmpeg HTTP 504, external installation infrastructure. Repair head CI pending.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -71,24 +71,25 @@
     }
   ],
   "next_units": [
-    "Check one latest-head CI status after PR creation",
-    "Review disabled Copy screenshot if available",
-    "Do not change backend / field acceptance"
+    "After PR #98 latest-head external validation, complete existing readiness UI merge",
+    "Implement optional stream-copy multi-segment queue as a separate bounded feature",
+    "Keep existing single-clip flow and Native export semantics"
   ],
   "branch": "fix/qhe-studio-source-readiness-action-20261011",
   "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/98",
   "latest_durable_commit": "6eda22a36bcfedbb5a647296958c85c1aec337fe",
   "external_validation": {
-    "frontend": "Pending source-readiness follow-up",
-    "playwright": "Pending source absent -> selected/unprobed -> probed sequence",
-    "windows_smoke": "passed exact repair head; workflow 38134035725 (CI runner, not physical GPU)",
+    "frontend": "Original head failed: test expectation wrong, not observed product error; repair Pending",
+    "playwright": "Original head halted at readiness label mismatch; repair Pending",
+    "windows_smoke": "Original head failed: Chocolatey FFmpeg install HTTP 504; repair Pending",
     "uigs": "Pending",
     "android_device": "not-run",
     "production_visual_review": "PR #97 Copy screenshot shows prematurely enabled green action; fix screenshot Pending"
   },
   "blockers": [
-    "Exact-head frontend, UIGS and screenshot verification Pending",
-    "Physical Android and NVIDIA GPU/long-form remain separate Pending"
+    "Repair-head Frontend, Windows smoke, UIGS CI Pending",
+    "Previous Windows failure: Chocolatey FFmpeg 9.0.2 package endpoint HTTP 504 (external)",
+    "Physical Android/NVIDIA GPU long-video still FIELD-PENDING"
   ],
   "updated_at": "2026-10-11"
 }

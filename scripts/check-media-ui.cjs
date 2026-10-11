@@ -462,7 +462,7 @@ const {spawn}=require('node:child_process');
     document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
   });
   if(await page.locator('#taskRun').isDisabled() ||
-     (await page.locator('#taskRun').textContent()).trim()!=='开始硬字幕压制')
+     (await page.locator('#taskRun').textContent()).trim()!=='使用当前参数开始硬压')
     throw Error('Run did not enable after video selection and probing');
   if((await page.locator('#taskAudioPlaybackWarning').getAttribute('data-state'))!=='info')throw Error('AAC copy guidance is not rendered as informational');
   if(!(await page.locator('#taskAudioPlaybackWarning').textContent()).includes('AAC · 1 轨 · 192 kb/s'))throw Error('AAC codec-aware guidance does not expose probed audio facts');
