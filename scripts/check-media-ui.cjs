@@ -110,6 +110,31 @@ const {spawn}=require('node:child_process');
       throw Error('Desktop composition lost at '+width+': '+JSON.stringify(layout));
     }
   }
+  // Source/media/inspector architecture must be visible in an actual browser.
+  await viewportPage.setViewportSize({width:1280,height:820});
+  await viewportPage.waitForFunction(()=>document.documentElement.dataset.uiShell==='desktop');
+  const professionalLayout=await viewportPage.evaluate(()=>{
+    const rect=selector=>{
+      const r=document.querySelector(selector)?.getBoundingClientRect();
+      return r?{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width}:null;
+    };
+    const stage=document.querySelector('#studioEmptyStage');
+    return {mode:rect('#studioModeDock'),asset:rect('#inputCard'),
+      viewer:rect('#studioEmptyStage'),inspector:rect('#taskOverviewRail'),
+      modeCount:document.querySelectorAll('#studioModeDock [data-media-mode]').length,
+      placeholderVisible:!!stage&&getComputedStyle(stage).display!=='none'};
+  });
+  if(professionalLayout.modeCount!==3||
+     professionalLayout.mode.bottom>professionalLayout.asset.top+1)
+    throw Error('Work mode dock is not ahead of source shelf: '+JSON.stringify(professionalLayout));
+  if(!professionalLayout.placeholderVisible||
+     professionalLayout.viewer.left<professionalLayout.asset.right+8||
+     professionalLayout.viewer.width<410)
+    throw Error('Large video stage is not beside source shelf: '+JSON.stringify(professionalLayout));
+  if(professionalLayout.inspector.left<professionalLayout.viewer.right+7)
+    throw Error('Inspector overlaps the media workspace: '+JSON.stringify(professionalLayout));
+  await viewportPage.screenshot({path:'media-workspace-studio-v3-desktop.png',fullPage:true});
+
   await viewportPage.setViewportSize({width:320,height:720});
   await viewportPage.waitForFunction(()=>document.documentElement.dataset.uiShell==='phone');
   const phoneLegibility=await viewportPage.evaluate(()=>{

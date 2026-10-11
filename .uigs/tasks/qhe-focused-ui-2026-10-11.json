@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
-  "goal": "Replace QHE's verbose legacy visual presentation with a focused real Web/Windows/Android shared UI, preserving all task and native functionality.",
-  "status": "Studio v2 plus phone accessibility follow-up merged; physical-device acceptance pending",
-  "current_bounded_work_unit": "PR #96 merged after successful frontend/Playwright and UIGS CI; reviewed 320px normal and 150% text screenshots and visible keyboard file-picker focus.",
+  "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
+  "status": "Studio v3 editor-style workbench committed; latest-head CI/visual Pending",
+  "current_bounded_work_unit": "Move the live media-mode nav into a top-level segmented toolbar. Recompose desktop source shelf, independent large viewer/plan column and quiet status inspector. Preserve tablet and phone stage semantics.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -45,27 +45,33 @@
       "merge_commit": "bbc2576ebf4ffef2bf70c806ba17a86e48615b83",
       "frontend_run": 38132443862,
       "uigs_run": 38132443859
+    },
+    {
+      "summary": "Studio v3 editor-style layout based on Compressor/HandBrake/Linear, source-side navigation reparent and accessible empty preview stage",
+      "branch": "design/qhe-compressor-inspired-workspace-20261011",
+      "commit": "68b3e9cb854286deedf291e5f87b38e55e76e9fa"
     }
   ],
   "next_units": [
-    "Validate physical Android UI with OS font scaling, screen reader, safe areas and touch",
-    "Consider further code changes only for observed UX or accessibility regressions",
-    "Keep physical GPU/HDR/VFR/long-film acceptance under #77"
+    "Review exact latest-head CI and desktop/mobile browser capture",
+    "Fix actionable regressions as a bounded work unit",
+    "Physical Android, Windows GPU/HDR/long-form acceptance separately Pending"
   ],
-  "branch": "main",
-  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/96",
-  "latest_durable_commit": "bbc2576ebf4ffef2bf70c806ba17a86e48615b83",
+  "branch": "design/qhe-compressor-inspired-workspace-20261011",
+  "pull_request_url": "",
+  "latest_durable_commit": "68b3e9cb854286deedf291e5f87b38e55e76e9fa",
   "external_validation": {
-    "frontend": "passed #96 38132443862",
-    "playwright": "passed #96 320px at normal and 150% root font; focus outline and no horizontal overflow",
+    "frontend": "pending new v3 head",
+    "playwright": "pending v3 desktop composition/screenshot",
     "windows_smoke": "not rerun on #96 (CSS/test only); earlier #95 smoke passed 38131737587",
-    "uigs": "passed #96 38132443859",
+    "uigs": "pending",
     "android_device": "not-run",
-    "production_visual_review": "reviewed actual Chromium 320px normal and 150% root-font + produce screenshots; physical Android not tested"
+    "production_visual_review": "pending current v3 Chromium captures; older v2 confirmed only"
   },
   "blockers": [
-    "Physical Android OS device tests and accessibility sign-off not run",
-    "Real Windows GPU/HDR/long-film #77 remains FIELD-PENDING"
+    "Studio v3 screenshots and CI not yet available",
+    "Physical Android font/touch/OS safety areas unverified",
+    "Real Windows GPU/HDR/VFR long-film #77 Pending"
   ],
   "updated_at": "2026-10-11"
 }
