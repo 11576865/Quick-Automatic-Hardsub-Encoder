@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "Optional Stream Copy multi-clip queue plus verified failed-save retry merged; exact-head CI green and browser queue reviewed / physical Native dialog acceptance Pending",
-  "current_bounded_work_unit": "PR #100 merged: failed or canceled Native save of a verified queued clip retains its output, exposes same-job save-only retry without re-encode, and blocks queue editing or alternate runs until resolved.",
+  "status": "PR #99/#100 merged; optional in-place queue editor correction submitted, exact-head CI Pending",
+  "current_bounded_work_unit": "Correct QHE Clip queue '载入' semantics: queued and failed clip can now edit IN/OUT in-place and cancel editing; already saved rows can only be reused as a new clip. Preserve existing Native save-only retry and independent output identities.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -105,28 +105,32 @@
       "windows_smoke_run": 38143257110,
       "uigs_run": 38143257131,
       "artifact_id": 11703821648
+    },
+    {
+      "summary": "Source-backed queue UI issue: 载入 plus 加入 created duplicate instead of editing row; implement in-place update and immutable saved range reuse with Playwright checks",
+      "state": "Pending latest-head CI"
     }
   ],
   "next_units": [
-    "Run on-device Windows Native and Android SAF multi-clip save dialog acceptance including cancel/retry",
-    "Validate native jobId attribution and no output overwrite with real files",
-    "Keep GPU/HDR/VFR/long-form field test separate under QHE #77"
+    "Review exact-head Frontend, Windows and UIGS checks and browser screenshot",
+    "Merge if the source/test geometry and runtime paths remain stable",
+    "Field test Android SAF and Windows Native dialogs on physical devices"
   ],
-  "branch": "main",
-  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/100",
-  "latest_durable_commit": "133e0e16ae30810866f4a5fbe98c27cac7343f70",
+  "branch": "fix/qhe-clip-queue-edit-in-place-20261012",
+  "pull_request_url": "",
+  "latest_durable_commit": "e02b3d2445e752edaeff64f0973cd5286fa8dc93",
   "external_validation": {
-    "frontend": "passed PR #100 exact source head 7b26c4fd; run 38143257105",
-    "playwright": "passed normal two-clip queue plus failed Native save / unrelated event / save-only retry with no second encode; run 38143257105",
-    "windows_smoke": "passed PR #100 exact source head; run 38143257110 (CI runner, not device dialog)",
-    "uigs": "passed PR #100 exact source head; run 38143257131",
+    "frontend": "Pending queue in-place edit fix exact-head",
+    "playwright": "Pending edit/cancel/reuse and original Native save retry path",
+    "windows_smoke": "Pending next PR Windows local smoke (media-workspace.js changes trigger workflow)",
+    "uigs": "Pending next PR UIGS Evidence",
     "android_device": "not-run",
-    "production_visual_review": "Reviewed actual Chromium 390px queued Copy UI screenshot from PR #100 artifact 11703821648; save-only retry functional assertions passed; physical device not reviewed"
+    "production_visual_review": "Existing 390px queue screenshot reviewed in PR #100; new active editing screenshot Pending"
   },
   "blockers": [
-    "Physical Windows Native and Android SAF save-dialog retry tests remain FIELD-PENDING",
-    "Real device Android font scaling/accessibility not tested",
-    "Windows GPU/HDR/VFR/long-form QHE #77 remains FIELD-PENDING"
+    "In-place edit UI CI and visual capture Pending",
+    "Physical Windows Native / Android SAF save dialogue acceptance Pending",
+    "Real GPU/HDR/VFR long-form #77 FIELD-PENDING"
   ],
-  "updated_at": "2026-10-11"
+  "updated_at": "2026-10-12"
 }

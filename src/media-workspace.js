@@ -99,7 +99,7 @@ export function mountMediaWorkspace(hooks) {
   <section id="taskClipQueuePanel" class="media-clip-queue" hidden aria-label="多片段无损剪切">
     <div class="media-clip-queue-header">
       <div><strong>多片段剪切</strong><span>可选 · 每段分别导出，不拼接</span></div>
-      <button id="taskAddClip" type="button" class="secondary">加入片段</button>
+      <div class="media-clip-queue-header-actions"><button id="taskCancelClipEdit" type="button" class="secondary" hidden>取消编辑</button><button id="taskAddClip" type="button" class="secondary">加入片段</button></div>
     </div>
     <ol id="taskClipQueueList" aria-label="待导出片段"></ol>
     <p id="taskClipQueueStatus" role="status">设置 IN / OUT 后加入片段。实际起点可能受关键帧约束。</p>
@@ -297,7 +297,7 @@ export function mountMediaWorkspace(hooks) {
   const clips=[],clipList=section.querySelector('#taskClipQueueList');
   const clipPanel=section.querySelector('#taskClipQueuePanel');
   const clipMessage=section.querySelector('#taskClipQueueStatus');
-  let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null,clipAwaitingSave=null;
+  let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null,clipAwaitingSave=null,clipEditingIndex=-1;
   const clipSource=()=>hooks.videoIdentity?.()||'';
   const clipMedia=()=>hooks.mediaSnapshot?.()||null;
   const showClipMessage=text=>{clipMessage.textContent=text;};
@@ -307,6 +307,7 @@ export function mountMediaWorkspace(hooks) {
     clipList.replaceChildren();
     clips.forEach((clip,index)=>{
       const item=document.createElement('li');
+      item.classList.toggle('media-clip-queue-row-editing',index===clipEditingIndex);
       const description=document.createElement('div');
       const title=document.createElement('strong');
       title.textContent='片段 '+String(index+1).padStart(2,'0');
@@ -317,17 +318,22 @@ export function mountMediaWorkspace(hooks) {
       description.append(title,range,state);
       const use=document.createElement('button');
       use.type='button';use.className='secondary';
-      use.textContent=clipAwaitingSave===clip?'重试保存':'载入';
-      use.dataset.clipAction=clipAwaitingSave===clip?'retry-save':'load';
+      use.textContent=clipAwaitingSave===clip?'重试保存':clip.state==='saved'?'复用':'编辑';
+      use.dataset.clipAction=clipAwaitingSave===clip?'retry-save':clip.state==='saved'?'reuse':'edit';
       use.dataset.clipIndex=String(index);
+      use.setAttribute('aria-label',use.textContent+'片段 '+(index+1));
       use.disabled=locked||(!!clipAwaitingSave&&clipAwaitingSave!==clip);
       const del=document.createElement('button');
       del.type='button';del.className='secondary';del.textContent='删除';
       del.dataset.clipAction='remove';del.dataset.clipIndex=String(index);del.disabled=locked||!!clipAwaitingSave;
+      del.setAttribute('aria-label','删除片段 '+(index+1));
       item.append(description,use,del);clipList.append(item);
     });
-    section.querySelector('#taskAddClip').disabled=locked||!!clipAwaitingSave||!clipSource()||!clipMedia()||clips.length>=50;
-    section.querySelector('#taskExportClips').disabled=locked||!!clipAwaitingSave||!clips.some(c=>c.state!=='saved')||!clipSource()||!clipMedia();
+    section.querySelector('#taskAddClip').textContent=clipEditingIndex>=0?'更新片段':'加入片段';
+    section.querySelector('#taskAddClip').disabled=locked||!!clipAwaitingSave||!clipSource()||!clipMedia()||(clips.length>=50&&clipEditingIndex<0);
+    section.querySelector('#taskCancelClipEdit').hidden=clipEditingIndex<0;
+    section.querySelector('#taskCancelClipEdit').disabled=locked||!!clipAwaitingSave;
+    section.querySelector('#taskExportClips').disabled=locked||!!clipAwaitingSave||clipEditingIndex>=0||!clips.some(c=>c.state!=='saved')||!clipSource()||!clipMedia();
     section.querySelector('#taskClearClips').disabled=locked||!!clipAwaitingSave||!clips.length;
     section.querySelector('#taskStopClips').hidden=!clipBatchRunning;
     section.querySelector('#taskStopClips').disabled=!clipBatchRunning||clipBatchStopRequested;
@@ -337,7 +343,7 @@ export function mountMediaWorkspace(hooks) {
     if(!clips.length||clipBatchRunning||clipAwaitingSave)return;
     const key=clipSource();
     if(key===clipSourceKey)return;
-    clips.length=0;clipSourceKey='';
+    clips.length=0;clipSourceKey='';clipEditingIndex=-1;
     showClipMessage('视频已更换，旧视频的片段列表已清空。');
   };
   const settlePendingClipSave=(saved)=>{
@@ -353,6 +359,12 @@ export function mountMediaWorkspace(hooks) {
     }
     syncClipQueue();
   };
+  section.querySelector('#taskCancelClipEdit').onclick=()=>{
+    if(clipBatchRunning||busy||hooks.busy()||clipAwaitingSave)return;
+    clipEditingIndex=-1;
+    showClipMessage('已取消编辑；当前 IN / OUT 可作为新片段加入。');
+    syncClipQueue();
+  };
   section.querySelector('#taskAddClip').onclick=()=>{
     try{
       if(busy||hooks.busy())return;
@@ -362,10 +374,19 @@ export function mountMediaWorkspace(hooks) {
       validateQueuedCopySettings(read());
       const clip=makeQueuedClip(get('start').value,get('end').value,media);
       if(clipSourceKey&&clipSourceKey!==source)throw Error('视频已更换，请重新建立片段列表');
-      if(clips.some(c=>c.start===clip.start&&c.end===clip.end))throw Error('这个 IN / OUT 片段已经加入');
-      if(clips.length>=50)throw Error('单次最多加入 50 个片段');
-      clipSourceKey=source;clips.push({...clip,state:'queued'});
-      showClipMessage('已加入 '+clips.length+' 段。每段将单独保存；无损实际 IN 可能前移到关键帧。');
+      const editing=clipEditingIndex;
+      if(clips.some((c,index)=>index!==editing&&c.start===clip.start&&c.end===clip.end))
+        throw Error('这个 IN / OUT 片段已经加入');
+      if(editing>=0){
+        if(!clips[editing]||clips[editing].state==='saved')throw Error('已导出的片段不可原位修改，请使用“复用”创建新片段');
+        clips[editing]={...clip,state:'queued'};
+        clipEditingIndex=-1;
+        showClipMessage('片段 '+(editing+1)+' 已更新，导出时将使用新的 IN / OUT。');
+      }else{
+        if(clips.length>=50)throw Error('单次最多加入 50 个片段');
+        clipSourceKey=source;clips.push({...clip,state:'queued'});
+        showClipMessage('已加入 '+clips.length+' 段。每段将单独保存；无损实际 IN 可能前移到关键帧。');
+      }
       syncClipQueue();
     }catch(err){showClipMessage(err.message);}
   };
@@ -382,17 +403,23 @@ export function mountMediaWorkspace(hooks) {
     if(clipAwaitingSave)return;
     if(btn.dataset.clipAction==='remove'){
       clips.splice(index,1);
+      if(clipEditingIndex===index)clipEditingIndex=-1;
+      else if(clipEditingIndex>index)clipEditingIndex--;
       if(!clips.length)clipSourceKey='';
       showClipMessage(clips.length?'已删除片段。':'队列已清空；可继续单段剪切。');
       syncClipQueue();return;
     }
+    clipEditingIndex=btn.dataset.clipAction==='edit'?index:-1;
     get('start').value=clip.startText;get('end').value=clip.endText;
     for(const field of [get('start'),get('end')])field.dispatchEvent(new Event('change',{bubbles:true}));
-    showClipMessage('已载入片段 '+(index+1)+' 的 IN / OUT，可修改后重新加入。');
+    showClipMessage(clipEditingIndex>=0
+      ?'正在编辑片段 '+(index+1)+'，修改 IN / OUT 后点击“更新片段”，或取消编辑。'
+      :'已复用片段 '+(index+1)+' 的时间范围；可修改后作为新片段加入，不会修改已导出的文件。');
+    syncClipQueue();
   });
   section.querySelector('#taskClearClips').onclick=()=>{
     if(clipBatchRunning||busy||hooks.busy()||clipAwaitingSave)return;
-    clips.length=0;clipSourceKey='';
+    clips.length=0;clipSourceKey='';clipEditingIndex=-1;
     showClipMessage('队列已清空；现有单段剪切仍可使用。');
     syncClipQueue();
   };
@@ -1617,6 +1644,7 @@ export function mountMediaWorkspace(hooks) {
   function updateMode() {
     const mode=get('operation').value;
     const copy=mode==='copy';
+    if(!copy)clipEditingIndex=-1;
     syncModeChrome(mode);
     section.querySelector('#taskEncoding').disabled=copy;
     document.querySelectorAll('.input-ass,.input-font').forEach(el=>el.classList.toggle('hidden',get('operation').value!=='hardsub'));
@@ -1746,6 +1774,7 @@ export function mountMediaWorkspace(hooks) {
       if(!clipMedia())throw Error('请先读取视频参数');
       const settings=read();
       validateQueuedCopySettings(settings);
+      if(clipEditingIndex>=0)throw Error('请先更新或取消正在编辑的片段');
       if(clipAwaitingSave)throw Error('先重试保存未导出的片段成品，避免重新剪切');
       if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
         throw Error('先保存或处理上一任务的成品，避免批量剪切覆盖未保存的结果');

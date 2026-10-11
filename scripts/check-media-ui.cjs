@@ -747,6 +747,30 @@ const {spawn}=require('node:child_process');
   await page.click('#taskAddClip');
   await page.click('#taskAddClip');
   if(await page.locator('#taskClipQueueList li').count()!==2)throw Error('Duplicate or missing queued clip');
+  // Editing an unsaved row must update that row, not silently append a third.
+  await page.locator('#taskClipQueueList button[data-clip-action="edit"]').first().click();
+  if((await page.locator('#taskAddClip').textContent()).trim()!=='更新片段'||
+     !await page.locator('#taskCancelClipEdit').isVisible())
+    throw Error('Queue did not enter explicit in-place edit state');
+  await page.evaluate(()=>{
+    const end=document.querySelector('[name=end]');
+    end.value='2:04';end.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await page.click('#taskAddClip');
+  if(await page.locator('#taskClipQueueList li').count()!==2||
+     !(await page.locator('#taskClipQueueList li').first().textContent()).includes('2:04'))
+    throw Error('Edited clip was appended or old range stayed unchanged');
+  // Cancelling an edit is not deletion, and leaves the original interval.
+  await page.locator('#taskClipQueueList button[data-clip-action="edit"]').last().click();
+  await page.evaluate(()=>{
+    const end=document.querySelector('[name=end]');end.value='2:16';
+    end.dispatchEvent(new Event('change',{bubbles:true}));
+  });
+  await page.click('#taskCancelClipEdit');
+  if(await page.locator('#taskClipQueueList li').count()!==2||
+     (await page.locator('#taskAddClip').textContent()).trim()!=='加入片段'||
+     !(await page.locator('#taskClipQueueList li').last().textContent()).includes('2:15'))
+    throw Error('Cancelled clip edit modified the existing queue');
   await page.screenshot({path:'media-workspace-copy-segment-queue-390.png',fullPage:true});
   await page.evaluate(()=>{window.clipBatchMockActive=true;window.clipExportRequests=[];});
   const previousRuns=await page.evaluate(()=>window.taskRuns.length);
@@ -773,7 +797,7 @@ const {spawn}=require('node:child_process');
   }),previousRuns);
   if(result.tasks.length!==2||result.names.length!==2||
      result.tasks.some(task=>task.operation!=='copy'||task.videoRange!=='trim'||task.audioRange!=='trim')||
-     result.tasks[0].start!==0||result.tasks[0].end!==125||
+     result.tasks[0].start!==0||result.tasks[0].end!==124||
      result.tasks[1].start!==130||result.tasks[1].end!==135)
     throw Error('Queue did not compile separate Stream Copy IN/OUT intervals: '+JSON.stringify(result));
   if(!result.names[0].includes('-clip-01.')||!result.names[1].includes('-clip-02.')||
@@ -781,6 +805,12 @@ const {spawn}=require('node:child_process');
     throw Error('Queue output names were not unique: '+JSON.stringify(result.names));
   if(!await page.locator('#taskExportClips').isDisabled())
     throw Error('Already-exported queue still offers duplicate batch run');
+  // Saved clips are immutable: reusing a range must not mutate its exported row.
+  await page.locator('#taskClipQueueList button[data-clip-action="reuse"]').first().click();
+  if((await page.locator('#taskAddClip').textContent()).trim()!=='加入片段'||
+     await page.locator('#taskClipQueueList li').count()!==2||
+     !(await page.locator('#taskClipQueueList li').first().textContent()).includes('已导出'))
+    throw Error('Reusing completed clip unexpectedly edits existing export record');
 
 
   // A verified Native clip that fails at Save must survive for a save-only

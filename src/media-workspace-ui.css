@@ -1779,3 +1779,8 @@ body.media-frame-lightbox-open {
 .media-clip-queue-actions #taskExportClips{min-height:44px;background:#254859;border:1px solid #487889;color:#e1f4fa;font-weight:700;}
 .media-clip-queue-actions #taskExportClips:disabled{background:#24323d;border-color:#354452;color:#94a5b3;}
 @media(max-width:400px){.media-clip-queue{padding:10px}.media-clip-queue li{grid-template-columns:minmax(0,1fr) auto auto;padding:7px 6px;gap:4px}.media-clip-queue li button{padding:6px;min-width:44px}}
+
+/* Editing is explicitly in-place; completed clip ranges can only be reused. */
+.media-clip-queue-header-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center;}
+.media-clip-queue-row-editing{outline:2px solid rgba(130,200,223,.7);outline-offset:0;background:#1a2b38!important;}
+.media-clip-queue #taskCancelClipEdit[hidden]{display:none!important;}

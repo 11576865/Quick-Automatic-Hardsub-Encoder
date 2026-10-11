@@ -11,6 +11,9 @@ test('professional workbench composes real source, media viewer and inspector',a
   assert.match(main,/id="studioEmptyStage"/);
   assert.match(media,/id="taskClipQueuePanel"/);
   assert.match(media,/saveQueuedResult=async result/);
+  assert.match(media,/id="taskCancelClipEdit"/);
+  assert.match(media,/clipEditingIndex=-1/);
+  assert.match(media,/clips\[editing\]=\{\.\.\.clip,state:'queued'\}/);
   assert.match(media,/clipBatchRunning=true/);
   assert.match(media,/if \(modeDock\) modeDock.append\(modeNav\)/);
   assert.match(media,/if \(manualMount && section.parentElement !== manualMount\) manualMount.append\(section\)/);
