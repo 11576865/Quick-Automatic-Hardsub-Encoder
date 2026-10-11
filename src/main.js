@@ -13,6 +13,13 @@ import { parseLibassFontDiagnostics, codePointDisplay } from './font-diagnostics
 import { normalizeCompressionEvidence, normalizeCompressionEvidenceList, qualityEvidenceRecord, runtimeEvidenceKey, sourceEvidenceKey } from './compression-evidence.js';
 import { createSizeQualityFrontier, fitRateDistortionModel } from './rate-distortion-model.js';
 import { buildSizeFrontierPlot, evidenceFractionForTargetBytes, targetBytesAtEvidenceFraction } from './size-frontier-ui.js';
+import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
+import { createMultiBranchFrontier, calibrationTimeBudget, calibrationShouldContinue } from './compression-decision.js';
+import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
+import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
+import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from './scene-risk-selection.js';
+import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
+import { resolveGuidedSizePolicy, assessGuidedBudget } from './guided-size-policy.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -55,6 +62,7 @@ const state = {
   nativeJobId: null,
   nativeImportJobId: null,
   nativeCompletedJob: null,
+  nativeJobProjection: null,
   localBenchmarkHistory: [],
   appRelease: null,
   appUpdateCheck: null,
@@ -71,6 +79,10 @@ const state = {
   benchmarks: {},
   qualityCalibration: {},
   rateDistortionModels: {},
+  resolutionRateDistortionModels: {},
+  guidedOutputSize: null,
+  sizeEnvelopeEnabled: false,
+  qualityExplorationPoints: {},
   sizeBudgetTargetBytes: null,
   sizeFrontierPointerId: null,
   qualityCalibrationTarget: null,
@@ -325,6 +337,7 @@ app.innerHTML = `
             <button id="calibrateQualityBtn" type="button">比较可用编码器并校准</button>
             <small>校准会对代表性短片段反复试编码。短样本用于寻找参数边界，不是整片质量保证。</small>
             <div id="qualityCalibrationResult" class="note"></div>
+            <p id="qualityExplorationReadout" class="note" role="status">校准前没有实测参数。</p>
           </div>
         </div>
 
@@ -337,18 +350,24 @@ app.innerHTML = `
                 <strong>实测效率曲线</strong>
                 <small id="sizeFrontierSubtitle">先对当前编码器做短片段实测；有足够证据后可直接沿曲线选择体积。</small>
               </div>
-              <button id="calibrateSizeFrontierBtn" class="plan-interaction" type="button">生成当前编码器曲线</button>
+              <div class="size-frontier-actions">
+                <button id="calibrateSizeFrontierBtn" class="plan-interaction" type="button">生成当前编码器曲线</button>
+                <button id="compareSizeFrontierBtn" class="plan-interaction secondary" type="button">比较可用编码器</button>
+                <button id="compareResolutionFrontierBtn" class="plan-interaction secondary" type="button">比较当前编码器分辨率</button>
+              </div>
             </div>
             <div id="sizeFrontierEmpty" class="size-frontier-empty note">尚无当前编码器的 R-D 模型。仍可使用下方手动倍率预算。</div>
             <div id="sizeFrontierChartWrap" class="size-frontier-chart-wrap hidden">
-              <svg id="sizeFrontierChart" class="size-frontier-chart" viewBox="0 0 720 220" role="slider" tabindex="0" aria-label="沿实测体积质量曲线选择目标体积"></svg>
+              <svg id="sizeFrontierChart" class="size-frontier-chart" viewBox="0 0 720 300" role="slider" tabindex="0" aria-label="沿实测体积质量曲线选择目标体积"></svg>
               <div class="size-frontier-scale">
                 <span id="sizeFrontierMin">—</span>
                 <span id="sizeFrontierKnee">实测范围</span>
                 <span id="sizeFrontierMax">—</span>
               </div>
             </div>
+            <div class="media-curve-legend"><span class="legend-observed">原始观测</span><span class="legend-fit">保序拟合</span><span class="legend-band">范围插值</span><span class="legend-whisker">场景范围</span></div>
             <div id="sizeFrontierReadout" class="size-frontier-readout">当前仍按手动倍率规划；拖动曲线后切换为实测预算。</div>
+            <button id="adoptSizeFrontierBranchBtn" type="button" class="secondary plan-interaction hidden">采用推荐编码器</button>
           </div>
 
           <details id="sizeManualBudget" class="size-manual-budget">
@@ -363,6 +382,15 @@ app.innerHTML = `
             </div>
           </details>
           <div id="sizeBudgetDetail" class="plan-value-detail plan-slider-feedback">选择视频后显示对应的实际字节上限。</div>
+          <label class="size-accuracy-control" for="guidedSizeBudgetPolicy">
+            <strong>体积执行策略</strong>
+            <select id="guidedSizeBudgetPolicy" class="plan-interaction" aria-describedby="guidedSizeBudgetPolicyHelp">
+              <option value="best-effort">快速单遍 · 尽量接近预算（默认）</option>
+              <option value="two-pass">较高精度 · 软件 H.264 两遍编码</option>
+              <option value="strict-ceiling">验证字节上限 · 软件 H.264 两遍；超限不导出</option>
+            </select>
+          </label>
+          <div id="guidedSizeBudgetPolicyHelp" class="note">快速模式可能明显超预算；两遍模式仅支持 Windows Native 软件 H.264，会占用更多完整编码时间。严格模式超限时失败，不自动重试或替换原文件。</div>
         </div>
       </div>
     </div>
@@ -1019,18 +1047,46 @@ function estimatedSizeBudgetAudioBitrate() {
   return Math.max(0, audioBitRate);
 }
 
-function currentSizeFrontier(codec = state.selectedCodec || chooseDefaultCodec('sizeBudget')) {
-  const model = codec ? state.rateDistortionModels?.[codec] : null;
-  if (!model?.ok || !state.media?.duration) return null;
-  const frontier = createSizeQualityFrontier(model, {
-    durationSeconds: Number(state.media.duration),
-    audioBitrate: estimatedSizeBudgetAudioBitrate(),
-    reservePercent: 4,
-    containerReservePercent: 1,
-    fixedReserveBytes: 256 * 1024,
-    minimumVideoBitrate: 150000
-  });
-  return frontier?.ok ? frontier : null;
+function currentSizeFrontier(codec = null) {
+  if (!state.media?.duration) return null;
+  const budget={
+    durationSeconds:Number(state.media.duration),audioBitrate:estimatedSizeBudgetAudioBitrate(),
+    reservePercent:4,containerReservePercent:1,fixedReserveBytes:256*1024,minimumVideoBitrate:150000
+  };
+  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
+    ':'+currentRuntimeEvidenceKey();
+  const resolutionChoices=Object.values(state.resolutionRateDistortionModels)
+    .filter(x=>x.model?.ok && x.metric===COMMON_REFERENCE_METRIC &&
+      x.sourceScope===sourceScope);
+  if(codec===null && state.sizeEnvelopeEnabled) {
+    const useRes=resolutionChoices.length>=2;
+    const branches=useRes
+      ? resolutionChoices.map(x=>({id:x.id,model:x.model,preset:x.preset,
+        measurementScope:sourceScope+':'+COMMON_REFERENCE_METRIC}))
+      : ['h264','h265','av1']
+        .filter(id=>state.softwareEncoders[id]!==false && state.rateDistortionModels[id]?.ok)
+        .map(id=>({id,model:state.rateDistortionModels[id],
+          preset:state.qualityCalibration[id]?.preset||profileFor(id,'balanced').preset,
+          measurementScope:sourceScope}));
+    if(branches.length>=2) {
+      const incumbentId=useRes
+        ? state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source')
+        : state.selectedCodec;
+      const envelope=createMultiBranchFrontier(branches,{
+        ...budget,incumbentId,hysteresisSsim:.003
+      });
+      if(envelope.ok)return envelope;
+    }
+  }
+  const selected=codec||state.selectedCodec||chooseDefaultCodec('sizeBudget');
+  const sizeId=state.guidedOutputSize?.id;
+  const scaledModel=sizeId && codec===selected
+    ? state.resolutionRateDistortionModels[selected+'@'+sizeId] : null;
+  const model=scaledModel?.model?.ok && scaledModel.sourceScope===sourceScope
+    ? scaledModel.model : selected?state.rateDistortionModels?.[selected]:null;
+  if(!model?.ok)return null;
+  const frontier=createSizeQualityFrontier(model,budget);
+  return frontier?.ok?frontier:null;
 }
 
 function currentSizeBudgetBytes() {
@@ -1069,11 +1125,16 @@ function renderSizeFrontier() {
   const empty = $('sizeFrontierEmpty');
   const readout = $('sizeFrontierReadout');
   const button = $('calibrateSizeFrontierBtn');
+  const compare=$('compareSizeFrontierBtn'),
+    compareResolution=$('compareResolutionFrontierBtn'),branchAction=$('adoptSizeFrontierBranchBtn');
   if (!panel || !svg || !wrap || !empty || !readout || !button) return;
 
   const goal = $('encodeGoal')?.value || 'balanced';
   const codec = state.selectedCodec || chooseDefaultCodec(goal);
   const model = codec ? state.rateDistortionModels?.[codec] : null;
+  const multiReady=state.sizeEnvelopeEnabled && (
+    Object.values(state.rateDistortionModels).filter(m=>m?.ok).length>=2 ||
+    Object.values(state.resolutionRateDistortionModels).filter(x=>x.model?.ok).length>=2);
   const nativeOnly = !state.nativeBackend?.available;
   const inputNotReady = !state.inputDecodeOk || !state.assInfo;
   const ssimUnavailable = state.nativeBackend?.available && state.nativeSelfTest?.ssimSmoke !== true;
@@ -1091,9 +1152,14 @@ function renderSizeFrontier() {
     : model?.ok
       ? '刷新当前编码器曲线'
       : '生成当前编码器曲线';
+  if(compare)compare.disabled=button.disabled;
+  if(compareResolution)compareResolution.disabled=button.disabled ||
+    state.nativeBackend?.backend!=='windows-native' ||
+    guidedResolutionCandidates(state.media||{}).length<2;
+  if(branchAction){branchAction.classList.add('hidden');branchAction.disabled=true;}
 
   const label = codec ? codec.toUpperCase() : '当前编码器';
-  if (!model?.ok) {
+  if (!model?.ok && !multiReady) {
     wrap.classList.add('hidden');
     empty.classList.remove('hidden');
     empty.textContent = nativeOnly
@@ -1112,7 +1178,7 @@ function renderSizeFrontier() {
     return;
   }
 
-  const frontier = currentSizeFrontier(codec);
+  const frontier = currentSizeFrontier();
   if (!frontier) {
     wrap.classList.add('hidden');
     empty.classList.remove('hidden');
@@ -1124,7 +1190,7 @@ function renderSizeFrontier() {
   const directBytes = Number(state.sizeBudgetTargetBytes || 0);
   const plot = buildSizeFrontierPlot(frontier, {
     width: 720,
-    height: 220,
+    height: 300,
     selectedTargetBytes: directBytes > 0 ? directBytes : null
   });
   if (!plot.ok) {
@@ -1137,38 +1203,17 @@ function renderSizeFrontier() {
 
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
-  $('sizeFrontierSubtitle').textContent =
-    label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。';
+  $('sizeFrontierSubtitle').textContent = frontier.kind==='multi-branch'
+    ? frontier.branchIds.map(id=>id.toUpperCase()).join(' / ')+
+      ' · 统一源尺寸参考画面 SSIM；仅在共同实测体积区间内形成上包络。'
+    : label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。';
   $('sizeFrontierMin').textContent = formatBytes(frontier.minimumEvidenceTargetBytes);
   $('sizeFrontierMax').textContent = formatBytes(frontier.maximumEvidenceTargetBytes);
   $('sizeFrontierKnee').textContent = frontier.knee
     ? '效率拐点约 ' + formatBytes(frontier.knee.targetBytes)
     : '当前实测范围';
 
-  const evidenceDots = plot.evidencePoints.map(point =>
-    '<circle class="size-frontier-evidence" cx="' + point.x.toFixed(2) +
-    '" cy="' + point.y.toFixed(2) + '" r="4"><title>实测 · ' +
-    escapeHtml(formatBytes(point.targetBytes)) + ' · SSIM ' +
-    Number(point.quality).toFixed(5) + '</title></circle>'
-  ).join('');
-  const kneeDot = plot.knee
-    ? '<circle class="size-frontier-knee" cx="' + plot.knee.x.toFixed(2) +
-      '" cy="' + plot.knee.y.toFixed(2) + '" r="5"><title>效率拐点 · ' +
-      escapeHtml(formatBytes(plot.knee.targetBytes)) + '</title></circle>'
-    : '';
-  const selectedDot = plot.selected
-    ? '<circle class="size-frontier-thumb-halo" cx="' + plot.selected.x.toFixed(2) +
-      '" cy="' + plot.selected.y.toFixed(2) + '" r="11"></circle>' +
-      '<circle class="size-frontier-thumb" cx="' + plot.selected.x.toFixed(2) +
-      '" cy="' + plot.selected.y.toFixed(2) + '" r="6"></circle>'
-    : '';
-
-  svg.innerHTML =
-    '<rect class="size-frontier-bg" x="0" y="0" width="720" height="220" rx="8"></rect>' +
-    '<line class="size-frontier-grid" x1="34" y1="196" x2="686" y2="196"></line>' +
-    '<path class="size-frontier-band" d="' + plot.bandPath + '"></path>' +
-    '<path class="size-frontier-line" d="' + plot.curvePath + '"></path>' +
-    evidenceDots + kneeDot + selectedDot;
+  svg.innerHTML = renderRateDistortionSvg(plot);
 
   const ariaBytes = directBytes > 0
     ? Math.max(frontier.minimumEvidenceTargetBytes, Math.min(frontier.maximumEvidenceTargetBytes, directBytes))
@@ -1179,17 +1224,33 @@ function renderSizeFrontier() {
   svg.setAttribute('aria-valuetext', formatBytes(ariaBytes));
 
   if (directBytes > 0 && plot.selected) {
-    const marginal = model.marginalQualityPerDoubling(plot.selected.videoBitrate);
+    const marginal = frontier.kind==='multi-branch' ? null :
+      model.marginalQualityPerDoubling(plot.selected.videoBitrate);
     readout.innerHTML =
       '<strong>' + escapeHtml(formatBytes(plot.selected.targetBytes)) + '</strong>' +
       ' · 视频 ' + escapeHtml(formatBitrate(plot.selected.videoBitrate)) +
-      ' · 预计 SSIM ' + Number(plot.selected.quality).toFixed(5) +
+      ' · CQ 短样预测 SSIM ' + Number(plot.selected.quality).toFixed(5) +
       ' <span class="size-frontier-band-copy">样本范围 ' +
       Number(plot.selected.lowerQuality).toFixed(5) + '–' +
       Number(plot.selected.upperQuality).toFixed(5) + '</span>' +
+      ' · 体积策略 '+escapeHtml($('guidedSizeBudgetPolicy').selectedOptions[0]?.textContent||'快速单遍')+
+      '；该曲线是 CQ 短样观测；较高精度两遍若使用不同软件编码器不沿用该曲线作正式 SSIM 预测' +
       (Number.isFinite(marginal)
         ? ' · 每翻倍视频码率约 +' + Number(marginal).toFixed(4) + ' SSIM'
+        : '')+
+      (frontier.kind==='multi-branch'
+        ? ' · 建议 '+escapeHtml(String(plot.selected.branchId||'').toUpperCase())+
+          (plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source') &&
+            plot.selected.branchId!==state.selectedCodec?'（未采用，执行方案不变）':'（已选择）')
         : '');
+    if(branchAction && frontier.kind==='multi-branch' && plot.selected.branchId &&
+      plot.selected.branchId!==state.selectedCodec &&
+      plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source')){
+      branchAction.dataset.codec=plot.selected.branchId;
+      branchAction.disabled=state.qualityCalibrationBusy||state.operationBusy;
+      branchAction.classList.remove('hidden');
+      branchAction.textContent='采用推荐配置 '+plot.selected.branchId.toUpperCase();
+    }
   } else if (directBytes > 0) {
     const evaluation = frontier.evaluateTargetBytes(directBytes);
     const statusText = evaluation.status === 'below-evidence'
@@ -1211,9 +1272,11 @@ function sizeFrontierTargetFromPointer(event) {
   if (!svg || !frontier) return null;
   const rect = svg.getBoundingClientRect();
   if (!(rect.width > 0)) return null;
-  const svgX = (Number(event.clientX) - rect.left) / rect.width * 720;
-  const fraction = Math.max(0, Math.min(1, (svgX - 34) / (720 - 68)));
-  return targetBytesAtEvidenceFraction(frontier, fraction);
+  const plot = buildSizeFrontierPlot(frontier);
+  if (!plot.ok) return null;
+  const svgX = plotXFromClientX(event.clientX, rect, plot.width);
+  const fraction = plotFractionAtX(plot, svgX);
+  return fraction === null ? null : targetBytesAtEvidenceFraction(frontier, fraction);
 }
 
 function commitSizeFrontierKeyboard(event) {
@@ -1263,6 +1326,14 @@ function updateSizeBudgetPreview() {
     );
   });
   setSliderProgress(range);
+  if($('guidedSizeBudgetPolicy')){
+    const policy=$('guidedSizeBudgetPolicy').value;
+    $('guidedSizeBudgetPolicyHelp').textContent=policy==='strict-ceiling'
+      ? '严格上限：使用 Windows Native 软件 H.264 两遍编码，完成后核对实际容器字节数；超限则拒绝导出并保留原文件，不自动重试。'
+      : policy==='two-pass'
+        ? '较高精度：使用 Windows Native 软件 H.264 两遍编码，消耗更多完整编码时间；仍可能超过字节预算。'
+        : '快速单遍：优先使用当前可用编码器（可能为 NVENC）；目标码率只作规划，可能明显偏离文件上限。';
+  }
   renderSizeFrontier();
 }
 
@@ -1346,6 +1417,7 @@ $('encodeGoal').addEventListener('change', () => {
 
 $('qualityTarget').addEventListener('change', () => {
   state.qualityCalibration = {};
+  state.qualityExplorationPoints = {};
   state.qualityCalibrationTarget = null;
   $('qualityCalibrationResult').textContent = '';
   updateQualityTargetPreview();
@@ -1372,6 +1444,9 @@ $('qualityTargetRange').addEventListener('input', updateQualityTargetPreview);
 $('qualityTargetRange').addEventListener('change', commitQualityTarget);
 $('sizeBudgetRange').addEventListener('input', updateSizeBudgetPreview);
 $('sizeBudgetRange').addEventListener('change', commitSizeBudget);
+$('guidedSizeBudgetPolicy').addEventListener('change',()=>{
+  updateSizeBudgetPreview();renderPlanOptions();refreshBenchmarkEnabled();
+});
 
 $('sizeFrontierChart').addEventListener('pointerdown', event => {
   const targetBytes = sizeFrontierTargetFromPointer(event);
@@ -1457,6 +1532,24 @@ document.addEventListener('change', event => {
 });
 $('calibrateQualityBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
 $('calibrateSizeFrontierBtn').addEventListener('click', () => runWebTask(runQualityCalibration));
+$('compareSizeFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true})));
+$('compareResolutionFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true,compareResolution:true})));
+$('adoptSizeFrontierBranchBtn').addEventListener('click',()=>{
+  const frontier=currentSizeFrontier();
+  const recommendation=frontier?.evaluateTargetBytes(Number(state.sizeBudgetTargetBytes||0));
+  if(state.operationBusy||state.qualityCalibrationBusy||frontier?.kind!=='multi-branch'||
+    recommendation?.status!=='within-evidence'||!recommendation.branchId||
+    recommendation.branchId===state.selectedCodec)return;
+  const resolution=state.resolutionRateDistortionModels[recommendation.branchId];
+  if(resolution) {
+    state.selectedCodec=resolution.codec;
+    state.guidedOutputSize=resolution.outputWidth>0
+      ? {id:resolution.resolutionId,width:resolution.outputWidth,height:resolution.outputHeight}
+      : null;
+    renderPlanOptions();
+    refreshGuidedContainerDecision();
+  } else selectCodec(recommendation.branchId);
+});
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
 $('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
 $('encodeBtn').addEventListener('click', () => runWebTask(runEncode));
@@ -3985,11 +4078,34 @@ function chooseDefaultCodec(goal) {
 function invalidateQualityCalibration() {
   state.qualityCalibration = {};
   state.rateDistortionModels = {};
+  state.resolutionRateDistortionModels = {};
+  state.guidedOutputSize = null;
+  state.sizeEnvelopeEnabled = false;
+  state.qualityExplorationPoints = {};
   state.sizeBudgetTargetBytes = null;
   state.sizeFrontierPointerId = null;
   state.qualityCalibrationTarget = null;
   if ($('sizeBudgetBytes')) $('sizeBudgetBytes').value = '';
   if ($('qualityCalibrationResult')) $('qualityCalibrationResult').textContent = '';
+}
+
+
+function renderQualityExploration() {
+  const readout = $('qualityExplorationReadout');
+  if (!readout) return;
+  const codec = state.selectedCodec || chooseDefaultCodec('targetQuality');
+  const trials = state.qualityExplorationPoints?.[codec] || [];
+  if (!trials.length) {
+    readout.textContent = '当前编码器尚无实测参数；校准期间会逐点显示进度。';
+    return;
+  }
+  const target = Number(state.qualityCalibrationTarget || $('qualityTarget')?.value || .985);
+  const latest = trials.at(-1);
+  const passing = trials.filter(point => Number(point.ssim) >= target).length;
+  readout.textContent = codec.toUpperCase() + ' · 已试压 ' + trials.length +
+    ' 个 CQ/CRF 参数，' + passing + ' 个达到最低样本 SSIM ' + target.toFixed(3) +
+    '；最近 CRF ' + latest.qualitySetting + '，最低样本 SSIM ' +
+    Number(latest.ssim).toFixed(5) + '。结果仅代表短片样本。';
 }
 
 function updateQualityCalibrationControls() {
@@ -4014,6 +4130,7 @@ function updateQualityCalibrationControls() {
   }
   $('qualityTarget').disabled = controlsLocked;
   $('encodeGoal').disabled = controlsLocked;
+  $('guidedSizeBudgetPolicy').disabled=controlsLocked;
   if ($('qualityTargetRange')) $('qualityTargetRange').disabled = controlsLocked;
   if ($('qualityAutoCodec')) $('qualityAutoCodec').disabled = controlsLocked;
   document.querySelectorAll('.plan-mode-tab').forEach(button => { button.disabled = controlsLocked; });
@@ -4041,6 +4158,7 @@ function updateQualityCalibrationControls() {
   }
 
   renderSizeFrontier();
+  renderQualityExploration();
 }
 function renderPlanOptions() {
   if (!state.media) {
@@ -4078,10 +4196,14 @@ function renderPlanOptions() {
       param = 'CRF ' + plan.crf + ' · preset ' + plan.preset;
     } else if (plan?.mode === 'budget-rate') {
       param = plan.frontierPrediction
-        ? '实测曲线 · ' + formatBytes(plan.sizeCeiling) +
+        ? 'CQ 短样曲线 · ' + formatBytes(plan.sizeCeiling) +
           ' · ' + formatBitrate(plan.targetVideoBitrate) +
-          ' · SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
+          ' · CQ 样本 SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
         : '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
+    } else if (goal === 'sizeBudget' && currentGuidedBudgetAssessment()?.status === 'infeasible') {
+      param = '预算不可行：音频及容器预留后的视频码率低于规划下限';
+    } else if (goal === 'sizeBudget' && !plan && $('guidedSizeBudgetPolicy').value!=='best-effort') {
+      param='所选体积精度策略仅支持 Windows Native 软件 H.264';
     } else if (
       available &&
       (goal === 'targetQuality' || goal === 'efficiency') &&
@@ -4123,16 +4245,30 @@ function updateChosenSummary() {
   const plan = buildEncodePlan(state.selectedCodec);
 
   if (!plan) {
+    const capacity = goal === 'sizeBudget' ? currentGuidedBudgetAssessment() : null;
+    if (capacity?.status === 'infeasible') {
+      $('chosenSummary').textContent =
+        '按当前音频码率及容器预留，目标体积 ' + formatBytes(capacity.targetBytes) +
+        ' 不足以留下最低规划视频码率 ' + formatBitrate(capacity.minimumVideoBitrate) +
+        '。估算最低预算 ' + formatBytes(capacity.minimumTargetBytes) +
+        '，还差 ' + formatBytes(capacity.shortfallBytes) +
+        '；其中音频载荷约 ' + formatBytes(capacity.audioPayloadBytes) +
+        '。请增加目标体积、降低音频码率或减少音轨。这是当前预算模型下的容量约束，不是画质评价。';
+      return;
+    }
     if (goal === 'targetQuality' || goal === 'efficiency') {
       $('chosenSummary').textContent =
         '该模式需要先运行“实测校准目标质量”，校准完成后才会生成正式 CRF 参数。';
     } else {
-      $('chosenSummary').textContent = '当前方案无法生成安全参数。';
+      $('chosenSummary').textContent = goal==='sizeBudget' && $('guidedSizeBudgetPolicy').value!=='best-effort'
+        ? '当前体积策略仅支持 Windows Native 软件 H.264；请选 H.264 或切换快速单遍。'
+        : '当前方案无法生成安全参数。';
     }
     return;
   }
 
-  const history = localPredictionForPlan(plan);
+  const history = plan.sizeBudgetPolicy && plan.sizeBudgetPolicy!=='best-effort'
+    ? null : localPredictionForPlan(plan);
   const historyHtml = history
     ? ' <span class="note">本机历史 ' + history.samples + ' 次 · 中位速度 ' +
       history.speed.toFixed(2) + '× realtime · 预计编码阶段约 ' +
@@ -4166,7 +4302,16 @@ function updateChosenSummary() {
       frontierHtml +
       '。规划体积约 ' + formatBytes(plan.plannedBytes) +
       '，预算边界 ' + formatBytes(plan.sizeCeiling) +
-      '。这是参数规划值，不承诺最终字节数严格命中。' + historyHtml;
+      ' · 来源 '+(plan.budgetSource==='frontier'?'所选曲线目标':'源片倍率')+
+      ' · 预估音频 '+formatBitrate(plan.audioBitRate)+
+      ' · 容器预留 '+formatBytes(plan.containerReserveBytes)+
+      (plan.sizeBudgetPolicy==='best-effort'
+        ? '。快速单遍目标码率，可能明显超出预算。'
+        : plan.sizeBudgetPolicy==='two-pass'
+          ? '。软件 H.264 两遍编码，提高体积逼近精度但增加耗时，不保证精确命中。'
+          : '。严格字节上限：软件 H.264 两遍编码，成品超出预算会失败且不可导出；不自动重试。')+
+      'CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM。'+
+      '这是参数规划值，只有严格策略执行成功才代表成品经过上限验证。' + historyHtml;
   }
 }
 
@@ -4244,6 +4389,7 @@ function renderSelectedTestResult() {
 function selectCodec(codec) {
   if (state.operationBusy) return;
   state.selectedCodec = codec;
+  state.guidedOutputSize = null;
   renderPlanOptions();
   refreshGuidedContainerDecision();
 }
@@ -4279,15 +4425,75 @@ function qualitySampleStarts(duration) {
   return distinct.slice(0, 2);
 }
 
-async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
+// Called once per comparative run and shared by ALL competing branches.
+// A preflight failure degrades to a visibly time-stratified plan, not to
+// invented risk measurements. Probes are bounded, and source changes abort.
+async function preparePairedQualitySamplePlan() {
+  const seconds=Math.min(2,Math.max(1.2,Number(state.media?.duration||2)/20));
+  const total=Number(state.media?.duration||0);
+  const seekable=state.nativeInputProbe?.seekable!==false;
+  const spots=sceneProbeStarts(total,seconds);
+  const source=currentSourceEvidenceKey();
+  const subtitleSnapshot=state.activeAssText||state.assText;
+  const probes=[];
+  const limit=calibrationTimeBudget(total);
+  const riskBudget=Math.min(15,Math.max(0,(limit||0)*.20));
+  // At 3s maximum FFmpeg-process time per probe, a tiny source cannot be
+  // required to spend multiple seconds examining scenes before encoding.
+  const maxProbes=seekable && total>=20 ? Math.min(spots.length,Math.floor(riskBudget/3)) : 0;
+  const order=[0,2,4,1,3,5];
+  const started=performance.now();
+  for(const index of order.slice(0,maxProbes)){
+    const start=spots[index];if(start===undefined)continue;
+    if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot)
+      throw Error('场景预检期间输入或字幕已改变，旧证据不可使用。');
+    if((performance.now()-started)/1000+2>riskBudget)break;
+    try{
+      const measured=await requestNativeSample({
+        sceneRiskOnly:true,start,duration:seconds,timeoutSeconds:3
+      },'');
+      if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot)
+        throw Error('场景预检期间输入或字幕已改变，旧证据不可使用。');
+      if(Number(measured?.frameCount)>0)probes.push({
+        start,meanLuma:parseMeasuredNumber(measured.meanLuma),
+        meanYdif:parseMeasuredNumber(measured.meanYdif),
+        peakScene:parseMeasuredNumber(measured.peakScene),
+        meanContrast:parseMeasuredNumber(measured.meanContrast)
+      });
+    }catch(error){
+      if(currentSourceEvidenceKey()!==source)throw error;
+      log('场景风险探测不可用，改用配对的时间分层采样：'+error.message);
+      break;
+    }
+  }
+  const plan=selectPairedSceneWindows({
+    durationSeconds:total,windowSeconds:seconds,probes,
+    subtitleEvents:state.assInfo?.events||[],seekable,maxWindows:3
+  });
+  if(!plan.ok)throw Error('无法生成有界配对采样计划：'+plan.reason);
+  log('配对场景采样 '+plan.fingerprint+
+    ' · 视频复杂度预检 '+plan.probedWindows+'/'+plan.candidateWindows+
+    ' · '+(plan.riskAware?'场景风险辅助选择':'仅时间分层/字幕提示，非完整内容分析'));
+  return {...plan,source,subtitleSnapshot,windowSeconds:seconds,
+    preflightElapsedSeconds:(performance.now()-started)/1000};
+}
+
+async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, outputSize = null, samplePlan = null) {
   // Two seconds reduces keyframe/GOP overhead bias compared with the tiny
   // diagnostic benchmark while keeping repeated AV1 calibration tolerable.
   const duration = Math.min(2.0, Math.max(1.2, Number(state.media?.duration || 2.0) / 20));
-  const starts = qualitySampleStarts(duration);
+  const starts = samplePlan?.starts || qualitySampleStarts(duration);
   const originalAss = state.activeAssText || state.assText;
+  if(samplePlan && (samplePlan.source!==currentSourceEvidenceKey() ||
+    samplePlan.subtitleSnapshot!==originalAss)) throw Error('配对采样源证据已失效');
+  if(samplePlan && samplePlan.windowSeconds!==duration)
+    throw Error('配对采样窗口长度不一致');
   const results = [];
 
   for (const start of starts) {
+    if(samplePlan && (samplePlan.source!==currentSourceEvidenceKey() ||
+      samplePlan.subtitleSnapshot!==(state.activeAssText||state.assText)))
+      throw Error('配对采样源证据已失效');
     const sample = await requestNativeSample({
       codec,
       start,
@@ -4296,22 +4502,28 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
       measureSsim: true,
       crf,
       preset,
-      targetVideoBitrate: 0
+      targetVideoBitrate: 0,
+      outputWidth:outputSize?.width||0,outputHeight:outputSize?.height||0,
+      referenceWidth:outputSize?.width ? Number(state.media?.width||0):0,
+      referenceHeight:outputSize?.height ? Number(state.media?.height||0):0,
+      timeoutSeconds:samplePlan?.timeoutSeconds ??
+        Math.max(2,Math.ceil((calibrationTimeBudget(Number(state.media?.duration||0))||120)/Math.max(1,starts.length)))
     }, shiftAssForPreview(originalAss, start));
 
-    const ssim = Number(sample.ssim);
-    if (!Number.isFinite(ssim)) {
-      throw new Error(codec.toUpperCase() + ' 未取得有效 SSIM');
-    }
-
-    const measuredDuration = Math.max(0.001, Number(sample.duration || duration));
-    const videoBytes = Number(sample.totalVideoBytes || 0);
+    if(samplePlan && samplePlan.source!==currentSourceEvidenceKey())
+      throw Error('Native 样本返回后源已改变，拒绝旧证据');
+    const ssim=parseMeasuredQuality(sample?.ssim);
+    const measuredDuration=parseMeasuredNumber(sample?.duration);
+    const videoBytes=parseMeasuredNumber(sample?.totalVideoBytes);
+    const elapsed=parseMeasuredNumber(sample?.elapsedSeconds);
+    if(ssim===null||!(measuredDuration>0)||!(videoBytes>0)||!(elapsed>0))
+      throw new Error(codec.toUpperCase()+' 未取得有效 SSIM、时长、视频包字节数或编码耗时');
     results.push({
       start,
       ssim,
-      bitrate: videoBytes > 0 ? videoBytes * 8 / measuredDuration : 0,
+      bitrate: videoBytes * 8 / measuredDuration,
       mediaSeconds: measuredDuration,
-      elapsedSeconds: Math.max(0.001, Number(sample.elapsedSeconds || 0))
+      elapsedSeconds: elapsed
     });
   }
 
@@ -4330,6 +4542,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
       : 0,
     encodeSpeed: totalWall > 0 ? totalMedia / totalWall : 0,
     sampleCount: results.length,
+    samplePlanVersion:samplePlan?.version||'legacy-2-timestamps',
+    sampleFingerprint:samplePlan?.fingerprint||'legacy',
+    riskAware:samplePlan?.riskAware===true,
     sampleMeasurements: results.map(item => ({
       start: item.start,
       duration: item.mediaSeconds,
@@ -4339,7 +4554,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
     }))
   };
 
-  await persistCompressionEvidence(qualityEvidenceRecord({
+  // Resized evidence is session-only: the existing persistent evidence key
+  // does not carry output resolution and common-reference metric identity.
+  if(!outputSize?.width && !samplePlan) await persistCompressionEvidence(qualityEvidenceRecord({
     media: state.media,
     sourceName: state.video?.name || state.media?.sourceName || '',
     sourceSize: Number(state.video?.size || state.media?.size || 0),
@@ -4360,7 +4577,7 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null) {
   return summary;
 }
 
-async function calibrateCodecQuality(codec, target) {
+async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSize=null, samplePlan=null) {
   const range = qualityCrfRange(codec);
   const preset = profileFor(codec, 'balanced').preset;
   let low = range.min;
@@ -4368,15 +4585,32 @@ async function calibrateCodecQuality(codec, target) {
   let best = null;
   let bestQuality = null;
   const tested = new Map();
+  let stopReason=null;
+  const canProbe=()=>{
+    if(budgetSeconds===null||tested.size===0)return true;
+    const decision=calibrationShouldContinue({points:[...tested.values()],budgetSeconds});
+    if(!decision.continue)stopReason=decision.reason;
+    return decision.continue;
+  };
 
   const test = async crf => {
     if (tested.has(crf)) return tested.get(crf);
     $('qualityCalibrationResult').textContent =
       '正在校准 ' + codec.toUpperCase() +
+      (outputSize?.id?' / '+outputSize.id:'')+
       ' · CRF ' + crf +
       ' · 目标 SSIM ' + target.toFixed(3) + '…';
-    const result = await evaluateQualityCandidate(codec, crf, preset, target);
+    const result = await evaluateQualityCandidate(codec, crf, preset, target,outputSize,samplePlan);
     tested.set(crf, result);
+    if(!outputSize || outputSize.id==='source') {
+      if (!state.qualityExplorationPoints[codec]) state.qualityExplorationPoints[codec]=[];
+      state.qualityExplorationPoints[codec].push({
+        ...result, qualitySetting:crf,
+        iteration:state.qualityExplorationPoints[codec].length+1,
+        meetsTarget:result.ssim>=target
+      });
+      renderQualityExploration();
+    }
     if (!bestQuality || result.ssim > bestQuality.ssim) bestQuality = result;
     log(
       '目标质量校准 ' + codec.toUpperCase() +
@@ -4390,7 +4624,7 @@ async function calibrateCodecQuality(codec, target) {
 
   // Find the highest CRF that still clears the target. Higher CRF normally
   // means lower bitrate / lower quality, so this searches the quality boundary.
-  for (let i = 0; i < 5 && low <= high; i++) {
+  for (let i = 0; i < 5 && low <= high && canProbe(); i++) {
     const mid = Math.floor((low + high) / 2);
     const result = await test(mid);
     if (result.ssim >= target) {
@@ -4402,19 +4636,22 @@ async function calibrateCodecQuality(codec, target) {
   }
 
   // Binary search may stop one integer before the boundary.
-  if (best && best.crf < range.max) {
+  if (best && best.crf < range.max && canProbe()) {
     const next = await test(best.crf + 1);
     if (next.ssim >= target) best = next;
   }
 
   if (!best) {
-    const strongest = await test(range.min);
+    const strongest = tested.has(range.min) ? tested.get(range.min) :
+      canProbe() ? await test(range.min) :
+      [...tested.values()].reduce((a,b)=>!a||b.ssim>a.ssim?b:a,null);
     return {
       ...strongest,
       targetSsim: target,
       meetsTarget: strongest.ssim >= target,
       testedCrfs: [...tested.keys()].sort((a, b) => a - b),
-      testedPoints: [...tested.values()].sort((a, b) => Number(a.sampleBitrate) - Number(b.sampleBitrate))
+      testedPoints: [...tested.values()].sort((a, b) => Number(a.sampleBitrate) - Number(b.sampleBitrate)),
+      partial:!!stopReason,stopReason
     };
   }
 
@@ -4423,8 +4660,130 @@ async function calibrateCodecQuality(codec, target) {
     targetSsim: target,
     meetsTarget: true,
     testedCrfs: [...tested.keys()].sort((a, b) => a - b),
-    testedPoints: [...tested.values()].sort((a, b) => Number(a.sampleBitrate) - Number(b.sampleBitrate))
+    testedPoints: [...tested.values()].sort((a, b) => Number(a.sampleBitrate) - Number(b.sampleBitrate)),
+    partial:!!stopReason,stopReason
   };
+}
+
+// Optional second pass: only measured, same-position extra evidence may alter
+// the single envelope. Incomplete batches never update any public branch model.
+async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedAt,target,sourceScope}){
+  const frontier=currentSizeFrontier();
+  if(frontier?.kind!=='multi-branch'){
+    log('配对追加测量未执行：尚无共同体积证据。');
+    return {published:false,reason:'no-common-evidence'};
+  }
+  const entries=mode==='resolution'
+    ? Object.values(state.resolutionRateDistortionModels).filter(x=>x.model?.ok)
+    : Object.entries(state.rateDistortionModels).filter(([,model])=>model?.ok)
+        .map(([codec,model])=>({
+          id:codec,codec,preset:state.qualityCalibration[codec]?.preset,
+          model,testedPoints:state.qualityCalibration[codec]?.testedPoints,
+          sampleFingerprint:samplePlan.fingerprint,sourceScope
+        }));
+  const branches=entries.map(x=>({
+    id:x.id,codec:x.codec,preset:x.preset,testedPoints:x.testedPoints,
+    sampleFingerprint:x.sampleFingerprint,sourceScope:x.sourceScope,
+    outputSize:mode==='resolution'?{
+      id:x.resolutionId,width:x.outputWidth,height:x.outputHeight
+    }:null
+  }));
+  const targetBytes=Number(state.sizeBudgetTargetBytes)>0
+    ?Number(state.sizeBudgetTargetBytes)
+    :Math.sqrt(frontier.minimumEvidenceTargetBytes*frontier.maximumEvidenceTargetBytes);
+  const plan=planPairedRefinement({
+    frontier,targetBytes,branches,samplePlan,budgetSeconds:budget,
+    spentSeconds:(performance.now()-stageStartedAt)/1000
+  });
+  if(!plan.refine){
+    log('配对追加测量不执行：'+plan.reason+
+      '（可能是预算不足、已明显领先、样本不配对或未测区域不足）。');
+    return {published:false,reason:plan.reason};
+  }
+  const proposals=[];
+  const scenePlan={
+    ...samplePlan,starts:plan.starts,fingerprint:plan.fingerprint
+  };
+  try{
+    for(const branch of plan.branches){
+      const measured=new Map();
+      for(const step of branch.points){
+        const elapsed=(performance.now()-stageStartedAt)/1000;
+        if(elapsed+step.estimatedSeconds>budget)
+          throw Error('追加实测预算已耗尽，整组结果不采用');
+        $('qualityCalibrationResult').textContent=
+          '正在核验高风险配对窗口 '+plan.starts[0].toFixed(1)+'s · '+branch.id+
+          ' · CRF '+step.crf+'（所有已测 CRF 和分支均须补测）';
+        const remaining=Math.max(0,budget-elapsed);
+        const oneProbePlan={...scenePlan,timeoutSeconds:Math.max(2,
+          Math.ceil(Math.min(remaining,step.estimatedSeconds*1.5)))};
+        const latest=await evaluateQualityCandidate(branch.codec,step.crf,
+          branch.preset,target,branch.outputSize,oneProbePlan);
+        if((performance.now()-stageStartedAt)/1000>budget+2)
+          throw Error('实际追加测量超过软预算，拒绝发布不完整组');
+        const updated=appendMatchedSceneObservation(step.point,latest,{
+          start:plan.starts[0],originalFingerprint:plan.previousFingerprint,
+          nextFingerprint:plan.fingerprint
+        });
+        if(!updated)throw Error('追加样本与原校准来源、编码参数或位置不一致');
+        measured.set(step.point,updated);
+      }
+      const old=entries.find(x=>x.id===branch.id);
+      if(!old||measured.size!==old.testedPoints.length)
+        throw Error('部分 CRF 未补测，禁止混合场景样本集');
+      const testedPoints=old.testedPoints.map(p=>measured.get(p));
+      if(testedPoints.some(p=>!p||p.sampleFingerprint!==plan.fingerprint))
+        throw Error('追加实测未形成完整的同场景模型');
+      const model=fitRateDistortionModel(testedPoints);
+      if(!model.ok)throw Error('追加样本使模型无效');
+      proposals.push({id:branch.id,model,testedPoints});
+    }
+    if(proposals.length!==branches.length ||
+      samplePlan.source!==currentSourceEvidenceKey() ||
+      samplePlan.subtitleSnapshot!==(state.activeAssText||state.assText))
+      throw Error('追加测量不完整或来源已变化');
+    // Before publishing, require a valid new *common* measured budget domain.
+    const check=createMultiBranchFrontier(proposals.map(x=>({
+      id:x.id,model:x.model,measurementScope:sourceScope+
+        (mode==='resolution'?':'+COMMON_REFERENCE_METRIC:'')
+    })),{
+      durationSeconds:Number(state.media.duration),
+      audioBitrate:estimatedSizeBudgetAudioBitrate(),
+      reservePercent:4,containerReservePercent:1,
+      fixedReserveBytes:256*1024,minimumVideoBitrate:150000,
+      incumbentId:frontier.incumbentId,hysteresisSsim:.003
+    });
+    if(!check.ok || check.evaluateTargetBytes(targetBytes).status!=='within-evidence')
+      throw Error('更新后的候选不再覆盖本次目标体积的共同实测区间');
+    for(const p of proposals){
+      if(mode==='resolution'){
+        const record=state.resolutionRateDistortionModels[p.id];
+        record.model=p.model;
+        record.testedPoints=p.testedPoints;
+        record.sampleFingerprint=plan.fingerprint;
+        if(record.resolutionId==='source'){
+          state.rateDistortionModels[record.codec]=p.model;
+        }
+      }else{
+        state.rateDistortionModels[p.id]=p.model;
+        state.qualityCalibration[p.id].testedPoints=p.testedPoints;
+      }
+    }
+    const after=check.evaluateTargetBytes(targetBytes);
+    const old=frontier.evaluateTargetBytes(targetBytes);
+    log('配对追加实测已完成：窗口 '+plan.starts[0].toFixed(1)+
+      ' 秒；'+proposals.length+' 分支共同更新；'+
+      '此预算原建议 '+old.branchId+'，复核后 '+after.branchId+
+      '。观测跨度不是统计置信区间。');
+    renderPlanOptions();
+    return {published:true,previous:old.branchId,current:after.branchId,
+      start:plan.starts[0],costEstimate:plan.estimatedSeconds};
+  }catch(error){
+    // Pending models were local. Keep the previously complete, matched set.
+    log('配对追加测量未发布：'+error.message+
+      '。原有完整配对证据保留，未混用局部样本。');
+    return {published:false,reason:'incomplete-paired-batch'};
+  }
 }
 
 function chooseEfficiencyCalibration(calibrations) {
@@ -4442,7 +4801,80 @@ function chooseEfficiencyCalibration(calibrations) {
   })[0];
 }
 
-async function runQualityCalibration() {
+async function runResolutionCalibration() {
+  const codec=state.selectedCodec||chooseDefaultCodec('sizeBudget');
+  const candidates=guidedResolutionCandidates(state.media||{});
+  if(!state.nativeBackend?.available||state.nativeBackend?.backend!=='windows-native'||
+     state.nativeJobId||state.qualityCalibrationBusy||
+     !codec||state.softwareEncoders[codec]===false||candidates.length<2) {
+    $('qualityCalibrationResult').textContent='当前无法安全开展跨分辨率实测；需要 Windows Native、可用编码器和至少两档合法尺寸。';
+    return;
+  }
+  const target=Number($('qualityTarget')?.value||.985);
+  if(!(target>0&&target<1))return;
+  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
+    ':'+currentRuntimeEvidenceKey();
+  state.qualityCalibrationBusy=true;
+  state.sizeEnvelopeEnabled=false;
+  state.resolutionRateDistortionModels={};
+  state.guidedOutputSize=null;
+  const budget=calibrationTimeBudget(Number(state.media.duration))||120;
+  const eachBudget=Math.max(8,budget/candidates.length);
+  const records=[];
+  const stageStartedAt=performance.now();
+  updateQualityCalibrationControls();
+  try{
+    const samplePlan=await preparePairedQualitySamplePlan();
+    for(const size of candidates) {
+      const id=codec+'@'+size.id;
+      try{
+        const evidence=await calibrateCodecQuality(codec,target,eachBudget,size,samplePlan);
+        const model=fitRateDistortionModel(evidence.testedPoints||[]);
+        if(!model.ok)throw Error('有效实测点不足两个，不能构建体积—质量曲线');
+        state.resolutionRateDistortionModels[id]={
+          id,codec,resolutionId:size.id,outputWidth:size.width,outputHeight:size.height,
+          label:size.label,model,preset:evidence.preset,
+          testedPoints:evidence.testedPoints,sampleFingerprint:samplePlan.fingerprint,
+          metric:COMMON_REFERENCE_METRIC,sourceScope
+        };
+        if(size.id==='source'){
+          state.qualityCalibration[codec]=evidence;
+          state.rateDistortionModels[codec]=model;
+        }
+        records.push({id,ok:true,pointCount:model.points.length});
+        log('统一参考尺寸校准 '+id+' 成功：'+model.points.length+' 个码率观测点');
+      }catch(error){
+        records.push({id,ok:false,error:error.message});
+        log('统一参考尺寸校准 '+id+' 失败：'+error.message);
+      }
+      renderPlanOptions();
+    }
+    state.sizeEnvelopeEnabled=Object.values(state.resolutionRateDistortionModels)
+      .filter(b=>b.model?.ok).length>=2;
+    const refinement=state.sizeEnvelopeEnabled
+      ?await runBudgetedPairedRefinement({mode:'resolution',samplePlan,budget,
+        stageStartedAt,target,sourceScope})
+      :null;
+    const frontier=currentSizeFrontier();
+    $('qualityCalibrationResult').textContent=
+      '同源公共参考 SSIM：'+records.map(x=>x.id+(x.ok?' '+x.pointCount+' 点':' 失败：'+x.error)).join('；')+
+      '。'+(frontier?.kind==='multi-branch'
+        ? '已形成共同实测区间的单张跨分辨率上包络曲线。'
+        : '无充分重叠证据，保留单配置曲线；不推断最优分辨率。')+
+      (refinement?.published
+        ? '高风险追加实测：'+refinement.previous+' → '+refinement.current+
+          '（'+refinement.start.toFixed(1)+' 秒，同位置完成全分支测量）'
+        : refinement?'追加测量未发布：'+refinement.reason+'。':'');
+  }finally{
+    state.qualityCalibrationBusy=false;
+    updateQualityCalibrationControls();
+    renderPlanOptions();
+    refreshBenchmarkEnabled();
+  }
+}
+
+async function runQualityCalibration({compareForSize=false,compareResolution=false}={}) {
+  if(compareResolution)return runResolutionCalibration();
   if (!state.nativeBackend?.available) {
     alert('目标质量校准当前只在 Native 模式可用。');
     return;
@@ -4466,26 +4898,33 @@ async function runQualityCalibration() {
 
   // “目标质量”只校准当前选择，避免用户只想用 H.265 时还被迫等待 AV1。
   // “目标质量自动选择”才需要把三个编码器拉到同一质量线后比较。
-  const codecs = goal === 'efficiency'
-    ? available
-    : [state.selectedCodec];
+  const codecs = goal === 'efficiency'||compareForSize ? available : [state.selectedCodec];
+  const budget=calibrationTimeBudget(Number(state.media?.duration||0));
+  const budgetPerCodec=budget && compareForSize ? Math.max(8,budget/codecs.length) : budget;
+  const stageStartedAt=performance.now();
 
   state.qualityCalibrationBusy = true;
-  if (goal === 'efficiency') {
+  if (goal === 'efficiency'||compareForSize) {
     state.qualityCalibration = {};
     state.rateDistortionModels = {};
+    state.resolutionRateDistortionModels = {};
+    state.guidedOutputSize = null;
+    state.qualityExplorationPoints = {};
+    state.sizeEnvelopeEnabled = false;
   } else {
     delete state.qualityCalibration[state.selectedCodec];
     delete state.rateDistortionModels[state.selectedCodec];
+    delete state.qualityExplorationPoints[state.selectedCodec];
   }
   state.qualityCalibrationTarget = target;
   updateQualityCalibrationControls();
   refreshBenchmarkEnabled();
 
   try {
+    const samplePlan=await preparePairedQualitySamplePlan();
     for (const codec of codecs) {
       try {
-        state.qualityCalibration[codec] = await calibrateCodecQuality(codec, target);
+        state.qualityCalibration[codec] = await calibrateCodecQuality(codec, target, budgetPerCodec,null,samplePlan);
         const rdModel = fitRateDistortionModel(state.qualityCalibration[codec].testedPoints || []);
         state.rateDistortionModels[codec] = rdModel.ok ? rdModel : null;
         if (rdModel.ok) {
@@ -4510,8 +4949,17 @@ async function runQualityCalibration() {
       renderPlanOptions();
     }
 
+    state.sizeEnvelopeEnabled=compareForSize &&
+      codecs.filter(id=>state.rateDistortionModels[id]?.ok).length>=2;
+    const refinement=state.sizeEnvelopeEnabled
+      ?await runBudgetedPairedRefinement({mode:'codec',samplePlan,budget,
+        stageStartedAt,target,sourceScope:sourceEvidenceKey(state.media,state.video?.name,
+          Number(state.video?.size||0))+':'+currentRuntimeEvidenceKey()})
+      :null;
     const values = codecs.map(codec => state.qualityCalibration[codec]);
-    const efficient = goal === 'efficiency'
+    // Explicit size comparisons must not silently switch encoder merely
+    // because the current dropdown goal happens to be efficiency.
+    const efficient = goal === 'efficiency' && !compareForSize
       ? chooseEfficiencyCalibration(values)
       : null;
 
@@ -4534,7 +4982,7 @@ async function runQualityCalibration() {
         '</div>';
     }).join('');
 
-    const conclusion = goal === 'efficiency'
+    const conclusion = goal === 'efficiency' && !compareForSize
       ? (
           efficient
             ? '<div class="quality-efficiency-pick"><strong>等质量压缩效率选择：</strong>' +
@@ -4546,13 +4994,25 @@ async function runQualityCalibration() {
 
     $('qualityCalibrationResult').innerHTML =
       '<div class="quality-calibration-results">' +
+      '<small>首轮校准观测（追加风险测量后的最终选项以更新的单张曲线为准）：</small>' +
       resultRows +
       conclusion +
-      '<small>SSIM 以相同字幕渲染后的源画面为参考；最多取两个约 2 秒代表性片段中的较低分数作为校准值。它仍不是整片质量保证。</small>' +
+      '<small>SSIM 使用已配对的场景时间窗口，初始最多三组短样；风险预检无法保证发现全部困难场景。'+
+      (refinement?.published
+        ? '已完成同位置追加实测：'+escapeHtml(refinement.previous)+' → '+
+          escapeHtml(refinement.current)+'。'
+        : refinement?'追加测量未发布：'+escapeHtml(refinement.reason)+'。':'')+
+      '曲线观测跨度并非统计置信区间，短样质量不保证整片。</small>' +
       '</div>';
 
     renderPlanOptions();
     refreshBenchmarkEnabled();
+    if(compareForSize) {
+      const frontier=currentSizeFrontier();
+      log(frontier?.kind==='multi-branch'
+        ? '跨编码器上包络已构建：'+frontier.branchIds.join(', ')
+        : '未取得共同实测预算区间：保留单分支曲线，不伪造上包络。');
+    }
   } catch (error) {
     $('qualityCalibrationResult').innerHTML =
       '<span class="bad">目标质量校准失败：' + escapeHtml(error.message) + '</span>';
@@ -5081,7 +5541,12 @@ function requestNativeSample(options, assText) {
   }
 
   const requestId = (crypto.randomUUID?.() || (Date.now() + '-' + Math.random())).toString();
-  const timeoutMs = options.codec === 'av1' ? 120000 : 90000;
+  // Long 4K short-sample probes may encode slower than realtime on CPU.
+  // Bound each request; cancellation remains cooperative between samples.
+  const timeoutMs = Math.min(600000, Math.max(
+    options.codec === 'av1' ? 120000 : 90000,
+    Math.ceil(Number(options.duration || 2) * (options.codec === 'av1' ? 75000 : 45000))
+  ));
 
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -5160,6 +5625,9 @@ async function runNativeEncode() {
     crf: plan.crf,
     preset: plan.preset,
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
+    sizeBudgetPolicy:plan.sizeBudgetPolicy||'best-effort',
+    sizeCeilingBytes:plan.mode==='budget-rate'?plan.sizeCeiling:0,
+    outputWidth:plan.outputWidth||0,outputHeight:plan.outputHeight||0,
     expectedDuration: Number(state.media.duration || 0),
     expectedAudioTracks: audioSettings.audio === 'none' ? 0 : sourceAudioTracks,
     audio: audioSettings.audio,
@@ -5210,12 +5678,18 @@ async function runNativeEncode() {
 
   state.nativeJobId = started.jobId;
   state.nativeCompletedJob = null;
+  state.nativeJobProjection = plan.mode==='budget-rate' ? {
+    jobId:started.jobId,plannedBytes:Number(plan.plannedBytes||0),
+    budgetBytes:Number(plan.sizeCeiling||0),codec:plan.codec,
+    policy:plan.sizeBudgetPolicy||'best-effort'
+  } : null;
   localStorage.setItem('nativeEncodeJobId', started.jobId);
   $('encodeBtn').disabled = true;
   $('cancelEncodeBtn').classList.remove('hidden');
   $('cancelEncodeBtn').disabled = false;
   $('progressBar').style.width = '1%';
-  const localPrediction = localPredictionForPlan(plan);
+  const localPrediction = plan.sizeBudgetPolicy && plan.sizeBudgetPolicy!=='best-effort'
+    ? null : localPredictionForPlan(plan);
   $('liveEta').textContent = localPrediction
     ? nativePlatformName() + ' 任务已创建 · 本机历史预计编码约 ' +
       formatDuration(localPrediction.etaSeconds) +
@@ -5225,7 +5699,10 @@ async function runNativeEncode() {
     'Native 正式压制：' + state.selectedCodec.toUpperCase() +
     ' · ' + container.key.toUpperCase() +
     ' · 音频 ' + audioSettings.audio.toUpperCase() +
-    ' · ' + (plan.mode === 'budget-rate' ? '单遍预算码率' : 'CRF 质量') +
+    ' · ' + (plan.mode === 'budget-rate'
+      ? (plan.sizeBudgetPolicy==='best-effort'?'单遍预算码率':
+        plan.sizeBudgetPolicy==='strict-ceiling'?'两遍严格字节上限':'软件 H.264 两遍目标码率')
+      : 'CRF 质量') +
     ' · job=' + started.jobId
   );
 
@@ -5266,7 +5743,8 @@ async function monitorNativeJob(jobId) {
       const liveSpeed = Number(status.speed || 0);
       const timeSec = Number(status.timeMs || 0) / 1000;
       const currentPlan = state.selectedCodec ? buildEncodePlan(state.selectedCodec) : null;
-      const history = localPredictionForPlan(currentPlan);
+      const history = currentPlan?.sizeBudgetPolicy && currentPlan.sizeBudgetPolicy!=='best-effort'
+        ? null : localPredictionForPlan(currentPlan);
       const historySpeed = Number(history?.speed || 0);
       const liveWeight = Math.max(0, Math.min(1, timeSec / 30));
       const predictionSpeed = liveSpeed > 0 && historySpeed > 0
@@ -5274,11 +5752,15 @@ async function monitorNativeJob(jobId) {
         : liveSpeed > 0
           ? liveSpeed
           : historySpeed;
+      const totalPasses=Math.max(1,Number(status.totalPasses||1));
+      const pass=Math.max(1,Math.min(totalPasses,Number(status.pass||1)));
       const remain = predictionSpeed > 0
-        ? Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec) / predictionSpeed
+        ? (Math.max(0, Number(status.duration || state.media?.duration || 0) - timeSec)+
+           Math.max(0,totalPasses-pass)*Number(status.duration || state.media?.duration || 0)) / predictionSpeed
         : null;
       $('liveEta').textContent =
-        nativePlatformName() + ' · ' + (progress * 100).toFixed(1) + '%' +
+        nativePlatformName() + (totalPasses>1?' · 第 '+pass+'/'+totalPasses+' 遍':'') +
+        ' · ' + (progress * 100).toFixed(1) + '%' +
         (liveSpeed > 0 ? ' · 当前 ' + liveSpeed.toFixed(2) + '× realtime' : '') +
         (historySpeed > 0 && liveWeight < 1 ? ' · 本机历史参与预测' : '') +
         (remain != null ? ' · 预计剩余 ' + formatDuration(remain) : '');
@@ -5289,17 +5771,33 @@ async function monitorNativeJob(jobId) {
     } else if (status.state === 'cancelling') {
       $('liveEta').textContent = '正在取消 Native 压制…';
     } else if (status.state === 'completed') {
+      const projection=state.nativeJobProjection?.jobId===jobId
+        ? state.nativeJobProjection : null;
+      const actualBytes=Number(status.outputBytes||0);
+      const sizeError=projection?.plannedBytes>0 && actualBytes>0
+        ? (actualBytes-projection.plannedBytes)/projection.plannedBytes*100 : null;
       state.nativeCompletedJob = {
         jobId,
-        suggestedName: status.suggestedName || 'hardsub.mkv'
+        suggestedName: status.suggestedName || 'hardsub.mkv',
+        sizeComparison:projection && Number.isFinite(sizeError)
+          ? {plannedBytes:projection.plannedBytes,budgetBytes:projection.budgetBytes,
+            actualBytes,errorPercent:sizeError} : null
       };
+      state.nativeJobProjection=null;
       state.nativeJobId = null;
       syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '100%';
       $('liveEta').textContent =
-        'Native 压制完成 · ' + formatBytes(Number(status.outputBytes || 0)) +
-        ' · packet 扫描 + 完整解码验证通过 · 点击“保存成品”选择保存位置';
+        'Native 压制完成 · ' + formatBytes(actualBytes) +
+        (Number.isFinite(sizeError)
+          ? ' · 规划 '+formatBytes(projection.plannedBytes)+
+            ' · 体积误差 '+(sizeError>=0?'+':'')+sizeError.toFixed(1)+'%'+
+            (projection?.policy==='strict-ceiling'
+              ? ' · 严格字节上限已核验'
+              : actualBytes>projection.budgetBytes?' · 已超出目标体积上限':' · 未超过目标上限')
+          : '') +
+        ' · 流结构与 packet 完整性检查通过（未进行完整逐帧解码） · 点击“保存成品”选择保存位置';
       $('encodeBtn').disabled = false;
       $('encodeBtn').textContent = '保存成品';
       loadLocalBenchmarkHistory();
@@ -5312,7 +5810,12 @@ async function monitorNativeJob(jobId) {
         (status.audioDecodeSeconds != null
           ? ' · 音频完整解码 ' + Number(status.audioDecodeSeconds || 0).toFixed(2) + ' s'
           : '') +
-        ' · SHA-256 ' + (status.sha256 || '')
+        ' · SHA-256 ' + (status.sha256 || '') +
+        (Number.isFinite(sizeError)
+          ? ' · 体积预测 '+formatBytes(projection.plannedBytes)+
+            ' 实际 '+formatBytes(actualBytes)+
+            ' 误差 '+sizeError.toFixed(2)+'%'
+          : '')
       );
       return;
     } else if (status.state === 'failed') {
@@ -5321,7 +5824,9 @@ async function monitorNativeJob(jobId) {
       syncTaskInputMutationLocks();
       $('cancelEncodeBtn').classList.add('hidden');
       $('progressBar').style.width = '0%';
-      $('liveEta').textContent = 'Native 压制失败。';
+      $('liveEta').textContent = String(status.error||'').includes('Strict container byte ceiling exceeded')
+        ? '严格预算核验失败：成品容器字节数超出上限；未导出新文件。'
+        : 'Native 压制失败。';
       $('encodeBtn').disabled = false;
       log('Native 压制失败：' + (status.error || status.message || '未知错误'));
       alert('Native 压制失败：' + (status.error || status.message || '未知错误'));
@@ -5429,6 +5934,23 @@ function refreshGuidedContainerDecision() {
   }
 }
 
+function currentGuidedBudgetAssessment() {
+  if (!state.media?.duration || !state.video) return null;
+  const manualMultiplier = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetMultiplier')?.value || 1.6)));
+  const directBudgetBytes = Number(state.sizeBudgetTargetBytes || 0);
+  const targetBytes = Math.floor(directBudgetBytes > 0
+    ? directBudgetBytes : state.video.size * manualMultiplier);
+  return {
+    ...assessGuidedBudget({
+      targetBytes, durationSeconds: Number(state.media.duration),
+      audioBitrate: estimatedSizeBudgetAudioBitrate(),
+      reservePercent: 4, containerReservePercent: 1,
+      fixedReserveBytes: 256 * 1024, minimumVideoBitrate: 150001
+    }),
+    manualMultiplier, directBudgetBytes
+  };
+}
+
 function buildEncodePlan(codec) {
   const media = state.media;
   if (!media?.duration || !state.video || state.softwareEncoders[codec] === false) return null;
@@ -5470,13 +5992,17 @@ function buildEncodePlan(codec) {
   }
 
   if (goal !== 'sizeBudget') return null;
-  const manualMultiplier = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetMultiplier')?.value || 1.6)));
-  const directBudgetBytes = Number(state.sizeBudgetTargetBytes || 0);
-  const sizeCeiling = Math.floor(
-    directBudgetBytes > 0
-      ? directBudgetBytes
-      : state.video.size * manualMultiplier
-  );
+  const feasibility = currentGuidedBudgetAssessment();
+  if (feasibility?.status !== 'feasible') return null;
+  const { manualMultiplier, directBudgetBytes } = feasibility;
+  const sizeCeiling = feasibility.targetBytes;
+  const executionPolicy=resolveGuidedSizePolicy({
+    mode:'budget-rate',codec,
+    backend:state.nativeBackend?.backend||'',
+    policy:$('guidedSizeBudgetPolicy')?.value||'best-effort',
+    ceilingBytes:sizeCeiling
+  });
+  if(!executionPolicy.ok)return null;
   const multiplier = state.video.size > 0 ? sizeCeiling / state.video.size : manualMultiplier;
   const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
   const containerReserveBytes = Math.max(256 * 1024, Math.floor(safeBudgetBytes * 0.01));
@@ -5495,7 +6021,11 @@ function buildEncodePlan(codec) {
       : Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent))
   );
   const plannedBytes = Math.round(((targetVideoBitrate + audioBitRate) * media.duration / 8) + containerReserveBytes);
-  const frontier = directBudgetBytes > 0 ? currentSizeFrontier(codec) : null;
+  // The CQ curve may have been measured on preferred NVENC, whereas explicit
+  // two-pass is software libx264. Do not carry incompatible sample SSIM into
+  // a software formal encode's chosen-plan quality prediction.
+  const frontier = directBudgetBytes > 0 && executionPolicy.policy==='best-effort'
+    ? currentSizeFrontier(codec) : null;
   const frontierEvaluation = frontier?.evaluateTargetBytes(sizeCeiling) || null;
   const frontierPrediction = frontierEvaluation?.status === 'within-evidence'
     ? frontierEvaluation.prediction
@@ -5510,13 +6040,17 @@ function buildEncodePlan(codec) {
     multiplier,
     sizeCeiling,
     safeBudgetBytes,
+    containerReserveBytes,
     plannedBytes,
     targetVideoBitrate,
     ceilingVideoBitrate,
     sourceVideoBitrate,
     audioBitRate,
     budgetSource: directBudgetBytes > 0 ? 'frontier' : 'multiplier',
-    frontierPrediction
+    sizeBudgetPolicy:executionPolicy.policy,
+    frontierPrediction,
+    outputWidth:state.guidedOutputSize?.width||0,
+    outputHeight:state.guidedOutputSize?.height||0
   };
 }
 
@@ -5594,6 +6128,8 @@ mountMediaWorkspace({
     if (state.nativeInputProbe?.ok) return mediaFromNativeProbe(state.nativeInputProbe);
     return null;
   },
+  videoIdentity: () => state.video
+    ? [state.video.name,state.video.size,state.video.lastModified].join('|') : '',
   setBusy: value => {
     state.operationBusy=value;
     for (const id of ['video','ass','fonts','videoNativePickerBtn','assNativePickerBtn','fontsNativePickerBtn','analyze','encodeBtn','previewBtn','benchmarkBtn','calibrateQualityBtn']) if($(id)) $(id).disabled=value;
@@ -5636,6 +6172,25 @@ mountMediaWorkspace({
     const media=await state.engine.probe();
     const caps=await state.engine.taskCapabilities('copy');
     return {...media,sourceName:state.video.name,fpsModeSupported:caps.fpsModeSupported};
+  },
+  // Curves must measure exactly the encoder/preset selected in the manual
+  // transcode task. Refuse unsupported backends rather than sample a different
+  // implementation and silently label its result as the user's configuration.
+  calibrationSample: async ({codec, encoder, preset, multipass, quality, bitrate, mode='quality', start, duration, timeoutSeconds}) => {
+    if (!state.nativeBackend?.available || !globalThis.NativeHardsub?.__windowsNative) {
+      throw new Error('实测曲线目前需要 Windows Native；当前后端不能保证样本编码器与正式方案一致');
+    }
+    const actual = await requestNativeSample({
+      codec, encoder, preset, multipass, sampleExact: true,
+      crf: mode==='bitrate' ? 0 : quality,
+      start, duration, withSubtitles: false,
+      targetVideoBitrate: mode==='bitrate' ? bitrate : 0, measureSsim: true, retainSample: false,
+      timeoutSeconds
+    }, '');
+    if (actual.encoder !== encoder) {
+      throw new Error('实际测试编码器 '+String(actual.encoder)+' 与当前选择 '+encoder+' 不一致，拒绝生成曲线');
+    }
+    return actual;
   },
   frame: async options => {
     if (!state.video) throw new Error('请先选择视频');

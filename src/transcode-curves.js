@@ -1,0 +1,180 @@
+import { fitRateDistortionModel, createSizeQualityFrontier } from './rate-distortion-model.js';
+import { buildSizeFrontierPlot } from './size-frontier-ui.js';
+import { CURVE_CHART_LAYOUT } from './curve-chart-svg.js';
+import { calibrationCost, calibrationShouldContinue } from './compression-decision.js';
+
+const finite = value => Number.isFinite(Number(value)) ? Number(value) : null;
+const clamp = (value, lo, hi) => Math.max(lo, Math.min(hi, value));
+
+// Number(null), Number('') and Number(false) are finite, but are not evidence.
+function measurement(value) {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function qualityMeasurement(value) {
+  const parsed = measurement(value);
+  return parsed !== null && parsed >= 0 && parsed <= 1 ? parsed : null;
+}
+
+// Use these at the native-sample ingress, before coercion destroys provenance.
+export const parseMeasuredNumber = measurement;
+export const parseMeasuredQuality = qualityMeasurement;
+
+// Separate positions across the selected clip: these are time-spaced probes,
+// not a claim that the content is statistically representative.
+export const CALIBRATION_PROFILES = Object.freeze({
+  quick: Object.freeze({ count: 3, seconds: 2, label: '快速 · 3 处 × 2 秒' }),
+  balanced: Object.freeze({ count: 5, seconds: 4, label: '均衡 · 5 处 × 4 秒' }),
+  thorough: Object.freeze({ count: 7, seconds: 6, label: '深入 · 7 处 × 6 秒' })
+});
+
+export function calibrationSampleStarts(start, end, seconds = 2, requestedCount = 3) {
+  const a = finite(start), b = finite(end), duration = finite(seconds);
+  if (a === null || b === null || duration === null || a < 0 || b - a < duration || duration <= 0) return [];
+  const requested = Number.isSafeInteger(Number(requestedCount)) ? Number(requestedCount) : 3;
+  if (requested < 1 || requested > 15) return [];
+  // Non-overlapping windows. For short clips, reduce the count rather than
+  // repeatedly testing the same frames and inflating our evidence count.
+  const count = Math.min(requested, Math.floor((b - a + 1e-8) / duration));
+  return Array.from({ length: count }, (_, i) => a + ((i + 0.5) * (b - a) / count) - duration / 2);
+}
+
+export function summarizeCalibrationEvidence(points) {
+  if (!Array.isArray(points) || !points.length) return null;
+  const latest = points.at(-1);
+  const samples = Array.isArray(latest.sampleMeasurements) ? latest.sampleMeasurements : [];
+  const rates = samples.map(s => measurement(s?.bitrate)).filter(v => v !== null && v > 0);
+  const qualities = samples.map(s => qualityMeasurement(s?.ssim)).filter(v => v !== null);
+  if (!rates.length || rates.length !== samples.length || qualities.length !== samples.length) return null;
+  const rateMin = Math.min(...rates), rateMax = Math.max(...rates);
+  const worstSsim = Math.min(...qualities), bestSsim = Math.max(...qualities);
+  return {
+    sampleCount: samples.length,
+    minBitrate: rateMin, maxBitrate: rateMax,
+    bitrateSpread: rateMax / rateMin,
+    worstSsim, bestSsim,
+    ssimSpread: bestSsim - worstSsim,
+    widelyDivergent: rateMax / rateMin >= 2 || bestSsim - worstSsim > 0.02
+  };
+}
+
+// Search order is preserved separately from the quality-sorted rate/distortion
+// evidence. Endpoints establish the sampled range; midpoint trials converge on
+// the last setting meeting the minimum (worst-segment) SSIM threshold.
+export async function exploreQuality({
+  minQuality, maxQuality, targetSsim, evaluate, onPoint = () => {}, maxEvaluations = 7,
+  budgetSeconds = null
+}) {
+  const lo = Math.ceil(Number(minQuality)), hi = Math.floor(Number(maxQuality));
+  const target = Number(targetSsim);
+  if (!(lo >= 0 && hi > lo && hi <= 63 && target > 0 && target < 1)) throw Error('无效的质量搜索范围或目标 SSIM');
+  if (typeof evaluate !== 'function') throw Error('缺少真实测试片段评估函数');
+  const points = [], cache = new Map();
+  let stopReason = 'search-exhausted';
+  const affordable = () => {
+    if (budgetSeconds === null) return true;
+    const decision = calibrationShouldContinue({points, budgetSeconds});
+    if (!decision.continue) {stopReason = decision.reason;return false;}
+    return true;
+  };
+  const test = async (q, lower, upper) => {
+    if (cache.has(q)) return cache.get(q);
+    const raw = await evaluate(q);
+    const bitrate = measurement(raw?.sampleBitrate), ssim = qualityMeasurement(raw?.ssim);
+    const average = qualityMeasurement(raw?.averageSsim ?? ssim);
+    if (!(bitrate > 0) || ssim === null || average === null)
+      throw Error('测试片段缺少有效码率或 SSIM，无法绘制实测曲线');
+    const point = {
+      ...raw, qualitySetting: q, sampleBitrate: bitrate,
+      ssim, averageSsim: average, iteration: points.length + 1,
+      searchLower: lower, searchUpper: upper,
+      meetsTarget: ssim >= target
+    };
+    cache.set(q, point);
+    points.push(point);
+    onPoint(point, [...points]);
+    return point;
+  };
+  await test(lo, lo, hi);
+  if (points.length < maxEvaluations && affordable()) await test(hi, lo, hi);
+  let lower = lo, upper = hi;
+  while (points.length < maxEvaluations && lower <= upper && affordable()) {
+    const mid = Math.floor((lower + upper) / 2);
+    if (cache.has(mid)) {
+      const existing = cache.get(mid);
+      if (existing.meetsTarget) lower = mid + 1;
+      else upper = mid - 1;
+      continue;
+    }
+    const point = await test(mid, lower, upper);
+    if (point.meetsTarget) lower = mid + 1;
+    else upper = mid - 1;
+  }
+  const passing = points.filter(p => p.meetsTarget);
+  const best = passing.length ? passing.reduce((a, b) => a.qualitySetting > b.qualitySetting ? a : b) : null;
+  return {
+    points, best, meetsTarget: !!best,
+    model: fitRateDistortionModel(points),
+    evaluatedCount: points.length,
+    targetSsim: target,
+    searchExhausted: lower > upper,
+    stopReason: stopReason === 'time-budget' || stopReason === 'unknown-cost'
+      ? stopReason : lower > upper ? 'search-exhausted' : 'evaluation-cap',
+    encodeSeconds: points.map(calibrationCost).filter(Number.isFinite).reduce((a,b)=>a+b,0),
+    partial: !(lower > upper)
+  };
+}
+
+export function createMeasuredSizeFrontier(points, {
+  durationSeconds, audioBitrate = 0, reservePercent = 4
+} = {}) {
+  const model = fitRateDistortionModel(points);
+  if (!model.ok) return { ok:false, reason:model.reason, model };
+  const frontier = createSizeQualityFrontier(model, { durationSeconds, audioBitrate, reservePercent });
+  if (!frontier.ok) return { ...frontier, model };
+  return { ...frontier, model, plot: buildSizeFrontierPlot(frontier) };
+}
+
+export function buildExplorationPlot(points, targetSsim, {
+  width = CURVE_CHART_LAYOUT.width, height = CURVE_CHART_LAYOUT.height,
+  paddingX = CURVE_CHART_LAYOUT.paddingX, paddingY = CURVE_CHART_LAYOUT.paddingY
+} = {}) {
+  if (!Array.isArray(points) || !points.length) return { ok: false, reason: 'no-measurements' };
+  const target = qualityMeasurement(targetSsim);
+  if (target === null) return { ok: false, reason: 'invalid-threshold' };
+  const valid = points.flatMap((p,i) => {
+    const ssim = qualityMeasurement(p?.ssim), qualitySetting = measurement(p?.qualitySetting);
+    if (ssim === null || qualitySetting === null) return [];
+    const iteration = measurement(p.iteration);
+    return [{...p,ssim,qualitySetting,
+      iteration:Number.isSafeInteger(iteration) && iteration > 0 ? iteration : i+1,
+      meetsTarget:ssim >= target}];
+  });
+  if (!valid.length) return { ok: false, reason: 'invalid-measurements' };
+  const sampleQualities = p => Array.isArray(p.sampleMeasurements)
+    ? p.sampleMeasurements.map(s=>qualityMeasurement(s?.ssim)).filter(v=>v!==null) : [];
+  const quality = valid.flatMap(p => [
+    p.ssim, ...sampleQualities(p)
+  ]);
+  const min = clamp(Math.min(...quality, target) - 0.005, 0, 1);
+  const max = clamp(Math.max(...quality, target) + 0.005, 0, 1);
+  const span = Math.max(0.000001, max - min);
+  const innerWidth = width - paddingX * 2, innerHeight = height - paddingY * 2;
+  const yForQuality = value => paddingY + innerHeight * (1 - (Number(value) - min) / span);
+  const measured = valid.map((p, i) => {
+    const observations=sampleQualities(p);
+    return {
+      ...p,
+      x: paddingX + (valid.length === 1 ? innerWidth / 2 : i * innerWidth / (valid.length - 1)),
+      y: yForQuality(p.ssim),
+      lowY: yForQuality(observations.length ? Math.min(...observations) : p.ssim),
+      highY: yForQuality(observations.length ? Math.max(...observations) : p.ssim)
+    };
+  });
+  const targetY = yForQuality(target);
+  const line = measured.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' ');
+  return { ok: true, width, height, paddingX, paddingY, measured, line, targetY, targetSsim:target, min, max };
+}

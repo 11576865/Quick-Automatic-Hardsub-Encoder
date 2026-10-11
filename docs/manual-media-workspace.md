@@ -124,3 +124,83 @@ FFmpeg 参数与像素格式通过运行时 help 检查；旧核心缺少 `-fps_
 - [FFmpeg 滤镜文档](https://ffmpeg.org/ffmpeg-filters.html#libvmaf)：VMAF 依赖构建时启用 libvmaf。此次没有给所有平台添加默认 VMAF 分数；各平台核心并不保证包含该依赖，而且硬字幕、缩放、裁切后的评分需要一致的参考处理链路。当前采用真实短片比较，既有字幕预览和字体诊断继续使用。
 
 验证：`node --test src/media-task.test.mjs src/media-planning.test.mjs`；实际 FFmpeg 集成测试新增目标体积、x264 两遍、60 fps、旧帧率参数和 Opus；CI 另验证 Windows 两遍参数与成品规格、Android Kotlin 编译、桌面/手机配置与三片比较交互。
+
+## 纯视频转码：压制前校准曲线（Windows Native）
+
+在“纯视频转码”中打开“压制前 · 体积—质量曲线”，选择最低样本 SSIM 和采样力度，然后点击“探索当前编码器”。可使用快速（3 处 × 2 秒）、均衡（5 处 × 4 秒，默认）和深入（7 处 × 6 秒）三档。对于七小时素材，时间位置分散，但这**不是画面复杂度随机抽样**；不能把校准曲线当成整片的置信区间。
+
+搜索在真实选定的 codec/encoder/preset 下测量 CQ/CRF 与实际视频包码率，内部记录试压顺序，再拟合局部体积—质量曲线。界面只展示一张体积—质量曲线；各 CQ/CRF 实测值和“采用此质量值”操作位于曲线下方可展开的“实测 CQ/CRF 参数”区域。正式编码路径不受此校准操作影响。选用一个真实测量过的 CQ/CRF 通常比将 CQ 测得的质量曲线换算为目标平均码率更具有可比性。沿曲线采用码率时，界面会明确提示无法保证相同 SSIM 或最终大小。
+
+SSIM 是局部客观指标，不能保证 4K60 运动细节的主观质量；短片码率离散度会展示在读数中。复制源音频时无法可靠估计其字节预算；若音频保持完整而视频只裁切部分，程序会按对应音轨时长调整预算。平台目前限定 Windows Native，且当前校准只覆盖原尺寸/帧率、SDR 8-bit 4:2:0、无额外视频滤镜、主视频流 v:0 与默认高级参数。未能等价测量的参数组合会拒绝校准而不是提供伪精确曲线。
+
+“停止探索”在当前原生短片试压完成后中断，并清除不完整证据；不是立即杀死正在运行的 FFmpeg 进程。源素材、编码器、preset、时间区间或采样档位改变后会作废不兼容的旧结果。已完成试压后只修改目标 SSIM 或音频预算时，保留真实视频样本，重新评估目标达标情况并重算体积投影；校准过程中修改这些输入仍会终止当前搜索，避免发布失效任务。对长时长母片，先用快速档判断可行性，再用均衡/深入档复核，同时务必检查复杂运动场景。
+
+校准准备和采样等待期间改变素材或参数，也会停止后续探索并作废未完成结果；完成校准后修改 SSIM 目标将立即重新判断已测点是否达标，而无需重新编码这些样本或离开输入框。采用质量值或码率前会再次核对当前素材和方案，其他处理任务运行期间不能采用校准参数。
+
+Windows Native 的无字幕精确采样使用**直接解码源片参与 SSIM**，不再为每一个候选参数写出 4K60 FFV1 临时参考视频。硬字幕试压仍保留真实 libass 渲染后的 FFV1 参考。新路径以同一视频时间区间重新归零时间戳进行比较，并在测试中检查 seek 后帧对齐；实机仍需复验色彩、HDR 与变帧率等素材边界。
+
+## 曲线的图形语义
+
+唯一体积—质量曲线的横轴是对数比例的**体积预算**，按范围选择 B、kB、MB、GB 或 TB（十进制）；纵轴是样本 SSIM。空心点保留原始观测均值，竖线保留原始场景范围；保序拟合不会移动这些点。连续曲线及半透明范围是拟合与插值，不是整片实测结果或置信区间。选中位置的十字线与顶部读数显示预算和估计 SSIM。黄色菱形标注局部效率拐点，仅供比较，不保证最优。
+
+硬字幕目标体积和纯转码的体积—质量曲线共用绘图与指针坐标变换，但各自校准证据及执行路径独立。选择点时可用拖动、方向键和 Home/End；滑动到测试范围边界时停止外推。在纯转码页，原音频直接复制时仍须记得体积横轴**未计入音频字节**，不是最终输出体积保证。
+
+## Compression Decision Engine：有成本边界的比较与执行验证（Windows Native）
+
+目标体积方案新增“比较可用编码器”：在当前会话对可用 codec 的同一源片、字幕参考链路进行短样校准，构建**单张**跨编码器体积—质量上包络。候选都必须在同一预算处有实测模型，范围取各候选实测预算区间的交集；交集为空就保留原单分支曲线，不做缺口外推。每个预算点以样本较低质量估计比较各编码器，当前编码器在差异不足 0.003 SSIM 时受到滞后保护。用户需单击“采用推荐编码器”，不会在拖动体积时悄悄更换执行分支。比较仅限**同一源、同一字幕渲染参考、同输出分辨率**；跨分辨率不能未经统一参考质量测量直接比较。
+
+CQ/CRF 搜索引入按当前片段时长估计的软时间预算，并用已经测得的编码耗时决定是否追加下一组试压。它不等同 FFmpeg 的硬超时：一旦启动的原生短样可能超出预算，提前停止也可能只有一个数据点而无法形成可信曲线。若证据不足，必须明确报告不完整结果，而不是补造预测。
+
+纯视频转码沿 CQ/CRF 曲线选择目标码率后，必须先点击“实测验证当前 VBR 码率”。Windows Native 对**同一编码器、preset、时间位置**使用正式 bitrate 模式参数试压，逐段比较 SSIM；低于用户设定目标则阻止采用。达标才能采用该码率；这只是短样质量门禁，仍不担保整片文件大小、全部场景质量、色彩/HDR/VFR 或未来驱动版本。修改采样方案、编码器、源片、质量目标、音频预算或曲线选点都会使该次采用授权失效。
+
+本阶段仍需真实 Windows Native CPU/GPU、Android 与长视频素材的实机验收；“共同参考质量测量的跨分辨率分支比较”和硬时钟时间预算并未实现，不能按本段解释为已完成。
+
+Windows Native 精确短样现对**编码进程**另设超时：超过传入的样本时间预算，会终止该 FFmpeg 子进程并拒绝使用不完整测量。超时不覆盖预处理、参考解码、SSIM 计算、文件探测及系统调度，因此仍不能宣传为全流程严格的墙钟上限。慢编码器或高分辨率输入可能无法在预算内积累至少两个可信点，此时界面应报告校准失败或证据不足。
+
+## 跨分辨率的公共参考质量（Windows Native Guided）
+
+目标体积方案增加“比较当前编码器分辨率”，对合法的原尺寸、1080p、720p 候选执行同一 codec/preset 的短片试压（上限三档）。缩小尺寸的候选使用 bicubic 下采样；质量测量之前，解码后的候选以同一 bicubic 插值放大回原尺寸，对**原尺寸、已渲染字幕的参考**比较 SSIM，使用明确版本的 `original-source-bicubic-upscale-ssim-v1` 度量。只有完全相同来源、同一参考尺度、相同运行时及共同已测预算区间的分支可以形成同一张上包络曲线。
+
+切换分辨率与编码器都必须明确点击“采用推荐配置”；正式 Windows Guided 输出带对应缩放参数，成品完成前使用 FFprobe 校验视频分辨率是否等于采用的配置。缩放分支的校准证据仅限当前会话，**不得写入原有不含输出尺寸维度的跨会话 CQ 缓存**。
+
+注意：这个 SSIM 是统一参考尺寸的技术代理，不是视觉体验的通用真值；目前还没有真实 720p/1080p 与不同编解码组合的可复现交叉点现场验收，更未覆盖不同帧率或 HDR。两秒短样与软预算可能无法为慢编码器产生两个有效模型点，界面必须解释证据不足而不是外推。
+
+## Scene-stratified paired sample planner (Windows Native, stage P1)
+
+Windows Native guided CQ calibration first runs a **time-limited, decoded low-resolution source-risk probe** on selected timeline regions (FFmpeg signalstats + scene-change metadata). It uses frame-to-frame luma change, scene-change signal, dark-scene luminance and contrast, combined with the ASS subtitle event overlap, to choose **one high-priority window per time stratum**. All compared codec or output-resolution branches use the **same exact sample starts and duration**, captured with `paired-scene-strata-v2` provenance. Unsupported FFmpeg filters, short sources or exhausted cost budget degrade explicitly to deterministic time strata; a missing probe is never counted as a measured low-risk scene.
+
+This is a lightweight heuristic, not exhaustive scene search, VMAF, grain detection, motion vectors or a statistical P10 guarantee. Existing compression evidence records lack a sampling-plan dimension, so the new paired-plan trial results deliberately remain **session-only**, rather than masquerading as reusable fixed-position samples. Single-source CQ evidence collected by other workflows retains its original separate identity. Real difficult-scene inputs and real GPU/long-form acceptance remain pending.
+
+## 按目标体积追加高风险配对测量（Windows Native）
+
+多编码器或多分辨率的首轮模型建立后，决策层在**当前目标体积**（未选定时取共同实测预算区间中点）判断是否值得用剩余校准预算追加一个共同窗口：候选观测质量范围相互覆盖、未测试时间窗口存在、所有分支的 CRF 实测位置与版本完全一致、且基于已观测耗时预测整组测量仍可负担，才会安排一次追加。追加窗口优先取已测预检中风险评分较高的未测时间层。所有分支的**每一个已测试 CRF 点**都必须对同一新增窗口完成编码，所有点由相同场景集生成仍有重叠证据的 R-D 模型后，才会**原子性发布**新的单张上包络；任何失败或超时都保留上一组完整证据。
+
+对比反馈显示追加前后的推荐配置（即使没有变化，也会标明未改变）。此次策略属于以观测差距驱动的**启发式测试调度**，不是经过概率模型校准的预期后悔度（Expected Regret）最小化，也不是统计置信度声明。短视频/慢编码器可能因剩余时间不足而不启动追加。GPU、实际复杂素材及整片验收仍应执行独立现场测试。
+
+## 动态噪声的实际编码质量回归（Windows CI，2026-10-10）
+
+以前的 160×90 场景预检会模糊高频动态噪声：在单个四秒 synthetic FFV1 片段的两个配对窗口中，运动与噪声的低清 `YDIF` 很接近，但使用 `libx264 -preset medium -crf 28` 时，实测 SSIM 分别约 0.986 与 0.929。以 **SSIM 0.970** 为目标，测完运动窗口可采用 CRF 28；加入噪声窗口后只有 CRF 22 达标。该现象是**实际编码质量档位**的反转，而非跨 codec 或跨分辨率最优分支的证明。
+
+场景预检调整为**最长边不超过 320 像素、保持宽高比、偶数像素尺寸**的双线性缩放，以保留更多高频变化信号。更新采样合同版本为 `paired-scene-strata-v2`，旧 v1 证据不得与 v2 混用。Windows CI 使用 FFmpeg/FFprobe 对同一源素材生成两个参考窗口、编码、测量真实 SSIM 和视频包字节数，并验证噪声下实际质量决策的变化。过滤器成本可能略增，每窗 FFmpeg 超时仍生效。实际影视/游戏画面、HDR/VFR 与 GPU 长片仍待现场验收。
+
+## 引导式目标体积：CQ 短样与正式 VBR 输出差异（Windows CI）
+
+新增 `scripts/check-guided-full-budget-ffmpeg.mjs` 真实软件编码验收：用同一 6 秒 FFV1 合成源及 ASS 字幕制作渲染后的权威参考画面；取配对短样，以 `libx264 -preset medium`、CRF 18/22/26/30 形成项目现有的 R-D 模型和体积映射。再按固定 **2 Mbps** 目标，分别执行与 Windows Native 软件 VBR 参数同类的单遍 `-b:v` 及两遍 `-b:v` 正式整段编码。使用 FFprobe 和 FFmpeg 验证容器字节、视频包字节、输出尺寸、时长、整段 SSIM、耗时及体积偏差。两种输出都应达到这个受控例子规定的 SSIM 0.95 下限。
+
+目标码率乘时长只给出规划的视频字节数，**不等于 Matroska 的精确文件大小上限**。在高动态噪声下，单遍平均码率可能明显超标；两遍编码会额外耗时，也不保证逐字节命中目标。本 PR 仅增加**对照与真实验证**，不悄悄更改 Windows Native 正式压制的单遍执行策略。原有单张曲线和当前配置摘要补充明确信息：CQ 短样 SSIM **不等于**正式单遍 VBR 的整段质量证明，用户选定目标字节数也不代表输出必定在上限内。若必须严格限定体积，仍需另行设计可见的高精度预算方案与完整成品校验。
+
+合成软件例子不能代替真实 NVENC、7 小时素材、HDR/VFR、复杂字幕和用户设备的 FIELD-PENDING 验收（#77）。
+
+## 显式目标体积执行策略（Issue #85）
+
+引导式目标体积模式的**单张** CQ/CRF 实测曲线下方提供三个互斥选项：
+
+1. **快速单遍（默认）**：保持原有可用编码器（包括可能优先的 NVENC），正式编码使用目标码率；成品大小与 SSIM 均以实际结果为准，可能明显超过预算。不会静默改变已有任务的编码策略。
+2. **较高精度（软件 H.264 两遍）**：只支持 Windows Native 上的 `libx264`，明确绕过硬件 NVENC 的首选策略，**不改变用户所选 H.264 编码类别**。两遍使用同一个源片、ASS 字幕/字体处理、分辨率、码率、软件预设；首遍没有音频且不生成可导出的成品，第二遍依照用户原有音频/容器策略输出。显示第 1/2、2/2 遍和综合进度。虽然通常有利于收敛目标码率，但**不承诺最终体积逐字节命中**，并且增加整片编码时间。
+3. **严格字节上限（软件 H.264 两遍＋成品核验）**：在上述两遍执行完成后，Native 用**实际输出容器字节数**与用户所选上限比较。若实际容器大于上限，任务进入 `failed`，删除不可导出的 staging 成品；`Export-Job` 不允许该失败任务保存，也不会影响已有用户文件。无隐式压低质量重试；请用户主动改变目标或策略。小于等于上限的成功仅证明**经检查的容器字节数满足约束**，不保证整片视觉质量达到 CQ 曲线预测。
+
+两个新增两遍策略暂时**只接受 Windows Native 软件 H.264**；用户选择 H.265、AV1 或其他后端时立即拒绝生成执行计划并解释原因，不隐式换编码器或降级为单遍。视频长、源片复杂时两遍成本可能很高，默认从不启用。
+
+Windows CI 使用实际 Windows Native localhost 桥和 FFmpeg 合成视频执行：两遍成功、严格限额失败（无法导出）以及严格限额成功（多次状态读取仍然有效）。该测试**不是**用户设备上的 NVENC/HDR/VFR、复杂字幕或多小时长片现场验收；这些依然在 #77 FIELD-PENDING。
+
+**证据隔离补充：** 先前 CQ 曲线可能是 Native 首选 NVENC 编码器的样本；主动选择软件 `libx264` 两遍后，该旧曲线不能被用来推断此次正式编码的 SSIM 或速度，执行摘要只保留预算/实际参数信息。图表仍是同一张供观察的 CQ 曲线，并标明其对不同编码器模式不可直接迁移；若要对比正式两遍质量，需独立进行编码输出与相同字幕参考下的验证。正式两遍进度以其实际 pass 计，不使用旧的单遍历史速度估算。

@@ -353,7 +353,7 @@ test('compression evidence store is wired across Android and Windows', async () 
   assert.match(main, /persistCompressionEvidence/);
   assert.match(main, /currentSourceEvidenceKey/);
   assert.match(main, /sourceIdentity:\s*currentSourceEvidenceKey\(\)/);
-  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null\)/);
+  assert.match(main, /evaluateQualityCandidate\(codec, crf, preset, targetSsim = null, outputSize = null, samplePlan = null\)/);
   assert.match(main, /sampleMeasurements: results\.map/);
   assert.doesNotMatch(main, /reusableSourceQualityByCrf/);
 
@@ -486,4 +486,126 @@ test('Bink 2 input adapter distinguishes probe, decode, and external import stat
   assert.match(bridge, /Bink 2 must be imported through RAD Video Tools/);
   assert.match(bridge, /Stream Copy is unavailable for a Bink 2 source/);
   assert.match(bridge, /FFmpeg cannot decode the video stream/);
+});
+
+test('hard-sub quality plan reports measured search progress without a second chart', async () => {
+  const [main, curves] = await Promise.all([
+    readFile(new URL('./main.js', import.meta.url),'utf8'),
+    readFile(new URL('./transcode-curves.js', import.meta.url),'utf8')
+  ]);
+  assert.doesNotMatch(main,/id="qualityExplorationChart"/);
+  assert.match(main,/id="qualityExplorationReadout"/);
+  assert.doesNotMatch(main,/renderExplorationSvg\(/);
+  assert.match(main,/qualityExplorationPoints:\s*\{\}/);
+  assert.match(main,/function renderQualityExploration\(\)/);
+  assert.match(main,/state\.qualityExplorationPoints\[codec\]\.push\(/);
+  assert.match(main,/renderQualityExploration\(\);/);
+  assert.match(curves,/function buildExplorationPlot\(/);
+});
+
+test('guided size budget compares compatible measured codec curves with explicit handoff',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/id="compareSizeFrontierBtn"/);
+ assert.match(main,/id="adoptSizeFrontierBranchBtn"/);
+ assert.match(main,/createMultiBranchFrontier\(/);
+ assert.match(main,/state\.sizeEnvelopeEnabled=compareForSize/);
+ assert.match(main,/selectCodec\(recommendation\.branchId\)/);
+ assert.match(main,/calibrationShouldContinue\(/);
+});
+
+test('final verified output reports predicted vs actual size without claiming perceptual quality validation',async()=>{
+ const source=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(source,/nativeJobProjection/);
+ assert.match(source,/plannedBytes:Number\(plan\.plannedBytes/);
+ assert.match(source,/const sizeError=projection\?\.plannedBytes/);
+ assert.match(source,/体积误差/);
+ assert.match(source,/已超出目标体积上限/);
+ assert.match(source,/sizeComparison:projection/);
+});
+
+test('guided multi-resolution calibration keeps output scale, SSIM reference and execution branch aligned',async()=>{
+ const [main,bridge]=await Promise.all([
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(main,/id="compareResolutionFrontierBtn"/);
+ assert.match(main,/runResolutionCalibration\(/);
+ assert.match(main,/COMMON_REFERENCE_METRIC/);
+ assert.match(main,/resolutionRateDistortionModels/);
+ assert.match(main,/referenceWidth:outputSize\?\.width/);
+ assert.match(main,/outputWidth:plan\.outputWidth\|\|0/);
+ assert.match(main,/state\.guidedOutputSize=resolution\.outputWidth>0/);
+ assert.match(bridge,/scale='\+\$ReferenceWidth\+':'\+\$ReferenceHeight/);
+ assert.match(bridge,/Guided output resolution differs from adopted calibration branch/);
+ assert.match(bridge,/scale='\+\$outW\+':'\+\$outH\+':flags=bicubic/);
+});
+
+test('guided calibration shares scene-risk preflight positions across competing branches',async()=>{
+ const [main,bridge]=await Promise.all([
+  readFile(new URL('./main.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+ ]);
+ assert.match(main,/preparePairedQualitySamplePlan/);
+ assert.match(main,/const samplePlan=await preparePairedQualitySamplePlan\(\)/);
+ assert.match(main,/calibrateCodecQuality\(codec,target,eachBudget,size,samplePlan\)/);
+ assert.match(main,/calibrateCodecQuality\(codec, target, budgetPerCodec,null,samplePlan\)/);
+ assert.match(main,/samplePlan\?\.starts \|\| qualitySampleStarts\(duration\)/);
+ assert.match(main,/sampleFingerprint:samplePlan\?\.fingerprint/);
+ assert.match(main,/if\(!outputSize\?\.width && !samplePlan\)/);
+ assert.match(bridge,/function Invoke-SceneRiskProbe/);
+ assert.match(bridge,/if\(\[bool\]\$o\.sceneRiskOnly\)/);
+ assert.match(bridge,/signalstats,scdet=threshold=10/);
+});
+
+test('budgeted paired refinement is attached after codec and resolution comparisons',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/runBudgetedPairedRefinement\(\{mode:'resolution',samplePlan,budget/);
+ assert.match(main,/runBudgetedPairedRefinement\(\{mode:'codec',samplePlan,budget/);
+ assert.match(main,/appendMatchedSceneObservation/);
+ assert.match(main,/if\(proposals\.length!==branches\.length/);
+ assert.match(main,/originalFingerprint:plan\.previousFingerprint/);
+ assert.match(main,/if\(!check\.ok \|\| check\.evaluateTargetBytes\(targetBytes\)\.status/);
+ assert.match(main,/配对追加测量未发布/);
+ assert.match(main,/sourceScope:sourceEvidenceKey\(state\.media/);
+});
+
+test('guided sample ingress refuses missing or falsified elapsed timing evidence',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/const elapsed=parseMeasuredNumber\(sample\?\.elapsedSeconds\)/);
+ assert.match(main,/!\(elapsed>0\)/);
+ assert.match(main,/elapsedSeconds: elapsed/);
+});
+
+test('guided size target distinguishes CQ samples from formal VBR and actual file bytes',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/CQ 短样预测 SSIM/);
+ assert.match(main,/体积策略/);
+ assert.match(main,/快速单遍目标码率/);
+ assert.match(main,/CQ 短样曲线/);
+ assert.match(main,/CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM/);
+ assert.match(main,/可能明显超出预算/);
+ assert.match(main,/actualBytes>projection\.budgetBytes/);
+});
+
+test('guided size budget explicitly records execution policy and byte ceiling',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/id="guidedSizeBudgetPolicy"/);
+ assert.match(main,/value="best-effort"/);
+ assert.match(main,/value="two-pass"/);
+ assert.match(main,/value="strict-ceiling"/);
+ assert.match(main,/resolveGuidedSizePolicy/);
+ assert.match(main,/sizeBudgetPolicy:executionPolicy\.policy/);
+ assert.match(main,/sizeBudgetPolicy:plan\.sizeBudgetPolicy\|\|'best-effort'/);
+ assert.match(main,/sizeCeilingBytes:plan\.mode==='budget-rate'\?plan\.sizeCeiling:0/);
+ assert.match(main,/totalPasses>1/);
+ assert.match(main,/成品超出预算会失败且不可导出/);
+});
+
+test('two-pass software execution cannot inherit CQ/NVENC quality and speed predictions',async()=>{
+ const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+ assert.match(main,/executionPolicy\.policy==='best-effort'\s*\? currentSizeFrontier\(codec\) : null/);
+ assert.match(main,/sizeBudgetPolicy!=='best-effort'/);
+ assert.match(main,/containerReserveBytes,/);
+ assert.match(main,/严格字节上限已核验/);
+ assert.match(main,/Strict container byte ceiling exceeded/);
 });

@@ -3,12 +3,16 @@ on:
   push:
     paths:
       - 'windows/**'
+      - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'src/main.js'
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
   pull_request:
     paths:
       - 'windows/**'
+      - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'src/main.js'
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
@@ -136,6 +140,123 @@ jobs:
       - name: Install FFmpeg for encoding smoke
         shell: powershell
         run: choco install ffmpeg --yes --no-progress
+      - name: Verify exact CQ and VBR sample encoder arguments
+        shell: powershell
+        run: |
+          $bridge = Get-Content -Raw './windows/native-bridge.ps1'
+          $start = $bridge.IndexOf('function Get-BridgeEncoderArgs')
+          $stop = $bridge.IndexOf('function Get-ProbeMedia', $start)
+          if ($start -lt 0 -or $stop -le $start) { throw 'Exact sample encoder argument builder is missing' }
+          . ([scriptblock]::Create($bridge.Substring($start, $stop - $start)))
+          $software = [pscustomobject]@{Encoder='libx264';Hardware=$false}
+          $cq = Get-BridgeEncoderArgs $software ([pscustomobject]@{
+            sampleExact=$true;targetVideoBitrate=0;crf=24;preset='medium'
+          })
+          $rate = Get-BridgeEncoderArgs $software ([pscustomobject]@{
+            sampleExact=$true;targetVideoBitrate=1500000;crf=0;preset='medium'
+          })
+          if ($cq -notmatch '-crf 24' -or $cq -match '-b:v') { throw "CQ mode contract lost: $cq" }
+          if ($rate -notmatch '-b:v 1500000' -or $rate -match '-crf|-maxrate|-bufsize') {
+            throw "Exact VBR sample changed the formal default bitrate contract: $rate"
+          }
+          $gpu = [pscustomobject]@{Encoder='h264_nvenc';Hardware=$true;SupportsMultipass=$true;SupportsMultipassFullres=$true}
+          $gpuRate = Get-BridgeEncoderArgs $gpu ([pscustomobject]@{
+            sampleExact=$true;targetVideoBitrate=1500000;crf=0;preset='p5';multipass='fullres'
+          })
+          if ($gpuRate -notmatch '-preset p5' -or $gpuRate -notmatch '-b:v 1500000' -or
+              $gpuRate -notmatch '-multipass fullres' -or $gpuRate -match '-cq|-maxrate') {
+            throw "NVENC VBR option parity failed: $gpuRate"
+          }
+          $work = Join-Path $env:RUNNER_TEMP 'exact-rate-sample-smoke'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $sample = Join-Path $work 'vbr.mkv'
+          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=2' -an -c:v libx264 -preset medium -b:v 1500000 -pix_fmt yuv420p $sample
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sample) -or (Get-Item $sample).Length -le 0) {
+            throw 'Software exact-VBR short encode produced no valid output'
+          }
+
+      - name: Verify common-reference downscale and bicubic upsample SSIM
+        shell: powershell
+        run: |
+          $bridge = Get-Content -Raw './windows/native-bridge.ps1'
+          foreach ($contract in @(
+            'Resolution trials require subtitle-rendered common reference mode.',
+            'Invalid common-reference candidate resolution.',
+            'Guided output resolution differs from adopted calibration branch.'
+          )) {
+            if (-not $bridge.Contains($contract)) { throw "Common-reference resolution contract missing: $contract" }
+          }
+          $work=Join-Path $env:RUNNER_TEMP 'common-reference-resolution'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $reference=Join-Path $work 'reference.mkv'
+          $candidate=Join-Path $work 'candidate.mkv'
+          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=2' -c:v ffv1 $reference
+          if ($LASTEXITCODE -ne 0) { throw 'Reference fixture failed.' }
+          & ffmpeg -hide_banner -loglevel error -y -i $reference -vf 'scale=160:90:flags=bicubic' -c:v libx264 -pix_fmt yuv420p $candidate
+          if ($LASTEXITCODE -ne 0) { throw 'Reduced-resolution candidate failed.' }
+          # Use FFmpeg's SSIM stats_file so PowerShell 5.1 never turns
+          # the normal FFmpeg stderr progress stream into NativeCommandError.
+          Push-Location $work
+          try {
+            & ffmpeg -hide_banner -nostdin -loglevel error -i $candidate -i $reference -lavfi '[0:v]scale=320:180:flags=bicubic,setpts=PTS-STARTPTS[up];[1:v]setpts=PTS-STARTPTS[ref];[up][ref]ssim=stats_file=ssim.stats' -f null NUL
+            $exitCode=$LASTEXITCODE
+          } finally { Pop-Location }
+          $ssimLog=Join-Path $work 'ssim.stats'
+          if ($exitCode -ne 0 -or -not(Test-Path $ssimLog) -or
+              (Get-Content -Raw -LiteralPath $ssimLog) -notmatch 'All:[0-9.]+') {
+            throw 'Reduced candidate cannot be scored against the original-size reference.'
+          }
+      - name: Bounded risk-statistics probe uses decoded video, not encoder predictions
+        shell: powershell
+        run: |
+          $bridge=Get-Content -Raw './windows/native-bridge.ps1'
+          foreach($needed in @('function Invoke-SceneRiskProbe','sceneRiskOnly','signalstats,scdet=threshold=10','metadata=print:file=risk.stats','Invoke-BridgeTool $script:Ffmpeg')) {
+            if(-not $bridge.Contains($needed)){throw "Risk preflight wiring is missing: $needed"}
+          }
+          $work=Join-Path $env:RUNNER_TEMP 'paired-scene-risk'
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          $source=Join-Path $work 'fixture.mkv'
+          & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=15:duration=4' -c:v libx264 -preset ultrafast $source
+          if($LASTEXITCODE -ne 0){throw 'Risk input fixture failed'}
+          Push-Location $work
+          try {
+            & ffmpeg -hide_banner -nostdin -loglevel error -ss 0 -t 2 -i $source -an -sn -vf "fps=2,scale=w='max(2,trunc(iw*min(1,320/max(iw,ih))/2)*2)':h='max(2,trunc(ih*min(1,320/max(iw,ih))/2)*2)':flags=bilinear,format=yuv420p,signalstats,scdet=threshold=10,metadata=print:file=risk.stats" -f null NUL
+            if($LASTEXITCODE -ne 0){throw 'Scene analysis FFmpeg filter failed'}
+          }finally{Pop-Location}
+          $stats=Join-Path $work 'risk.stats'
+          if(-not(Test-Path $stats)){throw 'Risk analysis produced no metadata file'}
+          $text=Get-Content -Raw -LiteralPath $stats
+          if($text -notmatch 'lavfi.signalstats.YAVG=[0-9.]+' -or
+             $text -notmatch 'lavfi.signalstats.YDIF=[0-9.]+'){
+            throw 'Risk analysis failed to capture luma and frame-difference evidence'
+          }
+      - name: Decode real dark, motion and temporal-noise risk fixtures
+        shell: powershell
+        run: node scripts/check-scene-risk-fixtures.mjs
+
+      - name: Contrast real FFmpeg scene-risk fixtures and production selection
+        shell: powershell
+        run: node scripts/check-scene-risk-ffmpeg.mjs
+
+      - name: Compare true grain/motion CRF quality and bounded scene risk
+        shell: powershell
+        run: node scripts/check-risk-codec-ffmpeg.mjs
+
+      - name: Measure actual codec frontier crossover on matched motion and grain
+        shell: powershell
+        run: node scripts/check-real-codec-frontier-ffmpeg.mjs
+
+      - name: Verify guided target-size full-encode accuracy and practical SSIM
+        shell: powershell
+        run: node scripts/check-guided-full-budget-ffmpeg.mjs
+
+      - name: Verify real process cancellation across both passes and transition gap
+        shell: powershell
+        run: ./scripts/check-native-cancel-lifecycle.ps1
+      - name: Exercise real guided Windows Native two-pass and strict byte ceiling
+        shell: powershell
+        run: ./scripts/check-guided-budget-native.ps1
+
       - name: Real AV1 ALAC MKV acceptance
         shell: powershell
         run: |
