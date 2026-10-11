@@ -189,8 +189,20 @@ body.ui-desktop .preview-workspace {
 }
 body.ui-desktop .input-card > .grid.two {grid-template-columns:repeat(2,minmax(0,1fr));}
 body.ui-desktop .input-card .input-engine {grid-column:auto;align-self:stretch;}
-body.ui-tablet .workspace-layout {display:block;}
+/* Preserve the previously defined tablet grid; hiding the task overview
+   at every tablet width loses the wide-tablet contextual side panel. */
+body.ui-tablet .workspace-layout {min-width:0;}
 body.ui-tablet .task-overview-rail {display:none;}
+@media (min-width:920px) {
+  body.ui-tablet .task-overview-rail {
+    display:block;
+    grid-area:overview;
+    align-self:start;
+    min-width:0;
+    position:sticky;
+    top:10px;
+  }
+}
 body.ui-phone .app-shell {width:min(100% - 16px,640px);padding-top:7px;}
 body.ui-phone .app-header {padding:10px 11px;border-radius:10px;}
 body.ui-phone .app-header .hero-subtitle {display:none;}

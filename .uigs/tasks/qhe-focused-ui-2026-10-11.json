@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Replace QHE's verbose legacy visual presentation with a focused real Web/Windows/Android shared UI, preserving all task and native functionality.",
-  "status": "Pending External Validation",
-  "current_bounded_work_unit": "Desktop primary canvas + compact status rail, less static and dynamically restored explanatory copy, manual architecture progressive disclosure, responsive CSS and source-contract test.",
+  "status": "Merged / automated CI & browser screenshots verified / field acceptance pending",
+  "current_bounded_work_unit": "PR #93 merged; follow-up responsive tablet context at 920-1180px and 320-1280px browser viewport matrix Pending CI.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -17,28 +17,32 @@
     {
       "summary": "Shorten runtime re-rendered descriptions and operation-specific hints",
       "commit": "2ab6146b81399d9daa8933f39f6aaaa267bb45a9"
+    },
+    {
+      "summary": "Focused low-copy QHE workbench PR #93 merged with frontend, Windows and UIGS green; actual desktop and mobile screenshot review",
+      "merge_commit": "68a4ebe387f925d0c736dea9875edcca2733ac21"
     }
   ],
   "next_units": [
-    "Review current PR #93 latest-head Frontend, Playwright, Windows smoke, UIGS evidence checks.",
-    "Review desktop and phone screenshots/production visual evidence before claiming full UI acceptance.",
-    "If validation identifies an actionable regression, perform a bounded repair without changing Native process state or safety warnings."
+    "Review tablet viewport regression and screenshots on follow-up PR",
+    "Perform real Android device acceptance when device available",
+    "Maintain separate physical GPU/long-form FIELD-PENDING #77"
   ],
-  "branch": "design/focused-media-workbench-20261011",
+  "branch": "fix/qhe-tablet-overview-and-viewport-contract-20261011",
   "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/93",
-  "latest_durable_commit": "2ab6146b81399d9daa8933f39f6aaaa267bb45a9",
+  "latest_durable_commit": "68a4ebe387f925d0c736dea9875edcca2733ac21",
   "external_validation": {
-    "frontend": "pending",
-    "playwright": "pending",
-    "windows_smoke": "pending",
-    "uigs": "pending",
+    "frontend": "passed #93",
+    "playwright": "passed #93",
+    "windows_smoke": "passed #93",
+    "uigs": "passed #93",
     "android_device": "not-run",
-    "production_visual_review": "pending"
+    "production_visual_review": "passed 1280 desktop and 390 phone; tablet and 320 phone pending"
   },
   "blockers": [
-    "No verified latest-head CI yet",
-    "No production desktop/phone visual sign-off",
-    "Real Windows long-film/GPU field acceptance remains QHE #77"
+    "Physical Android device acceptance not run",
+    "Tablet 1024px/phone 320px follow-up CI pending",
+    "Real Windows GPU/HDR/long-form QHE #77 pending"
   ],
   "updated_at": "2026-10-11"
 }
