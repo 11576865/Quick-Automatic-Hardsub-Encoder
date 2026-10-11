@@ -277,6 +277,31 @@ const {spawn}=require('node:child_process');
   if(uiStreamPlanTask.outputArgs.filter((x,i,a)=>x==='-map' && /^1:v:[01]$/.test(a[i+1]||'')).length!==2)throw Error('Compiled UI task did not map both selected video streams from trimmed input');
   if(!uiStreamPlanTask.outputArgs.some((x,i,a)=>x==='-map' && a[i+1]==='0:a?'))throw Error('Compiled UI task did not map audio from full source input');
 
+  // This is a separate scenario. Restore the test form to its original
+  // single-stream/unbounded OUT state so the later 8:20 keyframe scenario
+  // cannot be silently clamped to the 0:03 OUT from the 1–3s trim case.
+  await page.evaluate(()=>{
+    const set=(name,value)=>{
+      const control=document.querySelector('[name='+name+']');
+      control.value=value;
+      control.dispatchEvent(new Event(control.tagName==='SELECT'?'change':'input',{bubbles:true}));
+      if(control.tagName!=='SELECT')control.dispatchEvent(new Event('change',{bubbles:true}));
+    };
+    set('end','');
+    set('start','0');
+    set('videoStreams','0');
+    set('videoRange','trim');
+    set('audioRange','trim');
+    const media={...window.mockAudioMedia};
+    delete media.videoTracks;
+    delete media.videoStreams;
+    window.mockAudioMedia=media;
+    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
+  });
+  if((await page.inputValue('[name=end]'))!=='' ||
+     (await page.inputValue('[name=videoStreams]'))!=='0')
+    throw Error('Multi-video E2E did not restore the legacy keyframe fixture inputs');
+
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'transcode');
   await page.click('#taskWaveformLoad');
   await page.waitForFunction(()=>document.querySelector('#taskWaveformStatus').textContent.includes('第 1 条音轨'));
