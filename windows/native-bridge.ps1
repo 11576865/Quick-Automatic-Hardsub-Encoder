@@ -1,4 +1,4 @@
-param(
+﻿param(
     [int]$Port = 8766,
     [switch]$NoBrowser,
     [string]$Token = '',
@@ -1443,6 +1443,34 @@ function Cancel-EncodeJob([string]$JobId) {
     return Get-JobStatus $JobId
 }
 
+function Test-GuidedOutputStreams($Job) {
+    # Guided encodes previously checked only the existence of a video header.
+    # Enforce the same bounded stream/packet integrity checks as manual tasks
+    # before a completed guided artifact becomes exportable.
+    $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_streams -show_format -of json '+(Quote-NativeArg $Job.Output))
+    if($probe.ExitCode -ne 0){throw 'Guided output FFprobe failed.'}
+    $info=$probe.StdOut | ConvertFrom-Json
+    $videos=@($info.streams | Where-Object { $_.codec_type -eq 'video' })
+    $audios=@($info.streams | Where-Object { $_.codec_type -eq 'audio' })
+    if($videos.Count -ne 1){throw 'Guided output must contain exactly one video stream.'}
+    $request=$Job.Request
+    if($null -ne $request.expectedAudioTracks -and $audios.Count -ne [int]$request.expectedAudioTracks){
+        throw 'Guided output audio stream count differs from requested input.'
+    }
+    if([string]$request.audio -eq 'none' -and $audios.Count -ne 0){
+        throw 'Guided output unexpectedly contains audio.'
+    }
+    $outputDuration=0.0
+    if(-not [double]::TryParse([string]$info.format.duration,
+        [Globalization.NumberStyles]::Float,[Globalization.CultureInfo]::InvariantCulture,
+        [ref]$outputDuration) -or $outputDuration -le 0 -or
+        ($Job.Duration -gt 0 -and [Math]::Abs($outputDuration-$Job.Duration) -gt 2)){
+        throw 'Guided output duration validation failed.'
+    }
+    $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -nostdin -i '+(Quote-NativeArg $Job.Output)+' -map 0:v -map 0:a? -c copy -f null -')
+    if($scan.ExitCode -ne 0){throw 'Guided output packet scan failed.'}
+}
+
 function Test-GuidedStrictBudget($Job) {
     # The completed state is only valid while its private staged *container*
     # stays within the user's explicit ceiling. An earlier successful check
@@ -1548,6 +1576,10 @@ function Get-JobStatus([string]$JobId) {
                             throw 'Guided output resolution differs from adopted calibration branch.'
                         }
                     }catch{$j.State='failed';$j.Error=$_.Exception.Message}
+                }
+                if($j.State -eq 'completed' -and -not $j.Task){
+                    try { Test-GuidedOutputStreams $j }
+                    catch { $j.State='failed';$j.Error=$_.Exception.Message }
                 }
                 if($j.State -eq 'completed' -and $j.Task){
                     try {

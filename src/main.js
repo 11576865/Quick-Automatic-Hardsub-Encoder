@@ -19,7 +19,7 @@ import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js
 import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
 import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from './scene-risk-selection.js';
 import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
-import { resolveGuidedSizePolicy } from './guided-size-policy.js';
+import { resolveGuidedSizePolicy, assessGuidedBudget } from './guided-size-policy.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -4200,6 +4200,8 @@ function renderPlanOptions() {
           ' · ' + formatBitrate(plan.targetVideoBitrate) +
           ' · CQ 样本 SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
         : '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
+    } else if (goal === 'sizeBudget' && currentGuidedBudgetAssessment()?.status === 'infeasible') {
+      param = '预算不可行：音频及容器预留后的视频码率低于规划下限';
     } else if (goal === 'sizeBudget' && !plan && $('guidedSizeBudgetPolicy').value!=='best-effort') {
       param='所选体积精度策略仅支持 Windows Native 软件 H.264';
     } else if (
@@ -4243,6 +4245,17 @@ function updateChosenSummary() {
   const plan = buildEncodePlan(state.selectedCodec);
 
   if (!plan) {
+    const capacity = goal === 'sizeBudget' ? currentGuidedBudgetAssessment() : null;
+    if (capacity?.status === 'infeasible') {
+      $('chosenSummary').textContent =
+        '按当前音频码率及容器预留，目标体积 ' + formatBytes(capacity.targetBytes) +
+        ' 不足以留下最低规划视频码率 ' + formatBitrate(capacity.minimumVideoBitrate) +
+        '。估算最低预算 ' + formatBytes(capacity.minimumTargetBytes) +
+        '，还差 ' + formatBytes(capacity.shortfallBytes) +
+        '；其中音频载荷约 ' + formatBytes(capacity.audioPayloadBytes) +
+        '。请增加目标体积、降低音频码率或减少音轨。这是当前预算模型下的容量约束，不是画质评价。';
+      return;
+    }
     if (goal === 'targetQuality' || goal === 'efficiency') {
       $('chosenSummary').textContent =
         '该模式需要先运行“实测校准目标质量”，校准完成后才会生成正式 CRF 参数。';
@@ -5921,6 +5934,23 @@ function refreshGuidedContainerDecision() {
   }
 }
 
+function currentGuidedBudgetAssessment() {
+  if (!state.media?.duration || !state.video) return null;
+  const manualMultiplier = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetMultiplier')?.value || 1.6)));
+  const directBudgetBytes = Number(state.sizeBudgetTargetBytes || 0);
+  const targetBytes = Math.floor(directBudgetBytes > 0
+    ? directBudgetBytes : state.video.size * manualMultiplier);
+  return {
+    ...assessGuidedBudget({
+      targetBytes, durationSeconds: Number(state.media.duration),
+      audioBitrate: estimatedSizeBudgetAudioBitrate(),
+      reservePercent: 4, containerReservePercent: 1,
+      fixedReserveBytes: 256 * 1024, minimumVideoBitrate: 150001
+    }),
+    manualMultiplier, directBudgetBytes
+  };
+}
+
 function buildEncodePlan(codec) {
   const media = state.media;
   if (!media?.duration || !state.video || state.softwareEncoders[codec] === false) return null;
@@ -5962,13 +5992,10 @@ function buildEncodePlan(codec) {
   }
 
   if (goal !== 'sizeBudget') return null;
-  const manualMultiplier = Math.max(0.75, Math.min(2.0, Number($('sizeBudgetMultiplier')?.value || 1.6)));
-  const directBudgetBytes = Number(state.sizeBudgetTargetBytes || 0);
-  const sizeCeiling = Math.floor(
-    directBudgetBytes > 0
-      ? directBudgetBytes
-      : state.video.size * manualMultiplier
-  );
+  const feasibility = currentGuidedBudgetAssessment();
+  if (feasibility?.status !== 'feasible') return null;
+  const { manualMultiplier, directBudgetBytes } = feasibility;
+  const sizeCeiling = feasibility.targetBytes;
   const executionPolicy=resolveGuidedSizePolicy({
     mode:'budget-rate',codec,
     backend:state.nativeBackend?.backend||'',
