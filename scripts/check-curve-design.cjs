@@ -136,6 +136,8 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.match(verified,/VBR 短样已验证/,
       'Browser-mocked VBR must pass reference and window receipt admission: '+verified);
     assert.match(verified,/正式编码方案仍未改变/);
+    assert.match(await page.locator('#taskCurveReadout').textContent(),/VBR 短样已通过/);
+    assert.doesNotMatch(await page.locator('#taskCurveReadout').textContent(),/未执行目标码率验证/);
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
     await page.screenshot({path:'media-workspace-manual-compare-desktop.png',fullPage:true});
     await page.setViewportSize({width:390,height:844});
