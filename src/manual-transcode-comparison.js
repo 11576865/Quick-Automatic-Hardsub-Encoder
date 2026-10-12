@@ -91,6 +91,14 @@ function validatePoints(points, protocol) {
          !finite(s?.bitrate) || !(s.bitrate>0))
         return {ok:false,reason:'unpaired-sample-evidence'};
     }
+    // Verify the published aggregate against the supplied per-window evidence.
+    // A fitted quality point is not valid if it summarizes a different trial.
+    const min=Math.min(...measured.map(s=>s.ssim));
+    const avg=measured.reduce((sum,s)=>sum+s.ssim,0)/measured.length;
+    const bitrate=measured.reduce((sum,s)=>sum+s.bitrate,0)/measured.length;
+    if(!within(p.ssim,min,1e-5) || !within(p.averageSsim,avg,1e-5) ||
+       Math.abs(p.sampleBitrate-bitrate)>Math.max(1,bitrate*.0001))
+      return {ok:false,reason:'inconsistent-trial-summary'};
   }
   return rates.size>=2 ? {ok:true} : {ok:false,reason:'insufficient-distinct-rates'};
 }
