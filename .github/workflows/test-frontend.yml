@@ -45,6 +45,7 @@ jobs:
       - run: node --test src/compression-decision.test.mjs
       - run: node --test src/manual-transcode-comparison.test.mjs
       - run: node --test src/manual-transcode-session.test.mjs
+      - run: node --test src/manual-transcode-vbr-verification.test.mjs
       - run: node --test src/compression-resolutions.test.mjs
       - run: node --test src/scene-risk-selection.test.mjs
       - run: node --test src/calibration-refinement.test.mjs
