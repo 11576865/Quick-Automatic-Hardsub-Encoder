@@ -1755,6 +1755,20 @@ body.media-frame-lightbox-open {
 
 
 
+/* Optional Manual two-codec trial: one shared graph and explicit read-only evidence. */
+.media-compare-controls {display:grid;gap:9px;padding:12px 14px;
+  border:1px solid rgba(124,174,203,.28);border-radius:9px;background:rgba(12,25,40,.55);min-width:0}
+.media-compare-heading {display:flex;flex-wrap:wrap;align-items:start;justify-content:space-between;gap:10px}
+.media-compare-heading>div {min-width:0;display:grid;gap:3px}
+.media-compare-heading strong {font-size:.88rem}
+.media-compare-heading small {overflow-wrap:anywhere}
+.media-compare-controls button {min-height:42px}
+.media-compare-controls [hidden] {display:none!important}
+.media-compare-controls details {border-top:1px solid rgba(128,145,169,.22);padding-top:8px;min-width:0}
+.media-compare-controls summary {cursor:pointer;min-height:36px;line-height:1.55}
+.media-compare-controls ul {padding-inline-start:22px;margin:6px 0;font-size:.78rem;line-height:1.65}
+.media-compare-controls li {overflow-wrap:anywhere;margin-bottom:5px}
+
 /* Optional Stream Copy clip queue; single-clip form remains the primary route. */
 .media-clip-queue {
   display:grid;gap:10px;
