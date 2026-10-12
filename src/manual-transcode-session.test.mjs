@@ -93,7 +93,7 @@ test('reject duplicate samples, wrong candidate, changed source and wrong mode',
  assert.equal(add(session,c[0],20,protocol().windows[1],changed).reason,
   'incompatible-native-receipt');
  assert.equal(session.trials().length,0);
- assert.equal(session.snapshot().invalidated,true);
+ assert.equal(session.snapshot().stats.invalidated,true);
  assert.equal(session.snapshot().stats.receivedSamples,1);
  assert.equal(add(session,c[0],32,protocol().windows[0]).reason,
    'session-invalidated');
