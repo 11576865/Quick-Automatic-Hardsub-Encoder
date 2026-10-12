@@ -67,6 +67,13 @@ export function mountTranscodeCurves(section, hooks) {
     return { rate: Number(raw.audioBitrate || 128000) * tracks * audioSeconds/videoSeconds, uncertain: false };
   };
   const render = () => {
+    const multi=!!compareController?.active;
+    const fitLegend=panel.querySelector('.media-curve-legend .legend-fit');
+    const pointsLegend=panel.querySelector('.media-curve-legend .legend-observed');
+    const kneeLegend=panel.querySelector('.media-curve-legend .legend-knee');
+    if(fitLegend)fitLegend.textContent=multi?'候选择优上包络':'保序拟合';
+    if(pointsLegend)pointsLegend.textContent=multi?'候选实测':'原始观测';
+    if(kneeLegend)kneeLegend.hidden=multi;
     btn.disabled = running || !!compareController?.active || !!compareController?.running;
     stop.disabled = !running || cancelRequested;
     btn.textContent = running ? '正在实测…' : '开始实测';
