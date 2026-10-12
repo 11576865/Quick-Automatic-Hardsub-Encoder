@@ -31,13 +31,17 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
-  "pr": null,
-  "latest_durable_commit": "d7fd449fc6486ed6a35e35206d8a706b3ddc7269",
+  "pr": 105,
+  "latest_durable_commit": "87d0ae59d8da6d9e38a93442362c1b651239cf64",
   "external_validation_states": {
     "windows_vvc": "pending CI; UNSUPPORTED is distinct from PASS",
     "browser": "pending CI; local Chromium download returned invalid archive",
     "physical_device": "pending"
   },
   "blockers": [],
-  "updated_timestamp": "2026-10-12T18:55:38.285060+00:00"
+  "updated_timestamp": "2026-10-12T18:57:17.128971+00:00",
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/observations/2026-10-13-qhe-vvc-capability-chain-and-cancellable-validation.md"
+  }
 }
