@@ -2,6 +2,7 @@ import { formatSize, outputReport, sampleSettings, sampleProjection } from './me
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { audioCopyPlaybackWarning } from './media-container.js';
 import { mountTranscodeCurves } from './transcode-calibration-panel.js';
+import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-queue.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
@@ -461,6 +462,18 @@ export function mountMediaWorkspace(hooks) {
       syncQualityRange();
       updateRate();
       get('quality').dispatchEvent(new Event('input',{bubbles:true}));
+    },
+    adoptCandidate: ({candidate,bitrate,expectedSettings,expectedSourceIdentity,media})=>{
+      const committed=commitVerifiedManualCandidate({
+        candidate,bitrate,expectedSettings,expectedSourceIdentity,
+        read,sourceIdentity:()=>hooks.videoIdentity?.()||'',get,
+        updateEncoder,updatePreset,updateRate,compile:compileTask,media
+      });
+      if(!committed.ok)return committed;
+      // Exactly one coherent event after all form fields have been committed:
+      // the existing plan/candidate invalidation happens only now.
+      get('bitrate').dispatchEvent(new Event('input',{bubbles:true}));
+      return committed;
     }
   });
 
