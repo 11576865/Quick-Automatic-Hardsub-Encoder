@@ -105,6 +105,10 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.equal(await page.locator('#manual-compare-test svg').count(),1);
     assert.equal(await page.locator('#taskCompareCandidates li').count(),2);
     assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),1);
+    // A decision-threshold-only change must reuse costly completed evidence.
+    await page.locator('#taskExploreTarget').fill('0.975');
+    assert.equal(await page.locator('#taskCompareCandidates li').count(),2);
+    assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),1);
     await page.locator('#taskEfficiencyChart').focus();
     await page.keyboard.press('ArrowRight');
     assert.ok((await page.locator('#taskCurveReadout').textContent()).includes('当前建议'));
