@@ -6535,6 +6535,11 @@ body[data-runtime-backend="web"] .runtime-mode-banner {
   font-size: .7rem;
   line-height: 1.5;
 }
+.size-frontier-candidates {font-size:.7rem;line-height:1.5;min-width:0}
+.size-frontier-candidates summary {cursor:pointer;min-height:36px;padding:6px 0}
+.size-frontier-candidates ul {margin:4px 0 8px;padding-inline-start:20px}
+.size-frontier-candidates li {overflow-wrap:anywhere;margin-block:5px}
+.size-frontier-candidates p {margin:6px 0;color:var(--muted)}
 
 .size-frontier-chart-wrap {
   min-width: 0;
