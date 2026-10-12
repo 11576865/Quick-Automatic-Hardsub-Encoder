@@ -13,7 +13,7 @@ $root="http://127.0.0.1:$port"
 $headers=@{'X-Quick-Hardsub-Token'='ci-manual-paired-token';Origin=$root}
 $bridge=$null
 try {
-  & ffmpeg -hide_banner -nostdin -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=12:duration=5' -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=5' -map '0:v:0' -map '1:a:0' -c:v ffv1 -c:a flac -shortest $source
+  & node './scripts/build-manual-rich-native-fixture.mjs' $work
   if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $source)){throw 'Cannot generate source FFV1 video.'}
   $bridge=Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -ArgumentList @(
     '-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path './windows/native-bridge.ps1'),
@@ -33,7 +33,7 @@ try {
     if(-not $availability.Count){throw "Required software encoder is not available: $encoder"}
   }
   $probe=Invoke-RestMethod -Method Post -Uri "$root/api/probe" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 30
-  if(-not $probe.ok -or [int]$probe.width -ne 320 -or [int]$probe.height -ne 180 -or [int]$probe.audioTracks -ne 1){throw 'Native probe did not recognize source geometry.'}
+  if(-not $probe.ok -or [int]$probe.width -ne 320 -or [int]$probe.height -ne 180 -or [int]$probe.audioTracks -ne 2){throw 'Native probe did not recognize source geometry.'}
 
   $windows=@(
     @{start=0.25;duration=1.5},
@@ -145,8 +145,8 @@ try {
   # Preserve the actual output and its reference input for independent replay.
   $evidenceDir=Join-Path $env:GITHUB_WORKSPACE 'native-full-output-evidence'
   [void](New-Item -Path $evidenceDir -ItemType Directory -Force)
-  Copy-Item -LiteralPath $source -Destination (Join-Path $evidenceDir 'synthetic-ffv1-flac-source.mkv') -Force
-  Copy-Item -LiteralPath $output -Destination (Join-Path $evidenceDir 'verified-hevc-flac-output.mkv') -Force
+  Copy-Item -LiteralPath $source -Destination (Join-Path $evidenceDir 'synthetic-ffv1-flac-aac-ass-font-source.mkv') -Force
+  Copy-Item -LiteralPath $output -Destination (Join-Path $evidenceDir 'verified-hevc-flac-aac-ass-font-output.mkv') -Force
   Copy-Item -LiteralPath $report -Destination (Join-Path $evidenceDir 'full-output-acceptance.json') -Force
   Write-Host 'PASS: Native formal v4 HEVC output, copied FLAC packet SHA256 and full-duration SSIM verified.'
   Remove-Item -LiteralPath $candidateDirs[0].FullName -Recurse -Force -ErrorAction SilentlyContinue
