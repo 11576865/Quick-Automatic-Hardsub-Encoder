@@ -61,7 +61,7 @@ try {
         $result=Invoke-RestMethod -Method Post -Uri "$root/api/sample" -Headers $headers -ContentType 'application/json' -Body $request -TimeoutSec 85
         if(-not $result.ok -or -not $result.nativeEvidence -or
           [string]$result.encoder -ne [string]$branch.encoder -or
-          -not [double]::IsFinite([double]$result.ssim)){
+          ([double]::IsNaN([double]$result.ssim) -or [double]::IsInfinity([double]$result.ssim))){
           throw "Native sample returned invalid result for $($branch.id), CQ $quality, $($window.start)"
         }
         $samples+=@{id=$branch.id;codec=$branch.codec;encoder=$branch.encoder;preset=$branch.preset
