@@ -126,3 +126,31 @@ Before a commit, `src/manual-transcode-compare-ui.js` recompiles the proposed co
 This explicitly writes **settings only**, not an encoded video. The checked VBR windows do not prove future output bytes, playback, packet continuity, quality over the rest of a film, copied audio delivery or full device compatibility. The ordinary formal encoding/run/save and independent artifact verification are still required.
 
 Tests: `src/manual-transcode-adoption.test.mjs` asserts transaction/rollback under failed compile, stale source/settings, rejected candidate/bitrate and unavailable codec controls. Chromium comparison UI test keeps two stages distinct: prior to explicit confirm no settings callback is invoked; after a fresh valid VBR certificate, explicit confirm invokes the adoption hook once and the pair mode exits. Cursor motion hides the action and revokes the pass. These tests must pass **at exact PR head**; they are not a physical Windows user-run demonstration.
+
+
+## 2026-10-13 real formal v4 whole-file artifact acceptance (Windows hosted)
+
+**New evidence tier, different from all prior short-window comparisons:** `scripts/check-manual-native-paired.ps1` now makes a five-second Windows-hosted FFV1 `320x180, 12fps` + **FLAC** Matroska input, executes 12 real x264/x265 CQ samples, executes two real **x265** bitrate-mode source-SSIM samples at 600000bps, and has `scripts/build-manual-adopted-native-request.mjs` check both VBR receipts and actually run `commitVerifiedManualCandidate` + the production `compileTask`. It creates a full **task-v4 bitrate-mode HEVC/libx265 with copied audio** JSON request, POSTs it to the actual `/api/encode` production job path, waits for a terminal `completed` status and then independently inspects the private Matroska output artifact with `scripts/verify-manual-adopted-native-output.mjs`.
+
+This is **not** a second sample encoding nor a separate handwritten FFmpeg command pretending to be a QHE job. The output is created by `windows/native-bridge.ps1::Start-MediaTaskJob`, which consumes the real compiler's `task.outputArgs`. The independent verifier uses FFprobe to prove HEVC output codec and frame dimensions, exact copied FLAC audio packet payload SHA-256 across all packets in order, input/output decoded frame count, source/output duration, actual file byte count equal to the job response and FFprobe container size, and a separate **full-timeline source-referenced SSIM** decoded by FFmpeg. Whole-file size is **observed**, not promised by target bitrate, and the test does not infer physical user device or player playback compatibility.
+
+Actual first successful end-to-end Windows run `38284134399` at head `891620f8027959f7ffdc671b710c0d2c57340211` reported:
+- output codec HEVC / `libx265`, input FFV1, output Matroska
+- 60 source/output video frames, 5.0 s source/output
+- 235/235 FLAC packet hashes matched SHA-256
+- requested video bitrate 600000 bps; video-only nominal projection 375000 bytes for 5 seconds, **not whole-file target**
+- actual entire Matroska output 358516 bytes, as reported independently by the file, FFprobe and Native status
+- independently measured *full 5-second* decoded video SSIM `0.999738` against the FFV1 source; this is only a CI-synthetic clip and not a real-movie quality guarantee.
+
+**CI transport defect and fix:** The first full-job request was rejected at `/api/encode` JSON decoding, **before encoding**, because the compiled task included non-ASCII compatibility warnings and the Windows PowerShell client passed a string request body. The Bridge explicitly reads/decode UTF-8 request bytes; the CI caller now sends `[Text.Encoding]::UTF8.GetBytes($requestJson)` with `application/json; charset=utf-8`. The second run successfully reached production Native job completion. Do not mislabel the initial red job as an HEVC encoder failure. Keep this as a transport case and track any applicable production caller separately.
+
+The dedicated Windows CI workflow now also archives the **synthetic** FFV1+FLAC source, actual HEVC+FLAC output and machine-readable independent verification JSON for short-term replay; only generated test artifacts, never users' own videos. Retention is 14 days.
+
+### Boundaries still requiring work
+- Real user-selected video Windows field E2E, physical GPU/NVENC/AV1, high bit depth, HDR and variable-frame-rate material;
+- complex multitrack audio, subtitle/attachment/container interoperability and player compatibility;
+- longer real-world sequences and more diverse representative quality scenes;
+- bitrate and strict whole-container size/error-budget modeling with copied audio accounted for; no strict ceiling claim from these 358516 bytes;
+- downstream saved/exported user artifact and visual GUI field-device confirmation.
+
+Owner review, draft PR status and Canonical governance remain unchanged. The full-file evidence is CI-synthetic, albeit **truly executed through the formal Native task backend**.
