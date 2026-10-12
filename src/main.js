@@ -1222,7 +1222,7 @@ function renderSizeFrontier() {
   wrap.classList.remove('hidden');
   $('sizeFrontierSubtitle').textContent = frontier.kind==='multi-branch'
     ? frontier.branchIds.map(id=>id.toUpperCase()).join(' / ')+
-      ' · 统一源尺寸参考画面 SSIM；仅在共同实测体积区间内形成上包络。'
+      ' · 统一源尺寸参考画面 SSIM；实线为择优上包络，细虚线为各候选拟合，仅显示共同实测体积区间。'
     : label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。';
   $('sizeFrontierMin').textContent = formatBytes(frontier.minimumEvidenceTargetBytes);
   $('sizeFrontierMax').textContent = formatBytes(frontier.maximumEvidenceTargetBytes);
