@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
+import {compileTask} from './media-task.js';
 const candidate={id:'h265-x265',codec:'h265',encoder:'libx265',preset:'medium'};
 function fixture(){
   const values={codec:'h264',encoder:'libx264',preset:'slow',
@@ -72,4 +73,47 @@ test('invalid chosen encoder options trigger rollback instead of partial switch'
   }}});
   assert.equal(y.ok,false);
   assert.deepEqual(x.read(),x.old);
+});
+
+test('the committed formal v4 transcode command really contains HEVC and target video bitrate',()=>{
+  const media={
+    duration:6,sourceName:'synthetic.mkv',formatName:'matroska,webm',
+    fps:30,videoTracks:1,videoCodec:'h264',
+    videoStreams:[{ordinal:0,codec:'h264',width:320,height:180,
+      fps:30,pixelFormat:'yuv420p',bitDepth:8,unsafeColorPipeline:false}],
+    audioTracks:0,audioStreams:[]
+  };
+  const base={
+    operation:'transcode',codec:'h264',encoder:'libx264',preset:'slow',
+    rateMode:'quality',quality:'23',multipass:'disabled',
+    bitrate:'1000000',twoPass:false,
+    start:'0',end:'',videoStreams:'0',videoRange:'trim',
+    audio:'none',audioTrack:'all',audioRange:'trim',subtitleRange:'trim',
+    fpsMode:'auto',pixelFormat:'yuv420p',scaleAlgorithm:'lanczos',
+    rotation:'none',deinterlace:'none',outputContainer:'mkv'
+  };
+  const owned=['codec','encoder','preset','multipass','rateMode','bitrate','twoPass'];
+  const controls=Object.fromEntries(owned.map(name=>[name,{
+    value:String(base[name]),checked:base[name]===true
+  }]));
+  const read=()=>({...base,...Object.fromEntries(owned.map(name=>[
+    name,name==='twoPass'?controls[name].checked:controls[name].value
+  ]))});
+  const result=commitVerifiedManualCandidate({
+    candidate,bitrate:850000,
+    expectedSettings:read(),expectedSourceIdentity:'real-media-key',
+    read,sourceIdentity:()=> 'real-media-key',get:k=>controls[k],
+    updateEncoder:()=>{controls.encoder.value='libx264';},
+    updatePreset:()=>{controls.preset.value='medium';},
+    updateRate:()=>{},compile:compileTask,media
+  });
+  assert.equal(result.ok,true,JSON.stringify(result));
+  assert.equal(result.task.operation,'transcode');
+  assert.equal(result.task.encoder,'libx265');
+  assert.equal(result.task.codec,'h265');
+  assert.equal(result.task.rateMode,'bitrate');
+  assert.equal(result.task.bitrate,850000);
+  assert.deepEqual(result.task.outputArgs.slice(
+    result.task.outputArgs.indexOf('-c:v'),result.task.outputArgs.indexOf('-c:v')+2
+  ),['-c:v','libx265']);
 });
