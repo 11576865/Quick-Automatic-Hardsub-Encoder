@@ -9,6 +9,7 @@ import {
 } from '../src/manual-transcode-comparison.js';
 import {buildSizeFrontierPlot} from '../src/size-frontier-ui.js';
 import {createManualTranscodeSession} from '../src/manual-transcode-session.js';
+import {verifyManualNativeVbrCandidate} from '../src/manual-transcode-vbr-verification.js';
 
 const file=process.argv[2];
 if(!file) throw Error('Expected paired Native receipt file');
@@ -127,9 +128,28 @@ assert.ok(f.sampleCurve(16).length>=2);
 assert.equal(f.evaluateTargetBytes(f.minimumEvidenceTargetBytes*.5).status,'below-evidence');
 assert.equal(f.evaluateTargetBytes(f.maximumEvidenceTargetBytes*1.5).status,'above-evidence');
 
+// Independent VBR-mode samples after CQ exploration. An actual native VBR
+// receipt must remain source/runtime/reference equivalent and be accepted only
+// for the bitrate-mode windows; it does not verify a whole output file.
+assert.equal(fixture.vbrTest?.samples?.length,2);
+const chosenVbrCandidate=fixture.branches.find(x=>x.id===fixture.vbrTest.candidateId);
+assert.ok(chosenVbrCandidate);
+const vbrResult=verifyManualNativeVbrCandidate({
+  protocol,candidate:{...chosenVbrCandidate,outputWidth:320,outputHeight:180,pixelFormat:'yuv420p'},
+  bitrate:fixture.vbrTest.bitrate,targetSsim:fixture.vbrTest.targetSsim,
+  samples:fixture.vbrTest.samples
+});
+assert.equal(vbrResult.ok,true,'Actual Windows VBR samples must match real CQ source and reference: '+JSON.stringify(vbrResult));
+assert.equal(vbrResult.measuredWindows,2);
+assert.equal(vbrResult.outputBytesVerified,false);
+assert.equal(vbrResult.wholeFileQualityVerified,false);
+
 console.log(JSON.stringify({
   result:'PASS',test:'real Windows Native x264/x265 same-source paired CQ',
   samples:fixture.samples.length,
+  realVbrSamples:fixture.vbrTest.samples.length,
+  realVbrMinimumSsim:+vbrResult.minimumSsim.toFixed(5),
+  realVbrTargetSatisfied:vbrResult.passed,
   encoders:fixture.branches.map(x=>x.encoder),
   windows:fixture.windows,qualitySettings:fixture.qualities,
   observedSsimRange:[+minObserved.toFixed(5),+maxObserved.toFixed(5)],
