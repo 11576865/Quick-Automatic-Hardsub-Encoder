@@ -34,8 +34,8 @@ function New-ManualNativeSampleSnapshot([string]$Source,[string]$Ffmpeg,[string]
         throw 'Missing FFmpeg runtime version for manual comparison.'
     }
     return [pscustomobject]@{
-        source=Get-ManualNativeStampToken $sourceStamp 'media-source'
-        runtime=Get-ManualNativeStampToken $runtimeStamp 'ffmpeg-executable' $Version
+        source=(Get-ManualNativeStampToken $sourceStamp 'media-source')
+        runtime=(Get-ManualNativeStampToken $runtimeStamp 'ffmpeg-executable' $Version)
         sourceStat=$sourceStamp
         runtimeStat=$runtimeStamp
         runtimeVersion=$Version
@@ -69,9 +69,13 @@ function New-ManualNativeSampleReceipt(
     if ([string]::IsNullOrWhiteSpace($preset)) {
         throw 'Manual sample receipt has no selected encoder preset.'
     }
+    $rateMode=if ($targetRate -gt 0) { 'bitrate' } else { 'quality' }
+    $method=if ($targetRate -gt 0) { 'windows-native-exact-vbr-v1' } else { 'windows-native-exact-cq-v1' }
+    $requestedRate=if ($targetRate -gt 0) { [long]$targetRate } else { 0L }
+    $requestedQuality=if ($targetRate -gt 0) { $null } else { [int]$Options.crf }
     return [pscustomobject]@{
         schemaVersion=1
-        method=if ($targetRate -gt 0) { 'windows-native-exact-vbr-v1' } else { 'windows-native-exact-cq-v1' }
+        method=$method
         referenceMetric='source-sdr-yuv420p-ssim-v1'
         referenceToken='direct-source-v0-yuv420p-setpts-ssim-v1'
         filterToken='no-video-filters-sdr-yuv420p-v1'
@@ -86,9 +90,9 @@ function New-ManualNativeSampleReceipt(
         requestedDuration=$duration
         actualDuration=$ActualDuration
         pixelFormat='yuv420p'
-        mode=if ($targetRate -gt 0) { 'bitrate' } else { 'quality' }
-        requestedRate=if ($targetRate -gt 0) { [long]$targetRate } else { 0L }
-        requestedQuality=if ($targetRate -gt 0) { $null } else { [int]$Options.crf }
+        mode=$rateMode
+        requestedRate=$requestedRate
+        requestedQuality=$requestedQuality
         # Do not report a file content hash or guarantee playback identity.
         identityKind='file-stat-snapshot-not-content-hash'
     }
