@@ -57,3 +57,11 @@ jobs:
       - name: Run actual localhost Bridge paired x264/x265 source SSIM
         shell: powershell
         run: ./scripts/check-manual-native-paired.ps1
+      - name: Publish CI-synthetic full output and independent acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-native-full-output-evidence
+          path: native-full-output-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
