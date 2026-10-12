@@ -13,7 +13,7 @@ $root="http://127.0.0.1:$port"
 $headers=@{'X-Quick-Hardsub-Token'='ci-manual-paired-token';Origin=$root}
 $bridge=$null
 try {
-  & ffmpeg -hide_banner -nostdin -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=12:duration=5' -an -c:v ffv1 $source
+  & ffmpeg -hide_banner -nostdin -loglevel error -y -f lavfi -i 'testsrc2=size=320x180:rate=12:duration=5' -f lavfi -i 'sine=frequency=440:sample_rate=48000:duration=5' -map '0:v:0' -map '1:a:0' -c:v ffv1 -c:a flac -shortest $source
   if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $source)){throw 'Cannot generate source FFV1 video.'}
   $bridge=Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -ArgumentList @(
     '-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path './windows/native-bridge.ps1'),
@@ -33,7 +33,7 @@ try {
     if(-not $availability.Count){throw "Required software encoder is not available: $encoder"}
   }
   $probe=Invoke-RestMethod -Method Post -Uri "$root/api/probe" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 30
-  if(-not $probe.ok -or [int]$probe.width -ne 320 -or [int]$probe.height -ne 180){throw 'Native probe did not recognize source geometry.'}
+  if(-not $probe.ok -or [int]$probe.width -ne 320 -or [int]$probe.height -ne 180 -or [int]$probe.audioTracks -ne 1){throw 'Native probe did not recognize source geometry.'}
 
   $windows=@(
     @{start=0.25;duration=1.5},
@@ -77,9 +77,9 @@ try {
   $vbrSamples=@()
   foreach($window in $windows){
     $request=@{
-      requestId=('paired-x264-vbr-'+[string]$window.start)
+      requestId=('paired-x265-vbr-'+[string]$window.start)
       options=@{
-        codec='h264';encoder='libx264';preset='medium'
+        codec='h265';encoder='libx265';preset='medium'
         multipass='disabled';sampleExact=$true;crf=0
         start=[double]$window.start;duration=[double]$window.duration
         withSubtitles=$false;targetVideoBitrate=$vbrRate;measureSsim=$true
@@ -92,11 +92,11 @@ try {
        throw 'Actual Windows VBR trial did not return a verifiable VBR receipt.'
     }
     $vbrSamples+=@{window=$window;sample=$sample}
-    Write-Host ("Real Native x264 VBR sample: rate={0} start={1}s ssim={2:N5}" -f
+    Write-Host ("Real Native x265 VBR sample: rate={0} start={1}s ssim={2:N5}" -f
       $vbrRate,$window.start,[double]$sample.ssim)
   }
   $fixture=@{
-    vbrTest=@{candidateId='h264-x264';bitrate=$vbrRate;targetSsim=0.90;samples=$vbrSamples}
+    vbrTest=@{candidateId='h265-x265';bitrate=$vbrRate;targetSsim=0.90;samples=$vbrSamples}
     kind='qhe-manual-windows-native-paired-v1'
     sourceType='FFV1 synthetic real encoded source; actual Windows Native FFmpeg samples'
     sourceGeometry=@{width=320;height=180}
@@ -107,7 +107,37 @@ try {
   [IO.File]::WriteAllText($path,$fixture,[Text.UTF8Encoding]::new($false))
   & node './scripts/verify-manual-native-paired.mjs' $path
   if($LASTEXITCODE -ne 0){throw 'Native paired source evidence failed strict model admission.'}
-  Write-Host "PASS: 12 actual Windows localhost Native samples yielded a comparable paired codec model."
+
+  Write-Host 'PASS: 12 Native CQ + two same-source x265 VBR observations admitted.'
+  $probePath=Join-Path $work 'source-probe.json'
+  $requestPath=Join-Path $work 'adopted-formal-request.json'
+  $statusPath=Join-Path $work 'full-job-status.json'
+  [IO.File]::WriteAllText($probePath,($probe | ConvertTo-Json -Depth 15),[Text.UTF8Encoding]::new($false))
+  & node './scripts/build-manual-adopted-native-request.mjs' $path $probePath $requestPath
+  if($LASTEXITCODE -ne 0){throw 'Could not construct formal task from accepted x265 VBR evidence.'}
+  $requestJson=[IO.File]::ReadAllText($requestPath)
+  $job=Invoke-RestMethod -Method Post -Uri "$root/api/encode" -Headers $headers -ContentType 'application/json' -Body $requestJson -TimeoutSec 35
+  if(-not $job.ok -or -not $job.jobId -or [string]$job.encoder -ne 'libx265'){
+    throw 'Windows Bridge rejected formal verified HEVC task'
+  }
+  $statusResult=$null
+  for($i=0;$i -lt 160;$i++){
+    Start-Sleep -Milliseconds 500
+    $statusResult=Invoke-RestMethod -Method Get -Uri "$root/api/jobs/$($job.jobId)" -Headers $headers -TimeoutSec 15
+    if($statusResult.state -in @('completed','failed','cancelled')){break}
+  }
+  if(-not $statusResult -or $statusResult.state -ne 'completed'){
+    throw ('Formal Windows Native full task failed/stalled: '+($statusResult | ConvertTo-Json -Depth 5))
+  }
+  [IO.File]::WriteAllText($statusPath,($statusResult | ConvertTo-Json -Depth 10),[Text.UTF8Encoding]::new($false))
+  $candidateDirs=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-media-job-"+$job.jobId+"-*"))
+  if($candidateDirs.Count -ne 1){throw 'Cannot uniquely identify the private completed Native job staging directory.'}
+  $output=Join-Path $candidateDirs[0].FullName 'output.mkv'
+  if(-not(Test-Path -LiteralPath $output -PathType Leaf)){throw 'Formal completed job output is missing.'}
+  & node './scripts/verify-manual-adopted-native-output.mjs' $source $output $requestPath $statusPath
+  if($LASTEXITCODE -ne 0){throw 'Independent full-output FFprobe/audio hash/SSIM acceptance failed.'}
+  Write-Host 'PASS: Native formal v4 HEVC output, copied FLAC packet SHA256 and full-duration SSIM verified.'
+  Remove-Item -LiteralPath $candidateDirs[0].FullName -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
   Write-Host '--- paired-bridge stdout tail ---'
   if(Test-Path -LiteralPath $stdout){Get-Content -LiteralPath $stdout -Tail 45|Write-Host}
