@@ -90,7 +90,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
             '（不足以作最终推荐）';
           list.append(li);
         }
-        rows.replaceChildren(list);details.hidden=false;
+        rows.replaceChildren(list);
+        if(details.hidden)details.open=true;
+        details.hidden=false;
       }else details.hidden=true;
       return true;
     }
@@ -120,6 +122,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       list.append(li);
     }
     rows.replaceChildren(list);
+    if(details.hidden)details.open=true;
     details.hidden=false;
     return true;
   }
