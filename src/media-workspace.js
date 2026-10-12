@@ -1,5 +1,6 @@
-import { formatSize, outputReport, sampleSettings, sampleProjection } from './media-planning.js';
+import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
+import { vvcCapability } from './media-capabilities.js';
 import { audioCopyPlaybackWarning } from './media-container.js';
 import { mountTranscodeCurves } from './transcode-calibration-panel.js';
 import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
@@ -183,10 +184,10 @@ export function mountMediaWorkspace(hooks) {
     <div class="button-row task-plan-actions"><button type="button" id="taskLoadPreset" class="secondary">恢复推荐方案</button><button type="button" id="taskInspect" class="secondary">验证当前方案</button></div>
   </section>
   <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">不确定时直接保留推荐方案；其他参数按需展开。</p><div class="task-grid media-core-decision-grid">
-  ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
+  ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1'],['h266','H.266 / VVC · 实验']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
   ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ（通常越低越保真）','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
   ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}
-  </div><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
+  </div><p id="taskVvcCapability" class="note" role="status"></p><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
   ${check('legacyFps','兼容旧 FFmpeg（使用 -vsync）')}
   ${input('maxrate','最大码率（bit/s）','编码器默认')}${input('bufsize','码率缓冲区（bit）','编码器默认')}
   ${select('fpsMode','帧率策略',[['auto','编码器自动'],['passthrough','保持源时间戳'],['cfr','恒定帧率 CFR'],['vfr','可变帧率 VFR']])}${input('fps','目标帧率','例如 24 或 24000/1001；留空保持')}${input('frames','输出总帧数上限','留空表示不限；设置后需关闭音频')}
@@ -282,8 +283,10 @@ export function mountMediaWorkspace(hooks) {
   qualityField.classList.add('media-range-field');
   qualityField.append(qualityRange);
   const syncQualityRange = () => {
-    qualityRange.max = get('codec').value === 'av1' ? '63' : '51';
-    const value = Math.max(Number(qualityRange.min), Math.min(Number(qualityRange.max), Number(get('quality').value) || 1));
+    qualityRange.min = get('codec').value === 'h266' ? '0' : '1';
+    qualityRange.max = ['av1','h266'].includes(get('codec').value) ? '63' : '51';
+    const entered=Number(get('quality').value);
+    const value = Math.max(Number(qualityRange.min), Math.min(Number(qualityRange.max), Number.isFinite(entered) ? entered : 1));
     get('quality').value = String(value);
     qualityRange.value = String(value);
     qualityRange.style.setProperty('--media-range-progress', ((value - Number(qualityRange.min)) / (Number(qualityRange.max) - Number(qualityRange.min)) * 100) + '%');
@@ -434,7 +437,7 @@ export function mountMediaWorkspace(hooks) {
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
   const refreshConfigs=()=>{get('savedConfig').innerHTML=Object.keys(configs()).map(n=>`<option value="${escape(n)}">${escape(n)}</option>`).join('');};
-  const applyConfig=raw=>{markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=String(value??'');}updateMode();updateRate();syncQualityRange();};
+  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();};
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
@@ -1340,7 +1343,7 @@ export function mountMediaWorkspace(hooks) {
   const renderPlanSummary = task => {
     const raw=read(),operation=raw.operation,copy=operation==='copy';
     const operationLabel=operation==='hardsub'?'硬字幕压制':operation==='transcode'?'纯视频转码':'视频流复制 / 快速剪辑';
-    const codecLabel={h264:'H.264',h265:'H.265 / HEVC',av1:'AV1'}[raw.codec]||raw.codec||'—';
+  const codecLabel={h264:'H.264',h265:'H.265 / HEVC',av1:'AV1',h266:'H.266 / VVC'}[raw.codec]||raw.codec||'—';
     const encoderLabel=get('encoder').selectedOptions?.[0]?.textContent||raw.encoder||'—';
     const speed=copy?'无需编码':presetIntent(raw.encoder,raw.preset);
     let rate='无损复制',note='不重新编码；实际切入点受关键帧约束。';
@@ -1517,8 +1520,11 @@ export function mountMediaWorkspace(hooks) {
   window.addEventListener('quick-hardsub-native-export-result',nativeExportListener);
   function updateEncoder() {
     const c=get('codec').value,previousEncoder=get('encoder').value;
-    const choices=[[SOFTWARE[c],{h264:'x264',h265:'x265',av1:'SVT-AV1'}[c]+' · CPU']];
-    if(windows() && hooks.hasNvenc(c)) choices.push([{h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc'}[c],'NVENC · GPU']);
+    const capability=vvcCapability(hooks.platformKey?.()||{});
+    get('codec').querySelector('option[value="h266"]').disabled=!capability.available;
+    section.querySelector('#taskVvcCapability').textContent=capability.reason;
+    const choices=[[SOFTWARE[c],{h264:'x264',h265:'x265',av1:'SVT-AV1',h266:'VVenC'}[c]+' · CPU']];
+    if(c!=='h266' && windows() && hooks.hasNvenc(c)) choices.push([{h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc'}[c],'NVENC · GPU']);
     get('encoder').innerHTML=choices.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
     if(choices.some(([v])=>v===previousEncoder))get('encoder').value=previousEncoder;
     updatePreset();updateRate();
@@ -1526,7 +1532,7 @@ export function mountMediaWorkspace(hooks) {
   function updatePreset(reset=false) {
     const previous=get('preset').value;
     const nv=get('encoder').value.endsWith('_nvenc');
-    const vals=nv?['p1','p2','p3','p4','p5','p6','p7']:get('codec').value==='av1'?Array.from({length:14},(_,i)=>String(i)):['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
+    const vals=get('codec').value==='h266'?['faster','fast','medium','slow','slower']:nv?['p1','p2','p3','p4','p5','p6','p7']:get('codec').value==='av1'?Array.from({length:14},(_,i)=>String(i)):['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
     get('preset').innerHTML=vals.map(v=>`<option value="${v}">${v} · ${presetIntent(get('encoder').value,v)}</option>`).join('');
     get('preset').value=!reset&&vals.includes(previous)?previous:nv?'p5':get('codec').value==='av1'?'6':'medium';
     section.querySelector('#taskNvencDetails').hidden=!nv;
@@ -1693,6 +1699,9 @@ export function mountMediaWorkspace(hooks) {
   function updateRate(){
     const mode=get('rateMode').value;
     const copy=get('operation').value==='copy';
+    const vvc=get('codec').value==='h266';
+    qualityField.firstChild.textContent=vvc?'量化参数 QP（0–63，越低通常越保真）':'质量值 CRF / CQ（通常越低越保真）';
+    get('rateMode').querySelector('option[value="quality"]').textContent=vvc?'固定量化参数 QP':'固定质量 CRF / CQ';
     setRateControl('quality', !copy && mode==='quality');
     setRateControl('bitrate', !copy && mode==='bitrate');
     for(const key of ['targetSize','sizeUnit','sizeReserve'])setRateControl(key, !copy && mode==='size');
@@ -1721,14 +1730,27 @@ export function mountMediaWorkspace(hooks) {
   section.querySelector('#taskExportConfig').onclick=()=>download({version:2,settings:read()},'media-config.json');
   section.querySelector('#taskImportConfig').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>65536)throw Error('配置文件超过 64 KiB');const data=JSON.parse(await file.text());if(data.version!==2||!data.settings||typeof data.settings!=='object')throw Error('配置格式无效');applyConfig(data.settings);status('已导入配置，执行前仍会验证参数');}catch(err){status(err.message);}finally{e.target.value='';}};
   section.querySelector('#taskReport').onclick=()=>{if(lastReport)download(lastReport,'media-task-report.json');};
-  get('codec').onchange=()=>{updateEncoder();get('quality').value=get('codec').value==='av1'?'32':'23';syncQualityRange();};
+  let lastManualCodec=get('codec').value;
+  let previousPixelFormat=null;
+  get('codec').onchange=()=>{
+    const codec=get('codec').value;
+    if(codec==='h266' && lastManualCodec!=='h266'){
+      previousPixelFormat=get('pixelFormat').value;
+      get('pixelFormat').value='yuv420p10le';
+    }else if(lastManualCodec==='h266' && previousPixelFormat){
+      get('pixelFormat').value=previousPixelFormat;previousPixelFormat=null;
+    }
+    lastManualCodec=codec;
+    updateEncoder();get('quality').value=['av1','h266'].includes(codec)?'32':'23';
+    syncQualityRange();transcodeCurves.refresh();
+  };
   get('encoder').onchange=()=>{updatePreset();updateRate();};
   get('operation').onchange=()=>{updateMode();updateRate();};
   get('videoRange').onchange=()=>{updateMode();renderPlanSummary(activeTask);};
   get('audioRange').onchange=()=>renderPlanSummary(activeTask);
   get('subtitleRange').onchange=()=>renderPlanSummary(activeTask);
   get('videoStreams').addEventListener('input',()=>{clearTimelineFrameCache();renderPlanSummary(activeTask);});
-  section.querySelector('#taskLoadPreset').onclick=()=>{markCompletedAsPrevious('preset');updatePreset(true);get('quality').value=get('codec').value==='av1'?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
+  section.querySelector('#taskLoadPreset').onclick=()=>{markCompletedAsPrevious('preset');updatePreset(true);get('quality').value=['av1','h266'].includes(get('codec').value)?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
   let platformKey='';
   const platformTimer=setInterval(()=>{const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
   const prepare=async()=>{
@@ -1955,17 +1977,17 @@ export function mountMediaWorkspace(hooks) {
       for(const control of form.elements)control.disabled=true;section.querySelector('#taskCancel').disabled=false;
       for(const adjustment of [-1,0,1]){
         const options={...raw,...range,frames:'',twoPass:false,keepAttachments:false,keepSubtitles:false,keepChapters:false};
-        if(raw.rateMode==='quality')options.quality=Math.max(1,Math.min(full.encoder.endsWith('_nvenc')||full.codec!=='av1'?51:63,Number(full.quality)+adjustment*2));
+        if(raw.rateMode==='quality')options.quality=sampleQualityTrial(full,adjustment).quality;
         else {options.rateMode='bitrate';options.bitrate=Math.round(Number(full.bitrate)*(1+adjustment*.2));}
         const task=compileTask(options,media);await hooks.validate?.(task);const started=performance.now();
         const result=await hooks.run(task,media,(p,message)=>{section.querySelector('#taskProgress').value=(adjustment+1+p)/3;status('短片 '+(adjustment+2)+'/3 · '+message);});
         const report=outputReport(task,result,(performance.now()-started)/1000),row=document.createElement('div');row.className='task-sample';
-        row.innerHTML=`<p>${escape(raw.rateMode==='quality'?'CRF / CQ '+options.quality:'视频码率 '+options.bitrate+' bit/s')} · ${escape(formatSize(report.outputBytes))} · ${report.elapsedSeconds.toFixed(1)} 秒；整片外推 ${escape(formatSize(sampleProjection(report.outputBytes,task.expectedDuration,full.expectedDuration)))}</p>`;
+        row.innerHTML=`<p>${escape(raw.rateMode==='quality'?sampleQualityTrial(full,adjustment).label+' '+options.quality:'视频码率 '+options.bitrate+' bit/s')} · ${escape(formatSize(report.outputBytes))} · ${report.elapsedSeconds.toFixed(1)} 秒；整片外推 ${escape(formatSize(sampleProjection(report.outputBytes,task.expectedDuration,full.expectedDuration)))}</p>`;
         if(result.blob){const video=document.createElement('video');video.controls=true;video.preload='metadata';const url=URL.createObjectURL(result.blob);sampleUrls.push(url);video.src=url;row.append(video);}
         const save=document.createElement('button');save.type='button';save.textContent='保存此短片';save.onclick=()=>hooks.save(result);row.append(save);
         const use=document.createElement('button');use.type='button';use.textContent='采用此参数';use.onclick=()=>{markCompletedAsPrevious('sample');if(raw.rateMode==='quality')get('quality').value=options.quality;else{get('rateMode').value='bitrate';get('bitrate').value=options.bitrate;}updateRate();status('已采用此短片参数；请重新检查整片体积预算。');};row.append(use);results.append(row);
       }
-      status('三组试压完成；浏览器播放受 AV1 / MKV 支持限制，可保存短片比较。');
+      status('三组试压完成；浏览器播放受 AV1 / H.266 / MKV 支持限制，可保存短片比较。');
     }catch(e){status('试压失败：'+e.message);}
     finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
   };

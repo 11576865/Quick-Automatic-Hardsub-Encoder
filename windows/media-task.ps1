@@ -6,7 +6,7 @@ function Get-MediaTaskArgs($Task) {
     $values=@{
         '-ss'='^(?:0)$'
         '-map'='^(?:(?:0|1):(?:v:\d{1,2}|a\?|a:\d{1,2}|s\?)|0:t\?)$'
-        '-c:v'='^(?:copy|libx264|libx265|libsvtav1|h264_nvenc|hevc_nvenc|av1_nvenc)$'
+        '-c:v'='^(?:copy|libx264|libx265|libsvtav1|libvvenc|h264_nvenc|hevc_nvenc|av1_nvenc)$'
         '-c:a'='^(?:copy|aac|libopus)$'
         '-ac'='^(?:\d{1,2})$'
         '-ar'='^(?:\d{4,6})$'
@@ -20,6 +20,7 @@ function Get-MediaTaskArgs($Task) {
         '-b:v'='^(?:\d{1,10})$'
         '-crf'='^(?:\d{1,2}(?:\.\d+)?)$'
         '-cq'='^(?:\d{1,2}(?:\.\d+)?)$'
+        '-qp'='^(?:[0-5]?[0-9]|6[0-3])$'
         '-maxrate'='^(?:\d{1,10})$'
         '-bufsize'='^(?:\d{1,10})$'
         '-g'='^(?:\d{1,6})$'
@@ -80,6 +81,16 @@ function Get-MediaTaskArgs($Task) {
         $result.Add($value)
     }
     if(-not $seen.ContainsKey('-c:v')){throw 'Missing video codec.'}
+    $videoEncoder=$result[$result.IndexOf('-c:v')+1]
+    if($videoEncoder -eq 'libvvenc'){
+        if([string]$Task.codec -ne 'h266' -or [string]$Task.outputFormat -ne 'matroska'){throw 'VVC requires an explicit H.266 Matroska task.'}
+        if(-not $seen.ContainsKey('-pix_fmt') -or $result[$result.IndexOf('-pix_fmt')+1] -ne 'yuv420p10le'){throw 'VVC requires yuv420p10le.'}
+        if(-not $seen.ContainsKey('-preset') -or $result[$result.IndexOf('-preset')+1] -notin @('faster','fast','medium','slow','slower')){throw 'Unsupported VVC preset.'}
+        if($seen.ContainsKey('-qp') -eq $seen.ContainsKey('-b:v')){throw 'VVC requires either QP or bitrate.'}
+        foreach($flag in @('-crf','-cq','-profile:v','-level:v','-tune','-bf','-refs','-g','-bufsize','-maxrate','-x264-params','-x265-params','-svtav1-params','-multipass','-rc')){if($seen.ContainsKey($flag)){throw "Unsupported VVC option: $flag"}}
+        if($seen.ContainsKey('-fps_mode') -and $result[$result.IndexOf('-fps_mode')+1] -ne 'cfr'){throw 'Unsupported VVC frame timing mode.'}
+        if($seen.ContainsKey('-vsync') -and $result[$result.IndexOf('-vsync')+1] -ne 'cfr'){throw 'Unsupported VVC frame timing mode.'}
+    }elseif($seen.ContainsKey('-qp')){throw 'QP option is reserved for VVC tasks.'}
     if($Task.twoPass -and ($result[$result.IndexOf('-c:v')+1] -ne 'libx264' -or -not $seen.ContainsKey('-b:v'))){throw 'Two-pass requires x264 bitrate mode.'}
     return ,$result.ToArray()
 }
@@ -98,6 +109,7 @@ function Get-MediaFirstPassArgs([string[]]$OutputOptions) {
     return ,$out.ToArray()
 }
 function Test-MediaOutput($Task, $Video) {
+    if([string]$Task.encoder -eq 'libvvenc' -and [string]$Video.codec_name -ne 'vvc'){throw 'VVC output codec differs from settings.'}
     if($Task.expectedWidth -and ([int]$Video.width -ne [int]$Task.expectedWidth -or [int]$Video.height -ne [int]$Task.expectedHeight)){throw 'Output resolution differs from settings.'}
     if($Task.expectedFps){
         $rate=([string]$Video.avg_frame_rate).Split('/')

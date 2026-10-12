@@ -4,7 +4,7 @@ import { parseMediaTime } from './media-time.js';
 
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
 export const TASK_VERSION = 4;
-export const SOFTWARE = { h264: 'libx264', h265: 'libx265', av1: 'libsvtav1' };
+export const SOFTWARE = { h264: 'libx264', h265: 'libx265', av1: 'libsvtav1', h266: 'libvvenc' };
 
 function streamCount(media, key, fallback = 0) {
   const explicit = Number(media?.[key]);
@@ -212,13 +212,22 @@ export function compileTask(raw, media) {
   }
 
   const nvenc = t.encoder.endsWith('_nvenc');
+  const vvc = t.encoder === 'libvvenc';
+  if (vvc) {
+    if (t.pixelFormat !== 'yuv420p10le') throw Error('H.266 / libvvenc 要求 yuv420p10le；请显式选择 10-bit 4:2:0');
+    if (t.fpsMode === 'vfr' || t.fpsMode === 'passthrough') throw Error('H.266 当前仅支持自动或 CFR 帧率策略');
+    for (const key of ['codecParams','profile','level','tune','bf','refs','gop','bufsize','maxrate']) {
+      if (t[key] !== '' && t[key] != null) throw Error('H.266 当前不支持高级参数 ' + key + '；请清空此项');
+    }
+    t.compatibilityWarnings.push('H.266 / VVC 为实验输出：需要 Windows libvvenc 编码、MKV 封装和解码实测通过；外部播放器兼容性未验证。10-bit 编码输入不代表 HDR 支持。');
+  }
   const presets = ['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
-  if (!(nvenc ? /^p[1-7]$/.test(t.preset) : t.codec === 'av1' ? /^(?:[0-9]|1[0-3])$/.test(t.preset) : presets.includes(t.preset))) {
+  if (!(vvc ? ['faster','fast','medium','slow','slower'].includes(t.preset) : nvenc ? /^p[1-7]$/.test(t.preset) : t.codec === 'av1' ? /^(?:[0-9]|1[0-3])$/.test(t.preset) : presets.includes(t.preset))) {
     throw Error('preset 与编码器不兼容');
   }
 
   const quality = t.rateMode === 'quality'
-    ? number('quality', t.codec === 'av1' ? 32 : 23, 0, (nvenc || t.codec !== 'av1') ? 51 : 63)
+    ? number('quality', (vvc || t.codec === 'av1') ? 32 : 23, 0, (vvc || t.codec === 'av1' && !nvenc) ? 63 : 51, vvc)
     : 23;
   t.quality = quality;
   args.push('-c:v', t.encoder, '-preset', t.preset);
@@ -229,7 +238,7 @@ export function compileTask(raw, media) {
     t.bitrate = number('bitrate', 4000000, 1, 2000000000, true);
     args.push('-b:v', String(t.bitrate));
   } else {
-    args.push(nvenc ? '-cq' : '-crf', String(quality));
+    args.push(vvc ? '-qp' : nvenc ? '-cq' : '-crf', String(quality));
     if (nvenc) args.push('-b:v','0');
   }
 

@@ -1149,8 +1149,9 @@ function Start-MediaTaskJob($Body) {
     if($encoder -ne 'copy'){
         $profile=@($script:Capabilities.Encoders | Where-Object { $_.Key -eq $encoder -and $_.Available }) | Select-Object -First 1
         if(-not $profile){throw 'Selected encoder is unavailable; no automatic substitution.'}
+        if($encoder -eq 'libvvenc' -and $profile.RuntimeValidation -ne 'encode-mkv-decode-v1'){throw 'VVC runtime chain was not validated.'}
         if($profile.PixelFormats.Count -and $outputArgs -contains '-pix_fmt' -and $profile.PixelFormats -notcontains $outputArgs[[Array]::IndexOf($outputArgs,'-pix_fmt')+1]){throw 'Selected pixel format is unsupported.'}
-        foreach($flag in @('-fps_mode','-vsync','-multipass','-rc-lookahead','-spatial-aq','-temporal-aq','-aq-strength','-cq','-crf','-preset','-tune')){if($outputArgs -contains $flag -and $profile.Options -notcontains $flag -and $script:Capabilities.GlobalOptions -notcontains $flag){throw "FFmpeg encoder does not support $flag"}}
+        foreach($flag in @('-fps_mode','-vsync','-multipass','-rc-lookahead','-spatial-aq','-temporal-aq','-aq-strength','-cq','-crf','-qp','-preset','-tune')){if($outputArgs -contains $flag -and $profile.Options -notcontains $flag -and $script:Capabilities.GlobalOptions -notcontains $flag){throw "FFmpeg encoder does not support $flag"}}
     }
     if($task.audio -in @('aac','libopus')){$audioHelp=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -h encoder='+$task.audio);if($audioHelp.StdOut -notmatch ('(?m)^Encoder '+[regex]::Escape([string]$task.audio)+'\s')){throw 'Selected audio encoder is unavailable.'}}
     $actualStart=[double]$task.start
@@ -1206,7 +1207,7 @@ function Start-MediaTaskJob($Body) {
         Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
         Duration=$duration;ExpectedVideoDuration=$videoDuration;ExpectedAudioDuration=$audioDuration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;Source=$video;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
-        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
+        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey='';VvcValidating=$false
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
@@ -1589,6 +1590,18 @@ function Get-JobStatus([string]$JobId) {
     if($j.State -eq 'cancelled'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     if($j.State -eq 'failed'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}}
 
+    # Decode validation is a second owned process. Keep the internal encoding
+    # lock until it exits, while reporting validating to the UI. Status never
+    # waits for the decoder, so the serial Bridge can still handle cancellation.
+    if($j.VvcValidating){
+        $snapshot=Get-VvcValidationSnapshot $j
+        if(-not $snapshot.terminal){return $snapshot}
+        $j.State=$snapshot.state;$j.Error=$snapshot.error;$j.VvcValidating=$false
+        $j.Started.Process.Dispose()
+        Clear-IncompleteJobStaging $j
+        return Get-JobStatus $JobId
+    }
+
     $p=$j.Started.Process
     if(-not $p.HasExited){
         $timeMs=0.0
@@ -1676,6 +1689,13 @@ function Get-JobStatus([string]$JobId) {
             [void](Test-GuidedStrictBudget $j $true)
         }
         $p.Dispose()
+        if($j.State -eq 'completed' -and $j.Encoder -eq 'libvvenc'){
+            try{
+                $j.Started=Start-BridgeTool $script:Ffmpeg ('-nostdin -v error -xerror -i '+(Quote-NativeArg $j.Output)+' -map 0:v -f null -') $j.Work
+                $j.State='encoding';$j.VvcValidating=$true
+                return Get-JobStatus $JobId
+            }catch{$j.State='failed';$j.Error='VVC validation launch failed: '+$_.Exception.Message}
+        }
         Clear-IncompleteJobStaging $j
         if($j.State -eq 'completed'){Ensure-CompletedJobHistory $j}
         if($j.State -eq 'completed'){Write-BridgeLog ("Job "+$JobId+" completed · "+$j.Encoder)}

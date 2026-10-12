@@ -43,3 +43,16 @@ Files: `windows/native-backend.ps1`, `windows/native-bridge.ps1`,
 - [ ] Review diff, commit and push this independent branch; create draft PR.
 - [ ] Deduplicate and record one reusable VVC capability case in UIGS-Foundry.
 - [ ] Report exact implemented scope, validation gaps and next round.
+
+## Execution ledger
+
+- User explicitly requested immediate execution; no further design approval round.
+- Task 1: complete. New compiler/capability tests observed RED then GREEN.
+- Task 2: implementation complete; Windows and browser acceptance registered, Pending CI.
+- Baseline: 183 passed, 5 skipped. Final local suite: 190 passed, 5 skipped, 0 failed.
+- Existing real FFmpeg task integration: 3 passed. Vite build: passed.
+- Browser Chromium absent; download produced an invalid ZIP. No browser success claim.
+- Independent review: async decode ownership, VVC trial QP bounds, legacy catalog leakage fixed.
+- VVC trial endpoints 0/63: regression RED then GREEN. Windows process lifecycle assertions await CI.
+- Ruling: physical Windows, HDR, universal player support and Android/Web core distribution remain explicit acceptance gaps; cost is no cross-platform VVC availability promise.
+- Task 3: pushing independent proposal and bounded Foundry observation; no merge/deployment.

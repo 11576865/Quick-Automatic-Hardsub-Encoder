@@ -75,7 +75,7 @@ export function mountTranscodeCurves(section, hooks) {
     if(fitLegend)fitLegend.textContent=multi?'候选择优上包络':'保序拟合';
     if(pointsLegend)pointsLegend.textContent=multi?'候选实测':'原始观测';
     if(kneeLegend)kneeLegend.hidden=multi;
-    btn.disabled = running || !!compareController?.active || !!compareController?.running;
+    btn.disabled = hooks.settings().codec==='h266' || running || !!compareController?.active || !!compareController?.running;
     stop.disabled = !running || cancelRequested;
     btn.textContent = running ? '正在实测…' : '开始实测';
     get('taskMeasuredQualitySummary').textContent =
@@ -345,6 +345,7 @@ export function mountTranscodeCurves(section, hooks) {
         }
       };
       if(raw.operation!=='transcode')throw Error('请切换至纯视频转码模式');
+      if(raw.codec==='h266')throw Error('H.266 QP 尚未纳入当前 CRF/CQ 校准协议；请使用手动短片试压');
       if(!hooks.isWindows())throw Error('当前曲线需要 Windows Native；其他端尚未验证样本编码器一致性');
       const media=await hooks.prepare('transcode');
       assertRunCurrent();
@@ -446,7 +447,11 @@ export function mountTranscodeCurves(section, hooks) {
     onRenderSingle:()=>render()
   });
   const refresh=()=>{
-    panel.hidden=hooks.settings().operation!=='transcode';
+    panel.hidden=hooks.settings().operation!=='transcode'||hooks.settings().codec==='h266';
+    if(hooks.settings().codec==='h266'){
+      btn.disabled=true;
+      label('H.266 QP 尚未纳入当前曲线校准；可使用手动短片试压和正式任务。');
+    }else render();
     if(panel.hidden&&compareController?.active)compareController.invalidate();
   };
   refresh();render();

@@ -129,7 +129,8 @@ function Refresh-Capabilities {
     $gpuText=if($script:capabilities.Gpus.Count){$script:capabilities.Gpus -join ' / '}else{'未检测到 NVIDIA GPU'}
     $hardware.Text="CPU: $($script:capabilities.Cpu)  ·  GPU: $gpuText"
 
-    $available=@($script:capabilities.Encoders | Where-Object {$_.Available})
+    # The legacy launcher does not implement VVC task/source/output contracts.
+    $available=@($script:capabilities.Encoders | Where-Object {$_.Available -and $_.Encoder -ne 'libvvenc'})
     foreach($profile in $available){
         $script:encoderOptions += $profile
         [void]$codec.Items.Add($profile.Label)

@@ -277,6 +277,19 @@ FFmpeg + libass
 
 ## 编码器
 
+### H.266 / VVC（实验，Windows Native 手动任务）
+
+手动硬压与纯转码可显式选择 H.266 / `libvvenc`。本机 FFmpeg 必须先通过
+短样编码、MKV writer、FFprobe 帧数与完整解码探测；只列出 encoder 不会启用此入口。
+探测失败时界面显示具体原因，仍可继续使用原有 H.264 / HEVC / AV1。
+
+质量模式使用整数 **QP 0–63**（默认 32），不是 CRF；码率模式使用 `-b:v`。
+支持 faster / fast / medium / slow / slower 预设、`yuv420p10le` 和 MKV。
+仍拒绝 HDR / 高位深输入；10-bit 编码输入不等于 HDR 支持。高级不兼容参数、
+MP4、整片两遍与现有 CQ/CRF 曲线校准会被拒绝，不自动换编码器。
+正式成品必须再次识别为 VVC 并通过全视频解码。外部播放器兼容性、长片与
+Android / Web VVC 核心分发仍待独立验证；不自动下载或替换用户 FFmpeg。
+
 项目当前围绕三种目标格式：
 
 ### H.264

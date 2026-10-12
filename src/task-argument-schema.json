@@ -2,7 +2,7 @@
   "values": {
     "-ss": "0",
     "-map": "(?:[01]:(?:v:\\d{1,2}|a\\?|a:\\d{1,2}|s\\?)|0:t\\?)",
-    "-c:v": "copy|libx264|libx265|libsvtav1|h264_nvenc|hevc_nvenc|av1_nvenc",
+    "-c:v": "copy|libx264|libx265|libsvtav1|libvvenc|h264_nvenc|hevc_nvenc|av1_nvenc",
     "-c:a": "copy|aac|libopus",
     "-c:s": "copy",
     "-c:t": "copy",
@@ -13,6 +13,7 @@
     "-b:v": "\\d{1,10}",
     "-crf": "\\d{1,2}(?:\\.\\d+)?",
     "-cq": "\\d{1,2}(?:\\.\\d+)?",
+    "-qp": "(?:[0-5]?[0-9]|6[0-3])",
     "-maxrate": "\\d{1,10}",
     "-bufsize": "\\d{1,10}",
     "-g": "\\d{1,6}",

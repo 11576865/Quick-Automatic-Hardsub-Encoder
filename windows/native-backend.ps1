@@ -2,6 +2,7 @@
 # PowerShell 5.1 compatible; safe to dot-source from the WinForms launcher and CI.
 
 $script:NativeFfmpegToolchainCache = @{}
+. (Join-Path $PSScriptRoot 'vvc-runtime.ps1')
 
 function Get-FfmpegVersionInfo([string]$Path) {
     if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
@@ -182,7 +183,7 @@ function Quote-NativeArg([string]$Value) {
     return '"' + ($Value -replace '"', '\"') + '"'
 }
 
-function Invoke-NativeTool([string]$Exe, [string]$Arguments, [switch]$AllowFailure) {
+function Invoke-NativeTool([string]$Exe, [string]$Arguments, [switch]$AllowFailure, [int]$TimeoutSeconds=0) {
     $p = New-Object System.Diagnostics.Process
     $p.StartInfo.FileName = $Exe
     $p.StartInfo.Arguments = $Arguments
@@ -194,6 +195,11 @@ function Invoke-NativeTool([string]$Exe, [string]$Arguments, [switch]$AllowFailu
         [void]$p.Start()
         $stdoutTask = $p.StandardOutput.ReadToEndAsync()
         $stderrTask = $p.StandardError.ReadToEndAsync()
+        if($TimeoutSeconds -gt 0 -and -not $p.WaitForExit($TimeoutSeconds*1000)){
+            try{$p.Kill()}catch{}
+            $p.WaitForExit()
+            throw 'Native tool probe timed out.'
+        }
         $p.WaitForExit()
         $result = [pscustomobject]@{
             ExitCode = $p.ExitCode
@@ -290,7 +296,8 @@ function Get-NativeEncoderCatalog {
         [pscustomobject]@{ Key='av1_nvenc'; Label='AV1 · NVIDIA NVENC'; Codec='av1'; Encoder='av1_nvenc'; Hardware=$true; QualityLabel='CQ 28'; Quality=28; SoftwarePreset=$null },
         [pscustomobject]@{ Key='libx264'; Label='H.264 · CPU / x264'; Codec='h264'; Encoder='libx264'; Hardware=$false; QualityLabel='CRF 22'; Quality=22; SoftwarePreset='medium' },
         [pscustomobject]@{ Key='libx265'; Label='H.265 / HEVC · CPU / x265'; Codec='h265'; Encoder='libx265'; Hardware=$false; QualityLabel='CRF 27'; Quality=27; SoftwarePreset='medium' },
-        [pscustomobject]@{ Key='libsvtav1'; Label='AV1 · CPU / SVT-AV1'; Codec='av1'; Encoder='libsvtav1'; Hardware=$false; QualityLabel='CRF 32 · preset 6'; Quality=32; SoftwarePreset='6' }
+        [pscustomobject]@{ Key='libsvtav1'; Label='AV1 · CPU / SVT-AV1'; Codec='av1'; Encoder='libsvtav1'; Hardware=$false; QualityLabel='CRF 32 · preset 6'; Quality=32; SoftwarePreset='6' },
+        [pscustomobject]@{ Key='libvvenc'; Label='H.266 / VVC · CPU / VVenC · Experimental'; Codec='h266'; Encoder='libvvenc'; Hardware=$false; QualityLabel='QP 32'; Quality=32; SoftwarePreset='medium' }
     )
 }
 
@@ -495,6 +502,12 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
                 $runtimeExitCode = $probe.ExitCode
                 $runtimeProbeBytes = $probe.Bytes
                 if ($runtime) { $tune = Get-NvencTune $Ffmpeg $profile.Encoder }
+            } elseif($profile.Encoder -eq 'libvvenc') {
+                $probe=Test-VvcRuntime $Ffmpeg $Ffprobe
+                $runtime=[bool]$probe.Available
+                $runtimeError=$probe.Error
+                $runtimeExitCode=$probe.ExitCode
+                $runtimeProbeBytes=$probe.Bytes
             } else {
                 $runtime = $true
             }
@@ -524,6 +537,7 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
             RuntimeError = $runtimeError
             RuntimeExitCode = $runtimeExitCode
             RuntimeProbeBytes = $runtimeProbeBytes
+            RuntimeValidation = if($profile.Encoder -eq 'libvvenc' -and $runtime){'encode-mkv-decode-v1'}else{''}
             Tune = $tune
         }
     }
@@ -565,6 +579,9 @@ function Get-NativeEncoderArguments($Profile) {
     }
     if ($Profile.Encoder -eq 'libsvtav1') {
         return "-c:v libsvtav1 -preset $($Profile.SoftwarePreset) -crf $($Profile.Quality)"
+    }
+    if ($Profile.Encoder -eq 'libvvenc') {
+        return "-c:v libvvenc -preset $($Profile.SoftwarePreset) -qp $($Profile.Quality) -pix_fmt yuv420p10le"
     }
     return "-c:v $($Profile.Encoder) -preset $($Profile.SoftwarePreset) -crf $($Profile.Quality)"
 }

@@ -1,6 +1,12 @@
 import { parseMediaTime } from './media-time.js';
 // Size budgets are estimates, never a reason to truncate or delete a valid movie.
 export const SIZE_UNITS = { MB: 1000000, GB: 1000000000, MiB: 1048576, GiB: 1073741824 };
+export function sampleQualityTrial(task,adjustment) {
+  const vvc=task.encoder==='libvvenc';
+  const min=vvc?0:1;
+  const max=vvc || task.codec==='av1'&&!task.encoder.endsWith('_nvenc')?63:51;
+  return {quality:Math.max(min,Math.min(max,Number(task.quality)+adjustment*2)),label:vvc?'QP':'CRF / CQ'};
+}
 export function sizeBudget(raw, duration, audioTracks) {
   const amount = Number(raw.targetSize), reserve = Number(raw.sizeReserve ?? 4);
   const bytes = amount * SIZE_UNITS[raw.sizeUnit || 'MB'];

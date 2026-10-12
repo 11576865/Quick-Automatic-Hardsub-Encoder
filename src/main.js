@@ -1,4 +1,4 @@
-import { validateEncoderSupport } from './media-capabilities.js';
+import { validateEncoderSupport, vvcCapability } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
 import { outputFileName, resolveOutputContainer } from './media-container.js';
 import './style.css';
@@ -6368,6 +6368,10 @@ mountMediaWorkspace({
     };
   },
   validate: async task => {
+    if(task.encoder==='libvvenc'){
+      const capability=vvcCapability(state.nativeBackend||{});
+      if(!capability.available)throw Error(capability.reason);
+    }
     if(state.nativeBackend?.available){
       if(globalThis.NativeHardsub?.__windowsNative){
         // Windows performs authoritative structured-task validation again when
