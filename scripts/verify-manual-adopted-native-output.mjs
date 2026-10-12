@@ -73,21 +73,13 @@ const args=[
   '[1:v:0]format=yuv420p,setpts=PTS-STARTPTS[dst];[src][dst]ssim',
   '-an','-f','null','NUL'
 ];
-let trace='';
-try{execFileSync('ffmpeg',args,{encoding:'utf8',maxBuffer:4*1024*1024,
-  stdio:['ignore','pipe','pipe'],timeout:45000});}
-catch(e){
-  // FFmpeg writes its measurement summary to stderr even on success;
-  // only accept exit code 0, but preserve error details for diagnostics.
-  throw Error('Full decoded SSIM failed: '+String(e.stderr||e.message).slice(-1800));
-}
-// Re-run with explicitly captured stderr to parse FFmpeg's final frame metric.
-// This is independent of prior /api/sample source-backed SSIM windows.
+// This is an independent reference comparison over the *entire* encoded
+// source timeline, not a reuse of the two sampled VBR windows.
 const {spawnSync}=await import('node:child_process');
 const measured=spawnSync('ffmpeg',args,{encoding:'utf8',maxBuffer:4*1024*1024,
   timeout:45000});
 if(measured.status!==0)throw Error('Whole-file SSIM failed: '+String(measured.stderr).slice(-1700));
-trace=String(measured.stderr);
+const trace=String(measured.stderr);
 const captures=[...trace.matchAll(/SSIM[^\n]*All:([0-9.]+)/g)];
 assert.ok(captures.length>0,'No independent whole-file SSIM evidence');
 const wholeSsim=Number(captures.at(-1)[1]);
