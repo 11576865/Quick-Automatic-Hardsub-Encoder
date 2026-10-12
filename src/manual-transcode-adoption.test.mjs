@@ -66,7 +66,10 @@ test('unknown/contradictory encoders and invalid rate cannot be committed',()=>{
 });
 test('invalid chosen encoder options trigger rollback instead of partial switch',()=>{
   const x=fixture();
-  const y=x.run({override:{updateEncoder:()=>{x.el.encoder.value='';}}});
+  const y=x.run({override:{updateEncoder:()=>{
+    if(x.el.codec.value==='h265')throw Error('selected encoder is unavailable');
+    x.el.encoder.value='libx264';
+  }}});
   assert.equal(y.ok,false);
   assert.deepEqual(x.read(),x.old);
 });
