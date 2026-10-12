@@ -71,3 +71,21 @@ Snapshots are captured before and after the sample encode; if either changes, th
 The full system is *still* not a secure end-to-end attestation: local bridge response is trusted, caller-supplied protocol tokens must be built from actual returned receipts, and a JS-only comparison cannot detect every altered byte/decoder-build change. There is no multi-codec native experiment in QHE's current Manual UI, no VBR recommendation handoff, and no physical-GPU acceptance.
 
 Native regression entry: `scripts/check-manual-sample-evidence.ps1` in Windows local smoke, after FFmpeg installation. Frontend model tests verify admission rejects missing/stale/wrong-mode receipts. Field acceptance still requires paired real samples across codecs on a consistent runtime, source and reference chain.
+
+
+## Session-only multi-encoder evidence registry (PR #104 incremental stage)
+
+New `src/manual-transcode-session.js` defines an **independent read-only candidate-evidence authority** for prospective Manual multibranch sampling; it is NOT yet the live Manual pane state. A session binds exactly one frozen source/time-window/decoder-reference/runtime protocol and an explicit, bounded set of encoder/preset candidates.
+
+`addSample` first verifies the actual Native CQ receipt through `admitManualNativeCqSample`, accounts for measured encode seconds, and places the per-window result under the exact candidate + CQ setting + requested time-window slot. A CQ point does **not** become a valid R–D observation until every required paired window is complete; duplicate windows, mismatched settings, native-origin drift, exceeded sample/quality/time budgets and missing reference data fail closed. Native provenance drift invalidates **the entire session**, including previously complete evidence, rather than allowing stale curves to persist.
+
+`discardIncomplete` removes incomplete quality settings but deliberately preserves previous completed CQ points in the same source/parameter protocol. `invalidate` clears all completed and pending candidate observations. `compare` only uses branches with two or more **complete** CQ points; it reuses the existing `createManualTranscodeComparison` quality/size constraints and never uses pending measurements in a fitted curve. `snapshot` exposes count/status, not an editable second copy of the Manual task.
+
+`runManualPairedSweep` offers an optional *bounded, serialized* Native-call orchestration shell: validates at least two unique candidates, distinct CQ settings, an explicit maximum request count, cooperative cancellation before and after each Native call, and nonpublication of partial results after a failure. Its cancellation does **not** forcibly terminate an in-flight FFmpeg process; it refuses the late result and stops before issuing subsequent calls. The measured cost budget currently tracks reported Native **encode seconds**, not full FFmpeg setup/SSIM/network/wall-clock time; this is a *soft* resource protection only.
+
+CI:
+- `src/manual-transcode-session.test.mjs` tests per-window integrity, cancellation, partial-response disposal, stale source invalidation, duplicate and missing sample guards, bounded sample/quality/cost quotas and invalid sweep plans.
+- `scripts/verify-manual-native-paired.mjs` now routes all 12 **real** Windows CI x264/x265 CQ/SSIM receipts through the session authority before constructing the common-envelope model; it cross-checks against the previous direct paired-record model, protecting existing mathematical behavior.
+- `.github/workflows/test-frontend.yml` runs the new Node regressions independently.
+
+This is intentionally NOT yet a UI compare button, guaranteed adaptive multi-encoder search, codec × resolution optimizer, automatic encoder switch, playback/size guarantee or Native task-v4 change. Safe next gate: bind session creation to one authoritative Manual source and runtime fingerprint, provide an explicit bounded candidate planner with correct task preflight/cancellation/timeout controls, then visually disclose measured candidate alternatives without replacing the existing one-branch quick curve.
