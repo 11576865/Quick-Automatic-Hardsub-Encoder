@@ -3,6 +3,8 @@
 // not duplicated as magic layout numbers in event listeners.
 const n = value => Number(value).toFixed(2);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const escapeSvgText = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 export const CURVE_CHART_LAYOUT = Object.freeze({width:720,height:300,paddingX:76,paddingY:56});
 const line = (x1, y1, x2, y2, cls, extra = '') =>
   '<line class="' + cls + '" x1="' + n(x1) + '" y1="' + n(y1) +
@@ -93,6 +95,10 @@ export function renderRateDistortionSvg(plot) {
     min:plot.qualityMin,max:plot.qualityMax,y:qualityTicks(plot.qualityMin,plot.qualityMax),x:scale.ticks
   },'体积预算 · '+scale.unit+' · 对数刻度','平均样本 SSIM');
   const band = '<path class="curve-band size-frontier-band" d="'+plot.bandPath+'"></path>';
+  const context=(plot.comparisonPaths||[]).map(branch=>
+    '<path class="curve-branch-ghost" d="'+branch.path+'">'+
+    '<title>'+escapeSvgText(branch.id)+'：共同实测范围内的拟合候选曲线，非逐点实测</title></path>'
+  ).join('');
   const fit = '<path class="curve-fit size-frontier-line" d="'+plot.curvePath+'"></path>';
   const points = plot.evidencePoints.map(p =>
     whisker(p,p.lowerY,p.upperY)+
@@ -113,7 +119,7 @@ export function renderRateDistortionSvg(plot) {
     ? badge(plot,formatSize(plot.selected.targetBytes)+' · 估计 '+Number(plot.selected.quality).toFixed(5))
     : badge(plot,'原始观测 '+plot.evidencePoints.length+' 点 · 局部拟合');
   return '<rect class="size-frontier-bg" x="0" y="0" width="'+n(width)+'" height="'+n(height)+'" rx="8"></rect>'+
-    ticks+band+fit+points+knee+selected+selectionLabel;
+    ticks+band+context+fit+points+knee+selected+selectionLabel;
 }
 
 export function renderExplorationSvg(plot) {
