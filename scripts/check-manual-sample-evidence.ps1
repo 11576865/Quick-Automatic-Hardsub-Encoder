@@ -28,7 +28,7 @@ try {
     }
     $opts.targetVideoBitrate=1000000
     $rate=New-ManualNativeSampleReceipt $before $after $opts 'libx264' 1.5
-    if($rate.mode -ne 'bitrate' -or $rate.requestedRate -ne 1000000){
+    if($rate.mode -ne 'bitrate' -or $rate.method -ne 'windows-native-exact-vbr-v1' -or $rate.requestedRate -ne 1000000){
         throw 'Native VBR trial mislabeled as CQ evidence.'
     }
     $opts.withSubtitles=$true
