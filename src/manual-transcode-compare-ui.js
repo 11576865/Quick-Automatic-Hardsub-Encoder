@@ -6,6 +6,7 @@ import {calibrationTimeBudget} from './compression-decision.js';
 import {createManualTranscodeSession,runManualPairedSweep} from './manual-transcode-session.js';
 import {buildSizeFrontierPlot,targetBytesAtEvidenceFraction,evidenceFractionForTargetBytes} from './size-frontier-ui.js';
 import {renderRateDistortionSvg,plotXFromClientX,plotFractionAtX} from './curve-chart-svg.js';
+import {verifyManualNativeVbrCandidate} from './manual-transcode-vbr-verification.js';
 
 const CANDIDATES=[
   {id:'h264-x264',codec:'h264',encoder:'libx264',preset:'medium'},
@@ -25,7 +26,7 @@ const percent=(frontier,bytes)=>evidenceFractionForTargetBytes(frontier,bytes)??
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
 
 export function mountManualTranscodeComparison({panel,hooks,chart,readout,
-  getSourceKey,onRenderSingle}){
+  getSourceKey,getTargetSsim,onRenderSingle}){
   const area=document.createElement('div');
   area.className='media-compare-controls';
   area.innerHTML=[
@@ -37,16 +38,17 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     '<p class="note" id="taskCompareStatus" role="status">对比结果仅供查看，不能自动切换编码器。需要正式采用时仍应使用当前编码器的 VBR 短样验证。</p>',
     '<details id="taskCompareDetails" hidden><summary>查看同预算候选及采样覆盖</summary>',
     '<div id="taskCompareCandidates"></div></details>',
+    '<button type="button" class="secondary" id="taskCompareVerify" disabled hidden>实测验证当前推荐编码器的 VBR</button>',
     '<p class="note">此图仅比较视频率失真和估算的视频预算；没有计入复制音轨、附件或实际容器开销。停止会等待当前原生调用结束；编码耗时配额不是严格墙钟时间上限。</p>'
   ].join('');
   const insertBefore=panel.querySelector('.media-curve-grid');
   insertBefore.before(area);
   const get=id=>area.querySelector('#'+id);
-  const start=get('taskCompareStart'),stop=get('taskCompareStop'),back=get('taskCompareSingle');
+  const start=get('taskCompareStart'),stop=get('taskCompareStop'),back=get('taskCompareSingle'),verify=get('taskCompareVerify');
   const status=get('taskCompareStatus'),details=get('taskCompareDetails'),rows=get('taskCompareCandidates');
   let active=false,running=false,aborted=false,disposed=false,session=null;
   let sourceKey='',sourceDuration=0,comparison=null,selectedBytes=null;
-  let task=null,media=null;
+  let task=null,media=null,verifiedVbr=null;
   const isCurrent=()=>!!sourceKey &&
     sourceKey===getSourceKey(hooks.settings(),{duration:sourceDuration});
   const message=text=>{if(!disposed)status.textContent=text;};
@@ -54,11 +56,15 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     // The SSIM target is a decision threshold, not a new video measurement.
     // Keep complete Native evidence when source, encoder policy and reference
     // geometry have not changed; do not unnecessarily repeat 12 encodes.
-    if(active&&isCurrent()){if(!running)onRenderSingle();return;}
+    if(active&&isCurrent()){
+      verifiedVbr=null;
+      if(!running)onRenderSingle();
+      return;
+    }
     aborted=true;
     session?.invalidate('current-source-or-task-changed');
     session=null;comparison=null;selectedBytes=null;sourceKey='';sourceDuration=0;
-    task=null;media=null;active=false;
+    task=null;media=null;active=false;verifiedVbr=null;
     if(!disposed){
       back.hidden=true;details.hidden=true;
       message('来源或任务参数已改变；原多编码器证据已经作废。');
@@ -67,6 +73,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   };
   const renderControls=()=>{
     start.disabled=running||hooks.busy()||disposed;
+    verify.hidden=!active;
+    verify.disabled=running||hooks.busy()||!eligible();
     stop.disabled=!running||aborted;
     back.disabled=running;
     back.hidden=!active;
@@ -94,6 +102,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         if(details.hidden)details.open=true;
         details.hidden=false;
       }else details.hidden=true;
+      verify.disabled=true;
       return true;
     }
     const f=comparison.frontier;
@@ -124,6 +133,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     rows.replaceChildren(list);
     if(details.hidden)details.open=true;
     details.hidden=false;
+    verify.disabled=running||hooks.busy();
     return true;
   }
   const selectPointer=event=>{
@@ -133,7 +143,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     const x=plotXFromClientX(event.clientX,chart.getBoundingClientRect(),plot.width);
     const fraction=plotFractionAtX(plot,x);
     if(fraction===null)return true;
-    selectedBytes=targetBytesAtEvidenceFraction(f,fraction);showResult();
+    selectedBytes=targetBytesAtEvidenceFraction(f,fraction);verifiedVbr=null;showResult();
     return true;
   };
   const selectKeyboard=event=>{
@@ -146,7 +156,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     else return false;
     event.preventDefault();
     selectedBytes=targetBytesAtEvidenceFraction(f,clamp(x,0,1));
-    showResult();return true;
+    verifiedVbr=null;showResult();return true;
   };
   function preflight(raw,originalMedia){
     if(raw.operation!=='transcode'||!hooks.isWindows())
@@ -168,6 +178,75 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       throw Error('缺少可靠的视频尺寸证据');
     return {width:Number(v.width),height:Number(v.height)};
   }
+  verify.addEventListener('click',async()=>{
+    if(running||hooks.busy()||!eligible())return;
+    const frontier=comparison.frontier;
+    const evaluation=frontier.evaluateTargetBytes(selectedBytes);
+    if(evaluation?.status!=='within-evidence')return;
+    const selected=CANDIDATES.find(c=>c.id===evaluation.branchId);
+    const plannedBitrate=Math.round(evaluation.videoBitrate);
+    const threshold=getTargetSsim?.();
+    if(!selected||!(plannedBitrate>0)||!Number.isFinite(threshold)||
+       threshold<.8||threshold>.9999){
+      message('选择的候选、码率或目标 SSIM 无效；拒绝 VBR 验证。');
+      return;
+    }
+    const candidate={...selected,outputWidth:session.snapshot().protocol.referenceWidth,
+      outputHeight:session.snapshot().protocol.referenceHeight,pixelFormat:'yuv420p'};
+    const chosenBytes=selectedBytes,chosenKey=sourceKey;
+    verifiedVbr=null;running=true;aborted=false;renderControls();
+    hooks.setBusy(true);
+    const current=()=>!disposed&&!aborted&&isCurrent()&&
+      sourceKey===chosenKey&&selectedBytes===chosenBytes&&
+      getTargetSsim?.()===threshold;
+    try{
+      const raw=hooks.settings();
+      const formal=compileTask({...raw,codec:selected.codec,encoder:selected.encoder,
+        preset:selected.preset,multipass:'disabled',rateMode:'bitrate',
+        bitrate:plannedBitrate,twoPass:false},media);
+      await hooks.validate?.(formal);
+      if(!current())throw Error('参数或来源已改变，验证结果作废。');
+      const outcomes=[];
+      for(const window of session.snapshot().protocol.windows){
+        if(!current())throw Error('已停止或校准参数发生变化。');
+        message('验证 '+selected.id.toUpperCase()+' VBR · '+(outcomes.length+1)+
+          '/'+session.snapshot().protocol.windows.length+
+          ' · 目标 '+(plannedBitrate/1e6).toFixed(2)+' Mbps');
+        const sample=await hooks.calibrationSample({
+          codec:selected.codec,encoder:selected.encoder,preset:selected.preset,
+          multipass:'disabled',mode:'bitrate',bitrate:plannedBitrate,
+          start:window.start,duration:window.duration,timeoutSeconds:45
+        });
+        if(!current())throw Error('原生调用返回后参数已改变，拒绝迟到证据。');
+        outcomes.push({window,sample});
+      }
+      const result=verifyManualNativeVbrCandidate({
+        protocol:session.snapshot().protocol,candidate,
+        bitrate:plannedBitrate,targetSsim:threshold,samples:outcomes
+      });
+      if(!result.ok){
+        if(result.reason==='incompatible-native-vbr-receipt')
+          session.invalidate('native-vbr-provenance-drift');
+        throw Error('原生 VBR 证据未通过校验：'+result.reason);
+      }
+      if(!result.passed){
+        message('VBR 短样未达到 SSIM 目标：最低 '+result.minimumSsim.toFixed(5)+
+          '，目标 '+threshold.toFixed(5)+'。不能采用该推算码率。');
+      }else{
+        verifiedVbr={...result,sourceKey:chosenKey,selectedBytes:chosenBytes};
+        message('VBR 短样已验证：'+selected.id.toUpperCase()+
+          ' · 最低 SSIM '+result.minimumSsim.toFixed(5)+
+          ' · 实际均值 '+(result.measuredMeanVideoBitrate/1e6).toFixed(2)+
+          ' Mbps。仅验证短样；正式编码方案仍未改变。');
+      }
+    }catch(error){
+      verifiedVbr=null;
+      message('VBR 验证失败：'+(error?.message||error));
+    }finally{
+      running=false;hooks.setBusy(false);
+      if(!disposed){renderControls();onRenderSingle();}
+    }
+  });
   stop.addEventListener('click',()=>{
     if(!running)return;
     aborted=true;stop.disabled=true;
@@ -175,14 +254,14 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   });
   back.addEventListener('click',()=>{
     if(running)return;
-    active=false;back.hidden=true;details.hidden=true;
+    active=false;back.hidden=true;details.hidden=true;verifiedVbr=null;
     chart.setAttribute('aria-label','选择实测范围内的目标视频码率');
     onRenderSingle();renderControls();
   });
   start.addEventListener('click',async()=>{
     if(disposed||running||hooks.busy())return;
     aborted=false;running=true;active=true;
-    session?.invalidate('new-comparison');session=null;comparison=null;
+    session?.invalidate('new-comparison');session=null;comparison=null;verifiedVbr=null;
     selectedBytes=null;renderControls();onRenderSingle();
     let originalKey='';
     hooks.setBusy(true);
