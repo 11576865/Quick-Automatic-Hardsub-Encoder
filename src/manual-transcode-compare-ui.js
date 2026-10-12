@@ -51,6 +51,10 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     sourceKey===getSourceKey(hooks.settings(),{duration:sourceDuration});
   const message=text=>{if(!disposed)status.textContent=text;};
   const invalidate=()=>{
+    // The SSIM target is a decision threshold, not a new video measurement.
+    // Keep complete Native evidence when source, encoder policy and reference
+    // geometry have not changed; do not unnecessarily repeat 12 encodes.
+    if(active&&isCurrent()){if(!running)onRenderSingle();return;}
     aborted=true;
     session?.invalidate('current-source-or-task-changed');
     session=null;comparison=null;selectedBytes=null;sourceKey='';sourceDuration=0;
