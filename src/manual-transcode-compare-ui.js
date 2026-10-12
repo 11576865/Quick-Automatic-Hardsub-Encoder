@@ -55,7 +55,11 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     session?.invalidate('current-source-or-task-changed');
     session=null;comparison=null;selectedBytes=null;sourceKey='';sourceDuration=0;
     task=null;media=null;active=false;
-    if(!disposed){back.hidden=true;details.hidden=true;renderControls();onRenderSingle();}
+    if(!disposed){
+      back.hidden=true;details.hidden=true;
+      message('来源或任务参数已改变；原多编码器证据已经作废。');
+      renderControls();onRenderSingle();
+    }
   };
   const renderControls=()=>{
     start.disabled=running||hooks.busy()||disposed;
@@ -72,7 +76,19 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       chart.setAttribute('aria-valuetext','暂无可比较的两个完整候选');
       chart.setAttribute('aria-label','多编码器比较暂时没有有效的共同实测范围');
       readout.textContent='尚无两个完整且可比较的编码器；已完成的样本不会被当成正式质量承诺。';
-      details.hidden=true;return true;
+      const partial=session?.snapshot();
+      if(partial?.ok&&partial.candidates?.length){
+        const list=document.createElement('ul');
+        for(const branch of partial.candidates){
+          const li=document.createElement('li');
+          li.textContent=String(branch.id).toUpperCase()+' · 完整 CRF 档位 '+
+            branch.completeSettings+' · 未完成档位 '+branch.pendingSettings+
+            '（不足以作最终推荐）';
+          list.append(li);
+        }
+        rows.replaceChildren(list);details.hidden=false;
+      }else details.hidden=true;
+      return true;
     }
     const f=comparison.frontier;
     if(!(selectedBytes>0)||percent(f,selectedBytes)===0 &&
@@ -139,7 +155,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       throw Error('双编码器试压仅支持 SDR 8-bit 原尺寸、无额外滤镜和原帧率');
     const v=originalMedia.videoStreams?.[0]||originalMedia;
     if(v?.hdr||v?.highBitDepth||v?.unsafeColorPipeline ||
-       Number(v?.bitDepth||8)>8||!/^(yuv420p|)$/.test(String(v?.pixelFormat||'')))
+       Number(v?.bitDepth||8)>8||String(v?.pixelFormat||'')!=='yuv420p')
       throw Error('当前来源不是经过验证的 SDR 8-bit yuv420p 输入');
     if(!(Number(v?.width)>0&&Number(v?.height)>0))
       throw Error('缺少可靠的视频尺寸证据');
@@ -170,6 +186,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       originalKey=getSourceKey(raw,{duration:hooks.mediaSnapshot()?.duration||0});
       const prepared=await hooks.prepare('transcode');
       if(aborted||disposed)throw Error('已停止');
+      if(originalKey!==getSourceKey(hooks.settings(),{duration:prepared.duration}))
+        throw Error('准备来源期间发生更改，拒绝旧试压参数');
       const geometry=preflight(raw,prepared);
       const taskOptions={...raw,rateMode:'quality',twoPass:false};
       const sourceTask=compileTask(taskOptions,prepared);
