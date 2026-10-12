@@ -374,6 +374,11 @@ app.innerHTML = `
             </div>
             <div class="media-curve-legend"><span class="legend-observed">原始观测</span><span class="legend-fit">保序拟合</span><span class="legend-band">范围插值</span><span class="legend-whisker">场景范围</span></div>
             <div id="sizeFrontierReadout" class="size-frontier-readout">当前仍按手动倍率规划；拖动曲线后切换为实测预算。</div>
+            <details id="sizeFrontierCandidates" class="size-frontier-candidates hidden">
+              <summary>查看同一体积预算下的候选配置比较</summary>
+              <div id="sizeFrontierCandidateRows">沿主曲线选择一个预算后显示各候选配置。</div>
+              <p>各数值是当前来源与相同测量条件下的短样拟合，不是正式输出质量保证；改变执行方案仍须明确采用。</p>
+            </details>
             <button id="adoptSizeFrontierBranchBtn" type="button" class="secondary plan-interaction hidden">采用推荐编码器</button>
           </div>
 
@@ -1141,6 +1146,8 @@ function renderSizeFrontier() {
   const wrap = $('sizeFrontierChartWrap');
   const empty = $('sizeFrontierEmpty');
   const readout = $('sizeFrontierReadout');
+  const candidateDetails = $('sizeFrontierCandidates');
+  const candidateRows = $('sizeFrontierCandidateRows');
   const button = $('calibrateSizeFrontierBtn');
   const compare=$('compareSizeFrontierBtn'),
     compareResolution=$('compareResolutionFrontierBtn'),branchAction=$('adoptSizeFrontierBranchBtn');
@@ -1174,6 +1181,8 @@ function renderSizeFrontier() {
     state.nativeBackend?.backend!=='windows-native' ||
     guidedResolutionCandidates(state.media||{}).length<2;
   if(branchAction){branchAction.classList.add('hidden');branchAction.disabled=true;}
+  if(candidateDetails)candidateDetails.classList.add('hidden');
+  if(candidateRows)candidateRows.textContent='沿主曲线选择一个预算后显示各候选配置。';
 
   const label = codec ? codec.toUpperCase() : '当前编码器';
   if (!model?.ok && !multiReady) {
@@ -1231,6 +1240,29 @@ function renderSizeFrontier() {
     : '当前实测范围';
 
   svg.innerHTML = renderRateDistortionSvg(plot);
+  // Branch title tooltips are not discoverable on touchscreens or via all
+  // assistive technologies. Expose the same budget-level comparison in text.
+  // Do not create a new slider or alter the user's chosen execution plan.
+  if(frontier.kind==='multi-branch' && candidateDetails && candidateRows){
+    candidateDetails.classList.remove('hidden');
+    const compare=directBytes>0 ? frontier.evaluateTargetBytes(directBytes) : null;
+    if(compare?.status==='within-evidence' && Array.isArray(compare.alternatives)){
+      const list=document.createElement('ul');
+      for(const choice of compare.alternatives){
+        const item=document.createElement('li');
+        item.textContent=String(choice.id).toUpperCase()+
+          ' · 拟合 SSIM '+Number(choice.quality).toFixed(5)+
+          ' · 样本质量下限 '+Number(choice.lowerQuality).toFixed(5)+
+          (choice.id===compare.branchId?' · 当前建议':'')+
+          (choice.id===compare.bestMeasuredId && choice.id!==compare.branchId
+            ?' · 保守质量最高（仍受滞回保护）':'');
+        list.appendChild(item);
+      }
+      candidateRows.replaceChildren(list);
+    }else{
+      candidateRows.textContent='沿主曲线选择共同实测范围内的体积预算后显示各候选配置。';
+    }
+  }
 
   const ariaBytes = directBytes > 0
     ? Math.max(frontier.minimumEvidenceTargetBytes, Math.min(frontier.maximumEvidenceTargetBytes, directBytes))
