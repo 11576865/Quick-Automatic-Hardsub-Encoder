@@ -72,23 +72,24 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
         isWindows:()=>true,busy:()=>busy,setBusy:v=>{busy=v;},
         applyQuality:()=>{applied++;},applyBitrate:()=>{applied++;},
         log:()=>{},
-        calibrationSample:async({codec,encoder,preset,quality,start,duration})=>{
-          const rate=({18:1600000,28:850000,40:420000})[quality]*
+        calibrationSample:async({codec,encoder,preset,quality,start,duration,mode='quality',bitrate})=>{
+          const isVbr=mode==='bitrate';
+          const rate=isVbr?bitrate:({18:1600000,28:850000,40:420000})[quality]*
             (encoder==='libx265'?.91:1);
-          const ssim=({18:.988,28:.95,40:.91})[quality]+
+          const ssim=isVbr?.99:({18:.988,28:.95,40:.91})[quality]+
             (encoder==='libx265'?.004:0);
           return {encoder,ssim,duration,elapsedSeconds:.02,
             totalVideoBytes:Math.round(rate*duration/8),
             nativeEvidence:{
-              schemaVersion:1,method:'windows-native-exact-cq-v1',
+              schemaVersion:1,method:isVbr?'windows-native-exact-vbr-v1':'windows-native-exact-cq-v1',
               referenceMetric:'source-sdr-yuv420p-ssim-v1',
               sourceToken:'stat-sha256:playwright-source',
               runtimeToken:'stat-sha256:playwright-runtime',
               referenceToken:'direct-source-v0-yuv420p-setpts-ssim-v1',
               filterToken:'no-video-filters-sdr-yuv420p-v1',
               identityKind:'file-stat-snapshot-not-content-hash',
-              videoStream:0,pixelFormat:'yuv420p',mode:'quality',
-              requestedRate:0,requestedQuality:quality,
+              videoStream:0,pixelFormat:'yuv420p',mode:isVbr?'bitrate':'quality',
+              requestedRate:isVbr?bitrate:0,requestedQuality:isVbr?null:quality,
               requestedStart:start,requestedDuration:duration,
               actualDuration:duration,encoder,preset
             }};
@@ -127,6 +128,15 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.ok((await page.locator('#taskCurveReadout').textContent()).includes('当前建议'));
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),0,
       'Read-only comparison must never automatically adopt codec or bitrate');
+    await page.locator('#taskCompareVerify').click();
+    await page.waitForFunction(()=>/VBR 短样已验证|VBR 验证失败/.test(
+      document.querySelector('#taskCompareStatus')?.textContent||''
+    ));
+    const verified=await page.locator('#taskCompareStatus').textContent();
+    assert.match(verified,/VBR 短样已验证/,
+      'Browser-mocked VBR must pass reference and window receipt admission: '+verified);
+    assert.match(verified,/正式编码方案仍未改变/);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
     await page.screenshot({path:'media-workspace-manual-compare-desktop.png',fullPage:true});
     await page.setViewportSize({width:390,height:844});
     assert.deepEqual(await overflow(),[],
