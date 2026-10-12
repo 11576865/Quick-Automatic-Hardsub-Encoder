@@ -8,6 +8,7 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
+. (Join-Path $PSScriptRoot 'manual-sample-evidence.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
 . (Join-Path $PSScriptRoot 'compression-history.ps1')
@@ -1045,6 +1046,11 @@ function Invoke-Sample($Body) {
     $duration=[double]$o.duration
     if($duration -le 0 -or $duration -gt 8){throw 'Sample duration must be between 0 and 8 seconds.'}
     $start=[Math]::Max(0,[double]$o.start)
+    $exactManualEvidence=[bool]$o.sampleExact -and -not [bool]$o.withSubtitles -and [bool]$o.measureSsim
+    $snapshotBefore=if($exactManualEvidence){
+        $version=Get-FfmpegVersionInfo $script:Ffmpeg
+        New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$version.Text)
+    }else{$null}
     $work=New-BridgeWorkDir 'quick-hardsub-sample-'
     $sampleId=[guid]::NewGuid().ToString('N')
     try{
@@ -1098,6 +1104,10 @@ function Invoke-Sample($Body) {
             }
         }else{$null}
         $sampleBytes=(Get-Item $candidate).Length
+        $nativeEvidence=if($exactManualEvidence){
+            $snapshotAfter=New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$snapshotBefore.runtimeVersion)
+            New-ManualNativeSampleReceipt $snapshotBefore $snapshotAfter $o ([string]$profile.Encoder) $measured
+        }else{$null}
         if([bool]$o.retainSample){
             $keep=Join-Path ([IO.Path]::GetTempPath()) ("quick-hardsub-sample-$sampleId.mkv")
             Copy-Item -LiteralPath $candidate -Destination $keep -Force
@@ -1109,6 +1119,7 @@ function Invoke-Sample($Body) {
             elapsedSeconds=$sw.Elapsed.TotalSeconds;duration=$measured
             encodeSpeed=($measured/[Math]::Max(.001,$sw.Elapsed.TotalSeconds))
             totalVideoBytes=$packets.bytes;packetCount=$packets.count;ssim=$ssim;sampleBytes=$sampleBytes
+            nativeEvidence=$nativeEvidence
         }
     }finally{Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue}
 }
