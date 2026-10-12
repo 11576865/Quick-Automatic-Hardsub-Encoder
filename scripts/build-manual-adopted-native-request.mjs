@@ -14,7 +14,7 @@ const probe=JSON.parse(readFileSync(probePath,'utf8'));
 assert.equal(fixture.kind,'qhe-manual-windows-native-paired-v1');
 assert.equal(probe.ok,true);
 assert.equal(probe.videoTracks,1);
-assert.equal(probe.audioTracks,1);
+assert.equal(probe.audioTracks,2);
 assert.equal(probe.videoStreams[0]?.pixelFormat,'yuv420p');
 assert.ok(Math.abs(Number(probe.duration)-5)<.2);
 const receipt=fixture.samples[0].result.nativeEvidence;
@@ -43,8 +43,8 @@ const raw={
   rateMode:'quality',quality:'23',bitrate:'1000000',twoPass:false,
   multipass:'disabled',start:'0',end:'',videoStreams:'0',
   videoRange:'trim',audio:'copy',audioTrack:'all',
-  audioRange:'trim',subtitleRange:'trim',keepSubtitles:false,
-  keepAttachments:false,keepMetadata:true,keepChapters:true,
+  audioRange:'trim',subtitleRange:'full',keepSubtitles:true,
+  keepAttachments:true,keepMetadata:true,keepChapters:true,
   fpsMode:'auto',pixelFormat:'yuv420p',scaleAlgorithm:'lanczos',
   rotation:'none',deinterlace:'none',outputContainer:'mkv'
 };
@@ -75,7 +75,13 @@ assert.equal(task.encoder,'libx265');
 assert.equal(task.rateMode,'bitrate');
 assert.equal(task.bitrate,rate);
 assert.equal(task.expectedVideoTracks,1);
-assert.equal(task.expectedAudioTracks,1);
+assert.equal(task.expectedAudioTracks,2);
+assert.equal(task.keepSubtitles,true);
+assert.equal(task.keepAttachments,true);
+assert.equal(task.keepChapters,true);
+assert.equal(task.keepMetadata,true);
+assert.ok(task.outputArgs.includes('-c:s'));
+assert.ok(task.outputArgs.includes('-c:t'));
 assert.equal(task.audio,'copy');
 assert.equal(task.outputFormat,'matroska');
 assert.equal(task.outputExtension,'mkv');
