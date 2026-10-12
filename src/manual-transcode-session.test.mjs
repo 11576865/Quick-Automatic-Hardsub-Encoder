@@ -108,7 +108,8 @@ test('completed quality settings survive cancellation; partial quality is discar
    return sample(candidate,qualitySetting,window);
   }
  });
- assert.equal(x.reason,'stopped-between-samples');
+ assert.equal(x.reason,'stopped-after-native-response');
+ // A stop observed on return from Native must refuse that late sample.
  assert.equal(session.snapshot().candidates[0].completeSettings,2);
  assert.equal(session.snapshot().candidates[0].pendingSettings,0);
  assert.equal(session.snapshot().candidates[1].completeSettings,0);
@@ -164,7 +165,7 @@ test('source invalidation clears all memory and permanently rejects stale respon
  await both(session);
  assert.equal(session.snapshot().stats.receivedSamples,8);
  assert.equal(session.invalidate('new-source').invalidated,true);
- assert.equal(session.snapshot().candidates[0].completeSettings,0);
+ assert.deepEqual(session.snapshot().candidates,[]);
  assert.equal(session.trials().length,0);
  assert.equal(session.compare(budget()).reason,'session-invalidated');
  assert.equal(add(session,candidates()[0],20,protocol().windows[0]).reason,
