@@ -84,7 +84,7 @@ export function mountTranscodeCurves(section, hooks) {
         (point.meetsTarget ? ' · 达标' : ' · 未达标');
       const adopt = document.createElement('button');
       adopt.type='button';adopt.className='secondary';adopt.textContent='采用此质量值';
-      adopt.disabled = running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid();
+      adopt.disabled = !!compareController?.active || running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid();
       adopt.addEventListener('click', () => useQuality(point.qualitySetting));
       row.append(details,adopt);rows.append(row);
     }
@@ -144,6 +144,10 @@ export function mountTranscodeCurves(section, hooks) {
 
   const chartResetForSingle = () => {
     efficiency.setAttribute('aria-label','选择实测范围内的目标视频码率');
+    if(!frontier?.ok || !evidenceIsCurrent()){
+      efficiency.removeAttribute('aria-valuenow');
+      efficiency.setAttribute('aria-valuetext','尚无当前编码器的有效实测曲线');
+    }
   };
   const updateEvidence = (newPoints, raw, task, { preserveSelection = false } = {}) => {
     points = newPoints;
