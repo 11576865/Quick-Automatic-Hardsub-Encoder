@@ -138,8 +138,16 @@ try {
   if($candidateDirs.Count -ne 1){throw 'Cannot uniquely identify the private completed Native job staging directory.'}
   $output=Join-Path $candidateDirs[0].FullName 'output.mkv'
   if(-not(Test-Path -LiteralPath $output -PathType Leaf)){throw 'Formal completed job output is missing.'}
-  & node './scripts/verify-manual-adopted-native-output.mjs' $source $output $requestPath $statusPath
+  $report=Join-Path $work 'full-output-acceptance.json'
+  & node './scripts/verify-manual-adopted-native-output.mjs' $source $output $requestPath $statusPath $report
   if($LASTEXITCODE -ne 0){throw 'Independent full-output FFprobe/audio hash/SSIM acceptance failed.'}
+  # These are GENERATED CI-SYNTHETIC files only, never uploaded user media.
+  # Preserve the actual output and its reference input for independent replay.
+  $evidenceDir=Join-Path $env:GITHUB_WORKSPACE 'native-full-output-evidence'
+  [void](New-Item -Path $evidenceDir -ItemType Directory -Force)
+  Copy-Item -LiteralPath $source -Destination (Join-Path $evidenceDir 'synthetic-ffv1-flac-source.mkv') -Force
+  Copy-Item -LiteralPath $output -Destination (Join-Path $evidenceDir 'verified-hevc-flac-output.mkv') -Force
+  Copy-Item -LiteralPath $report -Destination (Join-Path $evidenceDir 'full-output-acceptance.json') -Force
   Write-Host 'PASS: Native formal v4 HEVC output, copied FLAC packet SHA256 and full-duration SSIM verified.'
   Remove-Item -LiteralPath $candidateDirs[0].FullName -Recurse -Force -ErrorAction SilentlyContinue
 } catch {
