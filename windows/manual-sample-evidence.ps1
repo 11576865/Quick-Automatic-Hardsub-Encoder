@@ -71,7 +71,7 @@ function New-ManualNativeSampleReceipt(
     }
     return [pscustomobject]@{
         schemaVersion=1
-        method='windows-native-exact-cq-v1'
+        method=if ($targetRate -gt 0) { 'windows-native-exact-vbr-v1' } else { 'windows-native-exact-cq-v1' }
         referenceMetric='source-sdr-yuv420p-ssim-v1'
         referenceToken='direct-source-v0-yuv420p-setpts-ssim-v1'
         filterToken='no-video-filters-sdr-yuv420p-v1'
