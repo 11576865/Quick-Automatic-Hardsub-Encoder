@@ -116,7 +116,11 @@ try {
   & node './scripts/build-manual-adopted-native-request.mjs' $path $probePath $requestPath
   if($LASTEXITCODE -ne 0){throw 'Could not construct formal task from accepted x265 VBR evidence.'}
   $requestJson=[IO.File]::ReadAllText($requestPath)
-  $job=Invoke-RestMethod -Method Post -Uri "$root/api/encode" -Headers $headers -ContentType 'application/json' -Body $requestJson -TimeoutSec 35
+  # The compiled v4 plan contains CJK compatibility warnings. Send the exact
+  # UTF-8 BYTES; Windows PowerShell's string-body encoding may disagree with
+  # Content-Length and produce truncated JSON at the Native Bridge.
+  $requestBytes=[Text.Encoding]::UTF8.GetBytes($requestJson)
+  $job=Invoke-RestMethod -Method Post -Uri "$root/api/encode" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $requestBytes -TimeoutSec 35
   if(-not $job.ok -or -not $job.jobId -or [string]$job.encoder -ne 'libx265'){
     throw 'Windows Bridge rejected formal verified HEVC task'
   }
