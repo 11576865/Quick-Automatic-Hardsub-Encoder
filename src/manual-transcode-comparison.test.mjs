@@ -99,6 +99,15 @@ test('invalid SSIM, numeric coercions, invalid codec geometry and duplicate cand
   assert.equal(compare(flat).reason,'insufficient-distinct-rates');
 });
 
+test('measured per-window values must agree with published summary, not fabricated quality',()=>{
+  const a=[trial('a','h264','libx264'),trial('b','h265','libx265')];
+  a[1].points[0].ssim=.999;
+  assert.equal(compare(a).reason,'inconsistent-trial-summary');
+  const b=[trial('a','h264','libx264'),trial('b','h265','libx265')];
+  b[1].points[0].sampleMeasurements[0].bitrate=20e6;
+  assert.equal(compare(b).reason,'inconsistent-trial-summary');
+});
+
 test('unknown or incompatible output budgets cannot masquerade as final-size estimates',()=>{
   const t=[trial('a','h264','libx264'),trial('b','h265','libx265')];
   assert.equal(compare(t,{...budget(),audioBitrate:null,audioEvidence:'estimated'}).reason,'unknown-output-budget');
