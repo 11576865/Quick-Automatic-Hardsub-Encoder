@@ -40,6 +40,10 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
           }
+      - name: Validate native Manual sample evidence receipts on real FFmpeg source
+        shell: powershell
+        run: ./scripts/check-manual-sample-evidence.ps1
+
       - name: Validate Bink 2 adapter discovery contract
         shell: powershell
         run: |
