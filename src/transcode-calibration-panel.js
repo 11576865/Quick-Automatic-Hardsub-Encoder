@@ -68,6 +68,7 @@ export function mountTranscodeCurves(section, hooks) {
   };
   const render = () => {
     const multi=!!compareController?.active;
+    panel.dataset.compareActive=multi?'true':'false';
     const fitLegend=panel.querySelector('.media-curve-legend .legend-fit');
     const pointsLegend=panel.querySelector('.media-curve-legend .legend-observed');
     const kneeLegend=panel.querySelector('.media-curve-legend .legend-knee');
