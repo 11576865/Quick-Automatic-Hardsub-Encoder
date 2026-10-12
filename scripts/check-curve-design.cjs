@@ -43,6 +43,38 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.equal(geometry.charts.length,1);
     assert.ok(geometry.charts.every(c=>c.scroll>c.width),'Narrow curve keeps local scrolling');
     await page.screenshot({path:'media-workspace-curves-design-mobile.png',fullPage:true});
-    console.log('Single curve design: raw observations and desktop/mobile label bounds passed');
+    // Separate synthetic multibranch preview: one foreground decision curve and
+    // two bounded candidate context lines, never two independent control charts.
+    await page.setViewportSize({width:1280,height:900});
+    await page.evaluate(async()=>{
+      const {fitRateDistortionModel}=await import('/src/rate-distortion-model.js');
+      const {createMultiBranchFrontier}=await import('/src/compression-decision.js');
+      const {buildSizeFrontierPlot}=await import('/src/size-frontier-ui.js');
+      const {renderRateDistortionSvg}=await import('/src/curve-chart-svg.js');
+      const branch=(id,values)=>({
+        id,measurementScope:'synthetic-common-reference',
+        model:fitRateDistortionModel(values.map(([sampleBitrate,ssim])=>({sampleBitrate,ssim})))
+      });
+      const f=createMultiBranchFrontier([
+        branch('H264',[[1e6,.915],[2e6,.951],[3e6,.962]]),
+        branch('HEVC',[[1e6,.927],[2e6,.947],[3e6,.975]])
+      ],{durationSeconds:120,audioBitrate:0,reservePercent:0});
+      if(!f.ok)throw Error('Synthetic multibranch model invalid: '+f.reason);
+      const plot=buildSizeFrontierPlot(f,{selectedTargetBytes:
+        Math.sqrt(f.minimumEvidenceTargetBytes*f.maximumEvidenceTargetBytes)});
+      document.querySelector('h2').textContent='单张主决策曲线 · 候选方案参考线（合成测试数据）';
+      document.querySelector('#efficiency').innerHTML=renderRateDistortionSvg(plot);
+    });
+    assert.equal(await page.locator('svg').count(),1);
+    assert.equal(await page.locator('#efficiency .curve-fit').count(),1);
+    assert.equal(await page.locator('#efficiency .curve-branch-ghost').count(),2);
+    assert.deepEqual(await overflow(),[]);
+    await page.screenshot({path:'media-workspace-branch-context-desktop.png',fullPage:true});
+    await page.setViewportSize({width:390,height:844});
+    assert.equal(await page.locator('svg').count(),1);
+    assert.deepEqual(await overflow(),[]);
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.screenshot({path:'media-workspace-branch-context-mobile.png',fullPage:true});
+    console.log('Single decision curve and synthetic multi-branch context: desktop/mobile bounds passed');
   } finally {await page.close();}
 };
