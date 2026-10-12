@@ -127,3 +127,31 @@ test('native exact CQ/VBR probes include an FFmpeg process timeout',async()=>{
  assert.match(bridge,/\$p\.Kill\(\)/);
  assert.match(bridge,/FFmpeg sample encode timeout after/);
 });
+
+test('optional real Native x264/x265 comparison reuses one Manual chart and refuses implicit adoption',async()=>{
+ const [panel,optional,css]=await Promise.all([
+  readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+  readFile(new URL('./manual-transcode-compare-ui.js',import.meta.url),'utf8'),
+  readFile(new URL('./media-workspace-ui.css',import.meta.url),'utf8')
+ ]);
+ assert.match(panel,/mountManualTranscodeComparison\(/);
+ assert.match(panel,/compareController\.showResult\(\)/);
+ assert.match(panel,/compareController\.selectPointer\(event\)/);
+ assert.match(panel,/compareController\.selectKeyboard\(event\)/);
+ assert.match(panel,/compareController\?\.invalidate\(\)/);
+ assert.equal((panel.match(/<svg id="task[^"]+Chart"/g)||[]).length,1);
+ assert.doesNotMatch(optional,/<svg/);
+ assert.match(optional,/id="taskCompareStart"/);
+ assert.match(optional,/id="taskCompareStop"/);
+ assert.match(optional,/id="taskCompareSingle"/);
+ assert.match(optional,/id="taskCompareDetails"/);
+ assert.match(optional,/runManualPairedSweep\(/);
+ assert.match(optional,/hooks\.calibrationSample\(/);
+ assert.match(optional,/createManualTranscodeSession\(/);
+ assert.match(optional,/await hooks\.validate/);
+ assert.match(optional,/samplePlanVersion:'manual-ui-paired-windows-2x2-v1'/);
+ assert.match(optional,/maxRequests:12/);
+ assert.match(optional,/audioEvidence:'estimated'/);
+ assert.doesNotMatch(optional,/hooks\.applyQuality\(|hooks\.applyBitrate\(/);
+ assert.match(css,/\.media-compare-controls/);
+});
