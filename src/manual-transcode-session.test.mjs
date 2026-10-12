@@ -163,6 +163,24 @@ test('strict request, total sample, quality and actual encode-cost limits',async
   'quality-setting-budget-exceeded');
 });
 
+test('invalid, empty or duplicated sweep plans never report success',async()=>{
+ const session=open();const c=candidates();
+ for(const plan of [
+  {branches:[],qualitySettings:[20,32]},
+  {branches:[c[0]],qualitySettings:[20,32]},
+  {branches:c,qualitySettings:[20]},
+  {branches:c,qualitySettings:[20,20]},
+  {branches:c,qualitySettings:[20,'32']},
+  {branches:[c[0],c[0]],qualitySettings:[20,32]}
+ ]){
+  const r=await runManualPairedSweep({
+   session,...plan,sampleNative:async()=>{throw Error('must not be called')}
+  });
+  assert.equal(r.reason,'invalid-sweep-plan',JSON.stringify(plan));
+  assert.equal(session.snapshot().stats.receivedSamples,0);
+ }
+});
+
 test('source invalidation clears all memory and permanently rejects stale response',async()=>{
  const session=open();
  await both(session);
