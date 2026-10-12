@@ -176,7 +176,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     if(disposed||running||hooks.busy())return;
     aborted=false;running=true;active=true;
     session?.invalidate('new-comparison');session=null;comparison=null;
-    selectedBytes=null;renderControls();showResult();
+    selectedBytes=null;renderControls();onRenderSingle();
     let originalKey='';
     hooks.setBusy(true);
     try{
@@ -268,7 +268,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       hooks.log?.('纯转码双编码器比较：'+(error?.stack||error));
     }finally{
       running=false;hooks.setBusy(false);
-      if(!disposed){renderControls();if(active)showResult();}
+      if(!disposed){renderControls();onRenderSingle();}
     }
   });
   renderControls();
