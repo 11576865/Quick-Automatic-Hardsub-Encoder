@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {fitRateDistortionModel} from './rate-distortion-model.js';
+import {fitRateDistortionModel,createSizeQualityFrontier} from './rate-distortion-model.js';
 import {calibrationTimeBudget,calibrationCost,calibrationShouldContinue,createMultiBranchFrontier} from './compression-decision.js';
 import {buildSizeFrontierPlot} from './size-frontier-ui.js';
+import {renderRateDistortionSvg} from './curve-chart-svg.js';
 
 const samples=(elapsed)=>({sampleMeasurements:[{elapsedSeconds:elapsed}]});
 test('short-video time budgets never silently turn into unlimited probes',()=>{
@@ -58,4 +59,36 @@ test('incompatible evidence scopes and disjoint sampled size intervals fail clos
   {sampleBitrate:4e6,ssim:.96},{sampleBitrate:8e6,ssim:.97}
  ]);
  assert.equal(envelope([x,y]).reason,'no-common-evidence-domain');
+});
+
+test('single decision curve can disclose bounded candidate fits without duplicating the slider',()=>{
+ const e=envelope([branch('h264',.90,.94),branch('h265',.94,.97)]);
+ const candidates=e.sampleBranchCurves(11);
+ assert.deepEqual(candidates.map(x=>x.id),['h264','h265']);
+ assert.ok(candidates.every(b=>b.points.length===11));
+ for(const b of candidates)for(const p of b.points){
+   assert.ok(p.targetBytes>=e.minimumEvidenceTargetBytes && p.targetBytes<=e.maximumEvidenceTargetBytes);
+   assert.ok(p.quality>=0 && p.quality<=1);
+ }
+ const plot=buildSizeFrontierPlot(e);
+ assert.equal(plot.comparisonPaths.length,2);
+ assert.ok(plot.comparisonPaths.every(b=>/^M/.test(b.path)&&!/NaN|Infinity/.test(b.path)));
+ const svg=renderRateDistortionSvg(plot);
+ assert.equal((svg.match(/class="curve-fit size-frontier-line"/g)||[]).length,1);
+ assert.equal((svg.match(/class="curve-branch-ghost"/g)||[]).length,2);
+ assert.match(svg,/h264/);
+ assert.match(svg,/h265/);
+ assert.match(svg,/共同实测范围内的拟合候选曲线/);
+ assert.doesNotMatch(svg,/NaN|undefined|Infinity/);
+});
+
+test('single-branch decisions do not draw ghost curves; branch names are escaped',()=>{
+ const single=createSizeQualityFrontier(model(.9,.96),opts);
+ const plotted=buildSizeFrontierPlot(single);
+ assert.deepEqual(plotted.comparisonPaths,[]);
+ assert.doesNotMatch(renderRateDistortionSvg(plotted),/curve-branch-ghost/);
+ const multi=envelope([branch('<unsafe&>',.9,.94),branch('other',.94,.97)]);
+ const svg=renderRateDistortionSvg(buildSizeFrontierPlot(multi));
+ assert.match(svg,/&lt;unsafe&amp;&gt;/);
+ assert.doesNotMatch(svg,/<unsafe&>/);
 });
