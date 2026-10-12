@@ -25,7 +25,9 @@ export function createManualTranscodeSession({
      maxTotalSamples<2 || maxTotalSamples>512 ||
      !finite(maxEncodeSeconds) || maxEncodeSeconds<=0 || maxEncodeSeconds>3600)
     return {ok:false,reason:'invalid-session-limits'};
-  const p=normalized.protocol;
+  const p=Object.freeze({...normalized.protocol,
+    windows:Object.freeze(normalized.protocol.windows.map(w=>Object.freeze({...w})))
+  });
   const ids=new Set();
   const branchMap=new Map();
   for(const c of candidates){
