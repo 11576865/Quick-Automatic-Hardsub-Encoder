@@ -157,5 +157,5 @@ console.log(JSON.stringify({
     Math.ceil(f.maximumEvidenceTargetBytes)],
   incumbentOrPreferred:chosen.branchId,
   evidenceKind:'real synthetic FFV1 fixture, Windows hosted runner; not user hardware',
-  note:'No actual Manual UI handoff or final VBR output validation was performed.'
+  note:'This checkpoint validates actual paired codec windows. The Windows harness separately builds and executes the formal v4 task and independently verifies the whole synthetic output.'
 },null,2));
