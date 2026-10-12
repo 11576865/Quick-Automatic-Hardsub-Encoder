@@ -155,3 +155,57 @@ export function createManualTranscodeComparison({trials,budget,incumbentId=null,
     sessionOnly:true
   };
 }
+
+
+// Admission gateway for a real Windows Native CQ sample. Trust is still
+// bounded by the local bridge, but a caller cannot silently relabel a stale
+// bitrate-mode, changed-source, changed-preset or wrong-window result as CQ.
+export function admitManualNativeCqSample({sample,protocol,candidate,window,qualitySetting}={}) {
+  const norm=normalizeManualComparisonProtocol(protocol);
+  if(!norm.ok) return norm;
+  const p=norm.protocol,receipt=sample?.nativeEvidence;
+  if(!receipt || receipt.schemaVersion!==1 ||
+      receipt.method!=='windows-native-exact-cq-v1' ||
+      receipt.referenceMetric!==p.referenceMetric ||
+      receipt.sourceToken!==p.sourceToken ||
+      receipt.runtimeToken!==p.runtimeToken ||
+      receipt.referenceToken!==p.referenceToken ||
+      receipt.filterToken!==p.filterToken ||
+      receipt.identityKind!=='file-stat-snapshot-not-content-hash' ||
+      receipt.videoStream!==p.videoStream ||
+      receipt.pixelFormat!=='yuv420p' ||
+      receipt.mode!=='quality' || receipt.requestedRate!==0)
+    return {ok:false,reason:'incompatible-native-receipt'};
+  if(!candidate || !nonempty(candidate.id) ||
+      receipt.encoder!==candidate.encoder ||
+      receipt.preset!==candidate.preset ||
+      candidate.outputWidth!==p.referenceWidth ||
+      candidate.outputHeight!==p.referenceHeight ||
+      candidate.pixelFormat!=='yuv420p')
+    return {ok:false,reason:'wrong-native-encoder-or-geometry'};
+  const q=Number(qualitySetting);
+  const expected=p.windows.find(w=>w.start===window?.start &&
+    w.duration===window?.duration);
+  if(!expected || !Number.isSafeInteger(q) || q<0 || q>63 ||
+      receipt.requestedQuality!==q ||
+      !finite(receipt.requestedStart) ||
+      !within(receipt.requestedStart,expected.start) ||
+      !finite(receipt.requestedDuration) ||
+      !within(receipt.requestedDuration,expected.duration) ||
+      !finite(receipt.actualDuration) || !(receipt.actualDuration>0) ||
+      Math.abs(receipt.actualDuration-expected.duration)>
+        Math.max(.10,expected.duration*.025) ||
+      !finite(sample?.duration) ||
+      !within(sample.duration,receipt.actualDuration,.001))
+    return {ok:false,reason:'wrong-native-quality-or-sample-window'};
+  const quality=Number(sample?.ssim),bytes=Number(sample?.totalVideoBytes);
+  if(!finite(sample?.ssim) || !(quality>=0&&quality<=1) ||
+      !finite(sample?.totalVideoBytes) || !(bytes>0) ||
+      sample.encoder!==receipt.encoder)
+    return {ok:false,reason:'invalid-native-sample-measurement'};
+  return {ok:true,measurement:{
+    start:receipt.requestedStart,duration:receipt.actualDuration,
+    ssim:quality,bitrate:bytes*8/receipt.actualDuration
+  },sourceToken:p.sourceToken,runtimeToken:p.runtimeToken,
+  qualitySetting:q};
+}
