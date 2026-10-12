@@ -120,9 +120,17 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     chart.setAttribute('aria-valuenow',String(Math.round(100*percent(f,selectedBytes))));
     chart.setAttribute('aria-valuetext','视频预算约 '+(selectedBytes/1e6).toFixed(2)+' MB');
     const budgetText='视频估算预算 '+(selectedBytes/1e6).toFixed(2)+' MB';
+    const currentVbr=verifiedVbr && verifiedVbr.passed &&
+      verifiedVbr.sourceKey===sourceKey &&
+      verifiedVbr.selectedBytes===selectedBytes &&
+      verifiedVbr.candidateId===evalResult.branchId &&
+      verifiedVbr.requestedVideoBitrate===Math.round(evalResult.videoBitrate) &&
+      verifiedVbr.targetSsim===getTargetSsim?.();
     readout.textContent=budgetText+' · 择优上包络 SSIM '+Number(evalResult.prediction?.quality??0).toFixed(5)+
       ' · 当前建议 '+String(evalResult.branchId||'未知').toUpperCase()+
-      '。仅限同源短样的拟合；不含音频，也未执行目标码率验证。';
+      (currentVbr ? ' · VBR 短样已通过（最低 SSIM '+
+        verifiedVbr.minimumSsim.toFixed(5)+'；正式方案未改变）。':
+        '。仅限同源短样的拟合；不含音频，也未执行目标码率验证。');
     const list=document.createElement('ul');
     for(const item of evalResult.alternatives||[]){
       const li=document.createElement('li');
