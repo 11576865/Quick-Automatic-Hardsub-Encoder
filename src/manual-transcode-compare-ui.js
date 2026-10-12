@@ -80,7 +80,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     back.hidden=!active;
     start.textContent=running?'双编码器实测中…':'比较两个编码器';
   };
-  const eligible=()=>comparison?.ok && comparison.frontier?.ok && isCurrent() && !disposed;
+  const eligible=()=>comparison?.ok && comparison.frontier?.ok &&
+    session?.snapshot().ok && isCurrent() && !disposed;
   function showResult(){
     if(!active)return false;
     if(!eligible()){
@@ -225,8 +226,10 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         bitrate:plannedBitrate,targetSsim:threshold,samples:outcomes
       });
       if(!result.ok){
-        if(result.reason==='incompatible-native-vbr-receipt')
+        if(result.reason==='incompatible-native-vbr-receipt'){
           session.invalidate('native-vbr-provenance-drift');
+          comparison=null;
+        }
         throw Error('原生 VBR 证据未通过校验：'+result.reason);
       }
       if(!result.passed){
