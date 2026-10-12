@@ -18,7 +18,7 @@ const probe=(file)=>JSON.parse(run('ffprobe',[
 ]));
 const packets=(file,selector)=>JSON.parse(run('ffprobe',[
   '-v','error','-select_streams',selector,'-show_packets','-show_data_hash','sha256',
-  '-show_entries','packet=data_hash,size','-of','json',file
+  '-show_entries','packet=data_hash,size,pts_time,dts_time,flags:packet_side_data=side_data_type,skip_samples,discard_padding','-of','json',file
 ])).packets;
 const input=probe(source),actual=probe(output);
 const task=JSON.parse(readFileSync(requestFile,'utf8')).request.task;
@@ -82,8 +82,17 @@ for(const [selector,minimum] of [['a:0',20],['a:1',20],['s:0',2]]){
     outputHashes=outputPackets.map(x=>x.data_hash);
   assert.ok(sourceHashes.length>=minimum,
     'Source contains too few packets for '+selector);
-  assert.deepEqual(outputHashes,sourceHashes,
-    'Stream-copy packet payload hashes must match for '+selector);
+  if(outputHashes.length!==sourceHashes.length ||
+     outputHashes.some((value,i)=>value!==sourceHashes[i])){
+    const peek=items=>items.slice(0,4).map(p=>({
+      pts:p.pts_time,dts:p.dts_time,hash:p.data_hash,
+      size:p.size,sideData:p.side_data_list
+    }));
+    throw Error('Stream-copy payload difference '+selector+
+      ': '+JSON.stringify({sourceCount:sourceHashes.length,
+        outputCount:outputHashes.length,
+        sourceLeading:peek(inputPackets),outputLeading:peek(outputPackets)}));
+  }
   streamCopyProof.push({selector,count:outputPackets.length,
     payloadBytes:outputPackets.reduce((n,p)=>n+Number(p.size||0),0)});
 }
