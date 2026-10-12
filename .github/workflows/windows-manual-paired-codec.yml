@@ -12,6 +12,11 @@ on:
       - 'src/size-frontier-ui.js'
       - 'scripts/check-manual-native-paired.ps1'
       - 'scripts/verify-manual-native-paired.mjs'
+      - 'scripts/build-manual-adopted-native-request.mjs'
+      - 'scripts/verify-manual-adopted-native-output.mjs'
+      - 'src/manual-transcode-adoption.js'
+      - 'src/manual-transcode-vbr-verification.js'
+      - 'src/media-task.js'
       - '.github/workflows/windows-manual-paired-codec.yml'
   workflow_dispatch:
 
