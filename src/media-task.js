@@ -155,7 +155,11 @@ export function compileTask(raw, media) {
       ? null
       : Number(t.audioBitrate || 128000) * t.expectedAudioTracks;
 
-  const args = ['-ss','0'];
+  // An output-side -ss 0 is a seek, not a harmless no-op for some FFmpeg
+  // versions: it can discard negative-PTS AAC priming packets even when the
+  // user requested a full untrimmed Stream Copy. Only trim-range tasks need
+  // this timeline-rebase behavior; preserve complete source packets otherwise.
+  const args = t.hasTrimRange ? ['-ss','0'] : [];
   const videoInput = inputFor(t.videoRange);
   for (const ordinal of t.videoStreams) args.push('-map', `${videoInput}:v:${ordinal}`);
   if (t.audio !== 'none') {
