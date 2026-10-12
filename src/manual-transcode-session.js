@@ -86,7 +86,14 @@ export function createManualTranscodeSession({
     const accepted=admitManualNativeCqSample({
       sample,protocol:p,candidate:b.candidate,window,qualitySetting
     });
-    if(!accepted.ok)return accepted;
+    if(!accepted.ok){
+      // A mismatched Native origin, reference or CQ/VBR method means this
+      // session can no longer attest that the earlier source is still live.
+      // Do not let already complete points remain usable after that signal.
+      if(accepted.reason==='incompatible-native-receipt')
+        invalidate('native-provenance-changed');
+      return accepted;
+    }
     let readings=current;
     if(!readings){readings=new Map();b.inflight.set(qualitySetting,readings);}
     readings.set(winIndex,Object.freeze({
