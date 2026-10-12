@@ -71,6 +71,16 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
         mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},
         isWindows:()=>true,busy:()=>busy,setBusy:v=>{busy=v;},
         applyQuality:()=>{applied++;},applyBitrate:()=>{applied++;},
+        adoptCandidate:({candidate,bitrate,expectedSettings,expectedSourceIdentity})=>{
+          if(JSON.stringify(raw)!==JSON.stringify(expectedSettings)||
+             expectedSourceIdentity!=='synthetic-playwright-source')
+            return {ok:false,reason:'stale-adoption-settings'};
+          Object.assign(raw,{codec:candidate.codec,encoder:candidate.encoder,
+            preset:candidate.preset,rateMode:'bitrate',bitrate:String(bitrate),
+            multipass:'disabled',twoPass:false});
+          applied++;
+          return {ok:true};
+        },
         log:()=>{},
         calibrationSample:async({codec,encoder,preset,multipass,quality,start,duration,mode='quality',bitrate})=>{
           const isVbr=mode==='bitrate';
@@ -139,6 +149,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.match(await page.locator('#taskCurveReadout').textContent(),/VBR 短样已通过/);
     assert.doesNotMatch(await page.locator('#taskCurveReadout').textContent(),/未执行目标码率验证/);
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
+    assert.equal(await page.locator('#taskCompareAdopt').isVisible(),true);
     await page.screenshot({path:'media-workspace-manual-compare-desktop.png',fullPage:true});
     await page.setViewportSize({width:390,height:844});
     assert.deepEqual(await overflow(),[],
@@ -151,9 +162,35 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.doesNotMatch(await page.locator('#taskCurveReadout').textContent(),/VBR 短样已通过/);
     assert.match(await page.locator('#taskCurveReadout').textContent(),/未执行目标码率验证/);
     assert.match(await page.locator('#taskCompareStatus').textContent(),/预算已改变/);
+    assert.equal(await page.locator('#taskCompareAdopt').isVisible(),false);
     await page.locator('#taskCompareSingle').click();
     assert.equal(await page.locator('#taskCompareSingle').isVisible(),false);
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
+    // A new matched CQ/VBR certificate can be explicitly adopted. Nothing
+    // changes before this confirm button is clicked.
+    await page.locator('#taskCompareStart').click();
+    await page.waitForFunction(()=>/双编码器实测完成|本次对比不可用于推荐/.test(
+      document.querySelector('#taskCompareStatus')?.textContent||''
+    ));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/双编码器实测完成/);
+    await page.locator('#taskCompareVerify').click();
+    await page.waitForFunction(()=>/VBR 短样已验证|VBR 验证失败/.test(
+      document.querySelector('#taskCompareStatus')?.textContent||''
+    ));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/VBR 短样已验证/);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
+    await page.locator('#taskCompareAdopt').click();
+    await page.waitForFunction(()=>/已按明确确认写入|未写入编码方案/.test(
+      document.querySelector('#taskCompareStatus')?.textContent||''
+    ));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/已按明确确认写入/);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),1);
+    const committed=await page.evaluate(()=>window.__curveMock.raw);
+    assert.equal(committed.rateMode,'bitrate');
+    assert.equal(committed.multipass,'disabled');
+    assert.ok(['libx264','libx265'].includes(committed.encoder));
+    assert.ok(+committed.bitrate>0);
+    assert.equal(await page.locator('#taskCompareAdopt').isVisible(),false);
     // Fail closed for a source/processing setting that cannot be reproduced
     // by the exact SDR/yuv420p native sample protocol.
     await page.evaluate(()=>{window.__curveMock.raw.pixelFormat='p010le';});
@@ -163,7 +200,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     ));
     assert.match(await page.locator('#taskCompareStatus').textContent(),/无额外滤镜/);
     assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),0);
-    assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),1);
     console.log('Single curve + Manual native-mocked comparison: desktop, phone, keyboard, and fail-closed unsupported protocol passed');
   } finally {await page.close();}
 };
