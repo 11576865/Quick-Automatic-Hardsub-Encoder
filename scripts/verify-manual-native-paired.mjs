@@ -8,6 +8,7 @@ import {
   createManualTranscodeComparison
 } from '../src/manual-transcode-comparison.js';
 import {buildSizeFrontierPlot} from '../src/size-frontier-ui.js';
+import {createManualTranscodeSession} from '../src/manual-transcode-session.js';
 
 const file=process.argv[2];
 if(!file) throw Error('Expected paired Native receipt file');
@@ -43,6 +44,15 @@ const protocol={
   referenceHeight:fixture.sourceGeometry.height,
   windows:fixture.windows
 };
+const session=createManualTranscodeSession({
+  protocol,
+  candidates:fixture.branches.map(branch=>({
+    id:branch.id,codec:branch.codec,encoder:branch.encoder,
+    preset:branch.preset,outputWidth:320,outputHeight:180,pixelFormat:'yuv420p'
+  })),
+  maxTotalSamples:24,maxEncodeSeconds:300
+});
+assert.equal(session.ok,true);
 const trials=[];
 let minObserved=Infinity,maxObserved=-Infinity;
 for(const branch of fixture.branches){
@@ -64,6 +74,11 @@ for(const branch of fixture.branches){
       });
       assert.equal(r.ok,true,
         'Native receipt must match common source, runtime and reference: '+JSON.stringify(r));
+      const registered=session.addSample({
+        candidate,qualitySetting:quality,window,sample:hits[0].result
+      });
+      assert.equal(registered.ok,true,
+        'Real Native evidence registry must accept paired window: '+JSON.stringify(registered));
       const m=r.measurement;
       assert.ok(m.ssim>0&&m.ssim<=1);
       assert.ok(m.bitrate>0);
@@ -87,10 +102,14 @@ for(const branch of fixture.branches){
     branch.id+' did not produce different video rates between CQ settings');
   trials.push({protocol,candidate,points});
 }
-const result=createManualTranscodeComparison({
-  trials,budget:{durationSeconds:fixture.rangeEnd-fixture.rangeStart,
-    audioBitrate:0,audioEvidence:'no-audio',reservePercent:0}
-});
+const actualBudget={durationSeconds:fixture.rangeEnd-fixture.rangeStart,
+  audioBitrate:0,audioEvidence:'no-audio',reservePercent:0};
+const result=session.compare(actualBudget);
+const legacyProjection=createManualTranscodeComparison({trials,budget:actualBudget});
+assert.equal(legacyProjection.ok,true,'Prior evidence projection must remain valid');
+assert.deepEqual(session.snapshot().candidates.map(c=>c.completeSettings),[3,3]);
+assert.equal(session.snapshot().stats.receivedSamples,12);
+assert.deepEqual(result.branchIds,legacyProjection.branchIds);
 assert.equal(result.ok,true,
   'Real codecs must intersect in measured byte domain; '+JSON.stringify(result));
 assert.equal(result.frontier.kind,'multi-branch');
