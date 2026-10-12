@@ -71,7 +71,32 @@ try {
       }
     }
   }
+  # A separate real VBR pass: CQ interpolation alone must not be claimed
+  # as target-bitrate proof, even when the two codec frontiers overlap.
+  $vbrRate=600000
+  $vbrSamples=@()
+  foreach($window in $windows){
+    $request=@{
+      requestId=('paired-x264-vbr-'+[string]$window.start)
+      options=@{
+        codec='h264';encoder='libx264';preset='medium'
+        multipass='disabled';sampleExact=$true;crf=0
+        start=[double]$window.start;duration=[double]$window.duration
+        withSubtitles=$false;targetVideoBitrate=$vbrRate;measureSsim=$true
+        retainSample=$false;timeoutSeconds=55
+      }
+    }|ConvertTo-Json -Depth 7 -Compress
+    $sample=Invoke-RestMethod -Method Post -Uri "$root/api/sample" -Headers $headers -ContentType 'application/json' -Body $request -TimeoutSec 85
+    if(-not $sample.ok -or -not $sample.nativeEvidence -or
+       [string]$sample.nativeEvidence.method -ne 'windows-native-exact-vbr-v1'){
+       throw 'Actual Windows VBR trial did not return a verifiable VBR receipt.'
+    }
+    $vbrSamples+=@{window=$window;sample=$sample}
+    Write-Host ("Real Native x264 VBR sample: rate={0} start={1}s ssim={2:N5}" -f
+      $vbrRate,$window.start,[double]$sample.ssim)
+  }
   $fixture=@{
+    vbrTest=@{candidateId='h264-x264';bitrate=$vbrRate;targetSsim=0.90;samples=$vbrSamples}
     kind='qhe-manual-windows-native-paired-v1'
     sourceType='FFV1 synthetic real encoded source; actual Windows Native FFmpeg samples'
     sourceGeometry=@{width=320;height=180}
