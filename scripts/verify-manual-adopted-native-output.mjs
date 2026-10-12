@@ -3,9 +3,9 @@
 // full-duration source-reference SSIM. Short-window VBR and actual whole-file
 // observations are deliberately reported as separate evidence layers.
 import assert from 'node:assert/strict';
-import {readFileSync,statSync} from 'node:fs';
+import {readFileSync,writeFileSync,statSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
-const [source,output,requestFile,statusFile]=process.argv.slice(2);
+const [source,output,requestFile,statusFile,reportPath]=process.argv.slice(2);
 if(!source||!output||!requestFile||!statusFile)throw Error(
   'Usage: verify-manual-adopted-native-output.mjs source output request.json status.json');
 const run=(exe,args)=>{
@@ -86,7 +86,7 @@ const wholeSsim=Number(captures.at(-1)[1]);
 assert.ok(Number.isFinite(wholeSsim)&&wholeSsim>=.90&&wholeSsim<=1,
   'Whole synthetic output quality below acceptance threshold');
 const totalRequestedVideoBytes=task.bitrate*srcDuration/8;
-console.log(JSON.stringify({
+const report={
   result:'PASS',evidence:'actual full formal v4 Windows Native HEVC encode',
   sourceVideoCodec:sv[0].codec_name,outputVideoCodec:ov[0].codec_name,
   copiedAudioCodec:oa[0].codec_name,audioPackets:outputHashes.length,
@@ -100,4 +100,6 @@ console.log(JSON.stringify({
   targetWholeFileContainerBytesGuaranteed:false,
   playbackOnExternalPlayerVerified:false,
   userDeviceVerified:false
-},null,2));
+};
+if(reportPath)writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n','utf8');
+console.log(JSON.stringify(report,null,2));
