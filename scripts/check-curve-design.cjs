@@ -146,6 +146,11 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),
       'Optional comparison must not create global horizontal overflow');
     await page.screenshot({path:'media-workspace-manual-compare-mobile.png',fullPage:true});
+    await page.locator('#taskEfficiencyChart').focus();
+    await page.keyboard.press('ArrowLeft');
+    assert.doesNotMatch(await page.locator('#taskCurveReadout').textContent(),/VBR 短样已通过/);
+    assert.match(await page.locator('#taskCurveReadout').textContent(),/未执行目标码率验证/);
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/预算已改变/);
     await page.locator('#taskCompareSingle').click();
     assert.equal(await page.locator('#taskCompareSingle').isVisible(),false);
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
