@@ -513,6 +513,10 @@ test('guided size budget compares compatible measured codec curves with explicit
  const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
  assert.match(main,/id="compareSizeFrontierBtn"/);
  assert.match(main,/id="adoptSizeFrontierBranchBtn"/);
+ assert.match(main,/id="sizeFrontierCandidates"/);
+ assert.match(main,/id="sizeFrontierCandidateRows"/);
+ assert.match(main,/candidateRows\.replaceChildren\(list\)/);
+ assert.match(main,/样本质量下限/);
  assert.match(main,/createMultiBranchFrontier\(/);
  assert.match(main,/state\.sizeEnvelopeEnabled=compareForSize/);
  assert.match(main,/selectCodec\(recommendation\.branchId\)/);
