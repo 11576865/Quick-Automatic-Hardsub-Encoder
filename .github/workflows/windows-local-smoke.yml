@@ -143,7 +143,15 @@ jobs:
 
       - name: Install FFmpeg for encoding smoke
         shell: powershell
-        run: choco install ffmpeg --yes --no-progress
+        run: |
+          $ready=$false
+          for($attempt=1;$attempt -le 3;$attempt++){
+            choco install ffmpeg --yes --no-progress
+            if($LASTEXITCODE -eq 0){$ready=$true;break}
+            Write-Warning "FFmpeg Chocolatey installation attempt $attempt failed (upstream package feed may be unavailable)."
+            if($attempt -lt 3){Start-Sleep -Seconds ($attempt * 5)}
+          }
+          if(-not $ready){throw 'Cannot install FFmpeg after bounded retries; external package service failure, not an encoder regression.'}
       - name: Validate native Manual sample evidence receipts on real FFmpeg source
         shell: powershell
         run: ./scripts/check-manual-sample-evidence.ps1
