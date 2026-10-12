@@ -78,6 +78,8 @@ test('the single manual curve retains measured evidence and pointer geometry',as
   assert.doesNotMatch(main,/\(svgX - 34\) \/ \(720 - 68\)/);
   assert.match(panel,/class="media-curve-legend"/);
   assert.match(svg,/curve-sample-whisker/);
+ assert.match(svg,/短样拟合 SSIM/);
+ assert.doesNotMatch(svg,/平均样本 SSIM/);
   assert.match(style,/\.curve-axis/);
   assert.match(mediaCss,/\.media-curve-legend/);
 });
