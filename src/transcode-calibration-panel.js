@@ -3,6 +3,7 @@ import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, CA
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
 import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 import { calibrationTimeBudget } from './compression-decision.js';
+import { mountManualTranscodeComparison } from './manual-transcode-compare-ui.js';
 
 // One measured size-quality curve for manual video-only transcode. This is intentionally
 // separate from subtitle calibration: sample identity must match the manual
@@ -39,6 +40,7 @@ export function mountTranscodeCurves(section, hooks) {
   let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, disposed = false, sourceKey = '';
   let evidenceMedia = null, evidenceTask = null, verifiedSelection = null;
   let fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  let compareController = null;
   // Measurements depend on the video encode and sample positions, not on the
   // user's SSIM acceptance threshold or on the final audio size budget.
   const evidenceIsCurrent = () => !!sourceKey &&
@@ -50,7 +52,7 @@ export function mountTranscodeCurves(section, hooks) {
   const label = text => { get('taskCurveStatus').textContent = text; };
   const measuredVideoSize = bytes => (bytes / 1e9).toFixed(2) + ' GB';
   const useQuality = q => {
-    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid()) return;
+    if (compareController?.active || running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid()) return;
     hooks.applyQuality(q);
     label('已采用实际测试过的 CQ/CRF ' + q + '。改变参数后应再次检查输出。');
   };
@@ -65,7 +67,7 @@ export function mountTranscodeCurves(section, hooks) {
     return { rate: Number(raw.audioBitrate || 128000) * tracks * audioSeconds/videoSeconds, uncertain: false };
   };
   const render = () => {
-    btn.disabled = running;
+    btn.disabled = running || !!compareController?.active || !!compareController?.running;
     stop.disabled = !running || cancelRequested;
     btn.textContent = running ? '正在实测…' : '开始实测';
     get('taskMeasuredQualitySummary').textContent =
@@ -87,6 +89,13 @@ export function mountTranscodeCurves(section, hooks) {
       row.append(details,adopt);rows.append(row);
     }
 
+    if (compareController?.active) {
+      get('taskAdoptCurveRate').disabled = true;
+      get('taskVerifyCurveRate').disabled = true;
+      compareController.showResult();
+      return;
+    }
+    chartResetForSingle();
     if (!frontier?.ok || !evidenceIsCurrent()) {
       efficiency.replaceChildren();
       readout.textContent = '至少需要两个不同码率的有效测量点。';
@@ -133,6 +142,9 @@ export function mountTranscodeCurves(section, hooks) {
       ? '采用所选码率（短样已验证）' : '采用所选码率（需先验证）';
   };
 
+  const chartResetForSingle = () => {
+    efficiency.setAttribute('aria-label','选择实测范围内的目标视频码率');
+  };
   const updateEvidence = (newPoints, raw, task, { preserveSelection = false } = {}) => {
     points = newPoints;
     const audio = audioPlan(raw,task);
@@ -148,6 +160,7 @@ export function mountTranscodeCurves(section, hooks) {
     render();
   };
   const pointerSelect = event => {
+    if (compareController?.active) {compareController.selectPointer(event);return;}
     if (!frontier?.ok || running || !evidenceIsCurrent()) return;
     const plotted = buildSizeFrontierPlot(frontier);
     if (!plotted.ok) return;
@@ -162,6 +175,7 @@ export function mountTranscodeCurves(section, hooks) {
   efficiency.addEventListener('pointerdown',pointerSelect);
   efficiency.addEventListener('pointermove',event=>{if(event.buttons===1)pointerSelect(event);});
   efficiency.addEventListener('keydown',event=>{
+    if (compareController?.active) {compareController.selectKeyboard(event);return;}
     if (!frontier?.ok || running || !evidenceIsCurrent()) return;
     const existing = evidenceFractionForTargetBytes(frontier,selectedBytes) ?? 0.5;
     let next=existing;
@@ -259,6 +273,7 @@ export function mountTranscodeCurves(section, hooks) {
     evidenceMedia=null;evidenceTask=null;verifiedSelection=null;
   };
   const invalidate=()=>{
+    compareController?.invalidate();
     if (running) {
       cancelRequested=true;
       clearEvidence();
@@ -302,7 +317,7 @@ export function mountTranscodeCurves(section, hooks) {
     render();
   });
   btn.addEventListener('click',async()=>{
-    if (disposed || running || hooks.busy())return;
+    if (disposed || running || compareController?.active || hooks.busy())return;
     clearEvidence();
     running=true;cancelRequested=false;render();hooks.setBusy(true);
     try {
@@ -413,9 +428,16 @@ export function mountTranscodeCurves(section, hooks) {
       running=false;hooks.setBusy(false);if(!disposed)render();
     }
   });
-  const refresh=()=>{panel.hidden=hooks.settings().operation!=='transcode';};
+  compareController=mountManualTranscodeComparison({
+    panel,hooks,chart:efficiency,readout,getSourceKey:measurementKey,
+    onRenderSingle:()=>render()
+  });
+  const refresh=()=>{
+    panel.hidden=hooks.settings().operation!=='transcode';
+    if(panel.hidden&&compareController?.active)compareController.invalidate();
+  };
   refresh();render();
   return {panel,refresh,invalidate,dispose:()=>{
-    disposed=true;cancelRequested=true;clearEvidence();panel.remove();
+    disposed=true;cancelRequested=true;compareController?.dispose();clearEvidence();panel.remove();
   }};
 }
