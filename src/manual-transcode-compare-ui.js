@@ -58,6 +58,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     // geometry have not changed; do not unnecessarily repeat 12 encodes.
     if(active&&isCurrent()){
       verifiedVbr=null;
+      message('目标 SSIM 已变化：保留 CQ 配对测量；此前 VBR 通过状态不再适用。');
       if(!running)onRenderSingle();
       return;
     }
@@ -144,7 +145,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     const x=plotXFromClientX(event.clientX,chart.getBoundingClientRect(),plot.width);
     const fraction=plotFractionAtX(plot,x);
     if(fraction===null)return true;
-    selectedBytes=targetBytesAtEvidenceFraction(f,fraction);verifiedVbr=null;showResult();
+    selectedBytes=targetBytesAtEvidenceFraction(f,fraction);
+    if(verifiedVbr)message('预算已改变：当前位置需要重新执行 VBR 短样验证。');
+    verifiedVbr=null;showResult();
     return true;
   };
   const selectKeyboard=event=>{
@@ -157,6 +160,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     else return false;
     event.preventDefault();
     selectedBytes=targetBytesAtEvidenceFraction(f,clamp(x,0,1));
+    if(verifiedVbr)message('预算已改变：当前位置需要重新执行 VBR 短样验证。');
     verifiedVbr=null;showResult();return true;
   };
   function preflight(raw,originalMedia){
