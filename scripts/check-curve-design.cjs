@@ -72,7 +72,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
         isWindows:()=>true,busy:()=>busy,setBusy:v=>{busy=v;},
         applyQuality:()=>{applied++;},applyBitrate:()=>{applied++;},
         log:()=>{},
-        calibrationSample:async({codec,encoder,preset,quality,start,duration,mode='quality',bitrate})=>{
+        calibrationSample:async({codec,encoder,preset,multipass,quality,start,duration,mode='quality',bitrate})=>{
           const isVbr=mode==='bitrate';
           const rate=isVbr?bitrate:({18:1600000,28:850000,40:420000})[quality]*
             (encoder==='libx265'?.91:1);
@@ -91,7 +91,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
               videoStream:0,pixelFormat:'yuv420p',mode:isVbr?'bitrate':'quality',
               requestedRate:isVbr?bitrate:0,requestedQuality:isVbr?null:quality,
               requestedStart:start,requestedDuration:duration,
-              actualDuration:duration,encoder,preset
+              actualDuration:duration,encoder,preset,multipass
             }};
         }
       };
