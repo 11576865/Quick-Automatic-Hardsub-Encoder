@@ -1770,6 +1770,17 @@ body.media-frame-lightbox-open {
 .media-compare-controls ul {padding-inline-start:22px;margin:6px 0;font-size:.78rem;line-height:1.65}
 .media-compare-controls li {overflow-wrap:anywhere;margin-bottom:5px}
 
+/* A comparison is an alternate projection of the same Manual chart. Hide
+   single-encoder-only controls while it is active; restore on return. */
+.media-compression-curves[data-compare-active="true"] .media-curves-header .media-curve-actions,
+.media-compression-curves[data-compare-active="true"] .media-curve-options,
+.media-compression-curves[data-compare-active="true"] #taskCurveStatus,
+.media-compression-curves[data-compare-active="true"] #taskVerifyCurveRate,
+.media-compression-curves[data-compare-active="true"] #taskAdoptCurveRate,
+.media-compression-curves[data-compare-active="true"] .media-curve-observations {
+  display:none!important
+}
+
 /* Optional Stream Copy clip queue; single-clip form remains the primary route. */
 .media-clip-queue {
   display:grid;gap:10px;
