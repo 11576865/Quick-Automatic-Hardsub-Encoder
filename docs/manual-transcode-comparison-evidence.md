@@ -55,3 +55,19 @@ These are **synthetic Node tests of the pure model**, not FFmpeg or real GPU tri
 ## Separation from other QHE tasks
 
 Video Stream Copy cutting doesn't have an encoder-rate-distortion decision; it needs proof of preserved packets, realized seek boundary, PTS/DTS, audio synchrony and output integrity. Guided ASS can share the abstract model, not its reference/evidence observations. No QHE task-v4 or clip queue semantics are changed here.
+
+
+## Windows Native sample receipt: first ingress bridge (draft PR #104 follow-up)
+
+The actual `windows/native-bridge.ps1::Invoke-Sample` now attaches `nativeEvidence` to an exact, filter-free, source-backed SSIM result. It includes:
+- `schemaVersion=1`, `method` (`windows-native-exact-cq-v1` for quality samples, separate `windows-native-exact-vbr-v1` for bitrate samples), reference/filter versions, video ordinal 0 and `yuv420p`;
+- actual selected encoder/preset, multipass, requested quality or bitrate, requested sample start/duration and measured encoded duration;
+- `sourceToken` and `runtimeToken` produced **inside the Windows Bridge** from the full path, file length and LastWriteTimeUtc of the selected source and FFmpeg executable; runtime token also incorporates FFmpeg's version line.
+
+Snapshots are captured before and after the sample encode; if either changes, the receipt is refused rather than silently pooled into a comparison. This guards many accidental source/runtime switches but **is not a content SHA-256 of the media or FFmpeg binary**, despite using SHA-256 as a digest of file stat fields. Such tokens must never be displayed as content-integrity proof or used as long-lived durable identity.
+
+`src/manual-transcode-comparison.js::admitManualNativeCqSample` is a deliberately fail-closed, **not yet wired to Manual UI** gateway that checks the native receipt against one proposed measurement protocol, selected encoder/preset, paired window, actual native measured byte count/duration/SSIM, and CQ mode (not VBR). Existing single-encoder Manual samples remain functional and ignore the new optional native receipt until actual cross-encoder scheduling is implemented. The bridge-side helper lives at `windows/manual-sample-evidence.ps1`; Windows CI exercises it with a real FFmpeg-generated input, deliberately mutates the file and requires rejection.
+
+The full system is *still* not a secure end-to-end attestation: local bridge response is trusted, caller-supplied protocol tokens must be built from actual returned receipts, and a JS-only comparison cannot detect every altered byte/decoder-build change. There is no multi-codec native experiment in QHE's current Manual UI, no VBR recommendation handoff, and no physical-GPU acceptance.
+
+Native regression entry: `scripts/check-manual-sample-evidence.ps1` in Windows local smoke, after FFmpeg installation. Frontend model tests verify admission rejects missing/stale/wrong-mode receipts. Field acceptance still requires paired real samples across codecs on a consistent runtime, source and reference chain.
