@@ -39,12 +39,13 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     '<details id="taskCompareDetails" hidden><summary>查看同预算候选及采样覆盖</summary>',
     '<div id="taskCompareCandidates"></div></details>',
     '<button type="button" class="secondary" id="taskCompareVerify" disabled hidden>实测验证当前推荐编码器的 VBR</button>',
+    '<button type="button" class="secondary" id="taskCompareAdopt" disabled hidden>确认写入已验证的编码方案</button>',
     '<p class="note">此图仅比较视频率失真和估算的视频预算；没有计入复制音轨、附件或实际容器开销。停止会等待当前原生调用结束；编码耗时配额不是严格墙钟时间上限。</p>'
   ].join('');
   const insertBefore=panel.querySelector('.media-curve-grid');
   insertBefore.before(area);
   const get=id=>area.querySelector('#'+id);
-  const start=get('taskCompareStart'),stop=get('taskCompareStop'),back=get('taskCompareSingle'),verify=get('taskCompareVerify');
+  const start=get('taskCompareStart'),stop=get('taskCompareStop'),back=get('taskCompareSingle'),verify=get('taskCompareVerify'),adopt=get('taskCompareAdopt');
   const status=get('taskCompareStatus'),details=get('taskCompareDetails'),rows=get('taskCompareCandidates');
   let active=false,running=false,aborted=false,disposed=false,session=null;
   let sourceKey='',sourceDuration=0,comparison=null,selectedBytes=null;
@@ -76,6 +77,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     start.disabled=running||hooks.busy()||disposed;
     verify.hidden=!active;
     verify.disabled=running||hooks.busy()||!eligible();
+    adopt.hidden=!hasCurrentVbr();
+    adopt.disabled=running||hooks.busy()||!hasCurrentVbr();
     stop.disabled=!running||aborted;
     back.disabled=running;
     back.hidden=!active;
@@ -83,6 +86,17 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   };
   const eligible=()=>comparison?.ok && comparison.frontier?.ok &&
     session?.snapshot().ok && isCurrent() && !disposed;
+  const hasCurrentVbr=()=>{
+    if(!verifiedVbr?.passed || !eligible())return false;
+    const chosen=comparison.frontier.evaluateTargetBytes(selectedBytes);
+    return chosen?.status==='within-evidence' &&
+      verifiedVbr.sourceKey===sourceKey && verifiedVbr.selectedBytes===selectedBytes &&
+      verifiedVbr.candidateId===chosen.branchId &&
+      verifiedVbr.requestedVideoBitrate===Math.round(chosen.videoBitrate) &&
+      verifiedVbr.targetSsim===getTargetSsim?.() &&
+      JSON.stringify(hooks.settings())===JSON.stringify(verifiedVbr.expectedSettings) &&
+      hooks.sourceIdentity?.()===verifiedVbr.expectedSourceIdentity;
+  };
   function showResult(){
     if(!active)return false;
     if(!eligible()){
@@ -104,7 +118,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         if(details.hidden)details.open=true;
         details.hidden=false;
       }else details.hidden=true;
-      verify.disabled=true;
+      verify.disabled=true;adopt.hidden=true;adopt.disabled=true;
       return true;
     }
     const f=comparison.frontier;
@@ -144,6 +158,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     if(details.hidden)details.open=true;
     details.hidden=false;
     verify.disabled=running||hooks.busy();
+    adopt.hidden=!hasCurrentVbr();
+    adopt.disabled=running||hooks.busy()||!hasCurrentVbr();
     return true;
   }
   const selectPointer=event=>{
@@ -248,7 +264,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         message('VBR 短样未达到 SSIM 目标：最低 '+result.minimumSsim.toFixed(5)+
           '，目标 '+threshold.toFixed(5)+'。不能采用该推算码率。');
       }else{
-        verifiedVbr={...result,sourceKey:chosenKey,selectedBytes:chosenBytes};
+        verifiedVbr={...result,sourceKey:chosenKey,selectedBytes:chosenBytes,
+          expectedSettings:JSON.parse(JSON.stringify(raw)),
+          expectedSourceIdentity:hooks.sourceIdentity?.()};
         message('VBR 短样已验证：'+selected.id.toUpperCase()+
           ' · 最低 SSIM '+result.minimumSsim.toFixed(5)+
           ' · 实际均值 '+(result.measuredMeanVideoBitrate/1e6).toFixed(2)+
@@ -257,6 +275,44 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     }catch(error){
       verifiedVbr=null;
       message('VBR 验证失败：'+(error?.message||error));
+    }finally{
+      running=false;hooks.setBusy(false);
+      if(!disposed){renderControls();onRenderSingle();}
+    }
+  });
+  adopt.addEventListener('click',async()=>{
+    // Explicit user action only. Any source/option/target/budget change
+    // invalidates the short-window certificate; no curve may auto-commit.
+    if(disposed||running||hooks.busy()||!hasCurrentVbr())return;
+    const certificate=verifiedVbr;
+    const candidate=CANDIDATES.find(x=>x.id===certificate.candidateId);
+    if(!candidate)return;
+    running=true;aborted=false;renderControls();hooks.setBusy(true);
+    try{
+      const raw=hooks.settings(),bitrate=certificate.requestedVideoBitrate;
+      if(!hasCurrentVbr())throw Error('来源、预算或已验证配置发生变化');
+      const formal=compileTask({...raw,codec:candidate.codec,
+        encoder:candidate.encoder,preset:candidate.preset,
+        rateMode:'bitrate',bitrate,multipass:'disabled',twoPass:false},media);
+      await hooks.validate?.(formal);
+      if(aborted||disposed||!hasCurrentVbr())
+        throw Error('预检期间配置变化，已阻止旧证据写入');
+      const outcome=hooks.adoptCandidate?.({
+        candidate,bitrate,
+        expectedSettings:certificate.expectedSettings,
+        expectedSourceIdentity:certificate.expectedSourceIdentity,media
+      });
+      if(!outcome?.ok)throw Error('表单事务拒绝提交：'+(outcome?.reason||'missing-bridge'));
+      // Formal task form is now authoritative. Discard CQ/VBR certificates
+      // from the old candidate context; do not certify the output artifact.
+      session?.invalidate('candidate-applied');
+      comparison=null;verifiedVbr=null;active=false;
+      back.hidden=true;details.hidden=true;
+      message('已按明确确认写入 '+candidate.encoder+' · '+
+        (bitrate/1e6).toFixed(2)+' Mbps。正式任务须重新检查和编码；VBR 短样不证明整片质量或成品体积。');
+    }catch(error){
+      message('未写入编码方案：'+(error?.message||error));
+      hooks.log?.('纯转码正式参数交接：'+(error?.stack||error));
     }finally{
       running=false;hooks.setBusy(false);
       if(!disposed){renderControls();onRenderSingle();}
