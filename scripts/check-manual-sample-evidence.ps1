@@ -9,7 +9,8 @@ try {
     & ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc2=size=160x90:rate=12:duration=2' -c:v libx264 -preset ultrafast -crf 28 $source
     if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $source)){throw 'Failed to generate real media input.'}
     $ffmpeg=(Get-Command ffmpeg.exe).Source
-    $version=(& ffmpeg -version | Select-Object -First 1)
+    $version=((& ffmpeg -version) | Select-Object -First 1)
+    if($LASTEXITCODE -ne 0){throw 'FFmpeg version probe exited unsuccessfully.'}
     $before=New-ManualNativeSampleSnapshot $source $ffmpeg ([string]$version)
     $after=New-ManualNativeSampleSnapshot $source $ffmpeg ([string]$version)
     if($before.source -ne $after.source -or $before.runtime -ne $after.runtime){throw 'Stable source/runtime must preserve token.'}
@@ -46,3 +47,4 @@ try {
 }finally{
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 }
+exit 0
