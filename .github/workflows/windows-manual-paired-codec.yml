@@ -1,0 +1,46 @@
+name: Windows Manual paired codec acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'windows/native-bridge.ps1'
+      - 'windows/manual-sample-evidence.ps1'
+      - 'windows/native-backend.ps1'
+      - 'src/manual-transcode-comparison.js'
+      - 'src/rate-distortion-model.js'
+      - 'src/compression-decision.js'
+      - 'src/size-frontier-ui.js'
+      - 'scripts/check-manual-native-paired.ps1'
+      - 'scripts/verify-manual-native-paired.mjs'
+      - '.github/workflows/windows-manual-paired-codec.yml'
+  workflow_dispatch:
+
+jobs:
+  native-paired:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install FFmpeg and FFprobe
+        shell: powershell
+        run: choco install ffmpeg --yes --no-progress
+      - name: Verify FFmpeg backend and required CPU encoders
+        shell: powershell
+        run: |
+          $ffmpeg=(Get-Command ffmpeg.exe -ErrorAction Stop).Source
+          $ffprobe=(Get-Command ffprobe.exe -ErrorAction Stop).Source
+          if(-not (Test-Path -LiteralPath $ffmpeg) -or -not (Test-Path -LiteralPath $ffprobe)){
+            throw 'FFmpeg/FFprobe toolchain was not installed'
+          }
+          $encoders=(& ffmpeg -hide_banner -encoders 2>&1) -join "`n"
+          foreach($required in @('libx264','libx265','ffv1')){
+            if($encoders -notmatch ('\b'+[regex]::Escape($required)+'\b')){
+              throw "Required encoder missing from hosted runner: $required"
+            }
+          }
+      - name: Run actual localhost Bridge paired x264/x265 source SSIM
+        shell: powershell
+        run: ./scripts/check-manual-native-paired.ps1
