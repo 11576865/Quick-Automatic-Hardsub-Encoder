@@ -159,8 +159,13 @@ export async function runManualPairedSweep({
   onProgress=()=>{},maxRequests=64
 }={}) {
   if(!session?.ok || typeof session.addSample!=='function' ||
-     !Array.isArray(branches) || !Array.isArray(qualitySettings) ||
-     !qualitySettings.length || typeof sampleNative!=='function' ||
+     !Array.isArray(branches) || branches.length<2 ||
+     branches.length>12 || !Array.isArray(qualitySettings) ||
+     qualitySettings.length<2 ||
+     qualitySettings.some(q=>!Number.isSafeInteger(q)||q<0||q>63) ||
+     new Set(qualitySettings).size!==qualitySettings.length ||
+     new Set(branches.map(b=>b?.id)).size!==branches.length ||
+     typeof sampleNative!=='function' ||
      typeof shouldStop!=='function' || typeof onProgress!=='function' ||
      !Number.isSafeInteger(maxRequests) || maxRequests<1 ||
      maxRequests>512)return {ok:false,reason:'invalid-sweep-plan'};
