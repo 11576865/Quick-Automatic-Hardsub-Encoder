@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync,writeFileSync,statSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 const [source,output,requestFile,statusFile,reportPath]=process.argv.slice(2);
 if(!source||!output||!requestFile||!statusFile)throw Error(
   'Usage: verify-manual-adopted-native-output.mjs source output request.json status.json');
@@ -96,6 +97,22 @@ for(const [selector,minimum] of [['a:0',20],['a:1',20],['s:0',2]]){
   streamCopyProof.push({selector,count:outputPackets.length,
     payloadBytes:outputPackets.reduce((n,p)=>n+Number(p.size||0),0)});
 }
+// Independent decoded PCM comparison: packet identity alone does not prove
+// there was no AAC priming/sync loss after mux. Compare both full audio streams
+// at a fixed mono/48kHz decode format and report exact sample counts.
+const decodedAudio=[];
+for(const [i,codec] of ['flac','aac'].entries()){
+  const pcm=file=>execFileSync('ffmpeg',[
+    '-v','error','-nostdin','-i',file,'-map',`0:a:${i}`,
+    '-ac','1','-ar','48000','-c:a','pcm_s16le','-f','s16le','-'
+  ],{maxBuffer:8*1024*1024,timeout:45000});
+  const before=pcm(source),after=pcm(output);
+  assert.ok(before.length>0 && before.length%2===0);
+  assert.equal(after.length,before.length,codec+' decoded PCM duration mismatch');
+  const sha=data=>createHash('sha256').update(data).digest('hex');
+  assert.equal(sha(after),sha(before),codec+' decoded PCM samples changed');
+  decodedAudio.push({codec,samples:after.length/2,sha256:sha(after),identical:true});
+}
 const outputVideoPacketBytes=packets(output,'v:0')
   .reduce((n,p)=>n+Number(p.size||0),0);
 const totalBytes=statSync(output).size;
@@ -145,6 +162,7 @@ const report={
   perStreamPacketProof:streamCopyProof,
   copiedAudioPacketSha256AllMatch:true,
   copiedAssPacketSha256AllMatch:true,
+  decodedAudioPcmFullStreamMatches:decodedAudio,
   assCodecPrivateSha256Matched:true,
   syntheticTtfAttachmentSha256Matched:true,
   copiedChapters:actual.chapters.length,
@@ -159,6 +177,7 @@ const report={
   actualWholeContainerBytes:totalBytes,
   wholeFileDecodedSsim:+wholeSsim.toFixed(6),
   targetWholeFileContainerBytesGuaranteed:false,
+  subtitleVisualRenderingVerified:false,
   playbackOnExternalPlayerVerified:false,
   userDeviceVerified:false
 };
