@@ -14,12 +14,12 @@ const run=(exe,args)=>{
   catch(e){throw Error(exe+' failed: '+String(e.stderr||e.message).slice(-2300));}
 };
 const probe=(file)=>JSON.parse(run('ffprobe',[
-  '-v','error','-show_format','-show_streams','-of','json',file
+  '-v','error','-show_format','-show_streams','-show_chapters','-show_data_hash','sha256','-of','json',file
 ]));
-const hashes=(file)=>JSON.parse(run('ffprobe',[
-  '-v','error','-select_streams','a:0','-show_packets','-show_data_hash','sha256',
-  '-show_entries','packet=data_hash','-of','json',file
-])).packets.map(p=>p.data_hash);
+const packets=(file,selector)=>JSON.parse(run('ffprobe',[
+  '-v','error','-select_streams',selector,'-show_packets','-show_data_hash','sha256',
+  '-show_entries','packet=data_hash,size','-of','json',file
+])).packets;
 const input=probe(source),actual=probe(output);
 const task=JSON.parse(readFileSync(requestFile,'utf8')).request.task;
 const bridge=JSON.parse(readFileSync(statusFile,'utf8'));
@@ -34,18 +34,61 @@ const sv=input.streams.filter(s=>s.codec_type==='video');
 const sa=input.streams.filter(s=>s.codec_type==='audio');
 const ov=actual.streams.filter(s=>s.codec_type==='video');
 const oa=actual.streams.filter(s=>s.codec_type==='audio');
-assert.equal(sv.length,1);assert.equal(sa.length,1);
-assert.equal(ov.length,1);assert.equal(oa.length,1);
+const ss=input.streams.filter(s=>s.codec_type==='subtitle');
+const os=actual.streams.filter(s=>s.codec_type==='subtitle');
+const st=input.streams.filter(s=>s.codec_type==='attachment');
+const ot=actual.streams.filter(s=>s.codec_type==='attachment');
+assert.equal(sv.length,1);assert.equal(sa.length,2);
+assert.equal(ov.length,1);assert.equal(oa.length,2);
+assert.equal(ss.length,1);assert.equal(os.length,1);
+assert.equal(st.length,1);assert.equal(ot.length,1);
 assert.equal(sv[0].codec_name,'ffv1');
 assert.equal(ov[0].codec_name,'hevc');
-assert.equal(sa[0].codec_name,'flac');
-assert.equal(oa[0].codec_name,'flac');
+assert.deepEqual(sa.map(x=>x.codec_name),['flac','aac']);
+assert.deepEqual(oa.map(x=>x.codec_name),['flac','aac']);
+assert.equal(task.expectedAudioTracks,2);
+assert.equal(task.keepSubtitles,true);
+assert.equal(task.keepAttachments,true);
+assert.equal(task.keepMetadata,true);
+assert.equal(task.keepChapters,true);
+assert.deepEqual(sa.map(x=>x.tags?.language),['jpn','eng']);
+assert.deepEqual(oa.map(x=>x.tags?.language),['jpn','eng']);
+assert.equal(ss[0].codec_name,'ass');assert.equal(os[0].codec_name,'ass');
+assert.equal(ss[0].tags?.language,'jpn');assert.equal(os[0].tags?.language,'jpn');
+assert.equal(ss[0].extradata_hash,os[0].extradata_hash);
+assert.equal(st[0].codec_name,'ttf');assert.equal(ot[0].codec_name,'ttf');
+assert.equal(st[0].tags?.filename,'QHE-Synthetic-CI.ttf');
+assert.equal(ot[0].tags?.filename,st[0].tags?.filename);
+assert.equal(ot[0].tags?.mimetype,st[0].tags?.mimetype);
+assert.ok(st[0].extradata_hash?.startsWith('SHA256:'));
+assert.equal(ot[0].extradata_hash,st[0].extradata_hash,
+  'Embedded self-generated TrueType font data must be unchanged');
+assert.equal(input.format.tags?.title,'QHE MANUAL COMPLEX V4 CI');
+assert.equal(actual.format.tags?.title,input.format.tags?.title);
+assert.equal(input.chapters.length,2);
+assert.equal(actual.chapters.length,2);
+for(let i=0;i<2;i++){
+  const x=input.chapters[i],y=actual.chapters[i];
+  assert.equal(y.tags?.title,x.tags?.title);
+  assert.ok(Math.abs(Number(y.start_time)-Number(x.start_time))<.01);
+  assert.ok(Math.abs(Number(y.end_time)-Number(x.end_time))<.01);
+}
 assert.equal(ov[0].width,320);assert.equal(ov[0].height,180);
 assert.equal(ov[0].pix_fmt,'yuv420p');
-const sourceHashes=hashes(source),outputHashes=hashes(output);
-assert.ok(sourceHashes.length>=20,'Too few source audio packets to establish copy');
-assert.deepEqual(outputHashes,sourceHashes,
-  'Copied FLAC payload packets must be byte-identical and in order');
+const streamCopyProof=[];
+for(const [selector,minimum] of [['a:0',20],['a:1',20],['s:0',2]]){
+  const inputPackets=packets(source,selector),outputPackets=packets(output,selector);
+  const sourceHashes=inputPackets.map(x=>x.data_hash),
+    outputHashes=outputPackets.map(x=>x.data_hash);
+  assert.ok(sourceHashes.length>=minimum,
+    'Source contains too few packets for '+selector);
+  assert.deepEqual(outputHashes,sourceHashes,
+    'Stream-copy packet payload hashes must match for '+selector);
+  streamCopyProof.push({selector,count:outputPackets.length,
+    payloadBytes:outputPackets.reduce((n,p)=>n+Number(p.size||0),0)});
+}
+const outputVideoPacketBytes=packets(output,'v:0')
+  .reduce((n,p)=>n+Number(p.size||0),0);
 const totalBytes=statSync(output).size;
 assert.ok(totalBytes>0);
 assert.equal(totalBytes,Number(actual.format.size));
@@ -89,8 +132,17 @@ const totalRequestedVideoBytes=task.bitrate*srcDuration/8;
 const report={
   result:'PASS',evidence:'actual full formal v4 Windows Native HEVC encode',
   sourceVideoCodec:sv[0].codec_name,outputVideoCodec:ov[0].codec_name,
-  copiedAudioCodec:oa[0].codec_name,audioPackets:outputHashes.length,
+  copiedAudioCodecs:oa.map(x=>x.codec_name),
+  perStreamPacketProof:streamCopyProof,
   copiedAudioPacketSha256AllMatch:true,
+  copiedAssPacketSha256AllMatch:true,
+  assCodecPrivateSha256Matched:true,
+  syntheticTtfAttachmentSha256Matched:true,
+  copiedChapters:actual.chapters.length,
+  outputVideoPacketBytes,
+  copiedAudioAndSubtitlePacketBytes:streamCopyProof.reduce((n,x)=>n+x.payloadBytes,0),
+  otherBytesIncludingFontAndMux:totalBytes-outputVideoPacketBytes-
+    streamCopyProof.reduce((n,x)=>n+x.payloadBytes,0),
   framesInput:inputFrames,framesOutput:outputFrames,
   sourceDuration:+srcDuration.toFixed(3),outputDuration:+length.toFixed(3),
   requestedVideoBitrate:task.bitrate,
