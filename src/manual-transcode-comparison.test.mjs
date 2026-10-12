@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createManualTranscodeComparison, normalizeManualComparisonProtocol } from './manual-transcode-comparison.js';
+import { createManualTranscodeComparison, normalizeManualComparisonProtocol, admitManualNativeCqSample } from './manual-transcode-comparison.js';
 
 // Synthetic readings use the same paired windows and source-decode reference,
 // not actual FFmpeg/GPU evidence. Runtime field acceptance is separate.
@@ -141,4 +141,52 @@ test('protocol windows are ordered, bounded, non-overlapping, and never invented
     const s=protocol();s.windows=windows;
     assert.equal(normalizeManualComparisonProtocol(s).ok,false,JSON.stringify(windows));
   }
+});
+
+test('native CQ receipt admits only same source/runtime/reference, encoder and paired window',()=>{
+  const p=protocol();
+  p.sourceToken='stat-sha256:source';
+  p.runtimeToken='stat-sha256:ffmpeg';
+  p.referenceToken='direct-source-v0-yuv420p-setpts-ssim-v1';
+  p.filterToken='no-video-filters-sdr-yuv420p-v1';
+  const c=trial('h264','h264','libx264').candidate;
+  const sample={
+    encoder:'libx264',ssim:.98,totalVideoBytes:250000,duration:2,
+    nativeEvidence:{
+      schemaVersion:1,method:'windows-native-exact-cq-v1',
+      referenceMetric:p.referenceMetric,
+      sourceToken:p.sourceToken,runtimeToken:p.runtimeToken,
+      referenceToken:p.referenceToken,filterToken:p.filterToken,
+      identityKind:'file-stat-snapshot-not-content-hash',
+      videoStream:0,pixelFormat:'yuv420p',mode:'quality',
+      requestedRate:0,requestedQuality:24,requestedStart:58,
+      requestedDuration:2,actualDuration:2,encoder:'libx264',
+      preset:'medium'
+    }
+  };
+  const input={sample,protocol:p,candidate:c,window:p.windows[1],qualitySetting:24};
+  const accepted=admitManualNativeCqSample(input);
+  assert.equal(accepted.ok,true);
+  assert.deepEqual(accepted.measurement,{start:58,duration:2,ssim:.98,bitrate:1000000});
+  for(const field of ['sourceToken','runtimeToken','referenceToken','filterToken','method','encoder','preset','mode']){
+    const copy=structuredClone(sample);
+    copy.nativeEvidence[field]='wrong';
+    assert.equal(admitManualNativeCqSample({...input,sample:copy}).ok,false,field);
+  }
+  for(const field of ['requestedStart','requestedDuration','requestedQuality','actualDuration']){
+    const copy=structuredClone(sample);
+    copy.nativeEvidence[field]=field==='requestedQuality'?25:12;
+    assert.equal(admitManualNativeCqSample({...input,sample:copy}).ok,false,field);
+  }
+  const vbr=structuredClone(sample);
+  vbr.nativeEvidence.method='windows-native-exact-vbr-v1';
+  vbr.nativeEvidence.mode='bitrate';
+  vbr.nativeEvidence.requestedRate=1000000;
+  assert.equal(admitManualNativeCqSample({...input,sample:vbr}).reason,'incompatible-native-receipt');
+  const invalid=structuredClone(sample);
+  invalid.ssim='0.98';
+  assert.equal(admitManualNativeCqSample({...input,sample:invalid}).reason,'invalid-native-sample-measurement');
+  const missing=structuredClone(sample);
+  delete missing.nativeEvidence;
+  assert.equal(admitManualNativeCqSample({...input,sample:missing}).reason,'incompatible-native-receipt');
 });
