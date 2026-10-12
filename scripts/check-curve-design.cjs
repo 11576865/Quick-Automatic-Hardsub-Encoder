@@ -120,6 +120,16 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     await page.locator('#taskCompareSingle').click();
     assert.equal(await page.locator('#taskCompareSingle').isVisible(),false);
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
-    console.log('Single curve design + optional Manual x264/x265 read-only compare (browser-mocked Native) desktop/mobile passed');
+    // Fail closed for a source/processing setting that cannot be reproduced
+    // by the exact SDR/yuv420p native sample protocol.
+    await page.evaluate(()=>{window.__curveMock.raw.pixelFormat='p010le';});
+    await page.locator('#taskCompareStart').click();
+    await page.waitForFunction(()=>/本次对比不可用于推荐/.test(
+      document.querySelector('#taskCompareStatus')?.textContent||''
+    ));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/无额外滤镜/);
+    assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),0);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),0);
+    console.log('Single curve + Manual native-mocked comparison: desktop, phone, keyboard, and fail-closed unsupported protocol passed');
   } finally {await page.close();}
 };
