@@ -1738,6 +1738,7 @@ body.media-frame-lightbox-open {
 
 .media-curve-legend {display:flex;gap:8px 15px;flex-wrap:wrap;font-size:.74rem;line-height:1.4;color:var(--muted)}
 .media-curve-legend span {display:inline-flex;align-items:center;gap:6px}
+.media-curve-legend span[hidden] {display:none!important}
 .media-curve-legend span::before {content:"";display:inline-block;width:13px;height:8px;box-sizing:border-box}
 .legend-search::before {border-top:2px dashed var(--plan)}
 .legend-fit::before {border-top:3px solid var(--plan)}
