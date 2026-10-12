@@ -48,6 +48,10 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     await page.setViewportSize({width:1280,height:900});
     await page.evaluate(async()=>{
       const {mountTranscodeCurves}=await import('/src/transcode-calibration-panel.js');
+      // Earlier static-curve fixture has already been captured and checked.
+      // Remove it so this screenshot represents ONLY the Manual workspace.
+      document.querySelector('main>h2')?.remove();
+      document.querySelector('#charts')?.remove();
       const section=document.createElement('section');
       section.id='manual-compare-test';
       section.innerHTML='<div id="taskEncoding"></div>';
@@ -102,8 +106,13 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     const compareStatus=await page.locator('#taskCompareStatus').textContent();
     assert.match(compareStatus,/双编码器实测完成/,
       'Native-mocked browser test must complete and render a comparable model: '+compareStatus);
+    assert.equal(await page.locator('svg').count(),1);
     assert.equal(await page.locator('#manual-compare-test svg').count(),1);
     assert.equal(await page.locator('#taskCompareCandidates li').count(),2);
+    assert.equal(await page.locator('#taskCompareDetails').getAttribute('open'),'');
+    assert.equal(await page.locator('#taskVerifyCurveRate').isVisible(),false);
+    assert.equal(await page.locator('#taskExploreCurve').isVisible(),false);
+    assert.equal(await page.locator('.media-curve-legend .legend-fit').textContent(),'候选择优上包络');
     assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),1);
     // A decision-threshold-only change must reuse costly completed evidence.
     await page.locator('#taskExploreTarget').fill('0.975');
