@@ -154,3 +154,26 @@ The dedicated Windows CI workflow now also archives the **synthetic** FFV1+FLAC 
 - downstream saved/exported user artifact and visual GUI field-device confirmation.
 
 Owner review, draft PR status and Canonical governance remain unchanged. The full-file evidence is CI-synthetic, albeit **truly executed through the formal Native task backend**.
+
+
+## 2026-10-13 formal task full-range AAC priming fix + rich MKV output acceptance
+
+This is a **new regression boundary** beyond the previous 5-second one-audio synthetic FFV1+FLAC formal artifact. The same actual Manual candidate adoption → formal task v4 → Windows Native `/api/encode` now consumes a **self-generated 5-second Matroska fixture** with FFV1 primary video, FLAC (jpn) and AAC (eng) audio, embedded ASS (jpn), one valid **self-generated** 1000-byte TrueType font attachment `QHE-Synthetic-CI.ttf` (no proprietary Windows font), two chapters and container metadata. New generator `scripts/build-manual-rich-native-fixture.mjs` uses no download or external font-generation dependency. The existing independent artifact checker now checks each copied audio/subtitle packet SHA-256 sequence, actual ASS codec-private hash, TTF attachment extradata hash/filename/MIME, language identity, chapter titles/times, container title, video format/frame count/full-reference SSIM, whole container byte count, **full decoded audio PCM identity**, and an observed byte breakdown.
+
+**A real previously-undetected loss was found by first Windows CI run**: FFmpeg 9.0.2 Windows Bridge dropped the **first AAC packet** only in the formal output, leaving 235 of 236 encoded AAC packets. The source first AAC packet had PTS/DTS `-0.021s` with `Skip Samples: 1024`; first output packet was the source's second packet at PTS 0, with skip_samples now attached there. Independent downloaded input/output decoding observed the output AAC PCM was **1024 samples shorter**. This is not merely a harmless container hash difference. By contrast local Linux FFmpeg 7.1.5 output kept the AAC pre-roll packet despite the same original task. Version-specific handling matters.
+
+Root: the shared `src/media-task.js` compiler unconditionally prepended output-side `-ss 0` to *all* task `outputArgs`, even when `hasTrimRange=false`. Output seeking at zero can discard legitimate negative-PTS codec priming packets while retaining the rest of an audio stream. The fix emits `-ss 0` **only for actual trimmed-range tasks**, not for untrimmed/full-range transcode or Stream Copy. This protects source packet integrity without weakening the verifier or changing the actual trim path. A new `src/media-task.test.mjs` case specifically asserts the distinction. Because this is shared task compilation, frontend, Windows Native, Stream Plan v4, Android emulator and other affected test workflows must still pass independently.
+
+**First actual Windows green rich-MKV run** `38286715465` at QHE head `45f5538f714dcd952f03324bffa2e4bf325f73cc`, after this source-level fix:
+- 60/60 video frames, FFV1 → HEVC, full decoded source-vs-output SSIM `0.999738` on the synthetic test;
+- FLAC **235/235 packets** identical in order by SHA-256;
+- AAC **236/236 packets**, including the previously lost pre-roll, identical in order by SHA-256;
+- embedded ASS **2/2 packets** and ASS codec-private SHA-256 equal;
+- font attachment actual TTF binary SHA-256 equal, same filename/MIME;
+- two chapters, language tags jpn/eng, Matroska title preserved;
+- observed full MKV **422802 bytes**, of which video packet payloads **268272 B**, copied audio+subtitle packet payloads **145440 B**, residual font/metadata/mux overhead **9090 B**. These are **observed output accounting**, not a strict size guarantee or predicted allocation.
+- It publishes CI-generated actual source, output and `full-output-acceptance.json` in workflow artifact `11763342739` (14-day retention). The actual downloaded files were independently re-probed and their copy-stream hashes verified in the conversation. Both source and output full AAC and FLAC decoded PCM SHA-256 were also independently compared and found identical.
+
+A subsequent amendment added those decoded PCM comparisons directly to `scripts/verify-manual-adopted-native-output.mjs`; check its new exact-head CI before claiming that particular automated assertion has passed. All evidence remains Windows hosted with an **artificial**, intentionally small two-tone fixture; this does not verify libass visual fidelity, subtitle rendering on external players, arbitrary real-world content, physical hardware, strict target size, real-user save/export or cross-device compatibility. A font attachment can be structurally preserved even when no particular player has been proven to render its glyphs.
+
+See distinct Foundry Bug/Test (Intake) for the AAC pre-roll loss; do not automatically change Canonical or merge the Draft PR from one hosted fixture.
