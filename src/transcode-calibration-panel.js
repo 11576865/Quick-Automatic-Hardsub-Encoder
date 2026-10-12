@@ -442,6 +442,7 @@ export function mountTranscodeCurves(section, hooks) {
   });
   compareController=mountManualTranscodeComparison({
     panel,hooks,chart:efficiency,readout,getSourceKey:measurementKey,
+    getTargetSsim:()=>parseMeasuredQuality(targetControl.value),
     onRenderSingle:()=>render()
   });
   const refresh=()=>{
