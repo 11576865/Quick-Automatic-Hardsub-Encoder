@@ -233,3 +233,19 @@ test('timeline frame preview seeks exact requested time and scales bounded outpu
   assert.match(result.url,/^blob:/);
   URL.revokeObjectURL(result.url);
 });
+
+test('untrimmed transcode/copy never inserts output seek zero that may drop AAC priming',()=>{
+  const transcode=build({start:0,end:'',videoRange:'full',audio:'copy',audioRange:'full',
+    outputContainer:'mkv'});
+  assert.equal(transcode.hasTrimRange,false);
+  assert.equal(transcode.outputArgs.includes('-ss'),false);
+  assert.deepEqual(transcode.outputArgs.slice(0,2),['-map','0:v:0']);
+
+  const streamCopy=build({operation:'copy',start:0,end:'',
+    videoRange:'full',audioRange:'full',outputContainer:'mkv'});
+  assert.equal(streamCopy.outputArgs.includes('-ss'),false);
+
+  const trimmed=build({start:1,end:3,videoRange:'trim',audioRange:'full'});
+  assert.equal(trimmed.hasTrimRange,true);
+  assert.deepEqual(trimmed.outputArgs.slice(0,2),['-ss','0']);
+});
