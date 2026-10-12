@@ -5,7 +5,7 @@ const valid=(v)=>typeof v==='string'&&v.length>0;
 export function commitVerifiedManualCandidate({
   candidate,bitrate,expectedSettings,expectedSourceIdentity,
   read,sourceIdentity,get,updateEncoder,updatePreset,updateRate,
-  compile,media,onCommitted
+  compile,media
 }={}) {
   if(!candidate||!['h264','h265'].includes(candidate.codec)||
      !({h264:'libx264',h265:'libx265'}[candidate.codec]===candidate.encoder)||
@@ -58,7 +58,6 @@ export function commitVerifiedManualCandidate({
     // Signal only AFTER every field is updated and a full task has compiled.
     // Listening forms must see one coherent transaction, not intermediate
     // codec/encoder/preset states; a rejection must not emit an input event.
-    onCommitted?.(task);
     return {ok:true,kind:'manual-explicit-vbr-handoff-v1',task};
   }catch(error){
     try{
