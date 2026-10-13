@@ -1312,6 +1312,7 @@ function Start-MediaTaskJob($Body) {
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
         StrictBudget=([string]$task.budgetPolicy -eq 'strict-ceiling');BudgetCeiling=[long]$task.sizeCeilingBytes;StrictVerifiedHash='';StrictVerifiedWriteTicks=0L;BudgetRejected=$false
         StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey='';VvcValidating=$false
+        TrimPacketAuditFinished=$false;TrimPacketEvidence=$null
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
@@ -1674,6 +1675,38 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
     return $false
 }
 
+function Get-CompletedTrimPacketEvidence($Job) {
+    if(-not $Job.Task -or -not $Job.Task.hasTrimRange -or
+       [long]$Job.Task.sizePlan.copiedTrimReserveBytes -le 0) {return $null}
+    if($Job.TrimPacketAuditFinished){return $Job.TrimPacketEvidence}
+    $Job.TrimPacketAuditFinished=$true
+    try{
+        # One bounded read of the actual staged artifact, never a prediction
+        # based on cut duration. A failed audit cannot invalidate an otherwise
+        # valid completed encode or relax its strict byte ceiling.
+        $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries stream=index,codec_type -of json '+(Quote-NativeArg $Job.Output)) '' 10
+        if($probe.ExitCode -ne 0){throw 'Completed trim output stream probe failed.'}
+        $streams=@(($probe.StdOut|ConvertFrom-Json).streams)
+        if($streams.Count -gt 64){throw 'Too many streams for bounded trim packet audit.'}
+        $audio=Measure-AuxiliaryPackets $Job.Output 'a'
+        $sub=Measure-AuxiliaryPackets $Job.Output 's'
+        $audioBytes=@($streams | Where-Object {$_.codec_type -eq 'audio'} | ForEach-Object {
+            if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}
+        })
+        $subtitleBytes=@($streams | Where-Object {$_.codec_type -eq 'subtitle'} | ForEach-Object {
+            if($sub.ContainsKey([int]$_.index)){$sub[[int]$_.index]}else{$null}
+        })
+        $Job.TrimPacketEvidence=[pscustomobject]@{
+            version=1;scope='completed-artifact'
+            audioPacketBytes=$audioBytes;subtitlePacketBytes=$subtitleBytes
+        }
+    }catch{
+        Write-BridgeLog ('Trimmed output packet cost audit unavailable for '+$Job.Id+': '+$_.Exception.Message) 'WARN'
+        $Job.TrimPacketEvidence=$null
+    }
+    return $Job.TrimPacketEvidence
+}
+
 function Get-GuidedCompletedBudgetProjection($Job,[long]$ActualBytes) {
     if($Job.Task -or -not $Job.Request -or [string]$Job.Request.mode -ne 'budget-rate'){return $null}
     $request=$Job.Request
@@ -1720,7 +1753,8 @@ function Get-JobStatus([string]$JobId) {
         }
         $actualBytes=(Get-Item -LiteralPath $j.Output).Length
         $budgetProjection=Get-GuidedCompletedBudgetProjection $j $actualBytes
-        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+        $outputPacketEvidence=Get-CompletedTrimPacketEvidence $j
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputPacketEvidence=$outputPacketEvidence;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     if($j.State -eq 'failed'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}}
@@ -1849,7 +1883,8 @@ function Get-JobStatus([string]$JobId) {
         }
         $actualBytes=(Get-Item -LiteralPath $j.Output).Length
         $budgetProjection=Get-GuidedCompletedBudgetProjection $j $actualBytes
-        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+        $outputPacketEvidence=Get-CompletedTrimPacketEvidence $j
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputPacketEvidence=$outputPacketEvidence;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
