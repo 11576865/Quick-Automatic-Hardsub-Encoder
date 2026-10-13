@@ -3,7 +3,7 @@
 const finite=n=>typeof n==='number'&&Number.isFinite(n);
 const near=(a,b,t=.001)=>Math.abs(a-b)<=t;
 export function verifyGuidedNativeVbr({
-  plan,referenceScope,windows,samples,targetSsim,expectedEncoder
+  plan,referenceScope,windows,samples,targetSsim,expectedEncoder,expectedPreset=null
 }={}){
   if(!plan||plan.mode!=='budget-rate'||plan.sizeBudgetPolicy!=='best-effort'||
      !['h264','h265','av1'].includes(plan.codec)||!finite(plan.targetVideoBitrate)||
@@ -33,7 +33,7 @@ export function verifyGuidedNativeVbr({
        r.mode!=='bitrate'||r.requestedRate!==plan.targetVideoBitrate||
        r.requestedQuality!==null||r.codec!==plan.codec||
        r.encoder!==expectedEncoder||sample.encoder!==expectedEncoder||
-       r.preset!==plan.preset||r.multipass!=='disabled'||r.videoStream!==0||
+       r.preset!==(expectedPreset||plan.preset)||r.multipass!=='disabled'||r.videoStream!==0||
        r.pixelFormat!=='yuv420p'||
        r.outputWidth!==(plan.outputWidth||0)||r.outputHeight!==(plan.outputHeight||0)||
        (plan.outputWidth>0&&(r.referenceWidth!==plan.referenceWidth||r.referenceHeight!==plan.referenceHeight))||
