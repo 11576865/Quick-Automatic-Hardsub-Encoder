@@ -142,6 +142,8 @@ try {
       audio=$audioMode;expectedAudioTracks=$audioTracks;outputFormat='matroska';outputExtension='mkv'
       suggestedName="guided-$policy.mkv"}
     if($audioMode -eq 'copy' -and $audioTracks -gt 0){$request.budgetEvidence=$cost}
+    $request.plannedWholeFileBytes=80000L
+    $request.budgetCostBasis=if($audioMode -eq 'copy'){'measured-source-packets'}else{'planned-audio'}
     $body=@{request=$request;assText=$subtitle}|ConvertTo-Json -Depth 12 -Compress
     $started=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/encode" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $body -TimeoutSec 15
     if(-not $started.ok -or -not $started.jobId){throw "$policy encode refused to start"}
@@ -167,8 +169,24 @@ try {
     }else{
       if($result.state -ne 'completed' -or $result.outputBytes -le 0){throw "$policy never produced a valid output"}
       if($policy -eq 'strict-ceiling' -and $result.outputBytes -gt $ceiling){throw 'Strict success exceeded byte ceiling'}
+      if($ceiling -gt 0){
+        $receipt=$result.budgetProjection
+        if(-not $receipt -or [long]$receipt.plannedBytes -ne 80000L -or
+            [long]$receipt.budgetBytes -ne $ceiling -or [string]$receipt.policy -ne $policy){
+          throw 'Guided Native completed status dropped its original byte-budget projection'
+        }
+        if([bool]$receipt.strictVerified -ne ($policy -eq 'strict-ceiling')){
+          throw 'Native strict completion proof mismatches actual acceptance policy'
+        }
+      }
       $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
       if($again.state -ne 'completed'){throw 'Completed staged output is not retained'}
+      if($ceiling -gt 0 -and
+         ([long]$again.budgetProjection.plannedBytes -ne [long]$result.budgetProjection.plannedBytes -or
+          [long]$again.budgetProjection.budgetBytes -ne [long]$result.budgetProjection.budgetBytes -or
+          [bool]$again.budgetProjection.strictVerified -ne [bool]$result.budgetProjection.strictVerified)){
+        throw 'Repeated completed Native status changed or dropped its budget receipt'
+      }
       $lateCancel=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$($started.jobId)/cancel" -Headers $headers
       if($lateCancel.state -ne 'completed'){throw 'Late cancel invalidated a completed output'}
       $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
@@ -183,7 +201,7 @@ try {
     return [string]$started.jobId
   }
   # Real two-pass remux must preserve both selected source audio tracks.
-  $copyId=Test-PolicyRun 'two-pass' 0 $false 'copy' 2
+  $copyId=Test-PolicyRun 'two-pass' 5000000 $false 'copy' 2
   $copyStages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$copyId+"-*"))
   if($copyStages.Count -ne 1){throw 'Expected Native Guided ASS copied-audio output stage'}
   $copyOutput=Join-Path $copyStages[0].FullName 'output.mkv'
