@@ -427,7 +427,11 @@ test('target-size mode exposes a draggable measured frontier', async () => {
   assert.match(main, /sizeFrontierChart'\)\.addEventListener\('keydown', commitSizeFrontierKeyboard\)/);
   assert.match(main, /state\.sizeBudgetTargetBytes = Math\.round\(clamped\)/);
   assert.match(main, /budgetSource: directBudgetBytes > 0 \? 'frontier' : 'multiplier'/);
-  assert.match(main, /directBudgetBytes > 0\s*\? ceilingVideoBitrate/);
+  // Both multiplier and direct-frontier targets use the same formal whole-file
+  // ledger and integer video bitrate; the former split is no longer valid.
+  assert.match(main, /const targetVideoBitrate = ceilingVideoBitrate;/);
+  assert.match(main, /const ceilingVideoBitrate = feasibility\.availableVideoBitrate;/);
+  assert.match(main, /assessGuidedWholeFileBudget\(\{/);
   assert.match(main, /state\.rateDistortionModels = \{\}/);
   assert.match(main, /state\.sizeBudgetTargetBytes = null/);
 
