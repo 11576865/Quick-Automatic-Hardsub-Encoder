@@ -100,6 +100,18 @@ test('Guided width/height and original rendered reference are both bound',()=>{
  s[1].sample.nativeEvidence.referenceWidth=1280;
  assert.equal(check({plan:scaled,samples:s}).reason,'incompatible-guided-rendered-receipt');
 });
+test('Guided hardware Native evidence reports actual production p7, not balanced UI preset',()=>{
+ const cases=samples();
+ for(const x of cases){
+   x.sample.encoder='h264_nvenc';
+   x.sample.nativeEvidence.encoder='h264_nvenc';
+   x.sample.nativeEvidence.preset='p7';
+ }
+ const matched=check({samples:cases,expectedEncoder:'h264_nvenc',expectedPreset:'p7'});
+ assert.equal(matched.ok,true);
+ assert.equal(check({samples:cases,expectedEncoder:'h264_nvenc',expectedPreset:'p4'}).reason,
+   'incompatible-guided-rendered-receipt');
+});
 test('Guided UI uses real paired ASS Native sample with SHA-256 and explicit approval',async()=>{
  const {readFile}=await import('node:fs/promises');
  const [main,bridge,helper]=await Promise.all([
