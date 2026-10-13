@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_guided_native_budget_receipt_recovery_verified_hosted_partial",
-  "current_bounded_work_unit": "B13 Windows Native Guided ASS source-owned copied-audio budget, real two-stream output, and same-process page-reload byte receipt recovery",
+  "status": "incomplete_full_report_b16_postoutput_trim_audit_hosted_short_media_pending",
+  "current_bounded_work_unit": "B16 per-stream completed trimmed copied-audio/subtitle packet audit, conservative preflight reserve retained; short Linux FFmpeg and Windows Native Bridge tests",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -140,9 +140,9 @@
       "id": "B16",
       "source": "R19 §11；R24 §18",
       "requirement": "复制流精确范围成本、重编码音频成本、附件和余量完整计量",
-      "implementation_status": "部分实现",
-      "evidence": "media-planning.js；Windows source-budget；whole-file-budget tests",
-      "remaining": "裁切采用全源保守预留；FLAC重编码拒绝；Android/Web计量缺；必须保留为初版开放项"
+      "implementation_status": "Partial: retains safe full-source preflight reserve for trims, adds verified completed-output per-stream copied packet audit and visible/reportable source-vs-output byte delta; short FFmpeg/Linux and Windows Native 2-track acceptance tested; no precise preflight trim predictor.",
+      "evidence": "media-planning.js；Windows source-budget；whole-file-budget tests；trim-copy-audit.js + tests; media-planning.js::outputReport trimCopyAudit; windows/native-bridge.ps1 bounded FFprobe completion audit; main.js/media-workspace.js result+UI; whole-file-budget.integration.test.mjs Linux actual MKV and scripts/check-guided-budget-native.ps1 Windows Native two PCM trim. Frontend 7d3b784 test+integration PASS; Windows local smoke 451be21 PASS; later current SHA fb07c74 full CI pending.",
+      "remaining": "Pre-encode precise range-bound copy cost is not proven; full-source conservative reserve remains authoritative; auto short-media output audit capped at 180 sec/512 MiB, long-form asynchronous measurement missing; FLAC re-encode unknown, Android/Web metering, complex MKV and physical client acceptance Pending."
     },
     {
       "id": "B17",
@@ -229,10 +229,11 @@
     "Guided ASS short real MKV (2 AAC copied audio, SRT+attachment dropped, burned ASS) budget parity to formal v4 compiler, independent ffprobe packet-byte and output gate regressions; frontend hosted full suite 38422475740 succeeded.",
     "Shared workbench audio edits and config restoration now notify Guided cost-projection views; source wiring and actual Chromium DOM-event/no-encode regression; exact implementation frontend 38423311878 succeeded.",
     "B13 Windows Native source budget receipt: Native-selected source/packet cost validation rejects missing, stale, tampered or false zero-track claims, and real two-pass Guided ASS preserves two copied audio packet SHA256 hashes; 9/9 CI PASS at ad917ef, Native step and 9/9 CI PASS at 09ce78c.",
-    "B13 Native same-process page-reload completed budget comparison: budgetProjection is returned on both completed status paths after strict output gate; UI recovers original planning target, actual output, origin and Native-only strict verification. Pure/VM recovery tests and hosted real Windows Guided two-pass/strict smoke step PASS; 429de52 frontend PASS; entire exact-head platform suite still completing at checkpoint."
+    "B13 Native same-process page-reload completed budget comparison: budgetProjection is returned on both completed status paths after strict output gate; UI recovers original planning target, actual output, origin and Native-only strict verification. Pure/VM recovery tests and hosted real Windows Guided two-pass/strict smoke step PASS; 429de52 frontend PASS; entire exact-head platform suite still completing at checkpoint.",
+    "B16 post-output audit: native completed structured trim task returns source-linked completed-artifact audio/subtitle packet byte observation; normalized report maps output ordinals, reveals full-source overreserve, leaves formal strict ceiling unchanged. Linux actual MKV and Windows Native two-PCM trim tests PASS at 7d3b784/451be21; newer exact code fb07c74 CI pending."
   ],
   "next_units": [
-    "B13 remaining: Native Bridge process restart still loses in-memory job state; source-referenced Guided ASS CQ/VBR quality comparison and physical/long-form/external playback acceptance pending. B16 exact trimmed copied packets, FLAC reencode costs, Android/Web auxiliary cost measurement also open. Keep same-process browser-reload semantics distinct from process persistence.",
+    "B16 next: exact pre-encode trimmed copy packet cost remains unknown (full-source upper reserve retained); implement bounded asynchronous long-form range measurement with proof rather than duration scaling; FLAC re-encode bitrate/byte cost and Android/Web source metering open. B13 Native Bridge process restart/quality adoption and physical/long-form checks remain open.",
     "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
     "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
     "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
@@ -240,15 +241,16 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "429de527dd57b09f5441a7d21f119d5307b15af7",
+  "latest_durable_commit": "fb07c74b6174d309fa06243805855044b76e7677",
   "external_validation_states": {
-    "latest_tested_implementation": "Code 429de52: hosted frontend PASS, Windows Native real Guided two-pass/strict budget receipt step PASS, remaining independent Android emulator/VVC/Windows workflow completion pending at ledger update. Earlier source ad917ef all 9/9 success. No full initial version acceptance.",
+    "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
     "whole_product": "Incomplete",
     "new_whole_file_frontier": "Pending hosted browser and platform",
     "previous_whole_file_frontier": "9/9 success at 73c9470",
     "new_single_budget": "Pending browser and platform regression",
-    "new_guided_budget": "Source receipts: real Windows Native copied audio total and ordered packet SHA256, rejected stale/tampered/fake zero count 9/9 CI at ad917ef. Source 429de52 recovery byte receipt: pure/VM+frontend PASS, real Windows Native step PASS; whole exact-head suite pending at last observation."
+    "new_guided_budget": "Source receipts: real Windows Native copied audio total and ordered packet SHA256, rejected stale/tampered/fake zero count 9/9 CI at ad917ef. Source 429de52 recovery byte receipt: pure/VM+frontend PASS, real Windows Native step PASS; whole exact-head suite pending at last observation.",
+    "b16_trim_audit": "PASS short-source real Linux FFmpeg and Windows Native completed output packet audits; still post-output only, no strict-preflight replacement; newer exact-head runs pending"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
