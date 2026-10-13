@@ -520,6 +520,19 @@ function Get-PreferredEncoder([string]$Codec) {
 function Get-BridgeEncoderArgs($Profile, $Options) {
     if (-not $Profile) { throw 'No available encoder for this codec.' }
     $targetRate = [long]($Options.targetVideoBitrate)
+    if ([bool]$Options.sampleExact -and [bool]$Options.guidedRenderedReference) {
+        # Match the CURRENT production Guided VBR encoder args exactly. In
+        # particular hardware Guided uses p7+tune+maxrate/bufsize, unlike the
+        # no-subtitle Manual exact VBR profile. Never substitute that profile.
+        if($targetRate -le 0){throw 'Guided exact sample needs positive VBR bitrate.'}
+        if($Profile.Hardware){
+            $tune=if($Profile.Tune){$Profile.Tune}else{'hq'}
+            return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -b:v $targetRate -maxrate $targetRate -bufsize $($targetRate * 2)"
+        }
+        $preset=[string]$Options.preset
+        if(-not $preset){$preset=[string]$Profile.SoftwarePreset}
+        return "-c:v $($Profile.Encoder) -preset $preset -b:v $targetRate"
+    }
     if ([bool]$Options.sampleExact) {
         # Exact samples may verify either the measured CQ mode or the
         # final bitrate/VBR mode, with the same selected encoder and preset.
