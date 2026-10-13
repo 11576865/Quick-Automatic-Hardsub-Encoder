@@ -34,7 +34,10 @@ module.exports=async function checkVvcUi(browser,baseUrl){
       assert.match(await page.locator('#taskVvcCapability').textContent(),/播放器/);
       await page.screenshot({path:'media-workspace-vvc-desktop.png',fullPage:true});
       await page.setViewportSize({width:390,height:844});
-      assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'VVC UI must not overflow mobile');
+      await page.waitForFunction(()=>document.documentElement.dataset.uiShell==='phone');
+      await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+      const geometry=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,overflow:[...document.querySelectorAll('body *')].filter(el=>el.getBoundingClientRect().right>innerWidth+1).slice(0,12).map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right}))}));
+      assert.ok(geometry.scroll<=geometry.width,'VVC UI must not overflow mobile: '+JSON.stringify(geometry));
       await page.screenshot({path:'media-workspace-vvc-mobile.png',fullPage:true});
       await page.locator('[name="codec"]').selectOption('h264');
       assert.equal(await page.locator('[name="pixelFormat"]').inputValue(),'yuv420p');

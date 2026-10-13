@@ -60,7 +60,7 @@ try {
     }
     if($ceiling -eq 100L){
       if($result.state -ne 'failed' -or $result.error -notlike '*Strict container byte ceiling exceeded*'){throw 'Manual oversized container was not rejected.'}
-      $stage=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+[string]$started.jobId+"-*"))
+      $stage=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-media-job-"+[string]$started.jobId+"-*"))
       if($stage.Count -ne 1 -or -not(Test-Path -LiteralPath (Join-Path $stage[0].FullName 'output.mkv'))){throw 'Manual verified oversized container was deleted.'}
       $blocked=$false
       try{Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$($started.jobId)/export" -Headers $headers -ContentType 'application/json' -Body '{}' | Out-Null}catch{$blocked=$true}
