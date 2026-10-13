@@ -48,7 +48,7 @@
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
   "pr": 105,
-  "latest_durable_commit": "101a605334d4b8f00fbd65c935c3249c054a6bd4",
+  "latest_durable_commit": "bba86515185d6d204ae653453244a27b5798b9e5",
   "external_validation_states": {
     "windows_vvc": "Pending rerun after PS array reader correction",
     "browser": "Round 2 pending",
@@ -57,9 +57,9 @@
     "android_stream_plan": "Pending compile/runtime"
   },
   "blockers": [],
-  "updated_timestamp": "2026-10-13T00:20:30.505990+00:00",
+  "updated_timestamp": "2026-10-13T00:23:42.135513+00:00",
   "intake": {
     "status": "recorded",
-    "foundry_path": "inbox/observations/2026-10-13-qhe-vvc-capability-chain-and-cancellable-validation.md"
+    "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"
   }
 }
