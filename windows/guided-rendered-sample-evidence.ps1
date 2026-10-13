@@ -18,7 +18,7 @@ function Get-GuidedRenderedAssetStamp([string]$WorkDir) {
   }finally{$sha.Dispose()}
   return [pscustomobject]@{assTextSha256=$assHash;fontContentSha256=$fonts;fontCount=$records.Count}
 }
-function New-GuidedExactVbrReceipt($Before,$After,$Options,[string]$ActualEncoder,[double]$ActualDuration,$AssetBefore,$AssetAfter){
+function New-GuidedExactVbrReceipt($Before,$After,$Options,[string]$ActualEncoder,[string]$ActualPreset,[double]$ActualDuration,$AssetBefore,$AssetAfter){
   if(-not $Before -or -not $After -or $Before.source -ne $After.source -or $Before.runtime -ne $After.runtime){
     throw 'Native source or FFmpeg changed while sampling.'
   }
@@ -38,7 +38,7 @@ function New-GuidedExactVbrReceipt($Before,$After,$Options,[string]$ActualEncode
      [double]::IsNaN($duration) -or [double]::IsInfinity($duration) -or
      $duration -le 0 -or $duration -gt 8 -or
      [double]::IsNaN($ActualDuration) -or [double]::IsInfinity($ActualDuration) -or
-     $ActualDuration -le 0 -or [string]::IsNullOrWhiteSpace([string]$Options.preset)){
+     $ActualDuration -le 0 -or [string]::IsNullOrWhiteSpace($ActualPreset)){
     throw 'Invalid Guided exact VBR evidence request.'
   }
   $scaled=[int]$Options.outputWidth -gt 0 -or [int]$Options.outputHeight -gt 0
@@ -55,7 +55,7 @@ function New-GuidedExactVbrReceipt($Before,$After,$Options,[string]$ActualEncode
     fontContentSha256=[string]$AssetBefore.fontContentSha256
     fontCount=[int]$AssetBefore.fontCount
     requestedStart=$start;requestedDuration=$duration;actualDuration=$ActualDuration
-    encoder=$ActualEncoder;codec=[string]$Options.codec;preset=[string]$Options.preset
+    encoder=$ActualEncoder;codec=[string]$Options.codec;preset=$ActualPreset
     multipass='disabled';pixelFormat='yuv420p';videoStream=0
     outputWidth=$(if($scaled){[int]$Options.outputWidth}else{0})
     outputHeight=$(if($scaled){[int]$Options.outputHeight}else{0})
