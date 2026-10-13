@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {compileTask} from './media-task.js';
 import {guidedTaskSettings} from './guided-task-handoff.js';
+import {hardsubReferenceFilter} from './media-verification.js';
 import {compileGuidedCpuHandoff,commitGuidedCpuHandoff}
   from './guided-cpu-compiler-contract.js';
 
@@ -46,6 +47,10 @@ test('scaled Guided handoff renders ASS before bicubic and never inherits Lanczo
  assert.equal(c.task.expectedHeight,360);
  const vf=c.task.outputArgs[c.task.outputArgs.indexOf('-vf')+1];
  assert.equal(vf,'ass=__ASS__:fontsdir=__FONTS__,scale=640:360:flags=bicubic,pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0');
+ const observedReference=hardsubReferenceFilter(c.task,2.5);
+ assert.ok(observedReference.indexOf('ass=__ASS__:fontsdir=__FONTS__')<
+   observedReference.indexOf('scale=640:360:flags=bicubic'));
+ assert.match(observedReference,/setpts=PTS-STARTPTS\+2\.5\/TB,ass=__ASS__/);
  const manual=compileTask({...defaults(),...c.settings,subtitleRenderOrder:'after-scale'},media());
  const legacy=manual.outputArgs[manual.outputArgs.indexOf('-vf')+1];
  assert.ok(legacy.indexOf('scale=640:360')<legacy.indexOf('ass=__ASS__'));
