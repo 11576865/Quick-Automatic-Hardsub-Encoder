@@ -6253,6 +6253,19 @@ mediaWorkspace=mountMediaWorkspace({
     const caps=await state.engine.taskCapabilities('copy');
     return {...media,sourceName:state.video.name,fpsModeSupported:caps.fpsModeSupported};
   },
+  // The same Windows Native scene-signal primitive used by Guided ASS.
+  // Pure-transcode comparisons pass no subtitle rendering; the probe is not
+  // a quality metric and never certifies Native CQ or VBR results.
+  sceneRiskProbe: async ({start,duration,timeoutSeconds=3})=>{
+    if(!state.nativeBackend?.available||!globalThis.NativeHardsub?.__windowsNative)
+      throw Error('场景风险探测需要 Windows Native FFmpeg');
+    const sample=await requestNativeSample({
+      sceneRiskOnly:true,start,duration,timeoutSeconds
+    },'');
+    if(!Number.isFinite(Number(sample?.frameCount))||Number(sample.frameCount)<=0)
+      throw Error('Native 场景风险探测未返回有效帧');
+    return sample;
+  },
   // Curves must measure exactly the encoder/preset selected in the manual
   // transcode task. Refuse unsupported backends rather than sample a different
   // implementation and silently label its result as the user's configuration.
