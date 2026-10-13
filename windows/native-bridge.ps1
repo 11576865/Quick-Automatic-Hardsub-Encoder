@@ -1679,6 +1679,13 @@ function Get-CompletedTrimPacketEvidence($Job) {
     if(-not $Job.Task -or -not $Job.Task.hasTrimRange -or
        [long]$Job.Task.sizePlan.copiedTrimReserveBytes -le 0) {return $null}
     if($Job.TrimPacketAuditFinished){return $Job.TrimPacketEvidence}
+    # Automatic completed-artifact packet scans are bounded to small outputs;
+    # long-form source/result metering needs a separate asynchronous job.
+    if([double]$Job.ExpectedVideoDuration -gt 180 -or
+       (Get-Item -LiteralPath $Job.Output).Length -gt 536870912) {
+        $Job.TrimPacketAuditFinished=$true
+        return $null
+    }
     $Job.TrimPacketAuditFinished=$true
     try{
         # One bounded read of the actual staged artifact, never a prediction
