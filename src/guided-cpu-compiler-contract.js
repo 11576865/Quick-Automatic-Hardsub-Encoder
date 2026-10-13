@@ -72,7 +72,8 @@ export function compileGuidedCpuHandoff({
  snapshot,defaults={},media,evidence=null,sourceKey='',evidenceSourceKey=''
 }={}){
  const plan=snapshot?.plan,audio=snapshot?.audio;
- if(!plan||!media||!(Number(media.duration)>0))
+ if(!plan||!media||!(Number(media.duration)>0)||
+    typeof sourceKey!=='string'||!sourceKey)
   return fail('missing-guided-source-or-plan');
  if(plan.mode==='budget-rate'&&
    (!integer(plan.sizeCeiling)||!integer(plan.targetVideoBitrate)||
@@ -103,14 +104,24 @@ export function compileGuidedCpuHandoff({
   return fail('compiled-guided-geometry-divergence');
  if(task.subtitleRenderOrder!=='before-scale')
   return fail('compiled-guided-ass-render-order-divergence');
+ // Reject non-Guided filters inherited from a previous manual configuration.
+ // The legacy Native Guided renderer paints ASS at source geometry and then
+ // applies bicubic scaling; the exact filter ordering is a reference boundary.
  const vf=task.outputArgs[task.outputArgs.indexOf('-vf')+1]||'';
- const renderAt=vf.indexOf('ass=__ASS__:fontsdir=__FONTS__');
- if(renderAt<0)return fail('compiled-guided-ass-filter-missing');
- if(plan.outputWidth>0||plan.outputHeight>0){
-  const scaleAt=vf.indexOf('scale='+plan.outputWidth+':'+plan.outputHeight+':flags=bicubic');
-  if(scaleAt<0||renderAt>=scaleAt)
-   return fail('compiled-guided-scaling-or-ass-order-divergence');
- }
+ const expectedFilter=[
+  'ass=__ASS__:fontsdir=__FONTS__',
+  ...(plan.outputWidth>0&&plan.outputHeight>0
+    ?['scale='+plan.outputWidth+':'+plan.outputHeight+':flags=bicubic']:[]),
+  'pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0'
+ ].join(',');
+ if(vf!==expectedFilter)
+  return fail('compiled-guided-render-filter-divergence');
+ if(task.pixelFormat!=='yuv420p'||task.fpsMode!=='auto'||
+    task.hasTrimRange||task.start!==0||task.end!==Number(media.duration)||
+    task.outputArgs.some(arg=>['-r','-frames:v','-vf_complex','-x264-params',
+      '-x265-params','-svtav1-params','-g','-bf','-refs','-maxrate',
+      '-bufsize'].includes(arg)))
+  return fail('compiled-guided-production-settings-divergence');
  if(plan.mode==='budget-rate'){
   if(task.rateMode!=='size'||!task.sizePlan||
      task.sizePlan.targetBytes!==plan.sizeCeiling||
