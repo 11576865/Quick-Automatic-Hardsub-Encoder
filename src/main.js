@@ -2197,14 +2197,31 @@ function currentRuntimeEvidenceKey() {
   return runtimeEvidenceKey(state.nativeBackend || { backend: 'web' });
 }
 
+let guidedScopeCache=null;
 function currentGuidedDecisionScope() {
-  return guidedAssDecisionScope({
-    sourceKey:currentSourceEvidenceKey(),runtimeKey:currentRuntimeEvidenceKey(),
-    assText:state.activeAssText||state.assText,
-    fonts:state.effectiveFonts||[],fontBindings:state.fontBindings,
-    autoFontFallbacks:state.autoFontFallbacks,
-    renderer:'libass-'+(state.nativeBackend?.backend||'web')
+  // Rendering a large ASS file can involve repeated UI updates. Hash only
+  // when one of the source, runtime, subtitle, font or mapping inputs changes.
+  const sourceKey=currentSourceEvidenceKey(),runtimeKey=currentRuntimeEvidenceKey();
+  const assText=state.activeAssText||state.assText;
+  const fonts=state.effectiveFonts||[];
+  const fontManifest=JSON.stringify(fonts.map(f=>[
+    f?.name,Number(f?.size||0),Number(f?.lastModified||0)
+  ]));
+  const mappingManifest=JSON.stringify([
+    state.fontBindings||{},state.autoFontFallbacks||{}
+  ]);
+  const renderer='libass-'+(state.nativeBackend?.backend||'web');
+  const cache=guidedScopeCache;
+  if(cache&&cache.sourceKey===sourceKey&&cache.runtimeKey===runtimeKey&&
+    cache.assText===assText&&cache.fontManifest===fontManifest&&
+    cache.mappingManifest===mappingManifest&&cache.renderer===renderer)
+    return cache.scope;
+  const scope=guidedAssDecisionScope({
+    sourceKey,runtimeKey,assText,fonts,fontBindings:state.fontBindings,
+    autoFontFallbacks:state.autoFontFallbacks,renderer
   });
+  guidedScopeCache={sourceKey,runtimeKey,assText,fontManifest,mappingManifest,renderer,scope};
+  return scope;
 }
 
 function medianNumber(values) {
