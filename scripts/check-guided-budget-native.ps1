@@ -46,11 +46,11 @@ try {
   $sum=0L
   foreach($line in (& ffprobe -v error -select_streams a:0 -show_packets -show_entries packet=size -of csv=p=0 $source)){$sum += [long]$line}
   if($sum -ne [long]$cost.audioPacketBytes[0]){throw 'Native packet-byte ledger differs from independent FFprobe scan.'}
-  function Assert-GuidedCopyReceiptRejected($receipt,[string]$label,[string]$expected='Budget measurement') {
+  function Assert-GuidedCopyReceiptRejected($receipt,[string]$label,[string]$expected='Budget measurement',[int]$declaredTracks=2) {
     $req=@{codec='h264';mode='budget-rate';preset='medium';crf=23
       targetVideoBitrate=350000;sizeBudgetPolicy='best-effort';sizeCeilingBytes=5000000
       outputWidth=0;outputHeight=0;expectedDuration=2.0
-      audio='copy';expectedAudioTracks=2;outputFormat='matroska';outputExtension='mkv'
+      audio='copy';expectedAudioTracks=$declaredTracks;outputFormat='matroska';outputExtension='mkv'
       suggestedName='must-not-start.mkv'}
     if($null -ne $receipt){$req.budgetEvidence=$receipt}
     $body=@{request=$req;assText=$subtitle}|ConvertTo-Json -Depth 12 -Compress
@@ -65,6 +65,7 @@ try {
     if(-not $rejected){throw "Guided copied-audio task accepted $label receipt"}
   }
   Assert-GuidedCopyReceiptRejected $null 'missing'
+  Assert-GuidedCopyReceiptRejected $null 'forged zero-track count' 'track count differs' 0
   $wrong=$cost | ConvertTo-Json -Depth 8 | ConvertFrom-Json
   $wrong.measurementId='not-the-current-measurement'
   Assert-GuidedCopyReceiptRejected $wrong 'stale'
