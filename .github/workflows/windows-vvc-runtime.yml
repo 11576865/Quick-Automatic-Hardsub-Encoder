@@ -1,6 +1,7 @@
 name: Windows required VVC runtime acceptance
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'windows/**'
       - 'src/media-task.js'
@@ -15,6 +16,7 @@ permissions:
   contents: read
 jobs:
   vvc-runtime:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -35,10 +37,45 @@ jobs:
       - name: Verify actual PowerShell help parser
         shell: powershell
         run: ./scripts/check-ffmpeg-help-options.ps1
-      - name: Fetch hash-verified isolated libvvenc toolchain
+      - name: Resolve digest-scoped VVC archive cache key
+        id: vvc-asset
         shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $headers=@{Accept='application/vnd.github+json';'User-Agent'='QHE-VVC-acceptance'}
+          if($env:GH_TOKEN){$headers.Authorization='Bearer '+$env:GH_TOKEN}
+          $release=Invoke-RestMethod -Uri 'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest' -Headers $headers
+          $assets=@($release.assets | Where-Object {$_.name -eq 'ffmpeg-master-latest-win64-gpl.zip'})
+          if($assets.Count -ne 1 -or [string]$assets[0].digest -notmatch '^sha256:([0-9a-fA-F]{64})
+      - name: Require real QP, bitrate and ASS hard-sub bridge outputs
+        shell: powershell
+        run: |
+          $ffmpeg=(Get-Command ffmpeg.exe -ErrorAction Stop).Source
+          $ffprobe=(Get-Command ffprobe.exe -ErrorAction Stop).Source
+          ./scripts/check-vvc-native.ps1 -Ffmpeg $ffmpeg -Ffprobe $ffprobe -RequireRuntime -IncludeHardsub
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vvc-required-runtime-evidence
+          path: |
+            vvc-native-acceptance.json
+            vvc-runtime-evidence/
+          if-no-files-found: ignore
+          retention-days: 14
+){throw 'VVC asset identity is absent or ambiguous.'}
+          "digest=$($Matches[1].ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+      - name: Restore immutable digest-scoped VVC archive
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/qhe-vvc-cache/ffmpeg.zip
+          key: qhe-vvc-win64-ffmpeg-${{ steps.vvc-asset.outputs.digest }}
+      - name: Fetch or reuse verified libvvenc toolchain
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QHE_VVC_EXPECTED_SHA256: ${{ steps.vvc-asset.outputs.digest }}
         run: ./scripts/install-ci-vvc-toolchain.ps1
       - name: Require real QP, bitrate and ASS hard-sub bridge outputs
         shell: powershell
