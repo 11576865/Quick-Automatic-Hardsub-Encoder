@@ -465,7 +465,7 @@ export function mountMediaWorkspace(hooks) {
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
   const refreshConfigs=()=>{get('savedConfig').innerHTML=Object.keys(configs()).map(n=>`<option value="${escape(n)}">${escape(n)}</option>`).join('');};
-  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=key==='audioPlan'&&Array.isArray(value)?JSON.stringify(value):String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();audioStreamPlan.refresh();};
+  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=key==='audioPlan'&&Array.isArray(value)?JSON.stringify(value):String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();audioStreamPlan.refresh();hooks.onBudgetEvidenceChange?.();};
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
@@ -2090,6 +2090,12 @@ export function mountMediaWorkspace(hooks) {
     renderContainerDecision(null);
     syncAudioPlaybackWarning();
     renderPlanSummary();
+    // Audio choices change the full-container cost coordinate even when
+    // source packet evidence and video-only CQ measurements stay valid.
+    if(['audio','audioTrack','audioRange','audioBitrate','audioChannels',
+        'audioSampleRate','audioPlan'].includes(sourceName)){
+      hooks.onBudgetEvidenceChange?.();
+    }
   };
   outputPolicy?.addEventListener('input',event=>{if(!form.contains(event.target))invalidateCompiledPlan(event);});
   outputPolicy?.addEventListener('change',event=>{if(!form.contains(event.target))invalidateCompiledPlan(event);});
