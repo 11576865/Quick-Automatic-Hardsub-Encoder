@@ -5295,7 +5295,8 @@ async function runGuidedVbrVerification(){
     }
     const checked=verifyGuidedNativeVbr({
       plan:formal,referenceScope:currentGuidedDecisionScope(),
-      windows,samples,targetSsim:quality,expectedEncoder:encoder
+      windows,samples,targetSsim:quality,expectedEncoder:encoder,
+      expectedPreset:encoder.endsWith('_nvenc')?'p7':plan.preset
     });
     if(!checked.ok)throw Error('Native ASS VBR 收据失败：'+checked.reason);
     if(!checked.passed)throw Error('短样最低 SSIM '+checked.minimumSsim.toFixed(5)+
