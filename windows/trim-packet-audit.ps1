@@ -11,10 +11,10 @@ if(-not (Test-Path -LiteralPath $OutputFile -PathType Leaf)){throw 'Completed ou
 $before=Get-Item -LiteralPath $OutputFile
 if($before.Length -le 0){throw 'Completed output is empty.'}
 
-function Run-BoundedProbe([string]$args,[int]$limitSeconds,[bool]$packetStream=$false){
+function Run-BoundedProbe([string]$arguments,[int]$limitSeconds,[bool]$packetStream=$false){
     $p=New-Object Diagnostics.Process
     $p.StartInfo.FileName=$Ffprobe
-    $p.StartInfo.Arguments=$args
+    $p.StartInfo.Arguments=$arguments
     $p.StartInfo.UseShellExecute=$false
     $p.StartInfo.CreateNoWindow=$true
     $p.StartInfo.RedirectStandardOutput=$true
