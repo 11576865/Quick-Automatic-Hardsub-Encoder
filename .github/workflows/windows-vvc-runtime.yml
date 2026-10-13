@@ -14,6 +14,10 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   vvc-runtime:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
@@ -48,24 +52,11 @@ jobs:
           if($env:GH_TOKEN){$headers.Authorization='Bearer '+$env:GH_TOKEN}
           $release=Invoke-RestMethod -Uri 'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest' -Headers $headers
           $assets=@($release.assets | Where-Object {$_.name -eq 'ffmpeg-master-latest-win64-gpl.zip'})
-          if($assets.Count -ne 1 -or [string]$assets[0].digest -notmatch '^sha256:([0-9a-fA-F]{64})
-      - name: Require real QP, bitrate and ASS hard-sub bridge outputs
-        shell: powershell
-        run: |
-          $ffmpeg=(Get-Command ffmpeg.exe -ErrorAction Stop).Source
-          $ffprobe=(Get-Command ffprobe.exe -ErrorAction Stop).Source
-          ./scripts/check-vvc-native.ps1 -Ffmpeg $ffmpeg -Ffprobe $ffprobe -RequireRuntime -IncludeHardsub
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: vvc-required-runtime-evidence
-          path: |
-            vvc-native-acceptance.json
-            vvc-runtime-evidence/
-          if-no-files-found: ignore
-          retention-days: 14
-){throw 'VVC asset identity is absent or ambiguous.'}
-          "digest=$($Matches[1].ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          if($assets.Count -ne 1){throw 'VVC asset identity is absent or ambiguous.'}
+          if([string]$assets[0].digest -match '^sha256:([0-9a-fA-F]{64})$'){
+            $digest=$Matches[1].ToLowerInvariant()
+          }else{throw 'VVC asset digest is missing or invalid.'}
+          [IO.File]::AppendAllText($env:GITHUB_OUTPUT, "digest=$digest`n", (New-Object System.Text.UTF8Encoding($false)))
       - name: Restore immutable digest-scoped VVC archive
         uses: actions/cache@v4
         with:
