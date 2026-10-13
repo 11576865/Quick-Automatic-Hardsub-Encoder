@@ -97,3 +97,10 @@ UIGS Intake：已去重并记录为 Case `inbox/cases/2026-10-13-qhe-report-base
 - `src/manual-time-tradeoff.test.mjs` 与 `src/manual-transcode-session.test.mjs` 增加结构 / 失败封闭 / Native 会话到时间证据的测试。B14 分类维持「部分实现」；真实 Windows、浏览器与 exact-head CI 均 Pending。B04/B11/B12/B15 的 ASS Guided 统一决策合同仍未关闭。
 - 详细范围见 `docs/b14-observed-quality-size-encode-time-2026-10-14.md`，当前进度在 `.uigs/tasks/qhe-initial-version-full-report.json`。
 
+
+
+## 2026-10-14 B15 共用有界 Native 场景分层采样（未关闭其他初版条目）
+
+B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转码复用路径。新 `manual-paired-risk-plan.js` 对剪切范围输出两个不重叠窗口，使用原生 `sceneRiskOnly` 信号与明确 9 秒总探测预算；最多采集 3 处独立风险信号，失败则进入未标记为风险实测的时间分层计划。Native 视频 seekable 属性现在传递至 Manual media 预检，无法随机寻址/不足两窗时拒绝生成对比曲线。
+
+源码：`src/main.js`、`src/manual-paired-risk-plan.js`、`src/manual-transcode-compare-ui.js`；回归：`src/manual-paired-risk-plan.test.mjs`。6 组源码等价隔离 JS 逻辑测试通过；真实 Windows Native、浏览器和 exact-head CI 待验收。两条链路共享采样策略，而非混用 Manual 原始 SDR SSIM 与 Guided ASS 字幕渲染 SSIM。B04/B11/B12/B15 均维持未整体关闭。
