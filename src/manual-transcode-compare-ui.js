@@ -10,6 +10,7 @@ import {createManualTranscodeSession,runManualPairedSweep} from './manual-transc
 import {buildSizeFrontierPlot,targetBytesAtEvidenceFraction,evidenceFractionForTargetBytes} from './size-frontier-ui.js';
 import {renderRateDistortionSvg,plotXFromClientX,plotFractionAtX} from './curve-chart-svg.js';
 import {verifyManualNativeVbrCandidate} from './manual-transcode-vbr-verification.js';
+import {summarizeManualEncodeCost} from './manual-time-tradeoff.js';
 
 const QUALITY_SETTINGS=[18,28,40];
 const reasonLabel={
@@ -38,7 +39,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     '<label>预算坐标 <select id="taskCompareBudgetBasis"><option value="whole">成品目标体积 · 完整预算</option><option value="video">仅视频负载 · 诊断</option></select></label>',
     '<p class="note" id="taskCompareStatus" role="status">对比结果仅供查看，不能自动切换编码器。需要正式采用时仍应使用当前编码器的 VBR 短样验证。</p>',
     '<details id="taskCompareDetails" hidden><summary>查看同预算候选及采样覆盖</summary>',
-    '<div id="taskCompareCandidates"></div></details>',
+    '<div id="taskCompareCandidates"></div><div id="taskCompareCostEvidence"></div></details>',
     '<button type="button" class="secondary" id="taskCompareVerify" disabled hidden>实测验证当前推荐编码器的 VBR</button>',
     '<button type="button" class="secondary" id="taskCompareAdopt" disabled hidden>确认写入已验证的编码方案</button>',
     '<p class="note">成品预算包含已测复制流、附件、计划音频和封装余量；成本未知时拒绝推荐。仅视频坐标只供诊断。拟合不证明整片质量或实际成品大小。停止会等待当前原生调用结束；编码耗时配额不是严格墙钟时间上限。</p>'
@@ -61,7 +62,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   let activePolicy='codecs',sessionCandidates=[],lastGoalKey='';
   const goalKey=()=>JSON.stringify([hooks.settings().rateMode,hooks.settings().targetSize,hooks.settings().sizeUnit]);
   const currentGoalBytes=()=>Number(hooks.settings().targetSize)*SIZE_UNITS[hooks.settings().sizeUnit||'MB'];
-  const status=get('taskCompareStatus'),details=get('taskCompareDetails'),rows=get('taskCompareCandidates');
+  const status=get('taskCompareStatus'),details=get('taskCompareDetails'),rows=get('taskCompareCandidates'),costRows=get('taskCompareCostEvidence');
   let active=false,running=false,aborted=false,disposed=false,session=null;
   let sourceKey='',sourceDuration=0,comparison=null,selectedBytes=null;
   let task=null,media=null,verifiedVbr=null;
@@ -138,6 +139,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         if(details.hidden)details.open=true;
         details.hidden=false;
       }else details.hidden=true;
+      costRows.replaceChildren();
       verify.disabled=true;adopt.hidden=true;adopt.disabled=true;
       return true;
     }
@@ -146,10 +148,10 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       selectedBytes=Math.sqrt(f.minimumEvidenceTargetBytes*f.maximumEvidenceTargetBytes);
     if(basis.value==='whole')selectedBytes=Math.round(selectedBytes);
     const plotted=buildSizeFrontierPlot(f,{selectedTargetBytes:selectedBytes});
-    if(!plotted.ok){chart.replaceChildren();readout.textContent='无法在共同实测体积范围绘制曲线。';return true;}
+    if(!plotted.ok){chart.replaceChildren();costRows.replaceChildren();readout.textContent='无法在共同实测体积范围绘制曲线。';return true;}
     chart.innerHTML=renderRateDistortionSvg(plotted);
     const evalResult=f.evaluateTargetBytes(selectedBytes);
-    if(evalResult.status!=='within-evidence'){readout.textContent='当前目标不在共同实测预算范围：'+evalResult.status+'；不会外推推荐或替换目标。';verify.disabled=true;adopt.hidden=true;adopt.disabled=true;return true;}
+    if(evalResult.status!=='within-evidence'){costRows.replaceChildren();readout.textContent='当前目标不在共同实测预算范围：'+evalResult.status+'；不会外推推荐或替换目标。';verify.disabled=true;adopt.hidden=true;adopt.disabled=true;return true;}
     chart.setAttribute('role','slider');
     chart.setAttribute('aria-label',basis.value==='whole'?'同一成品目标体积下选择多编码器估算对比位置':'同一视频预算下选择多编码器估算对比位置');
     chart.setAttribute('aria-valuenow',String(Math.round(100*percent(f,selectedBytes))));
@@ -176,6 +178,52 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       list.append(li);
     }
     rows.replaceChildren(list);
+    const observations=summarizeManualEncodeCost(session.trials(),{
+      referenceVideoBitrate:Number(evalResult.videoBitrate)>0?Number(evalResult.videoBitrate):null
+    });
+    const costHeading=document.createElement('h4');
+    costHeading.textContent='质量 · 视频负载 · 编码耗时（同源短片实测）';
+    const costNote=document.createElement('p');
+    costNote.className='note';
+    costNote.textContent='仅展示当前采样档位真实 FFmpeg 编码秒数与速度；不预测整片耗时，不能把最近档位当作目标码率验证。';
+    if(observations.ok){
+      const costList=document.createElement('ul');
+      for(const item of observations.candidates){
+        const li=document.createElement('li'),point=item.nearestObserved;
+        li.textContent=point?
+          String(item.candidateId).toUpperCase()+
+          ' · 最近实测 CRF '+point.qualitySetting+
+          ' · 视频 '+(point.measuredVideoBitrate/1e6).toFixed(2)+' Mbps'+
+          (item.referenceRateDeltaPercent===null?'':'（距所选目标 '+(item.referenceRateDeltaPercent>0?'+':'')+item.referenceRateDeltaPercent.toFixed(1)+'%）')+
+          ' · 最低 SSIM '+point.minimumSsim.toFixed(5)+
+          ' · '+point.measuredMediaSeconds.toFixed(2)+' 秒样本编码 '+point.measuredEncodeSeconds.toFixed(2)+' 秒'+
+          '（'+point.speedFactor.toFixed(2)+'× 实时）'
+          :String(item.candidateId).toUpperCase()+' · 编码耗时证据不足，拒绝性能排名';
+        costList.append(li);
+      }
+      if(observations.candidatesOmitted){
+        const li=document.createElement('li');
+        li.textContent='其余 '+observations.candidatesOmitted+' 个候选请缩小比较集合。';
+        costList.append(li);
+      }
+      const near=observations.matchedQualityPairs[0];
+      const paired=document.createElement('p');
+      paired.className='note';
+      paired.textContent=near?
+        '近似同画质实测档位（最低/平均 SSIM 差均不大于 0.003）：'+
+        near.candidateA+' CRF '+near.qualitySettingA+' / '+
+        near.candidateB+' CRF '+near.qualitySettingB+
+        '；时间比 A/B '+near.timeRatioAOverB.toFixed(2)+
+        '，视频码率比 A/B '+near.videoRateRatioAOverB.toFixed(2)+
+        '。不是严格等画质证明，也不是整片预测。'
+        :'当前短样没有足够接近画质的跨候选实测档位；拒绝推断同画质编码时间赢家。';
+      costRows.replaceChildren(costHeading,costNote,costList,paired);
+    }else{
+      const missing=document.createElement('p');
+      missing.className='note';
+      missing.textContent='编码时间证据不足：'+observations.reason+'；SSIM 曲线不因此获得时间维度的推荐权。';
+      costRows.replaceChildren(costHeading,missing);
+    }
     if(details.hidden)details.open=true;
     details.hidden=false;
     verify.disabled=running||hooks.busy();
