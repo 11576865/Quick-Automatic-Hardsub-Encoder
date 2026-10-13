@@ -1349,16 +1349,19 @@ function Start-EncodeJob($Body) {
     if(-not $video){throw 'No video selected.'}
     $request=$Body.request
     if($request.task){return Start-MediaTaskJob $Body}
-    # Legacy Guided ASS budgets may use measured copied audio from the shared
-    # ledger. The measured source must still be the selected Native input when
-    # the job is actually created; unchecked claims are never accepted.
-    if([string]$request.mode -eq 'budget-rate' -and [string]$request.audio -eq 'copy' -and
-       [int]$request.expectedAudioTracks -gt 0) {
-        Assert-CurrentCopyBudgetEvidence $request.budgetEvidence $video
-    }
     $probe=Get-ProbeMedia
     if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
     if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
+    # The client-reported track count cannot waive the receipt requirement.
+    # Check the *probed Native source*, which also owns the packet observation.
+    if([string]$request.mode -eq 'budget-rate' -and [string]$request.audio -eq 'copy') {
+        if([int]$request.expectedAudioTracks -ne [int]$probe.audioTracks) {
+            throw 'Guided copied-audio track count differs from current Native source.'
+        }
+        if([int]$probe.audioTracks -gt 0) {
+            Assert-CurrentCopyBudgetEvidence $request.budgetEvidence $video
+        }
+    }
     $outputFormat=if([string]$request.outputFormat){[string]$request.outputFormat}else{'matroska'}
     $outputExtension=if([string]$request.outputExtension){[string]$request.outputExtension}else{'mkv'}
     if($outputFormat -notin @('matroska','mp4')){throw 'Unsupported output container format.'}
