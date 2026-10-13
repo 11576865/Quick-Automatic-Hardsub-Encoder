@@ -1,6 +1,7 @@
 import {commitVerifiedSizeBudget} from './size-budget-adoption.js';
 import {sharedTaskPresentation} from './shared-task-presentation.js';
 import {guidedTaskSettings} from './guided-task-handoff.js';
+import {compileGuidedCpuHandoff,commitGuidedCpuHandoff} from './guided-cpu-compiler-contract.js';
 import {buildTaskReview,renderTaskReview} from './task-review.js';
 import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
@@ -1693,11 +1694,27 @@ export function mountMediaWorkspace(hooks) {
   if(guidedHandoffButton)guidedHandoffButton.onclick=()=>{
     if(busy||hooks.busy()||clipBatchRunning||clipAwaitingSave)return;
     try{
-      const settings=guidedTaskSettings(hooks.guidedSnapshot?.(),initialManualSettings);
-      applyConfig(settings);
-      activeTask=null;currentPlanTask=null;transcodeCurves.invalidate();
-      syncHardsubStrategyChrome();syncTaskReview();renderPlanSummary();
-      status('已按引导目标生成 CPU 参数方案；需重新验证，原采样证据未转移。目标体积将按逐流计划重新核算。');
+      const sourceKey=hooks.videoIdentity?.()||'';
+      const source=hooks.mediaSnapshot?.();
+      const evidence=budgetSourceIdentity===sourceKey?budgetEvidence:null;
+      const compiled=compileGuidedCpuHandoff({
+        snapshot:hooks.guidedSnapshot?.(),defaults:initialManualSettings,
+        media:source,evidence,sourceKey,evidenceSourceKey:budgetSourceIdentity
+      });
+      if(!compiled.ok)throw Error('无法安全交接 CPU 任务：'+compiled.reason+
+        (compiled.detail?' · '+compiled.detail:''));
+      const applied=commitGuidedCpuHandoff({
+        contract:compiled,read,apply:applyConfig,media:source,evidence,
+        sourceIdentity:()=>hooks.videoIdentity?.()||'',
+        expectedSourceIdentity:sourceKey
+      });
+      if(!applied.ok)throw Error('交接没有采用任何新任务：'+applied.reason+
+        (applied.detail?' · '+applied.detail:''));
+      hardsubStrategy='manual';
+      localStorage.setItem('hardsub-control-strategy-v1',hardsubStrategy);
+      activeTask=null;currentPlanTask=applied.task;transcodeCurves.invalidate();
+      syncHardsubStrategyChrome();syncTaskReview();renderPlanSummary(applied.task);
+      status('CPU 交接已通过共同任务编译与实际表单复核；保留原目标体积、逐流成本和双遍/严格策略。需要重新验证编码结果，ASS / VBR 短样证据不转移。');
       section.scrollIntoView?.({block:'start'});
     }catch(error){hooks.log?.('方案交接未完成：'+error.message);alert(error.message);}
   };
