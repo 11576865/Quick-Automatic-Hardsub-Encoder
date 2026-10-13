@@ -37,7 +37,18 @@ test('real whole-container gate includes copied audio, subtitle and attachment p
   assert.ok(trimPackets('a')>0 && trimPackets('a')<=evidence.audioPacketBytes[0]);
   assert.ok(trimPackets('s')>0 && trimPackets('s')<=evidence.subtitlePacketBytes[0]);
   const trimBytes=statSync(trimOutput).size;
-  assert.equal(outputReport(trimmed,{outputBytes:trimBytes,verified:true},1).deliveryAllowed,trimBytes<=trimmed.sizeCeilingBytes);
+  const observed={version:1,scope:'completed-artifact',
+    audioPacketBytes:[trimPackets('a')],subtitlePacketBytes:[trimPackets('s')]};
+  const trimReport=outputReport(trimmed,{outputBytes:trimBytes,verified:true,
+    outputPacketEvidence:observed},1);
+  assert.equal(trimReport.deliveryAllowed,trimBytes<=trimmed.sizeCeilingBytes);
+  assert.equal(trimReport.trimCopyAudit.status,'observed');
+  assert.equal(trimReport.trimCopyAudit.sourcePacketBytes,trimmed.sizePlan.copiedTrimReserveBytes);
+  assert.equal(trimReport.trimCopyAudit.outputPacketBytes,observed.audioPacketBytes[0]+observed.subtitlePacketBytes[0]);
+  assert.ok(trimReport.trimCopyAudit.overreserveBytes>=0);
+  assert.equal(trimReport.trimCopyAudit.canReplacePreflightBudget,false);
+  assert.equal(trimmed.sizePlan.fixedPayloadBytes,task.sizePlan.fixedPayloadBytes);
+  assert.equal(outputReport(trimmed,{outputBytes:trimBytes,verified:true},1).trimCopyAudit,null);
 
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
