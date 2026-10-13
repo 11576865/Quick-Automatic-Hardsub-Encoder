@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_b14_measured_encode_cost_submitted_pending_frontend_acceptance",
-  "current_bounded_work_unit": "B14 source-paired Native CQ time/size/SSIM observed cost tradeoff, diagnostic UI and explicit provenance export; integration and true field acceptance Pending",
+  "status": "incomplete_full_report_b15_shared_risk_sampling_code_submitted_pending_windows_acceptance",
+  "current_bounded_work_unit": "B15 shared bounded Native risk stratification for Manual multi-codec paired windows, source/version refusal, short timeline fallback, kept separate from Guided ASS rendered SSIM identity",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -132,9 +132,9 @@
       "id": "B15",
       "source": "R19 §10；R24 §17",
       "requirement": "风险场景、配对窗口、追加测量和不足证据结果",
-      "implementation_status": "引导已有，专业未全面共享",
-      "evidence": "scene-risk-selection.js；calibration-refinement.js；main.js；Manual 两窗口",
-      "remaining": "统一候选调度/风险覆盖；字幕高密度、暗场/噪声真实素材验证仍待补；不伪造统计覆盖率"
+      "implementation_status": "部分实现：Guided ASS 已用 Native 风险分层；本轮新增 Manual 多编码器 Native 风险信号探测与同一 selectPairedSceneWindows 双窗口预检（包含失效拒收/无风险数据降级/绝对时间范围），已写入 Draft，exact-head CI 和真实 Native 验收 Pending。",
+      "evidence": "scene-risk-selection.js；calibration-refinement.js；main.js；Manual 两窗口；src/manual-paired-risk-plan.js + manual-paired-risk-plan.test.mjs；src/main.js Native sceneRiskProbe；src/manual-transcode-compare-ui.js same source-paired protocol fingerprint；frontend CI fast/full wiring；6 isolated source-equivalent JavaScript tests PASS (not full Node CI)",
+      "remaining": "真实 Windows 风险探测及 UI/浏览器验收 Pending；Guided ASS 字幕/字体渲染参考与 Manual 纯源参考的质量决策合同仍不通用；追加配对采样、风险/置信区间、暗场/噪声/VFR/高密字幕长素材仍待实测。"
     },
     {
       "id": "B16",
@@ -232,9 +232,11 @@
     "B13 Native same-process page-reload completed budget comparison: budgetProjection is returned on both completed status paths after strict output gate; UI recovers original planning target, actual output, origin and Native-only strict verification. Pure/VM recovery tests and hosted real Windows Guided two-pass/strict smoke step PASS; 429de52 frontend PASS; entire exact-head platform suite still completing at checkpoint.",
     "B16 post-output audit: native completed structured trim task returns source-linked completed-artifact audio/subtitle packet byte observation; normalized report maps output ordinals, reveals full-source overreserve, leaves formal strict ceiling unchanged. Linux actual MKV and Windows Native two-PCM trim tests PASS at 7d3b784/451be21; newer exact code fb07c74 CI pending.",
     "B16 code submitted: bounded constant-memory Windows FFprobe auxiliary packet audit worker and Native status owner, output identity checks, pending/ready/unavailable receipts, report refresh, short-clip independent Windows worker test (hosted execution Pending)",
-    "B14 code submitted: paired Native CQ short-sample encoding time/quality/video bitrate observability, matched-quality cost ratio, per-candidate UI rows and explicit JSON receipts; CI Pending"
+    "B14 code submitted: paired Native CQ short-sample encoding time/quality/video bitrate observability, matched-quality cost ratio, per-candidate UI rows and explicit JSON receipts; CI Pending",
+    "B15 code submitted: Manual candidate preflight reuses Guided scene-risk selector and Native probe, bounded distinct paired windows, absolute trim offsets, stale-source refusal, explicit risk evidence scope and matching same-window protocol for all codecs; 6 isolated JS logic checks passed"
   ],
   "next_units": [
+    "B15 exact-head Node/build and real Windows Native Manual paired scene probes + browser control acceptance; verify one source/risk set shared across all encoder/preset candidates; then add-on paired risk-refinement and ASS-render reference bridge remains Pending.",
     "B14 exact-head fast/full frontend tests and real Windows Native UI/receipt acceptance; then add real final-job resource/time and strict capability coverage (NOT automatic whole-movie estimates)",
     "B16 acceptance next: exact-head frontend and Windows PowerShell Native worker CI, actual >180s or >512MiB trim/receipt/strict-gate fixture and user report refresh; then precise pre-encode trim cost, FLAC recompression, Android/Web metering remain open.",
     "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
@@ -255,7 +257,8 @@
     "new_guided_budget": "Source receipts: real Windows Native copied audio total and ordered packet SHA256, rejected stale/tampered/fake zero count 9/9 CI at ad917ef. Source 429de52 recovery byte receipt: pure/VM+frontend PASS, real Windows Native step PASS; whole exact-head suite pending at last observation.",
     "b16_trim_audit": "PASS short-source real Linux FFmpeg and Windows Native completed output packet audits; still post-output only, no strict-preflight replacement; newer exact-head runs pending",
     "b16_async_long_output": "Implementation checkpoint complete on QHE work branch; exact PR head hosted frontend/Windows long-form validation Pending",
-    "b14_observed_encode_cost": "Code/syntax and 6 isolated source-equivalent V8 logic tests passed; exact-head Node/frontend CI and Windows/real-browser UI acceptance Pending"
+    "b14_observed_encode_cost": "Code/syntax and 6 isolated source-equivalent V8 logic tests passed; exact-head Node/frontend CI and Windows/real-browser UI acceptance Pending",
+    "b15_shared_manual_risk": "6 isolated source-equivalent JS logic tests PASS; real native scene probe, browser and exact-head CI Pending"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
