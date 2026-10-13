@@ -1784,7 +1784,7 @@ export function mountMediaWorkspace(hooks) {
     if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
     syncTaskReview();
   }
-  const mediaInfoListener = () => { syncReviewSource();invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
+  const mediaInfoListener = () => { syncReviewSource();invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); hooks.onBudgetEvidenceChange?.(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
@@ -1979,7 +1979,7 @@ export function mountMediaWorkspace(hooks) {
       budgetEvidence=result;budgetSourceIdentity=identity;
       ledger.textContent='完整源流成本已测量。点击“验证当前方案”查看预算分项；裁切复制流按完整源流保守预留，FLAC 重编码仍未知。';
     }catch(e){budgetEvidence=null;ledger.textContent='成本仍未知：'+e.message;}
-    finally{busy=false;hooks.setBusy(false);button.disabled=false;transcodeCurves.invalidate();syncTaskActions();}
+    finally{busy=false;hooks.setBusy(false);button.disabled=false;transcodeCurves.invalidate();hooks.onBudgetEvidenceChange?.();syncTaskActions();}
   };
   section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('当前方案验证通过，可以直接开始；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};

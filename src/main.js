@@ -6423,6 +6423,13 @@ mediaWorkspace=mountMediaWorkspace({
     if(state.nativeJobId)globalThis.NativeHardsub?.cancelNativeEncode(state.nativeJobId);
     else void state.engine.api?.FFmpegKit?.cancel();
   },
+  onBudgetEvidenceChange: () => {
+    // A measured source ledger alters only the size coordinate, not CQ evidence.
+    if ($('encodeGoal')?.value === 'sizeBudget') {
+      updateSizeBudgetPreview();
+      renderPlanOptions();
+    }
+  },
   measureBudget: async () => {
     const bridge=globalThis.NativeHardsub;
     if(!bridge?.__windowsNative||!bridge.measureSourceBudget)throw Error('当前仅 Windows Native 提供完整源流计量');
