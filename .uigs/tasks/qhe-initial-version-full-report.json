@@ -252,7 +252,7 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "b7ffee9d8fa5aa1e969453f93765bd68e2d05b47",
+  "latest_durable_commit": "2d9500ab41b12835dcb28c1a14a95a49d7948436",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -267,7 +267,7 @@
     "b15_shared_manual_risk": "6 source-equivalent isolated JS pure tests passed; CI exact-head pending after branch push; Native Windows real scene probe and browser UI pending",
     "b11_guided_manual_rendered_scope": "Seven extracted isolated V8 logic checks PASS; nine source wiring/compatibility checks PASS; Node Draft-fast/full frontend and Windows Native exact-head Pending",
     "b11_guided_exact_native_vbr": "8 actual-module isolated V8 behavior checks PASS; main JS syntax and 16 exact source wiring gates PASS; exact-head Draft-fast Node and hosted Windows Native localhost FFmpeg acceptance Pending",
-    "b11_guided_branch_adoption": "18 V8 extracted-module behavior tests PASS and main JS parse PASS; exact-head Node/browser and Windows Native paired FFmpeg/NVENC real execution Pending"
+    "b11_guided_branch_adoption": "18 extracted actual-module V8 pure behavior tests PASS, 12 static/source wiring gates PASS and main JS parse PASS. Exact-head full Node/browser and real Windows PowerShell+FFmpeg+NVENC acceptance Pending."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
