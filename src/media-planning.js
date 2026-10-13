@@ -1,4 +1,5 @@
 import { parseMediaTime } from './media-time.js';
+import { auditTrimCopyPayload } from './trim-copy-audit.js';
 // Size budgets are estimates, never a reason to truncate or delete a valid movie.
 export const SIZE_UNITS = { MB: 1000000, GB: 1000000000, MiB: 1048576, GiB: 1073741824 };
 export function sampleQualityTrial(task,adjustment) {
@@ -88,7 +89,9 @@ export function outputReport(task, result, elapsedSeconds) {
   const audioRate = task.estimatedAudioRate || 0;
   const suggestedVideoRate = withinBudget === false
     ? Math.max(1000, Math.floor((Number(task.bitrate) + audioRate) * (limit - (task.sizePlan?.fixedPayloadBytes || 0)) / Math.max(1,bytes - (task.sizePlan?.fixedPayloadBytes || 0)) * .97 - audioRate)) : null;
+  const trimCopyAudit=auditTrimCopyPayload(task,result.outputPacketEvidence);
   return {version:1, operation:task.operation, encoder:task.encoder || 'copy', parameters:task,
+    trimCopyAudit,
     outputBytes:Number.isFinite(bytes) ? bytes : null, outputDuration:duration, elapsedSeconds,
     actualStart:result.actualStart ?? task.start, targetBytes:limit ?? null,
     withinBudget, deliveryAllowed, recoveryOptions:deliveryAllowed?[]:['increase-budget','reduce-video-rate','change-stream-plan'], suggestedVideoRate, verified:result.verified ?? null,
