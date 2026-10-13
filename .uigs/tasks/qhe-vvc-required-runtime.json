@@ -1,24 +1,25 @@
 {
   "goal": "Close actual Windows VVC runtime acceptance gap without replacing user toolchains",
-  "status": "agent_execution_complete_pending_external_validation",
-  "current_bounded_work_unit": "one bounded repair of modern FFmpeg help option parsing after actual VVC runtime workflow failed",
+  "status": "hosted_runtime_validation_complete_field_validation_pending",
+  "current_bounded_work_unit": "accept actual VVC receipt and persist provenance",
   "completed_units": [
     "RequireRuntime fails on unsupported encoder",
     "optional hard-sub task and ASS fixture",
     "independent probe/decode and generated artifact evidence",
     "official asset digest verification and provenance",
-    "dedicated Windows workflow"
+    "dedicated Windows workflow",
+    "Three actual VVC Bridge tasks passed independent probe and full decode, workflow 38345727802; downloaded evidence digest and output byte sizes verified"
   ],
   "next_units": [
-    "read exact-head required VVC workflow conclusion and artifact; one bounded repair if necessary"
+    "physical-device and long-form validation; product-wide remaining scope and integration decision separate"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "6bd8a1ace6c731f8cf65a103b0b0100266d7de31",
+  "latest_durable_commit": "7a67d9e93a2440ace2cde8a7755a16fbd2cc27c0",
   "external_validation_states": {
-    "windows_required_vvc": "Run 38344020498 failed at formal Bridge request: FFmpeg encoder does not support -fps_mode; optional-selector parser repair pending rerun",
+    "windows_required_vvc": "PASS: QP transcode, bitrate transcode, ASS hardsub; run 38345727802, artifact 11788845480",
     "physical_device": "Pending",
-    "related_ci": "Other 8 workflows passed at 6bd8a1a"
+    "related_ci": "9/9 workflows success at 7a67d9e"
   },
   "local_tests": {
     "pass": 215,
@@ -27,13 +28,13 @@
   },
   "build": "pass",
   "blockers": [
-    "actual CI libvvenc encode/mux/probe/decode has not run in this work unit"
+    "Physical devices, long-form, external players and subtitle perceptual fidelity remain Pending"
   ],
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/observations/2026-10-13-qhe-vvc-capability-chain-and-cancellable-validation.md"
   },
-  "updated_timestamp": "2026-10-13T04:17:00.029581+00:00",
+  "updated_timestamp": "2026-10-13T05:48:00Z",
   "repair": {
     "reason": "global help parser omitted base flag for -fps_mode[:<stream_spec>]",
     "tests": "actual production regex RED->GREEN, plus dedicated .NET PowerShell fixture wired",

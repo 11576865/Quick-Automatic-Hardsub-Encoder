@@ -47,3 +47,24 @@
 - PR #105 以 PR #104 分支为基础；本轮未合并 main、未部署、未制作正式发行版。
 
 范围内交付完成，现场验证与产品后续工作保留为独立事项。
+
+
+## Verified hosted acceptance — 2026-10-13
+
+Head `7a67d9e93a2440ace2cde8a7755a16fbd2cc27c0`, tested PR merge
+`7bfc63b9b6c133d90c3e974de7bc548954fbbdac`: all nine workflows succeeded.
+Required VVC run [38345727802](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38345727802)
+executed real QP transcode, bitrate transcode and ASS hard-sub through Bridge.
+All three independently report VVC, yuv420p10le, 24 frames and full decode PASS.
+Output sizes: 26052 / 31566 / 25990 bytes. Runtime gate Available=true, ExitCode=0.
+
+Downloaded artifact 11788845480 ZIP SHA-256 matched its published digest;
+all three output byte sizes matched receipts. Provenance binds official asset
+633881560, archive SHA-256 4480b1abcae8bb46146e271fe603efaa90f29671ff9013bb0aed2d64d12951c8,
+FFmpeg N-127388-g615b07170e-20261012. Machine-readable receipt and output hashes:
+`docs/evidence/five-round-delivery/vvc-runtime-2026-10-13.json`.
+
+This supersedes the hosted-runtime Pending state above and the original generic
+smoke UNSUPPORTED gap; historical receipts remain unchanged. These are one-second
+synthetic hosted Windows jobs, not physical-device, long-form, external-player or
+perceptual ASS fidelity acceptance. No main merge or deployment.
