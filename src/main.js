@@ -25,8 +25,8 @@ import { parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js
 import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compression-resolutions.js';
 import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from './scene-risk-selection.js';
 import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
-import { resolveGuidedSizePolicy, assessGuidedBudget } from './guided-size-policy.js';
-import { guidedWholeFileProjection } from './guided-whole-file-budget.js';
+import { resolveGuidedSizePolicy } from './guided-size-policy.js';
+import { guidedWholeFileProjection, assessGuidedWholeFileBudget } from './guided-whole-file-budget.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -4244,7 +4244,9 @@ function renderPlanOptions() {
           ' · CQ 样本 SSIM≈' + Number(plan.frontierPrediction.quality).toFixed(5)
         : '单遍目标平均码率 ' + formatBitrate(plan.targetVideoBitrate);
     } else if (goal === 'sizeBudget' && currentGuidedBudgetAssessment()?.status === 'infeasible') {
-      param = '预算不可行：音频及容器预留后的视频码率低于规划下限';
+      param = '预算不可行：实际计划流和封装余量不足以容纳最低视频码率';
+    } else if (goal === 'sizeBudget' && currentGuidedBudgetAssessment()?.status === 'unknown') {
+      param = '完整预算待实测：复制音轨成本尚未确认';
     } else if (goal === 'sizeBudget' && !plan && $('guidedSizeBudgetPolicy').value!=='best-effort') {
       param='所选体积精度策略仅支持 Windows Native 软件 H.264';
     } else if (
@@ -4289,11 +4291,19 @@ function updateChosenSummary() {
 
   if (!plan) {
     const capacity = goal === 'sizeBudget' ? currentGuidedBudgetAssessment() : null;
+    if (capacity?.status === 'unknown') {
+      $('chosenSummary').textContent = '当前目标体积尚不能形成可执行方案：' +
+        (capacity.reason==='copy-cost-not-measured'
+          ? '复制音轨的完整源文件包字节尚未测量。请点击“测量源流与附件成本”，或将音频改为 AAC / Opus / 关闭音频。'
+          : '逐流成本测量不完整或已失效。'+(capacity.detail||'请重新测量当前完整源文件。')) +
+        ' 未知复制成本不能按零或估算码率计入正式任务。';
+      return;
+    }
     if (capacity?.status === 'infeasible') {
       $('chosenSummary').textContent =
-        '按当前音频码率及容器预留，目标体积 ' + formatBytes(capacity.targetBytes) +
+        '按当前音轨与封装预算，目标体积 ' + formatBytes(capacity.targetBytes) +
         ' 不足以留下最低规划视频码率 ' + formatBitrate(capacity.minimumVideoBitrate) +
-        '。估算最低预算 ' + formatBytes(capacity.minimumTargetBytes) +
+        '。最低预算约 ' + formatBytes(capacity.minimumTargetBytes) +
         '，还差 ' + formatBytes(capacity.shortfallBytes) +
         '；其中音频载荷约 ' + formatBytes(capacity.audioPayloadBytes) +
         '。请增加目标体积、降低音频码率或减少音轨。这是当前预算模型下的容量约束，不是画质评价。';
@@ -4346,7 +4356,8 @@ function updateChosenSummary() {
       '。规划体积约 ' + formatBytes(plan.plannedBytes) +
       '，预算边界 ' + formatBytes(plan.sizeCeiling) +
       ' · 来源 '+(plan.budgetSource==='frontier'?'所选曲线目标':'源片倍率')+
-      ' · 预估音频 '+formatBitrate(plan.audioBitRate)+
+      ' · 音频/固定流预算 '+formatBytes(plan.audioPayloadBytes)+
+      '（'+(plan.budgetCostBasis==='measured-source-packets'?'复制音轨已测包字节':'编码音频按计划码率')+'）'+
       ' · 容器预留 '+formatBytes(plan.containerReserveBytes)+
       (plan.sizeBudgetPolicy==='best-effort'
         ? '。快速单遍目标码率，可能明显超出预算。'
@@ -6006,13 +6017,12 @@ function currentGuidedBudgetAssessment() {
   const targetBytes = Math.floor(directBudgetBytes > 0
     ? directBudgetBytes : state.video.size * manualMultiplier);
   return {
-    ...assessGuidedBudget({
-      targetBytes, durationSeconds: Number(state.media.duration),
-      audioBitrate: estimatedSizeBudgetAudioBitrate(),
-      reservePercent: 4, containerReservePercent: 1,
-      fixedReserveBytes: 256 * 1024, minimumVideoBitrate: 150001
+    ...assessGuidedWholeFileBudget({
+      targetBytes,media:state.media,audio:guidedHardsubAudioSettings(),
+      evidence:mediaWorkspace?.getActiveBudgetEvidence?.()||null,
+      reservePercent:4,minimumVideoBitrate:150001
     }),
-    manualMultiplier, directBudgetBytes
+    manualMultiplier,directBudgetBytes
   };
 }
 
@@ -6069,23 +6079,16 @@ function buildEncodePlan(codec) {
   });
   if(!executionPolicy.ok)return null;
   const multiplier = state.video.size > 0 ? sizeCeiling / state.video.size : manualMultiplier;
-  const safeBudgetBytes = Math.floor(sizeCeiling * 0.96);
-  const containerReserveBytes = Math.max(256 * 1024, Math.floor(safeBudgetBytes * 0.01));
+  // Formal task compilation uses the same sizeBudget ledger, ceil reserve and
+  // integer bitrate. Never silently apply a second codec-efficiency heuristic.
+  const containerReserveBytes = feasibility.containerReserveBytes;
+  const safeBudgetBytes = sizeCeiling - containerReserveBytes;
   const sourceVideoBitrate = getSourceVideoBitrate();
-  const audioBitRate = estimatedSizeBudgetAudioBitrate();
-  const ceilingVideoBitrate = Math.floor(((safeBudgetBytes - containerReserveBytes) * 8 / media.duration) - audioBitRate);
-  if (!(ceilingVideoBitrate > 150000)) return null;
-  const sourceCodec = normalizeCodec(media.videoCodec);
-  const budgetHeadroom = 1.05 + Math.max(0, Math.min(1, (manualMultiplier - 0.75) / 1.25)) * 0.07;
-  const sourceEquivalent = sourceVideoBitrate > 0
-    ? sourceVideoBitrate * (codecEfficiency(sourceCodec) / codecEfficiency(codec)) * budgetHeadroom
-    : ceilingVideoBitrate;
-  const targetVideoBitrate = Math.floor(
-    directBudgetBytes > 0
-      ? ceilingVideoBitrate
-      : Math.max(150000, Math.min(ceilingVideoBitrate, sourceEquivalent))
-  );
-  const plannedBytes = Math.round(((targetVideoBitrate + audioBitRate) * media.duration / 8) + containerReserveBytes);
+  const audioBitRate = feasibility.audioPayloadBytes * 8 / media.duration;
+  const ceilingVideoBitrate = feasibility.availableVideoBitrate;
+  const targetVideoBitrate = ceilingVideoBitrate;
+  const plannedBytes = Math.floor(targetVideoBitrate * media.duration / 8 +
+    feasibility.audioPayloadBytes + containerReserveBytes);
   // The CQ curve may have been measured on preferred NVENC, whereas explicit
   // two-pass is software libx264. Do not carry incompatible sample SSIM into
   // a software formal encode's chosen-plan quality prediction.
@@ -6111,6 +6114,10 @@ function buildEncodePlan(codec) {
     ceilingVideoBitrate,
     sourceVideoBitrate,
     audioBitRate,
+    audioPayloadBytes:feasibility.audioPayloadBytes,
+    fixedPayloadBytes:feasibility.fixedPayloadBytes,
+    encodedAudioBytes:feasibility.encodedAudioBytes,
+    budgetCostBasis:feasibility.costBasis,
     budgetSource: directBudgetBytes > 0 ? 'frontier' : 'multiplier',
     sizeBudgetPolicy:executionPolicy.policy,
     frontierPrediction,
