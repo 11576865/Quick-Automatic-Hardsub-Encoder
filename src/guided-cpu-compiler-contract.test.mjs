@@ -118,11 +118,11 @@ test('changed source before any form mutation rejects without writes',()=>{
  assert.equal(commitGuidedCpuHandoff(f.props).reason,'invalid-or-stale-guided-cpu-handoff');
  assert.equal(f.count(),0);
 });
-test('form silently rewriting bitrate after apply triggers exact rollback',()=>{
+test('form silently rewriting actual target size after apply triggers exact rollback',()=>{
  const f=fixture(),previous=f.read();
  let current={...previous};
  f.props.read=()=>({...current});
- f.props.apply=s=>{current={...s,bitrate:'2000000'};if(s.codec==='h265')current={...s};};
+ f.props.apply=s=>{current={...s,targetSize:'2'};if(s.codec==='h265')current={...s};};
  const r=commitGuidedCpuHandoff(f.props);
  assert.equal(r.ok,false);
  assert.equal(r.reason,'guided-cpu-handoff-rejected');
