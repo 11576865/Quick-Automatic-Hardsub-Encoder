@@ -1,20 +1,21 @@
 {
   "goal": "Guided and professional views share authoritative current task and complete execution lifecycle",
-  "status": "local_implementation_verified_external_validation_pending",
+  "status": "hosted_shared_task_acceptance_complete_field_pending",
   "current_bounded_work_unit": "shared current task, validation, encode, cancellation, result and save retry across views",
   "completed_units": [
     "One authoritative form remains visible in guided compact and professional expanded presentations",
     "Switching views retains existing fields, checked plan and original artifact",
     "Normal guided execution delegates to same submit handler; legacy recovered job monitor/export retained",
-    "Budget measurement remains accessible in guided; reparented output controls invalidate checked evidence"
+    "Budget measurement remains accessible in guided; reparented output controls invalidate checked evidence",
+    "All nine hosted workflows passed; artifact digest verified; production phone/desktop layout screenshots reviewed with unloaded-source limits"
   ],
   "next_units": [
-    "Read hosted browser full flow, failure/cancel/save retry and responsive screenshots",
-    "Finish remaining compression resolution comparison and acceptance separately"
+    "Implement resolution cross-product and independent four-branch Native quality acceptance",
+    "Continue field and final product integration acceptance"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "104d9cd41477a3c2aca465037e2bca679e5e1851",
+  "latest_durable_commit": "2e81ac1449319136aafa70c103f2d3c178329694",
   "local_tests": {
     "passed": 229,
     "skipped": 8,
@@ -24,19 +25,19 @@
   },
   "external_validation_states": {
     "previous_head": "all nine workflows pass at 104d9cd",
-    "new_browser": "Pending",
-    "native_shared_task": "existing task API; new regression generation Pending",
+    "new_browser": "PASS 38360213661; cross-view settings/run/cancel/save retry; simulated media callbacks",
+    "native_shared_task": "Windows smoke/stream/VVC and Android emulator regression all pass at tested head",
     "physical_devices": "Pending"
   },
   "blockers": [
-    "Browser full flow and production screenshots not yet observed",
     "Guided goal exploration remains an explicitly applied CPU template, not automatic adoption",
     "Legacy recovered tasks retain separate archived monitor/export lifecycle",
-    "Physical, long-form and independent quality/compatibility claims remain Pending"
+    "Physical, long-form and independent quality/compatibility claims remain Pending",
+    "Guided phone layout remains long; no usability study"
   ],
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/observations/2026-10-13-qhe-shared-task-presentation-and-execution.md"
   },
-  "updated_timestamp": "2026-10-13T07:01:08.751092+00:00"
+  "updated_timestamp": "2026-10-13T07:26:15.516213+00:00"
 }
