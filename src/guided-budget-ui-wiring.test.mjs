@@ -62,4 +62,5 @@ test('Guided Native copied-audio budget binds current source packet measurement 
   assert.match(bridge,/AudioPacketBytes=\$audioCosts/);
   assert.match(bridge,/Assert-CurrentCopyBudgetEvidence \$task\.budgetEvidence \$video/);
   assert.match(bridge,/Assert-CurrentCopyBudgetEvidence \$request\.budgetEvidence \$video/);
+  assert.match(bridge,/\[int\]\$request\.expectedAudioTracks -ne \[int\]\$probe\.audioTracks/);
 });
