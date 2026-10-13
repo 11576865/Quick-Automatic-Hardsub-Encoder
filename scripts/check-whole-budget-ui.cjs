@@ -99,6 +99,7 @@ module.exports=async(browser,baseUrl)=>{
   assert.match(await page.locator('#taskStatus').textContent(),/任务已取消/);
   // Real DOM events: changes to audio settings must refresh the derived Guided
   // budget axis without requiring source remeasurement or a second encode.
+  const tasksAfterCancel=await page.evaluate(()=>window.budgetTest.tasks.length);
   const beforeAudio=await page.evaluate(()=>window.budgetTest.budgetNotifications);
   await page.evaluate(()=>{
     const s=window.budgetTest;
@@ -111,7 +112,7 @@ module.exports=async(browser,baseUrl)=>{
   await page.evaluate(()=>document.querySelector('#taskRestore').click());
   const afterRestore=await page.evaluate(()=>window.budgetTest.budgetNotifications);
   assert.ok(afterRestore>afterAudio,'restored configs must refresh Guided cost projections');
-  assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeRetry,
+  assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),tasksAfterCancel,
     'budget projection invalidation must not start an encode');
 
  }finally{await page.close();}
