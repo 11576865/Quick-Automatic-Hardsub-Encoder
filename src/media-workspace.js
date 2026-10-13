@@ -2046,7 +2046,11 @@ export function mountMediaWorkspace(hooks) {
           (trimAudit.status==='observed'
             ? '（节省 '+formatSize(trimAudit.overreserveBytes)+'，不减少正式预算）'
             : '（实测超出源预算，请复核来源流）')
-        : '';
+        : lastReport.trimCopyAuditState==='running'
+          ? ' · 裁切复制流审计正在后台运行（不影响成品验证与保存）'
+          : lastReport.trimCopyAuditState==='unavailable'
+            ? ' · 裁切复制流审计不可用；完整源流预算仍保留'
+            : '';
       status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+trimAuditText+' · 尚未保存到你的文件夹。下一步：保存成品。');
     }catch(e){
       if(isCancellationError(e)){
