@@ -1491,7 +1491,9 @@ $('qualityTargetRange').addEventListener('input', updateQualityTargetPreview);
 $('qualityTargetRange').addEventListener('change', commitQualityTarget);
 $('sizeBudgetRange').addEventListener('input', updateSizeBudgetPreview);
 $('sizeBudgetRange').addEventListener('change', commitSizeBudget);
-$('guidedVerifyVbrBtn').addEventListener('click',()=>runWebTask(runGuidedVbrVerification));
+$('guidedVerifyVbrBtn').addEventListener('click',async()=>{
+  try{await runWebTask(runGuidedVbrVerification);}finally{refreshGuidedVbrControls();}
+});
 $('guidedConfirmVbrBtn').addEventListener('click',confirmGuidedVbrVerification);
 $('guidedSizeBudgetPolicy').addEventListener('change',()=>{
   updateSizeBudgetPreview();renderPlanOptions();refreshBenchmarkEnabled();
