@@ -182,7 +182,34 @@ try {
     return [string]$started.jobId
   }
   # Real two-pass remux must preserve both selected source audio tracks.
-  Test-PolicyRun 'two-pass' 0 $false 'copy' 2 | Out-Null
+  $copyId=Test-PolicyRun 'two-pass' 0 $false 'copy' 2
+  $copyStages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+$copyId+"-*"))
+  if($copyStages.Count -ne 1){throw 'Expected Native Guided ASS copied-audio output stage'}
+  $copyOutput=Join-Path $copyStages[0].FullName 'output.mkv'
+  if(-not(Test-Path -LiteralPath $copyOutput)){throw 'Guided copied-audio stage has no output'}
+  $copyStatus=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$copyId" -Headers $headers
+  if($copyStatus.state -ne 'completed' -or [long]$copyStatus.outputBytes -ne (Get-Item $copyOutput).Length){
+    throw 'Guided Native status whole-container bytes differ from the stored output'
+  }
+  $copiedTotal=0L
+  for($track=0;$track -lt 2;$track++){
+    $selector="a:$track"
+    $sourcePackets=((& ffprobe -v error -select_streams $selector -show_packets -show_data_hash sha256 -show_entries packet=data_hash,size -of json $source | Out-String) | ConvertFrom-Json).packets
+    $outputPackets=((& ffprobe -v error -select_streams $selector -show_packets -show_data_hash sha256 -show_entries packet=data_hash,size -of json $copyOutput | Out-String) | ConvertFrom-Json).packets
+    if($LASTEXITCODE -ne 0 -or @($sourcePackets).Count -le 0 -or @($outputPackets).Count -ne @($sourcePackets).Count){
+      throw "Guided Native audio packet count mismatch for $selector"
+    }
+    for($i=0;$i -lt @($sourcePackets).Count;$i++){
+      if([string]$sourcePackets[$i].data_hash -ne [string]$outputPackets[$i].data_hash){
+        throw "Guided Native copied audio payload changed for $selector packet $i"
+      }
+      $copiedTotal += [long]$sourcePackets[$i].size
+    }
+  }
+  if($copiedTotal -ne ([long]$cost.audioPacketBytes[0]+[long]$cost.audioPacketBytes[1])){
+    throw 'Guided Native output copied packet total diverged from the measured source ledger'
+  }
+  Write-Host "Guided Native source-owned two-audio packets SHA256 identity, ledger and actual container bytes passed: $copyId"
   Test-PolicyRun 'strict-ceiling' 1024 $true | Out-Null
   $tamperId=Test-PolicyRun 'strict-ceiling' 5000000 $false 'copy' 2
   # A prior completed status is NOT authorization to export an arbitrarily
