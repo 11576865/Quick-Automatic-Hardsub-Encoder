@@ -46,3 +46,20 @@ test('audio setting mutations and restored configurations invalidate the Guided 
   assert.match(workspace,/form\.addEventListener\('input',invalidateCompiledPlan\)/);
   assert.match(workspace,/form\.addEventListener\('change',invalidateCompiledPlan\)/);
 });
+
+test('Guided Native copied-audio budget binds current source packet measurement at start',async()=>{
+  const [main,bridge]=await Promise.all([
+    readFile(new URL('./main.js',import.meta.url),'utf8'),
+    readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
+  ]);
+  const native=main.slice(main.indexOf('async function runNativeEncode()'),
+    main.indexOf('async function monitorNativeJob('));
+  assert.match(native,/const measuredBudget = plan\.mode === 'budget-rate'/);
+  assert.match(native,/mediaWorkspace\?\.getActiveBudgetEvidence\?\.\(\)/);
+  assert.match(native,/!measuredBudget\?\.measurementId/);
+  assert.match(native,/budgetEvidence: measuredBudget/);
+  assert.match(bridge,/function Assert-CurrentCopyBudgetEvidence\(/);
+  assert.match(bridge,/AudioPacketBytes=\$audioCosts/);
+  assert.match(bridge,/Assert-CurrentCopyBudgetEvidence \$task\.budgetEvidence \$video/);
+  assert.match(bridge,/Assert-CurrentCopyBudgetEvidence \$request\.budgetEvidence \$video/);
+});
