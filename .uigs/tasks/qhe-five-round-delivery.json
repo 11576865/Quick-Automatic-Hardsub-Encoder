@@ -1,8 +1,8 @@
 {
   "goal": "Implement most researched QHE workflows including VVC and task-centered UI within five work units",
-  "status": "agent_execution_complete_pending_external_validation",
-  "round": 4,
-  "current_bounded_work_unit": "source/checked-plan/original-artifact manual review projection and post-completion inspect reachability",
+  "status": "five_round_scoped_delivery_complete_field_validation_pending",
+  "round": 5,
+  "current_bounded_work_unit": "final integrated evidence acceptance and screenshot review",
   "completed_units": [
     {
       "round": 1,
@@ -81,31 +81,57 @@
         "browser visual/runtime Pending",
         "physical device Pending"
       ]
+    },
+    {
+      "round": 5,
+      "scope": "exact-head 8-workflow acceptance; Android 8-output report; desktop/phone visual review; explicit VVC unsupported boundary",
+      "implementation": "complete",
+      "tested_head": "95fc86dee63585493818f9c452b69649dd68fc1c",
+      "acceptance_manifest": "docs/evidence/five-round-delivery/acceptance-2026-10-13.json",
+      "hosted_workflows": {
+        "success": 8,
+        "failed": 0,
+        "pending": 0
+      },
+      "android_outputs": {
+        "passed": 8,
+        "total": 8
+      },
+      "vvc_actual_runtime": "UNSUPPORTED in CI; libvvenc absent; field Pending"
     }
   ],
   "next_units": [
-    "integration and delivery acceptance"
+    "physical-device and actual libvvenc acceptance; product-wide remaining research scope; integration/merge decision separate"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
   "pr": 105,
-  "latest_durable_commit": "eff12de96ddaf1128d26484775932c11296b5e86",
+  "latest_durable_commit": "95fc86dee63585493818f9c452b69649dd68fc1c",
   "external_validation_states": {
-    "windows_vvc": "round 2 Windows smoke passed; VVC unsupported is separately reported by runtime fixture",
-    "browser": "VVC phone passed; saved-state plan inspection failure addressed in round 4, rerun Pending",
+    "windows_vvc": "Structured PASS; actual UNSUPPORTED (libvvenc not included in CI), not runtime acceptance",
+    "browser": "Passed run 38342175981; production desktop and VVC phone screenshots visually reviewed",
     "physical_device": "Pending",
-    "windows_stream_plan": "round 2 runtime acceptance passed",
-    "android_stream_plan": "round 2 compile failed nullable output properties; safe access repair implemented, round 3 rerun pending",
-    "android_emulator": "round 2 failure; rerun pending",
+    "windows_stream_plan": "Passed exact checkpoint 95fc86d, run 38342175957",
+    "android_stream_plan": "Android compilation passed exact checkpoint 95fc86d, run 38342176046; emulator pending",
+    "android_emulator": "Passed run 38342175961; independent output verification 8/8",
     "windows_budget": "Passed hosted Windows smoke run 38341203400",
-    "android_budget": "Round 3 pending: Kotlin compile and instrumentation byte/contract guards",
-    "browser_budget": "Round 3 pending: DOM budget/save/config/source/mode-switch fixtures",
-    "round3_ci": "5 success, 2 fixture failures (repair submitted next), Android emulator pending at single status read",
-    "round3_fixture_repair": "Pending hosted Windows staging and settled-phone overflow validation",
-    "round4_ci": "Pending after publication; no polling of repair generation"
+    "android_budget": "instrumentation OK (2 tests), hosted emulator; physical SAF/provider mutation Pending",
+    "browser_budget": "Passed browser fixture, source/plan/artifact/strict-save/mode-switch checks, simulated backend",
+    "round3_ci": "superseded by all-green exact tested head 95fc86d",
+    "round3_fixture_repair": "Passed under exact tested head 95fc86d",
+    "round4_ci": "All 8 exact-head workflows success",
+    "windows_paired_codec": "Passed exact checkpoint 95fc86d, run 38342175960",
+    "windows_smoke_latest": "Passed run 38342175973"
   },
-  "blockers": [],
-  "updated_timestamp": "2026-10-13T03:32:07.142595+00:00",
+  "blockers": [
+    "Windows VVC actual runtime not tested: libvvenc absent in CI",
+    "physical GPU/Windows/Android/SAF/provider dialogs/long-form/player compatibility Pending",
+    "source-cost measurement Windows-only; trimmed copied payload and FLAC re-encode costs unknown",
+    "guided hard-sub retains prior interface",
+    "long vertical manual editor and duplicated overview content remain UI refinement debt",
+    "no main merge or deployment"
+  ],
+  "updated_timestamp": "2026-10-13T03:43:40.440605+00:00",
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"
@@ -131,5 +157,17 @@
       "VVC resize waits for phone shell and animation frames; overflow assertion unchanged, geometry diagnostics added"
     ],
     "scope": "fixture repair only; no new round-four UI claimed"
+  },
+  "round5": {
+    "status": "complete_for_scoped_delivery",
+    "tested_head": "95fc86dee63585493818f9c452b69649dd68fc1c",
+    "remaining": [
+      "Windows VVC actual runtime not tested: libvvenc absent in CI",
+      "physical GPU/Windows/Android/SAF/provider dialogs/long-form/player compatibility Pending",
+      "source-cost measurement Windows-only; trimmed copied payload and FLAC re-encode costs unknown",
+      "guided hard-sub retains prior interface",
+      "long vertical manual editor and duplicated overview content remain UI refinement debt",
+      "no main merge or deployment"
+    ]
   }
 }
