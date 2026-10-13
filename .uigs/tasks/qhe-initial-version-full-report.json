@@ -242,7 +242,7 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "905511646b9ba86b7f4387897ee6f008f833caa5",
+  "latest_durable_commit": "e5fc052af3aa6fda8ddfa518a54aeff1a1ba2878",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -252,7 +252,7 @@
     "new_single_budget": "Pending browser and platform regression",
     "new_guided_budget": "Source receipts: real Windows Native copied audio total and ordered packet SHA256, rejected stale/tampered/fake zero count 9/9 CI at ad917ef. Source 429de52 recovery byte receipt: pure/VM+frontend PASS, real Windows Native step PASS; whole exact-head suite pending at last observation.",
     "b16_trim_audit": "PASS short-source real Linux FFmpeg and Windows Native completed output packet audits; still post-output only, no strict-preflight replacement; newer exact-head runs pending",
-    "b16_async_long_output": "Pending exact-head draft-fast and Windows Native acceptance; NO >180sec or >512MiB field acceptance"
+    "b16_async_long_output": "Implementation checkpoint complete on QHE work branch; exact PR head hosted frontend/Windows long-form validation Pending"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
