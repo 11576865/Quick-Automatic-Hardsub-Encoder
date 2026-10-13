@@ -7,9 +7,9 @@ module.exports=async(browser,baseUrl)=>{
   await page.goto(baseUrl+'/whole-budget-fixture');
   await page.evaluate(async()=>{
    const {mountMediaWorkspace}=await import('/src/media-workspace.js');
-   const state=window.budgetTest={source:'A',busy:false,saves:0,bytes:1100000,tasks:[]};
+   const state=window.budgetTest={source:'A',busy:false,saves:0,bytes:1100000,tasks:[],budgetNotifications:0};
    const media={duration:5,fps:24,videoTracks:1,audioTracks:1,audioCodecs:['flac'],audioStreams:[{codec:'flac'}],formatName:'matroska'};
-   state.workspace=mountMediaWorkspace({guidedSnapshot:()=>({plan:{codec:'h265',mode:'crf',crf:22,preset:'medium'},audio:{audio:'aac',audioBitrate:128000},container:'mkv'}),busy:()=>state.busy,setBusy:v=>state.busy=v,isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.source,sourceName:()=>state.source,mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},log:()=>{},cancel:()=>{state.rejectRun?.(Error('已取消'));},save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true};},measureBudget:async()=>({version:1,scope:'full-source',audioPacketBytes:[1000],subtitlePacketBytes:[],attachmentBytes:[]}),run:async task=>{state.tasks.push(task);if(state.deferRun)return new Promise((resolve,reject)=>{state.rejectRun=reject;});return {outputBytes:state.bytes,verified:true};}});
+   state.workspace=mountMediaWorkspace({guidedSnapshot:()=>({plan:{codec:'h265',mode:'crf',crf:22,preset:'medium'},audio:{audio:'aac',audioBitrate:128000},container:'mkv'}),onBudgetEvidenceChange:()=>state.budgetNotifications++,busy:()=>state.busy,setBusy:v=>state.busy=v,isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.source,sourceName:()=>state.source,mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},log:()=>{},cancel:()=>{state.rejectRun?.(Error('已取消'));},save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true};},measureBudget:async()=>({version:1,scope:'full-source',audioPacketBytes:[1000],subtitlePacketBytes:[],attachmentBytes:[]}),run:async task=>{state.tasks.push(task);if(state.deferRun)return new Promise((resolve,reject)=>{state.rejectRun=reject;});return {outputBytes:state.bytes,verified:true};}});
    const form=document.querySelector('#mediaTaskForm');
    const set=(key,value)=>{const el=form.elements.namedItem(key);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));};
    set('operation','transcode');set('rateMode','size');set('targetSize','1');set('budgetPolicy','strict-ceiling');
@@ -97,6 +97,22 @@ module.exports=async(browser,baseUrl)=>{
   await page.click('#taskCancel');
   await page.waitForFunction(()=>!window.budgetTest.busy);
   assert.match(await page.locator('#taskStatus').textContent(),/任务已取消/);
+  // Real DOM events: changes to audio settings must refresh the derived Guided
+  // budget axis without requiring source remeasurement or a second encode.
+  const beforeAudio=await page.evaluate(()=>window.budgetTest.budgetNotifications);
+  await page.evaluate(()=>{
+    const s=window.budgetTest;
+    s.set('audio','aac');
+    s.set('audioBitrate','96000');
+    s.set('audioPlan','');
+  });
+  const afterAudio=await page.evaluate(()=>window.budgetTest.budgetNotifications);
+  assert.ok(afterAudio>=beforeAudio+3,'audio policy, bitrate and stream plan must notify Guided');
+  await page.evaluate(()=>document.querySelector('#taskRestore').click());
+  const afterRestore=await page.evaluate(()=>window.budgetTest.budgetNotifications);
+  assert.ok(afterRestore>afterAudio,'restored configs must refresh Guided cost projections');
+  assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeRetry,
+    'budget projection invalidation must not start an encode');
 
  }finally{await page.close();}
  console.log('Whole-file workspace budget, strict save gate, config exclusion and source invalidation passed (simulated media backend).');
