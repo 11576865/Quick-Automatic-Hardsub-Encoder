@@ -1,6 +1,6 @@
 {
   "goal": "Implement most researched QHE workflows including VVC and task-centered UI within five work units",
-  "status": "five_round_scoped_delivery_complete_field_validation_pending",
+  "status": "historical_scoped_delivery_not_initial_version_completion",
   "round": 5,
   "current_bounded_work_unit": "follow-up conservative budget reservation for trimmed copied streams",
   "completed_units": [
@@ -130,7 +130,7 @@
     "long vertical manual editor and duplicated overview content remain UI refinement debt",
     "no main merge or deployment"
   ],
-  "updated_timestamp": "2026-10-13T05:57:36.349621+00:00",
+  "updated_timestamp": "2026-10-13T11:57:57.358259+00:00",
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"
@@ -168,5 +168,7 @@
       "long vertical manual editor and duplicated overview content remain UI refinement debt",
       "no main merge or deployment"
     ]
-  }
+  },
+  "superseded_for_product_completion_by": ".uigs/tasks/qhe-initial-version-full-report.json",
+  "scope_correction": "Full theoretical reports are initial-version baseline per owner. Five-round completion is a subset only; report gaps cannot be deferred without owner approval."
 }

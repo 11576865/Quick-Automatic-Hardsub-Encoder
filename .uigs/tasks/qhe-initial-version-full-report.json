@@ -1,0 +1,249 @@
+{
+  "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
+  "status": "incomplete_full_report_baseline_restored",
+  "current_bounded_work_unit": "Report-to-implementation/acceptance traceability and completion-denominator correction",
+  "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
+  "reports": [
+    {
+      "id": "R19",
+      "file": "19-QHE_-_2026-10-12_-1-.pdf",
+      "sha256": "155de82b383030e5b676572c50ae845540f24798e9d61d8c1b0452b01a9aabce"
+    },
+    {
+      "id": "R24",
+      "file": "24-QHE_-_-_2026-10-13-1-.pdf",
+      "sha256": "b4c3273caead7381b5d5c7a1a26240ee3a279f8aaff9869213bc7178069df0a5"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "B01",
+      "source": "R19 §01、§16–19；R24 §23–24",
+      "requirement": "初版以整份报告为完成分母，证据分层，旧能力不退化",
+      "implementation_status": "范围记录错误，现纠正",
+      "evidence": "AGENTS.md；五轮任务记录；9 条 CI",
+      "remaining": "五轮交付是子集；无逐报告验收矩阵时不能宣布初版完成"
+    },
+    {
+      "id": "B02",
+      "source": "R19 §03；R24 §04–05",
+      "requirement": "来源资源、轨道、用户意图、计划、冻结任务和实际成品分离",
+      "implementation_status": "部分实现",
+      "evidence": "media-task.js；task-review.js；manual-sample-evidence.ps1",
+      "remaining": "目前由表单/编译任务投影构成；完整来源/意图/保留合同及跨端身份需补齐"
+    },
+    {
+      "id": "B03",
+      "source": "R19 §05；R24 §06–09",
+      "requirement": "ASS、纯转码、Stream Copy 是完整且平等的工作流",
+      "implementation_status": "已实现主要路径，验收有限",
+      "evidence": "media-workspace.js；main.js；clip-queue.js；Windows/Android CI",
+      "remaining": "复杂真实素材、旧路径完整回归和用户任务成本未全部验收"
+    },
+    {
+      "id": "B04",
+      "source": "R19 §03、§14；R24 §19–20",
+      "requirement": "引导和专业视图编辑执行同一份任务，切换无覆盖",
+      "implementation_status": "核心已实现",
+      "evidence": "shared-task-presentation.js；guided-task-handoff.js；shared-task-ui acceptance",
+      "remaining": "共享执行已验收；目标探索仍生成显式 CPU 模板；决策内核尚未完全共享"
+    },
+    {
+      "id": "B05",
+      "source": "R19 §03、§07；R24 §05、§11–12",
+      "requirement": "逐流保留/变更意图、不可改变属性、冻结执行计划及成果证据",
+      "implementation_status": "部分实现",
+      "evidence": "media-stream-plan.js；media-task.js；task-review.js",
+      "remaining": "输出投影已有，但未证明独立保留合同覆盖全部属性和任务生命周期"
+    },
+    {
+      "id": "B06",
+      "source": "R19 §07、A02/A03；R24 §11",
+      "requirement": "逐音轨 copy/AAC/Opus/FLAC/drop，语言、声道、标志和时间对应",
+      "implementation_status": "主要策略已实现，属性验收不全",
+      "evidence": "audio-stream-plan-ui.js；media-stream-plan.js；rich-MKV Windows fixtures",
+      "remaining": "真实多声道、多语言默认标志和延迟/降混组合未全部验收"
+    },
+    {
+      "id": "B07",
+      "source": "R19 §05、§07、§12、A01；R24 §07",
+      "requirement": "内封 ASS 与字体依赖绑定、真实 libass 渲染和复杂几何验证",
+      "implementation_status": "部分实现/需继续追踪",
+      "evidence": "ass.js；fonts.js；font-diagnostics.js；main.js；VVC ASS smoke",
+      "remaining": "已有外置输入和实际渲染路径；内封选择到字体绑定的跨端完整链不能视作已闭环"
+    },
+    {
+      "id": "B08",
+      "source": "R19 §06、A04；R24 §09",
+      "requirement": "请求/实际呈现切点、复制包范围、音频时间映射和验证状态",
+      "implementation_status": "部分实现",
+      "evidence": "media-task.js；native-bridge.ps1；device verifier；clip queue",
+      "remaining": "actualStart 和关键帧预览不等于完整 requested/actual/PTS/DTS/A-V 时间审计；VFR/B帧/偏移真实验收待补"
+    },
+    {
+      "id": "B09",
+      "source": "R19 §12；R24 §04、§07",
+      "requirement": "字幕事件、章节、音频时钟、PTS/DTS 与重基准一致",
+      "implementation_status": "局部测试已有",
+      "evidence": "media-stream-plan integration；rich MKV and device verifier",
+      "remaining": "边界事件、非零偏移、VFR、完整音轨配裁切视频的综合矩阵待补"
+    },
+    {
+      "id": "B10",
+      "source": "R19 §12、§18；R24 §16、§21",
+      "requirement": "色彩变化必须明确，HDR/位深不能混同",
+      "implementation_status": "保护性门禁已有",
+      "evidence": "media-task.js；media-capabilities.js",
+      "remaining": "保持不安全输入阻断；端到端色彩正确性/显示实验仍缺，不能以门禁等同色彩能力完成"
+    },
+    {
+      "id": "B11",
+      "source": "R19 §08–09；R24 §13–16、§20",
+      "requirement": "共同参考上包络、证据域、CQ/VBR 分离、显式采用和回滚",
+      "implementation_status": "限定路径已实现并 CI 验收",
+      "evidence": "manual-transcode-comparison/session/vbr-verification/adoption.js",
+      "remaining": "Windows SDR 纯转码实证；ASS/引导与专业比较的统一合同仍未闭环"
+    },
+    {
+      "id": "B12",
+      "source": "R19 §08、§16；R24 §13–16",
+      "requirement": "有界 codec × resolution × preset 候选与明确可比范围",
+      "implementation_status": "有限交叉集合已实现",
+      "evidence": "manual-candidate-set.js：x264/x265 × medium/fast × 原尺寸/1080p/720p",
+      "remaining": "不能宣称完整候选适配；AV1、其他可用实现、ASS 渲染参考和高级处理的准入仍待完善；不追求无限全局最优"
+    },
+    {
+      "id": "B13",
+      "source": "R19 §09、§11、P3；R24 §14、§18",
+      "requirement": "总文件目标与固定/编码音轨、字幕、附件、封装预算接入同一决策坐标",
+      "implementation_status": "主干未打通",
+      "evidence": "compare-ui.js 明示视频估算预算、不含音频；sizeBudget 独立账本",
+      "remaining": "把完整账本投影到曲线预算域并保留来源身份、未知项和不可行域；现有成品门禁不能替代决策接入"
+    },
+    {
+      "id": "B14",
+      "source": "R19 §10、§15；R24 §13、§17",
+      "requirement": "质量/大小/编码时间及资源与兼容条件的可解释取舍",
+      "implementation_status": "部分实现",
+      "evidence": "manual-transcode-session.js encode-time quota；main.js 风险采样",
+      "remaining": "配额限制不等于显示同预算候选耗时/收益，也不等于按用户时间意图选择；需真实成本呈现及策略"
+    },
+    {
+      "id": "B15",
+      "source": "R19 §10；R24 §17",
+      "requirement": "风险场景、配对窗口、追加测量和不足证据结果",
+      "implementation_status": "引导已有，专业未全面共享",
+      "evidence": "scene-risk-selection.js；calibration-refinement.js；main.js；Manual 两窗口",
+      "remaining": "统一候选调度/风险覆盖；字幕高密度、暗场/噪声真实素材验证仍待补；不伪造统计覆盖率"
+    },
+    {
+      "id": "B16",
+      "source": "R19 §11；R24 §18",
+      "requirement": "复制流精确范围成本、重编码音频成本、附件和余量完整计量",
+      "implementation_status": "部分实现",
+      "evidence": "media-planning.js；Windows source-budget；whole-file-budget tests",
+      "remaining": "裁切采用全源保守预留；FLAC重编码拒绝；Android/Web计量缺；必须保留为初版开放项"
+    },
+    {
+      "id": "B17",
+      "source": "R19 A07/A08；R24 §18、§20",
+      "requirement": "严格实际字节上限、取消、保存失败重试、来源变更和旧文件安全",
+      "implementation_status": "主要机制已实现",
+      "evidence": "native-bridge.ps1；Android EncodeService；browser save fixture",
+      "remaining": "合成及模拟回归通过；真实提供者、重开成品、并发变更/磁盘不足场景仍需验收"
+    },
+    {
+      "id": "B18",
+      "source": "R19 §04、A10；R24 §10、§21",
+      "requirement": "三端同业务语义，能力逐级探测，不支持明确拒绝",
+      "implementation_status": "部分实现",
+      "evidence": "media-capabilities.js；platform adapters；三端 compile/CI",
+      "remaining": "三端无相同编码器承诺；浏览器大文件、Android生命周期/空间和用户机能力链证据待完善"
+    },
+    {
+      "id": "B19",
+      "source": "R19 §04、P4、§19；R24 §10、§21",
+      "requirement": "VVC/GPU/HDR 按适配器实验与证据边界推进",
+      "implementation_status": "Windows VVC合成链已验收；其余未关闭",
+      "evidence": "windows/vvc-runtime.ps1；required VVC CI",
+      "remaining": "许可/分发、目标设备与真实文件缺；HDR继续保护性阻断；报告实验性要求仍在矩阵，不擅自延期"
+    },
+    {
+      "id": "B20",
+      "source": "R19 §14、P5；R24 §19–20",
+      "requirement": "任务中心、多尺寸、单主图、候选解释、回退和真实预览",
+      "implementation_status": "主要展示已改，产品验收不全",
+      "evidence": "media-workspace.js；task-review；curve SVG；候选比较表；compact disclosure",
+      "remaining": "表格是报告允许的候选展示，不强制重复PR103虚线；信息收敛、真实载入态/字体/触控/可用性仍待验收"
+    },
+    {
+      "id": "B21",
+      "source": "R19 P5；R24 §19",
+      "requirement": "批次矩阵与每项来源/意图/计划/执行/成果管理",
+      "implementation_status": "综合矩阵未确认实现",
+      "evidence": "clip-queue.js 仅现有剪切片段队列",
+      "remaining": "剪切队列不能替代多来源/多输出转换矩阵；需设计和接入统一任务执行"
+    },
+    {
+      "id": "B22",
+      "source": "R19 §13、P5；R24 §22",
+      "requirement": "可选的版本化成果交换与跨项目证据语义",
+      "implementation_status": "可选设计项未实现",
+      "evidence": "现有outputReport/JSON，非正式ArtifactManifest",
+      "remaining": "保留报告可选性质，不强制合并产品；版本/身份/证据适配尚未建立，不把一般报告导出当成协议"
+    },
+    {
+      "id": "B23",
+      "source": "R19 §15；R24 §03、§23",
+      "requirement": "同素材同约束的任务收益、操作/时间/错误率对照",
+      "implementation_status": "缺少控制实验",
+      "evidence": "报告列出HandBrake/StaxRip等对照维度",
+      "remaining": "没有实际收益证据；不拿功能数量或编码器存在证明产品定位完成"
+    },
+    {
+      "id": "B24",
+      "source": "R19 §16–17；R24 §23",
+      "requirement": "版本化综合黄金样本和 A01–A10 独立验收",
+      "implementation_status": "部分合成矩阵，现场待补",
+      "evidence": "scripts/verify-stream-plan-v4-device-outputs.mjs；rich MKV；paired codec CI",
+      "remaining": "所有验收项必须分别绑定素材、后端、版本、PASS/FAIL/UNSUPPORTED/FIELD-PENDING，见下表"
+    },
+    {
+      "id": "B25",
+      "source": "R19 §16–19；R24 §24",
+      "requirement": "完整范围关闭后集成和可安装/可运行交付",
+      "implementation_status": "未完成",
+      "evidence": "PR104→PR105仍草稿且未合并 main",
+      "remaining": "不能以分支 CI 全绿宣布产品完成；报告缺项、产品审阅、集成与发布产物验收均需关闭"
+    }
+  ],
+  "completed_units": [
+    "Report sections and acceptance gates mapped to current code and evidence",
+    "Five-round completion classified as historical subset, not initial-version completion"
+  ],
+  "next_units": [
+    "B13/B16 whole-file budget coordinates in compression decision",
+    "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
+    "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
+    "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
+    "B03/B18/B19/B23/B25 platform/field/benchmark/integration/release"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "ba10fb966ee63168e03526afd09c02140c6aa04c",
+  "external_validation_states": {
+    "latest_tested_implementation": "9/9 hosted success at bbec19d; not full report acceptance",
+    "physical_devices": "Pending",
+    "whole_product": "Incomplete"
+  },
+  "blockers": [
+    "Report requirements remain partially implemented; no full product completion claim",
+    "Physical device, provider, long-form and player acceptance lacks required environment/media evidence"
+  ],
+  "traceability_document": "docs/initial-version-report-traceability-2026-10-13.md",
+  "intake": {
+    "status": "recorded",
+    "foundry_commit": "c4299f7c4f058dcb640f7671e53ccbd2cb85c18c"
+  },
+  "updated_timestamp": "2026-10-13T11:57:57.358259+00:00"
+}
