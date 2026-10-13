@@ -1674,6 +1674,25 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
     return $false
 }
 
+function Get-GuidedCompletedBudgetProjection($Job,[long]$ActualBytes) {
+    if($Job.Task -or -not $Job.Request -or [string]$Job.Request.mode -ne 'budget-rate'){return $null}
+    $request=$Job.Request
+    $planned=0L
+    $limit=0L
+    if(-not [long]::TryParse([string]$request.plannedWholeFileBytes,[ref]$planned) -or $planned -le 0){return $null}
+    if(-not [long]::TryParse([string]$request.sizeCeilingBytes,[ref]$limit) -or $limit -le 0){return $null}
+    $policy=[string]$Job.SizeBudgetPolicy
+    if($policy -notin @('best-effort','two-pass','strict-ceiling')){return $null}
+    # Completion and strict output checks run before this receipt is emitted.
+    $verified=($policy -eq 'strict-ceiling' -and [bool]$Job.StrictBudget -and
+        $Job.BudgetCeiling -eq $limit -and $ActualBytes -le $limit)
+    return [pscustomobject]@{
+        plannedBytes=$planned;budgetBytes=$limit;policy=$policy
+        costBasis=[string]$request.budgetCostBasis
+        withinBudget=($ActualBytes -le $limit);strictVerified=$verified
+    }
+}
+
 function Get-JobStatus([string]$JobId) {
     if(-not $script:Jobs.ContainsKey($JobId)){return [pscustomobject]@{ok=$false;error='Unknown Windows Native job id.'}}
     $j=$script:Jobs[$JobId]
@@ -1699,7 +1718,9 @@ function Get-JobStatus([string]$JobId) {
             $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
             $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
         }
-        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+        $actualBytes=(Get-Item -LiteralPath $j.Output).Length
+        $budgetProjection=Get-GuidedCompletedBudgetProjection $j $actualBytes
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     if($j.State -eq 'failed'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}}
@@ -1826,7 +1847,9 @@ function Get-JobStatus([string]$JobId) {
             $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
             $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
         }
-        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+        $actualBytes=(Get-Item -LiteralPath $j.Output).Length
+        $budgetProjection=Get-GuidedCompletedBudgetProjection $j $actualBytes
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
