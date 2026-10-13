@@ -76,7 +76,7 @@ jobs:
       - run: node --test src/rate-distortion-model.test.mjs
       - run: node --test src/compression-decision.test.mjs
       - run: node --test src/manual-transcode-comparison.test.mjs
-      - run: node --test src/manual-transcode-session.test.mjs src/manual-candidate-set.test.mjs
+      - run: node --test src/manual-transcode-session.test.mjs src/manual-candidate-set.test.mjs src/manual-time-tradeoff.test.mjs
       - run: node --test src/manual-transcode-vbr-verification.test.mjs
       - run: node --test src/manual-transcode-adoption.test.mjs
       - run: node --test src/compression-resolutions.test.mjs
