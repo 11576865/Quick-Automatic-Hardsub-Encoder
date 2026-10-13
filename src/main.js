@@ -5156,6 +5156,7 @@ function guidedVbrKey(plan=buildEncodePlan(state.selectedCodec)) {
   if(plan?.mode!=='budget-rate')return '';
   try{return JSON.stringify([
     currentGuidedDecisionScope(),state.selectedCodec,plan.codec,plan.preset,
+    Number($('qualityTarget')?.value||.985),
     plan.targetVideoBitrate,plan.sizeCeiling,plan.sizeBudgetPolicy,
     plan.outputWidth||0,plan.outputHeight||0,
     state.video?.name,state.video?.size,state.video?.lastModified,
