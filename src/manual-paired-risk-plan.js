@@ -28,7 +28,7 @@ export async function prepareManualPairedRiskPlan({
   const probes=[];
   const started=now();
   const order=[0,2,4,1,3,5];
-  for(const index of order.slice(0,Math.min(maxProbes,candidates.length))){
+  for(const index of order.filter(i=>i<candidates.length).slice(0,maxProbes)){
     if(!isCurrent())return {ok:false,reason:'stale-source-during-probing'};
     if(now()-started>=probeBudgetMs)break;
     const relative=candidates[index];
