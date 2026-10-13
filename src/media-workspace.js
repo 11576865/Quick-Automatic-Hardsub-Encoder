@@ -2067,7 +2067,7 @@ export function mountMediaWorkspace(hooks) {
             ? '（节省 '+formatSize(trimAudit.overreserveBytes)+'，不减少正式预算）'
             : '（实测超出源预算，请复核来源流）')
         : lastReport.trimCopyAuditState==='running'
-          ? ' · 裁切复制流审计正在后台运行（不影响成品验证与保存）'
+          ? ' · 裁切复制流审计正在后台运行；可稍后点任务报告刷新（不影响成品保存）'
           : lastReport.trimCopyAuditState==='unavailable'
             ? ' · 裁切复制流审计不可用；完整源流预算仍保留'
             : '';
