@@ -1204,7 +1204,7 @@ function Invoke-Sample($Body) {
         }elseif($exactGuidedEvidence){
             $snapshotAfter=New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$snapshotBefore.runtimeVersion)
             $assetAfter=Get-GuidedRenderedAssetStamp $work
-            New-GuidedExactVbrReceipt $snapshotBefore $snapshotAfter $o ([string]$profile.Encoder) $measured $assetBefore $assetAfter
+            New-GuidedExactVbrReceipt $snapshotBefore $snapshotAfter $o ([string]$profile.Encoder) $(if($profile.Hardware){'p7'}elseif([string]$o.preset){[string]$o.preset}else{[string]$profile.SoftwarePreset}) $measured $assetBefore $assetAfter
         }else{$null}
         if([bool]$o.retainSample){
             $keep=Join-Path ([IO.Path]::GetTempPath()) ("quick-hardsub-sample-$sampleId.mkv")
