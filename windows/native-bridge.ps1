@@ -986,13 +986,14 @@ function Get-Ssim([string]$Candidate,[string]$Reference,[string]$Work,[int]$Refe
     return $null
 }
 
-function Get-SsimAgainstSource([string]$Candidate,[string]$Source,[string]$Start,[string]$Duration,[string]$Work) {
+function Get-SsimAgainstSource([string]$Candidate,[string]$Source,[string]$Start,[string]$Duration,[string]$Work,[int]$ReferenceWidth=0,[int]$ReferenceHeight=0) {
     # Only for the validated, filter-free video-transcode calibration path.
     # Decode the source directly: no multi-GB FFV1 reference written to disk.
     # Independent seek windows reset PTS before same-frame SSIM comparison.
+    $up=if($ReferenceWidth -gt 0){'scale='+$ReferenceWidth+':'+$ReferenceHeight+':flags=bicubic,'}else{''}
     $cmd='-hide_banner -nostdin -loglevel info -i '+(Quote-NativeArg $Candidate)+
       ' -ss '+$Start+' -t '+$Duration+' -i '+(Quote-NativeArg $Source)+
-      ' -filter_complex "[0:v]setpts=PTS-STARTPTS[encoded];[1:v]format=yuv420p,setpts=PTS-STARTPTS[reference];[encoded][reference]ssim" -an -sn -f null NUL'
+      ' -filter_complex "[0:v]'+$up+'setpts=PTS-STARTPTS[encoded];[1:v]format=yuv420p,setpts=PTS-STARTPTS[reference];[encoded][reference]ssim" -an -sn -f null NUL'
     $r=Invoke-BridgeTool $script:Ffmpeg $cmd $Work
     if($r.ExitCode -ne 0){throw 'Source-backed SSIM failed: '+$r.StdErr.Trim()}
     $match=[regex]::Match(($r.StdErr+[Environment]::NewLine+$r.StdOut),'All:(?<v>[0-9.]+)')
@@ -1117,9 +1118,11 @@ function Invoke-Sample($Body) {
         $outH=[int]$o.outputHeight
         $refW=[int]$o.referenceWidth
         $refH=[int]$o.referenceHeight
+        $common=$exactManualEvidence -and [bool]$o.commonReference
         $scaled=$outW -gt 0 -or $outH -gt 0
+        if([bool]$o.commonReference -and (-not $common -or -not $scaled)){throw 'Common reference requires exact measured manual geometry.'}
         if($scaled){
-            if(-not $withSubs -or [bool]$o.sampleExact){throw 'Resolution trials require subtitle-rendered common reference mode.'}
+            if(-not $common -and (-not $withSubs -or [bool]$o.sampleExact)){throw 'Resolution trials require subtitle-rendered common reference mode.'}
             if($outW -lt 2 -or $outH -lt 2 -or $outW -gt 16384 -or $outH -gt 16384 -or
                 ($outW % 2) -or ($outH % 2) -or
                 $refW -lt $outW -or $refH -lt $outH -or
@@ -1127,12 +1130,18 @@ function Invoke-Sample($Body) {
                 throw 'Invalid common-reference candidate resolution.'
             }
         }
+        if($common){
+            $sourceGeometry=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=width,height -of json '+(Quote-NativeArg $video))
+            if($sourceGeometry.ExitCode -ne 0){throw 'Cannot verify common source reference geometry.'}
+            $sourceStream=@(($sourceGeometry.StdOut | ConvertFrom-Json).streams)[0]
+            if([int]$sourceStream.width -ne $refW -or [int]$sourceStream.height -ne $refH){throw 'Common reference geometry differs from source.'}
+        }
         $referenceFilter=if($withSubs){' -vf "ass=subtitle.ass:fontsdir=fonts"'}else{''}
         $vf=if($withSubs){
             $filter='ass=subtitle.ass:fontsdir=fonts'
             if($scaled){$filter+=',scale='+$outW+':'+$outH+':flags=bicubic'}
             ' -vf "'+$filter+'"'
-        }else{''}
+        }elseif($common){' -vf "scale='+$outW+':'+$outH+':flags=bicubic"'}else{''}
         if(-not [bool]$o.sampleExact){
             # Legacy hard-sub samples require the subtitle-rendered FFV1
             # reference; exact filter-free transcoding measures from source.
@@ -1147,10 +1156,16 @@ function Invoke-Sample($Body) {
         if($run.ExitCode -ne 0 -or -not(Test-Path $candidate)){throw ($run.StdErr.Trim())}
         $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $candidate))
         $measured=if($probe.ExitCode -eq 0){[double]::Parse($probe.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$duration}
+        if($common){
+            $outputGeometry=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=width,height -of json '+(Quote-NativeArg $candidate))
+            if($outputGeometry.ExitCode -ne 0){throw 'Cannot verify measured output geometry.'}
+            $actualStream=@(($outputGeometry.StdOut | ConvertFrom-Json).streams)[0]
+            if([int]$actualStream.width -ne $outW -or [int]$actualStream.height -ne $outH){throw 'Measured output geometry differs from requested candidate.'}
+        }
         $packets=Get-PacketStats $candidate
         $ssim=if([bool]$o.measureSsim){
             if([bool]$o.sampleExact){
-                Get-SsimAgainstSource $candidate $video $startText $durationText $work
+                Get-SsimAgainstSource $candidate $video $startText $durationText $work $(if($common){$refW}else{0}) $(if($common){$refH}else{0})
             }else{
                 if($scaled){Get-Ssim $candidate $reference $work $refW $refH}
                 else{Get-Ssim $candidate $reference $work}

@@ -14,7 +14,7 @@ const within = (a, b, tolerance=1e-3) => Math.abs(a-b) <= tolerance;
 export function normalizeManualComparisonProtocol(raw) {
   if (!raw || typeof raw !== 'object' ||
       !['windows-native-exact-cq-v1'].includes(raw.method) ||
-      !['source-sdr-yuv420p-ssim-v1'].includes(raw.referenceMetric) ||
+      !['source-sdr-yuv420p-ssim-v1','source-sdr-bicubic-upscale-ssim-v1'].includes(raw.referenceMetric) ||
       !nonempty(raw.sourceToken) || !nonempty(raw.runtimeToken) ||
       !nonempty(raw.referenceToken) || !nonempty(raw.filterToken) ||
       !nonempty(raw.samplePlanVersion) ||
@@ -53,16 +53,21 @@ export function normalizeManualComparisonProtocol(raw) {
   return {ok:true,protocol,scope:JSON.stringify(protocol)};
 }
 
+export function validManualCandidateGeometry(candidate, protocol) {
+  const w=candidate?.outputWidth,h=candidate?.outputHeight;
+  if(!Number.isSafeInteger(w)||!Number.isSafeInteger(h)||w<=0||h<=0||candidate.pixelFormat!=='yuv420p')return false;
+  if(protocol.referenceMetric==='source-sdr-yuv420p-ssim-v1')return w===protocol.referenceWidth&&h===protocol.referenceHeight;
+  return w%2===0&&h%2===0&&w<=protocol.referenceWidth&&h<=protocol.referenceHeight;
+}
+export function validManualReceiptGeometry(receipt,candidate,protocol) {
+  if(!validManualCandidateGeometry(candidate,protocol))return false;
+  return protocol.referenceMetric!=='source-sdr-bicubic-upscale-ssim-v1'||
+    (receipt.outputWidth===candidate.outputWidth&&receipt.outputHeight===candidate.outputHeight&&
+     receipt.referenceWidth===protocol.referenceWidth&&receipt.referenceHeight===protocol.referenceHeight);
+}
 function checkCandidate(candidate, protocol) {
-  if(!candidate || !nonempty(candidate.id) || !nonempty(candidate.codec) ||
-      !nonempty(candidate.encoder) || !nonempty(candidate.preset) ||
-      !Number.isSafeInteger(candidate.outputWidth) || candidate.outputWidth<=0 ||
-      !Number.isSafeInteger(candidate.outputHeight) || candidate.outputHeight<=0 ||
-      candidate.outputWidth!==protocol.referenceWidth ||
-      candidate.outputHeight!==protocol.referenceHeight ||
-      candidate.pixelFormat!=='yuv420p')
-    return {ok:false,reason:'unsupported-candidate-geometry'};
-  return {ok:true};
+  return candidate&&nonempty(candidate.id)&&nonempty(candidate.codec)&&nonempty(candidate.encoder)&&nonempty(candidate.preset)&&validManualCandidateGeometry(candidate,protocol)
+    ?{ok:true}:{ok:false,reason:'unsupported-candidate-geometry'};
 }
 
 // Short-sample results must cover the *same requested windows* at every CQ/CRF
@@ -179,8 +184,7 @@ export function admitManualNativeCqSample({sample,protocol,candidate,window,qual
   if(!candidate || !nonempty(candidate.id) ||
       receipt.encoder!==candidate.encoder ||
       receipt.preset!==candidate.preset ||
-      candidate.outputWidth!==p.referenceWidth ||
-      candidate.outputHeight!==p.referenceHeight ||
+      !validManualReceiptGeometry(receipt,candidate,p) ||
       candidate.pixelFormat!=='yuv420p')
     return {ok:false,reason:'wrong-native-encoder-or-geometry'};
   const q=Number(qualitySetting);

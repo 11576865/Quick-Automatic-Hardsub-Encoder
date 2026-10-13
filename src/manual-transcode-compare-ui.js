@@ -32,7 +32,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     '<div class="media-curve-actions"><button type="button" class="secondary" id="taskCompareStart">比较两个编码器</button>',
     '<button type="button" class="secondary" id="taskCompareStop" disabled>停止对比</button>',
     '<button type="button" class="secondary" id="taskCompareSingle" hidden>返回单编码器曲线</button></div></div>',
-    '<label>候选集合 <select id="taskComparePolicy"><option value="codecs">x264 / x265 · medium · 最多 12 次</option><option value="codecs-presets">x264 / x265 × medium / fast · 最多 24 次</option></select></label>',
+    '<label>候选集合 <select id="taskComparePolicy"><option value="codecs">x264 / x265 · medium · 最多 12 次</option><option value="codecs-presets">x264 / x265 × medium / fast · 最多 24 次</option><option value="codecs-presets-resolutions">编码器 × preset × 原尺寸 / 1080p / 720p · 最多 72 次</option></select></label>',
     '<p class="note" id="taskCompareStatus" role="status">对比结果仅供查看，不能自动切换编码器。需要正式采用时仍应使用当前编码器的 VBR 短样验证。</p>',
     '<details id="taskCompareDetails" hidden><summary>查看同预算候选及采样覆盖</summary>',
     '<div id="taskCompareCandidates"></div></details>',
@@ -83,8 +83,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     stop.disabled=!running||aborted;
     back.disabled=running;
     back.hidden=!active;
-    start.textContent=running?'候选实测中…':policy.value==='codecs-presets'?'比较编码器与 preset':'比较两个编码器';
-    get('taskCompareScope').textContent='Windows · 原尺寸 · 2 个窗口 × 3 档 CRF · 最多 '+(policy.value==='codecs-presets'?24:12)+' 次短样；编码耗时预算不增加';
+    start.textContent=running?'候选实测中…':policy.value==='codecs-presets-resolutions'?'比较编码器、preset 与分辨率':policy.value==='codecs-presets'?'比较编码器与 preset':'比较两个编码器';
+    get('taskCompareScope').textContent='Windows · '+(policy.value==='codecs-presets-resolutions'?'公共原尺寸参考 · ':'原尺寸 · ')+'2 个窗口 × 3 档 CRF · 最多 '+(policy.value==='codecs-presets-resolutions'?72:policy.value==='codecs-presets'?24:12)+' 次短样；编码耗时预算不增加';
   };
   const eligible=()=>comparison?.ok && comparison.frontier?.ok &&
     session?.snapshot().ok && isCurrent() && !disposed;
@@ -189,6 +189,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     if(verifiedVbr)message('预算已改变：当前位置需要重新执行 VBR 短样验证。');
     verifiedVbr=null;showResult();return true;
   };
+  function geometrySettings(c){return c.scaleAlgorithm==='bicubic'?{width:c.outputWidth,height:c.outputHeight,scaleAlgorithm:'bicubic'}:{};}
+  function sampleGeometry(c,g=session?.snapshot().protocol){return c.scaleAlgorithm==='bicubic'?{commonReference:true,outputWidth:c.outputWidth,outputHeight:c.outputHeight,referenceWidth:g.width??g.referenceWidth,referenceHeight:g.height??g.referenceHeight}:{};}
   function preflight(raw,originalMedia){
     if(raw.operation!=='transcode'||!hooks.isWindows())
       throw Error('双编码器对比仅支持 Windows Native 纯视频转码');
@@ -222,8 +224,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       message('选择的候选、码率或目标 SSIM 无效；拒绝 VBR 验证。');
       return;
     }
-    const candidate={...selected,outputWidth:session.snapshot().protocol.referenceWidth,
-      outputHeight:session.snapshot().protocol.referenceHeight,pixelFormat:'yuv420p'};
+    const candidate={...selected};
     const chosenBytes=selectedBytes,chosenKey=sourceKey;
     verifiedVbr=null;running=true;aborted=false;renderControls();
     hooks.setBusy(true);
@@ -233,7 +234,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     try{
       const raw=hooks.settings();
       const formal=compileTask({...raw,codec:selected.codec,encoder:selected.encoder,
-        preset:selected.preset,multipass:'disabled',rateMode:'bitrate',
+        preset:selected.preset,...geometrySettings(selected),multipass:'disabled',rateMode:'bitrate',
         bitrate:plannedBitrate,twoPass:false},media);
       await hooks.validate?.(formal);
       if(!current())throw Error('参数或来源已改变，验证结果作废。');
@@ -245,7 +246,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
           ' · 目标 '+(plannedBitrate/1e6).toFixed(2)+' Mbps');
         const sample=await hooks.calibrationSample({
           codec:selected.codec,encoder:selected.encoder,preset:selected.preset,
-          multipass:'disabled',mode:'bitrate',bitrate:plannedBitrate,
+          multipass:'disabled',...sampleGeometry(selected),mode:'bitrate',bitrate:plannedBitrate,
           start:window.start,duration:window.duration,timeoutSeconds:45
         });
         if(!current())throw Error('原生调用返回后参数已改变，拒绝迟到证据。');
@@ -294,7 +295,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       const raw=hooks.settings(),bitrate=certificate.requestedVideoBitrate;
       if(!hasCurrentVbr())throw Error('来源、预算或已验证配置发生变化');
       const formal=compileTask({...raw,codec:candidate.codec,
-        encoder:candidate.encoder,preset:candidate.preset,
+        encoder:candidate.encoder,preset:candidate.preset,...geometrySettings(candidate),
         rateMode:'bitrate',bitrate,multipass:'disabled',twoPass:false},media);
       await hooks.validate?.(formal);
       if(aborted||disposed||!hasCurrentVbr())
@@ -364,7 +365,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       sessionCandidates=candidates;
       for(const candidate of candidates){
         const taskForCandidate=compileTask({...taskOptions,codec:candidate.codec,
-          encoder:candidate.encoder,preset:candidate.preset,multipass:'disabled'},prepared);
+          encoder:candidate.encoder,preset:candidate.preset,...geometrySettings(candidate),multipass:'disabled'},prepared);
         await hooks.validate?.(taskForCandidate);
       }
       if(aborted||disposed)throw Error('已停止');
@@ -377,7 +378,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       message('建立真实原生来源和运行时身份；随后将执行 '+maxRequests+' 次短片采样。');
       const firstSample=await hooks.calibrationSample({
         codec:first.codec,encoder:first.encoder,preset:first.preset,
-        multipass:'disabled',quality:firstQuality,start:firstWindow.start,
+        multipass:'disabled',...sampleGeometry(first,geometry),quality:firstQuality,start:firstWindow.start,
         duration:firstWindow.duration,timeoutSeconds:30
       });
       if(!unchanged())throw Error('来源或设置变化，晚到的首次采样已作废');
@@ -406,7 +407,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
              window.start===firstWindow.start)return firstSample;
           return hooks.calibrationSample({
             codec:candidate.codec,encoder:candidate.encoder,preset:candidate.preset,
-            multipass:'disabled',quality:qualitySetting,
+            multipass:'disabled',...sampleGeometry(candidate,geometry),quality:qualitySetting,
             start:window.start,duration:window.duration,timeoutSeconds:30
           });
         },

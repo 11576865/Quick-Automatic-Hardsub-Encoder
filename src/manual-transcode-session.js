@@ -1,7 +1,7 @@
 // Session-only Manual native CQ evidence registry. No UI, storage, scheduler,
 // codec switching or authorization to publish a video output is implemented here.
 import {
-  normalizeManualComparisonProtocol,
+  normalizeManualComparisonProtocol, validManualCandidateGeometry,
   admitManualNativeCqSample,
   createManualTranscodeComparison
 } from './manual-transcode-comparison.js';
@@ -35,7 +35,7 @@ export function createManualTranscodeSession({
        typeof c.codec!=='string' || !c.codec ||
        typeof c.encoder!=='string' || !c.encoder ||
        typeof c.preset!=='string' || !c.preset ||
-       c.outputWidth!==p.referenceWidth || c.outputHeight!==p.referenceHeight ||
+       !validManualCandidateGeometry(c,p) ||
        c.pixelFormat!=='yuv420p' || ids.has(c.id))
       return {ok:false,reason:'invalid-session-candidate'};
     ids.add(c.id);

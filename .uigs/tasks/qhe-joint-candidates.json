@@ -1,42 +1,47 @@
 {
   "goal": "Implement bounded joint compression candidate decisions beyond codec-only comparison",
-  "status": "hosted_browser_and_regressions_passed_native_four_branch_quality_pending",
-  "current_bounded_work_unit": "two codecs by two presets at source resolution",
+  "status": "local_resolution_cross_product_verified_hosted_pending",
+  "current_bounded_work_unit": "codec x preset x resolution, common-reference CQ/VBR and atomic geometry adoption",
   "completed_units": [
     "Selectable legacy 2-candidate or codec/preset 4-candidate session",
     "Finite 12/24 short sample limits under same encode-time quota",
     "Candidate-policy invalidation; session-specific VBR verify and explicit adoption",
-    "Local four real FFmpeg tasks pass codec/geometry/frame/full-decode checks"
+    "Local four real FFmpeg tasks pass codec/geometry/frame/full-decode checks",
+    "Selectable x264/x265 x medium/fast x original/1080p/720p, up to 12 candidates and 72 samples without raising encode-time quota",
+    "Native original-source bicubic-upscale SSIM protocol, independently probed source/output geometry and source/runtime identity",
+    "Common-reference CQ/VBR geometry admission, explicit transactional dimensions/bicubic adoption and rollback",
+    "Local real four scaled encoder/preset outputs decoded and scored on original canvas"
   ],
   "next_units": [
-    "Read hosted four-candidate browser execution",
-    "Native four-branch quality evidence and source-size/resolution combinations",
-    "Keep AV1/VVC/GPU out of unverified comparison claims"
+    "Read hosted 12-branch browser interaction and 8-branch actual Windows common-reference receipt acceptance",
+    "Physical/long-form verification and final integration"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "104d9cd41477a3c2aca465037e2bca679e5e1851",
+  "latest_durable_commit": "6115fa562cce9604c6dee854e272b3e1dcdc1d50",
   "local_tests": {
-    "passed": 225,
-    "skipped": 8,
+    "passed": 234,
+    "skipped": 9,
     "failed": 0,
-    "real_four_candidate_execution": "4/4",
+    "real_ffmpeg_passed": 7,
     "build": "pass"
   },
   "external_validation_states": {
-    "previous_head": "9/9 success at a954ba6",
-    "new_browser": "PASS 38357938602; all nine workflows success",
-    "new_native": "Pending",
+    "previous_head": "9/9 success at 6115fa5",
+    "new_browser": "Pending; local Chromium absent",
+    "new_native": "Pending; eight synthetic codec/preset/resolution branches plus scaled VBR added to Windows CI",
     "physical_devices": "Pending"
   },
   "blockers": [
-    "Source resolution only; no resolution cross-product",
-    "Reported encode-time quota may stop before all 24 samples",
-    "Previous Android V4D-06 intermittent duration failure did not recur; root cause unresolved"
+    "Finite Windows Native SDR yuv420p pure-transcode candidates only; not AV1/VVC/GPU or complex ASS joint optimization",
+    "At most 72 requests; encode-time quota can stop before completion, no recommendation from an incomplete sweep",
+    "Common measured rate domains may not intersect; no extrapolation",
+    "Whole-file quality and physical/long-form acceptance pending"
   ],
   "intake": {
-    "status": "recorded",
-    "foundry_path": "inbox/tests/2026-10-13-qhe-bounded-codec-preset-candidates.md"
+    "status": "recorded_locally",
+    "path": ".uigs/observations/2026-10-13-common-reference-resolution.json",
+    "foundry": "Pending separate processing"
   },
-  "updated_timestamp": "2026-10-13T06:38:37.174718+00:00"
+  "updated_timestamp": "2026-10-13T10:57:09.169661+00:00"
 }

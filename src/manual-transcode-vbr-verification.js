@@ -1,11 +1,11 @@
 // A native VBR evidence gate for one candidate selected from a Manual CQ
 // comparison. This proves only the tested short windows, NOT whole-file output.
 // It never changes the formal media task, codec, encoder, quality or bitrate.
-import {normalizeManualComparisonProtocol} from './manual-transcode-comparison.js';
+import {normalizeManualComparisonProtocol,validManualCandidateGeometry,validManualReceiptGeometry} from './manual-transcode-comparison.js';
 
 const finite=n=>typeof n==='number' && Number.isFinite(n);
 const near=(a,b,tolerance=.001)=>Math.abs(a-b)<=tolerance;
-const allowedMetric='source-sdr-yuv420p-ssim-v1';
+const allowedMetrics=['source-sdr-yuv420p-ssim-v1','source-sdr-bicubic-upscale-ssim-v1'];
 
 export function verifyManualNativeVbrCandidate({
   protocol,candidate,bitrate,targetSsim,samples
@@ -17,8 +17,7 @@ export function verifyManualNativeVbrCandidate({
      typeof candidate.encoder!=='string'||!candidate.encoder ||
      typeof candidate.codec!=='string'||!candidate.codec ||
      typeof candidate.preset!=='string'||!candidate.preset ||
-     candidate.outputWidth!==p.referenceWidth ||
-     candidate.outputHeight!==p.referenceHeight ||
+     !validManualCandidateGeometry(candidate,p) ||
      candidate.pixelFormat!=='yuv420p')
     return {ok:false,reason:'invalid-vbr-candidate'};
   if(!Number.isSafeInteger(bitrate)||bitrate<=0 ||
@@ -40,7 +39,8 @@ export function verifyManualNativeVbrCandidate({
        receipt.runtimeToken!==p.runtimeToken ||
        receipt.referenceToken!==p.referenceToken ||
        receipt.filterToken!==p.filterToken ||
-       receipt.referenceMetric!==allowedMetric ||
+       !allowedMetrics.includes(receipt.referenceMetric) ||
+       !validManualReceiptGeometry(receipt,candidate,p) ||
        receipt.referenceMetric!==p.referenceMetric ||
        receipt.identityKind!=='file-stat-snapshot-not-content-hash' ||
        receipt.videoStream!==p.videoStream ||

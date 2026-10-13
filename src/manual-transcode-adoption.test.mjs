@@ -117,3 +117,13 @@ test('the committed formal v4 transcode command really contains HEVC and target 
     result.task.outputArgs.indexOf('-c:v'),result.task.outputArgs.indexOf('-c:v')+2
   ),['-c:v','libx265']);
 });
+test('adoption writes and rolls back verified resolution and bicubic scaling atomically',()=>{
+ const x=fixture();for(const k of ['width','height','scaleAlgorithm'])x.el[k]={value:k==='scaleAlgorithm'?'lanczos':'',checked:false};
+ const old=x.read(),c={...candidate,outputWidth:160,outputHeight:90,scaleAlgorithm:'bicubic'};
+ const result=x.run({override:{candidate:c,expectedSettings:old},compile:a=>compileTask({...a,start:0,end:'',audio:'none',fpsMode:'auto',rotation:'none',deinterlace:'none',pixelFormat:'yuv420p'},{duration:6,fps:24,videoTracks:1,audioTracks:0})});
+ assert.equal(result.ok,true);assert.equal(x.read().width,'160');assert.equal(x.read().height,'90');assert.equal(x.read().scaleAlgorithm,'bicubic');
+ const y=fixture();for(const k of ['width','height','scaleAlgorithm'])y.el[k]={value:k==='scaleAlgorithm'?'lanczos':'',checked:false};
+ const previous=y.read();
+ assert.equal(y.run({override:{candidate:c,expectedSettings:previous},compile:()=>{throw Error('reject');}}).ok,false);
+ assert.deepEqual(y.read(),previous);
+});

@@ -13,6 +13,7 @@ on:
       - 'scripts/check-manual-native-paired.ps1'
       - 'scripts/build-manual-rich-native-fixture.mjs'
       - 'scripts/verify-manual-native-paired.mjs'
+      - 'scripts/verify-manual-resolution-native.mjs'
       - 'scripts/build-manual-adopted-native-request.mjs'
       - 'scripts/verify-manual-adopted-native-output.mjs'
       - 'src/manual-transcode-adoption.js'

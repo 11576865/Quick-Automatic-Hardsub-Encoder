@@ -16,3 +16,11 @@ test('unsupported candidate policy or geometry fails instead of inventing candid
  assert.throws(()=>manualCandidateSet('unbounded',{width:640,height:360}));
  assert.throws(()=>manualCandidateSet('codecs-presets',{width:0,height:360}));
 });
+test('resolution policy creates twelve geometry-bound branches and seventy-two maximum samples',()=>{
+ const s=manualCandidateSet('codecs-presets-resolutions',{width:3840,height:2160});
+ assert.equal(s.candidates.length,12);assert.equal(s.maxRequests,72);
+ assert.equal(new Set(s.candidates.map(c=>c.id)).size,12);
+ assert.deepEqual(new Set(s.candidates.map(c=>c.outputHeight)),new Set([2160,1080,720]));
+ assert.ok(s.candidates.every(c=>c.scaleAlgorithm==='bicubic'));
+ assert.equal(manualCandidateSet('codecs-presets-resolutions',{width:640,height:360}).candidates.length,4);
+});

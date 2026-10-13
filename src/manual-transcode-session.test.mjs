@@ -202,3 +202,13 @@ test('reject malformed session settings and protocol without allocating a regist
  const c=candidates();c[1]={...c[0]};
  assert.equal(open({candidates:c}).reason,'invalid-session-candidate');
 });
+test('scaled session requires matching CQ output and common reference geometry',()=>{
+ const p=protocol();p.referenceMetric='source-sdr-bicubic-upscale-ssim-v1';
+ const c=candidates();c[1].outputWidth=160;c[1].outputHeight=90;
+ const s=open({protocol:p,candidates:c});assert.equal(s.ok,true);
+ const w=p.windows[0],v=sample(c[1],20,w);
+ Object.assign(v.nativeEvidence,{referenceMetric:p.referenceMetric,outputWidth:160,outputHeight:90,referenceWidth:320,referenceHeight:180});
+ assert.equal(add(s,c[1],20,w,v).ok,true);
+ const late=sample(c[1],20,p.windows[1]);Object.assign(late.nativeEvidence,v.nativeEvidence,{requestedStart:p.windows[1].start,outputWidth:320});
+ assert.equal(add(s,c[1],20,p.windows[1],late).ok,false);
+});

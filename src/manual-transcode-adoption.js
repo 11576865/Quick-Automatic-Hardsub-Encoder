@@ -19,7 +19,9 @@ export function commitVerifiedManualCandidate({
   if(JSON.stringify(read())!==JSON.stringify(expectedSettings)||
      sourceIdentity()!==expectedSourceIdentity)
     return {ok:false,reason:'stale-adoption-settings'};
-  const names=['codec','encoder','preset','multipass','rateMode','bitrate','twoPass'];
+  const sized=candidate.scaleAlgorithm==='bicubic';
+  if(sized&&(!Number.isSafeInteger(candidate.outputWidth)||!Number.isSafeInteger(candidate.outputHeight)||candidate.outputWidth<2||candidate.outputHeight<2))return {ok:false,reason:'invalid-adoption-geometry'};
+  const names=['codec','encoder','preset','multipass','rateMode','bitrate','twoPass',...(sized?['width','height','scaleAlgorithm']:[])];
   const saved=new Map();
   for(const name of names){
     const el=get(name);
@@ -39,8 +41,10 @@ export function commitVerifiedManualCandidate({
     get('rateMode').value='bitrate';
     get('bitrate').value=String(bitrate);
     get('twoPass').checked=false;
+    if(sized){get('width').value=String(candidate.outputWidth);get('height').value=String(candidate.outputHeight);get('scaleAlgorithm').value='bicubic';}
     updateRate();
     const actual=read();
+    if(sized&&(Number(actual.width)!==candidate.outputWidth||Number(actual.height)!==candidate.outputHeight||actual.scaleAlgorithm!=='bicubic'))throw Error('form-geometry-diverged');
     if(actual.codec!==candidate.codec||actual.encoder!==candidate.encoder||
       actual.preset!==candidate.preset||actual.multipass!=='disabled'||
       actual.rateMode!=='bitrate'||Number(actual.bitrate)!==bitrate||
@@ -51,6 +55,7 @@ export function commitVerifiedManualCandidate({
        task.encoder!==candidate.encoder||task.preset!==candidate.preset||
        task.rateMode!=='bitrate'||Number(task.bitrate)!==bitrate)
       throw Error('compiled-plan-diverged');
+    if(sized&&(!task.outputArgs?.includes('scale='+candidate.outputWidth+':'+candidate.outputHeight+':flags=bicubic') && !task.outputArgs?.some(x=>String(x).includes('scale='+candidate.outputWidth+':'+candidate.outputHeight+':flags=bicubic'))))throw Error('compiled-geometry-diverged');
     return task;
   }
   try{

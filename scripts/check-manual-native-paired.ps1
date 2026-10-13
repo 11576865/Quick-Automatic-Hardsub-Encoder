@@ -71,6 +71,51 @@ try {
       }
     }
   }
+  # Additional real codec x preset x resolution cross-product, common source canvas.
+  $resolutionBranches=@()
+  foreach($preset in @('medium','fast')){
+    foreach($encoder in @('libx264','libx265')){
+      foreach($size in @(@{w=320;h=180},@{w=160;h=90})){
+        $resolutionBranches+=@{id=($encoder+'-'+$preset+'-'+$size.w);codec=$(if($encoder -eq 'libx264'){'h264'}else{'h265'});encoder=$encoder;preset=$preset;outputWidth=$size.w;outputHeight=$size.h}
+      }
+    }
+  }
+  $resolutionSamples=@()
+  foreach($branch in $resolutionBranches){
+    foreach($quality in @(18,40)){
+      foreach($window in $windows){
+        $body=@{requestId=('res-'+[guid]::NewGuid().ToString('N'));options=@{
+          codec=$branch.codec;encoder=$branch.encoder;preset=$branch.preset;multipass='disabled'
+          sampleExact=$true;commonReference=$true;outputWidth=$branch.outputWidth;outputHeight=$branch.outputHeight
+          referenceWidth=320;referenceHeight=180;crf=$quality;targetVideoBitrate=0
+          start=$window.start;duration=$window.duration;withSubtitles=$false;measureSsim=$true;timeoutSeconds=55
+        }}|ConvertTo-Json -Depth 8 -Compress
+        $result=Invoke-RestMethod -Method Post -Uri "$root/api/sample" -Headers $headers -ContentType 'application/json' -Body $body -TimeoutSec 85
+        if(-not $result.ok){throw 'Common-reference Native sample failed.'}
+        $resolutionSamples+=@{id=$branch.id;quality=$quality;window=$window;result=$result}
+      }
+    }
+  }
+  $resolutionVbr=@()
+  foreach($window in $windows){
+    $body=@{requestId=('res-vbr-'+[guid]::NewGuid().ToString('N'));options=@{
+      codec='h265';encoder='libx265';preset='fast';multipass='disabled';sampleExact=$true;commonReference=$true
+      outputWidth=160;outputHeight=90;referenceWidth=320;referenceHeight=180;targetVideoBitrate=200000;crf=0
+      start=$window.start;duration=$window.duration;withSubtitles=$false;measureSsim=$true;timeoutSeconds=55
+    }}|ConvertTo-Json -Depth 8 -Compress
+    $result=Invoke-RestMethod -Method Post -Uri "$root/api/sample" -Headers $headers -ContentType 'application/json' -Body $body -TimeoutSec 85
+    $resolutionVbr+=@{window=$window;sample=$result}
+  }
+  $resolutionReceipt=@{windows=$windows;branches=$resolutionBranches;samples=$resolutionSamples
+    vbr=@{candidateId='libx265-fast-160';bitrate=200000;samples=$resolutionVbr}}|ConvertTo-Json -Depth 15
+  $resolutionPath=Join-Path $work 'resolution-native-evidence.json'
+  [IO.File]::WriteAllText($resolutionPath,$resolutionReceipt,[Text.UTF8Encoding]::new($false))
+  $resolutionEvidence=Join-Path $env:GITHUB_WORKSPACE 'native-full-output-evidence'
+  [void](New-Item -ItemType Directory -Path $resolutionEvidence -Force)
+  Copy-Item -LiteralPath $resolutionPath -Destination $resolutionEvidence -Force
+  & node './scripts/verify-manual-resolution-native.mjs' $resolutionPath
+  if($LASTEXITCODE -ne 0){throw 'Real common-reference resolution evidence was rejected.'}
+
   # A separate real VBR pass: CQ interpolation alone must not be claimed
   # as target-bitrate proof, even when the two codec frontiers overlap.
   $vbrRate=600000

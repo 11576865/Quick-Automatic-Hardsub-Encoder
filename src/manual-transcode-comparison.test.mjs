@@ -190,3 +190,11 @@ test('native CQ receipt admits only same source/runtime/reference, encoder and p
   delete missing.nativeEvidence;
   assert.equal(admitManualNativeCqSample({...input,sample:missing}).reason,'incompatible-native-receipt');
 });
+test('common-reference protocol admits downscaled branches only with exact geometry receipts',()=>{
+ const t=[trial('a','h264','libx264'),trial('b','h265','libx265')];
+ for(const x of t)x.protocol.referenceMetric='source-sdr-bicubic-upscale-ssim-v1';
+ t[1].candidate.outputWidth=1280;t[1].candidate.outputHeight=720;
+ assert.equal(compare(t).ok,true);
+ t[1].candidate.outputWidth=3840;
+ assert.equal(compare(t).ok,false);
+});

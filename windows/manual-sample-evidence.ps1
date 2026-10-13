@@ -73,12 +73,22 @@ function New-ManualNativeSampleReceipt(
     $method=if ($targetRate -gt 0) { 'windows-native-exact-vbr-v1' } else { 'windows-native-exact-cq-v1' }
     $requestedRate=if ($targetRate -gt 0) { [long]$targetRate } else { 0L }
     $requestedQuality=if ($targetRate -gt 0) { $null } else { [int]$Options.crf }
+    $common=[bool]$Options.commonReference
+    if($common){
+        $ow=[int]$Options.outputWidth;$oh=[int]$Options.outputHeight
+        $rw=[int]$Options.referenceWidth;$rh=[int]$Options.referenceHeight
+        if($ow -lt 2 -or $oh -lt 2 -or $ow % 2 -or $oh % 2 -or $rw % 2 -or $rh % 2 -or $rw -lt $ow -or $rh -lt $oh -or $rw -gt 16384 -or $rh -gt 16384){throw 'Invalid manual common-reference geometry.'}
+    }
     return [pscustomobject]@{
         schemaVersion=1
         method=$method
-        referenceMetric='source-sdr-yuv420p-ssim-v1'
-        referenceToken='direct-source-v0-yuv420p-setpts-ssim-v1'
-        filterToken='no-video-filters-sdr-yuv420p-v1'
+        referenceMetric=$(if($common){'source-sdr-bicubic-upscale-ssim-v1'}else{'source-sdr-yuv420p-ssim-v1'})
+        referenceToken=$(if($common){'direct-source-v0-yuv420p-bicubic-upscale-'+$rw+'x'+$rh+'-ssim-v1'}else{'direct-source-v0-yuv420p-setpts-ssim-v1'})
+        filterToken=$(if($common){'candidate-bicubic-common-reference-sdr-yuv420p-v1'}else{'no-video-filters-sdr-yuv420p-v1'})
+        outputWidth=$(if($common){$ow}else{0})
+        outputHeight=$(if($common){$oh}else{0})
+        referenceWidth=$(if($common){$rw}else{0})
+        referenceHeight=$(if($common){$rh}else{0})
         sourceToken=[string]$Before.source
         runtimeToken=[string]$Before.runtime
         runtimeVersion=[string]$Before.runtimeVersion

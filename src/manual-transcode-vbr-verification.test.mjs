@@ -91,3 +91,13 @@ test('guard candidate preset, actual encoder, multipass, target and numeric SSIM
   const wrongRate=inputs();wrongRate.bitrate=0;
   assert.equal(verify(wrongRate).reason,'invalid-vbr-target');
 });
+test('common-reference VBR rejects substituted output or reference geometry',()=>{
+ const x=inputs();x.protocol.referenceMetric='source-sdr-bicubic-upscale-ssim-v1';
+ x.candidate.outputWidth=160;x.candidate.outputHeight=90;
+ for(const e of x.samples)Object.assign(e.sample.nativeEvidence,{
+  referenceMetric:x.protocol.referenceMetric,outputWidth:160,outputHeight:90,referenceWidth:320,referenceHeight:180
+ });
+ assert.equal(verify(x).passed,true);
+ x.samples[1].sample.nativeEvidence.outputWidth=320;
+ assert.equal(verify(x).ok,false);
+});

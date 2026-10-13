@@ -76,13 +76,13 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
              expectedSourceIdentity!=='synthetic-playwright-source')
             return {ok:false,reason:'stale-adoption-settings'};
           Object.assign(raw,{codec:candidate.codec,encoder:candidate.encoder,
-            preset:candidate.preset,rateMode:'bitrate',bitrate:String(bitrate),
+            preset:candidate.preset,...(candidate.scaleAlgorithm==='bicubic'?{width:candidate.outputWidth,height:candidate.outputHeight,scaleAlgorithm:'bicubic'}:{}),rateMode:'bitrate',bitrate:String(bitrate),
             multipass:'disabled',twoPass:false});
           applied++;
           return {ok:true};
         },
         log:()=>{},
-        calibrationSample:async({codec,encoder,preset,multipass,quality,start,duration,mode='quality',bitrate})=>{
+        calibrationSample:async({codec,encoder,preset,multipass,quality,start,duration,mode='quality',bitrate,commonReference,outputWidth,outputHeight,referenceWidth,referenceHeight})=>{
           const isVbr=mode==='bitrate';
           const rate=isVbr?bitrate:({18:1600000,28:850000,40:420000})[quality]*
             (encoder==='libx265'?.91:1)*(preset==='fast'?.9:1);
@@ -92,7 +92,8 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
             totalVideoBytes:Math.round(rate*duration/8),
             nativeEvidence:{
               schemaVersion:1,method:isVbr?'windows-native-exact-vbr-v1':'windows-native-exact-cq-v1',
-              referenceMetric:'source-sdr-yuv420p-ssim-v1',
+              referenceMetric:commonReference?'source-sdr-bicubic-upscale-ssim-v1':'source-sdr-yuv420p-ssim-v1',
+              outputWidth,outputHeight,referenceWidth,referenceHeight,
               sourceToken:'stat-sha256:playwright-source',
               runtimeToken:'stat-sha256:playwright-runtime',
               referenceToken:'direct-source-v0-yuv420p-setpts-ssim-v1',
@@ -106,7 +107,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
         }
       };
       mountTranscodeCurves(section,hooks);
-      window.__curveMock={get applied(){return applied;},section,raw};
+      window.__curveMock={media,get applied(){return applied;},section,raw};
     });
     assert.equal(await page.locator('#manual-compare-test svg').count(),1,
       'Optional codec comparison must reuse the one Manual SVG');
@@ -205,6 +206,22 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     await page.waitForFunction(()=>/已按明确确认写入|未写入编码方案/.test(document.querySelector('#taskCompareStatus')?.textContent||''));
     assert.equal(await page.evaluate(()=>window.__curveMock.raw.preset),'fast');
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),2);
+    await page.evaluate(()=>{window.__curveMock.media.videoStreams[0].width=3840;window.__curveMock.media.videoStreams[0].height=2160;});
+    await page.locator('#taskComparePolicy').selectOption('codecs-presets-resolutions');
+    await page.locator('#taskCompareStart').click();
+    await page.waitForFunction(()=>/实测完成|本次对比不可用于推荐/.test(document.querySelector('#taskCompareStatus')?.textContent||''));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/实测完成.*72 次/);
+    assert.equal(await page.locator('#taskCompareCandidates li').count(),12);
+    await page.locator('#taskCompareVerify').click();
+    await page.waitForFunction(()=>/VBR 短样已验证|VBR 验证失败/.test(document.querySelector('#taskCompareStatus')?.textContent||''));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/VBR 短样已验证/);
+    await page.locator('#taskCompareAdopt').click();
+    await page.waitForFunction(()=>/已按明确确认写入|未写入编码方案/.test(document.querySelector('#taskCompareStatus')?.textContent||''));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/已按明确确认写入/);
+    assert.equal(await page.evaluate(()=>window.__curveMock.raw.scaleAlgorithm),'bicubic');
+    assert.ok(await page.evaluate(()=>[2160,1080,720].includes(+window.__curveMock.raw.height)));
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),3);
+    await page.evaluate(()=>{window.__curveMock.raw.width='';window.__curveMock.raw.height='';});
     // Fail closed for a source/processing setting that cannot be reproduced
     // by the exact SDR/yuv420p native sample protocol.
     await page.evaluate(()=>{window.__curveMock.raw.pixelFormat='p010le';});
@@ -214,7 +231,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     ));
     assert.match(await page.locator('#taskCompareStatus').textContent(),/无额外滤镜/);
     assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),0);
-    assert.equal(await page.evaluate(()=>window.__curveMock.applied),2);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),3);
     console.log('Single curve + Manual native-mocked comparison: desktop, phone, keyboard, and fail-closed unsupported protocol passed');
   } finally {await page.close();}
 };

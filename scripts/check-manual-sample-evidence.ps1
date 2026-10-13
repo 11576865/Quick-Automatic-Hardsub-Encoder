@@ -32,6 +32,14 @@ try {
     if($rate.mode -ne 'bitrate' -or $rate.method -ne 'windows-native-exact-vbr-v1' -or $rate.requestedRate -ne 1000000){
         throw 'Native VBR trial mislabeled as CQ evidence.'
     }
+    $opts | Add-Member -NotePropertyName commonReference -NotePropertyValue $true
+    $opts | Add-Member -NotePropertyName outputWidth -NotePropertyValue 80
+    $opts | Add-Member -NotePropertyName outputHeight -NotePropertyValue 44
+    $opts | Add-Member -NotePropertyName referenceWidth -NotePropertyValue 160
+    $opts | Add-Member -NotePropertyName referenceHeight -NotePropertyValue 90
+    $scaled=New-ManualNativeSampleReceipt $before $after $opts 'libx264' 1.5
+    if($scaled.referenceMetric -ne 'source-sdr-bicubic-upscale-ssim-v1' -or $scaled.outputWidth -ne 80 -or $scaled.referenceWidth -ne 160){throw 'Scaled receipt lost geometry.'}
+    $opts.commonReference=$false
     $opts.withSubtitles=$true
     $rejected=$false
     try{New-ManualNativeSampleReceipt $before $after $opts 'libx264' 1.5 | Out-Null}catch{$rejected=$true}
