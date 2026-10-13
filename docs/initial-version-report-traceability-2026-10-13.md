@@ -104,3 +104,12 @@ UIGS Intake：已去重并记录为 Case `inbox/cases/2026-10-13-qhe-report-base
 B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转码复用路径。新 `manual-paired-risk-plan.js` 对剪切范围输出两个不重叠窗口，使用原生 `sceneRiskOnly` 信号与明确 9 秒总探测预算；最多采集 3 处独立风险信号，失败则进入未标记为风险实测的时间分层计划。Native 视频 seekable 属性现在传递至 Manual media 预检，无法随机寻址/不足两窗时拒绝生成对比曲线。
 
 源码：`src/main.js`、`src/manual-paired-risk-plan.js`、`src/manual-transcode-compare-ui.js`；回归：`src/manual-paired-risk-plan.test.mjs`。6 组源码等价隔离 JS 逻辑测试通过；真实 Windows Native、浏览器和 exact-head CI 待验收。两条链路共享采样策略，而非混用 Manual 原始 SDR SSIM 与 Guided ASS 字幕渲染 SSIM。B04/B11/B12/B15 均维持未整体关闭。
+
+
+## 2026-10-14 B04/B11 统一决策参考身份（不等于完成全链路决策）
+
+- `src/decision-reference-scope.js` 新增 Guided ASS 渲染参考与 Manual 纯转码原始 SDR 参考的显式身份；两者使用同一身份判断方式，但**不得直接交叉采用 SSIM/CQ 证据**。
+- `src/main.js` 在完整 Guided 质量采样的风险预检前后、Native 异步采样前后、分支实测模型发布、曲线选择和正式 CRF 计划编制时检查 ASS 文本、有效字体元数据及强制/自动字体映射是否匹配原渲染参考。对不上则将模型视为不可用，而不是向新参考重投影。
+- `src/manual-transcode-comparison.js` 为现有 Native source/reference/filter/window 证据附加 `referenceScope` 与纯转码域声明；`src/manual-transcode-compare-ui.js` 导出的观察收据保留该声明，VBR 实测和显式参数交接规则不变。
+- `src/decision-reference-scope.test.mjs` 已纳入 Draft-fast 和完整前端检查；7 项隔离 JavaScript 纯逻辑测试通过。完整 Node/浏览器/Native 及真实修改字幕字体的 UI 测试仍待验收。缓存哈希仅供失效判断，不代表源文件完整性认证。
+- B04/B11/B12/B15 均**未关闭**：完整 Guided ASS VBR/Manual 统一采用和回滚合同、复杂 ASS 字幕场景与实际成品仍待工程闭环。
