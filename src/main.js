@@ -27,6 +27,7 @@ import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from '
 import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
 import { resolveGuidedSizePolicy } from './guided-size-policy.js';
 import { guidedWholeFileProjection, assessGuidedWholeFileBudget } from './guided-whole-file-budget.js';
+import { completedGuidedNativeBudget, formatCompletedGuidedNativeBudget } from './native-guided-budget-recovery.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -5692,6 +5693,8 @@ async function runNativeEncode() {
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
     sizeBudgetPolicy:plan.sizeBudgetPolicy||'best-effort',
     sizeCeilingBytes:plan.mode==='budget-rate'?plan.sizeCeiling:0,
+    plannedWholeFileBytes:plan.mode==='budget-rate'?plan.plannedBytes:0,
+    budgetCostBasis:plan.mode==='budget-rate'?plan.budgetCostBasis:'',
     outputWidth:plan.outputWidth||0,outputHeight:plan.outputHeight||0,
     expectedDuration: Number(state.media.duration || 0),
     expectedAudioTracks: audioSettings.audio === 'none' ? 0 : sourceAudioTracks,
@@ -5855,17 +5858,13 @@ async function monitorNativeJob(jobId, initialStatus = null) {
     } else if (status.state === 'cancelling') {
       $('liveEta').textContent = '正在取消 Native 压制…';
     } else if (status.state === 'completed') {
-      const projection=state.nativeJobProjection?.jobId===jobId
-        ? state.nativeJobProjection : null;
+      const comparison=completedGuidedNativeBudget(
+        status,jobId,state.nativeJobProjection);
       const actualBytes=Number(status.outputBytes||0);
-      const sizeError=projection?.plannedBytes>0 && actualBytes>0
-        ? (actualBytes-projection.plannedBytes)/projection.plannedBytes*100 : null;
       state.nativeCompletedJob = {
         jobId,
         suggestedName: status.suggestedName || 'hardsub.mkv',
-        sizeComparison:projection && Number.isFinite(sizeError)
-          ? {plannedBytes:projection.plannedBytes,budgetBytes:projection.budgetBytes,
-            actualBytes,errorPercent:sizeError} : null
+        sizeComparison:comparison
       };
       state.nativeJobProjection=null;
       state.nativeJobId = null;
@@ -5874,13 +5873,7 @@ async function monitorNativeJob(jobId, initialStatus = null) {
       $('progressBar').style.width = '100%';
       $('liveEta').textContent =
         'Native 压制完成 · ' + formatBytes(actualBytes) +
-        (Number.isFinite(sizeError)
-          ? ' · 规划 '+formatBytes(projection.plannedBytes)+
-            ' · 体积误差 '+(sizeError>=0?'+':'')+sizeError.toFixed(1)+'%'+
-            (projection?.policy==='strict-ceiling'
-              ? ' · 严格字节上限已核验'
-              : actualBytes>projection.budgetBytes?' · 已超出目标体积上限':' · 未超过目标上限')
-          : '') +
+        formatCompletedGuidedNativeBudget(comparison,formatBytes) +
         ' · 流结构与 packet 完整性检查通过（未进行完整逐帧解码） · 点击“保存成品”选择保存位置';
       $('encodeBtn').disabled = false;
       $('encodeBtn').textContent = '保存成品';
@@ -5895,10 +5888,10 @@ async function monitorNativeJob(jobId, initialStatus = null) {
           ? ' · 音频完整解码 ' + Number(status.audioDecodeSeconds || 0).toFixed(2) + ' s'
           : '') +
         ' · SHA-256 ' + (status.sha256 || '') +
-        (Number.isFinite(sizeError)
-          ? ' · 体积预测 '+formatBytes(projection.plannedBytes)+
+        (comparison
+          ? ' · 体积预测 '+formatBytes(comparison.plannedBytes)+
             ' 实际 '+formatBytes(actualBytes)+
-            ' 误差 '+sizeError.toFixed(2)+'%'
+            ' 误差 '+comparison.errorPercent.toFixed(2)+'%'
           : '')
       );
       return;
@@ -5947,14 +5940,17 @@ async function recoverNativeJob() {
     syncMobileStageNav();
     if (document.body.classList.contains('ui-mobile')) setMobileStage('produce', { scroll: false });
     if (status.state === 'completed') {
+      const comparison=completedGuidedNativeBudget(status,jobId);
       state.nativeCompletedJob = {
         jobId,
-        suggestedName: status.suggestedName || 'hardsub.mkv'
+        suggestedName: status.suggestedName || 'hardsub.mkv',
+        sizeComparison:comparison
       };
       $('progressBar').style.width = '100%';
       $('liveEta').textContent =
         '检测到上次已完成的 Native 成品 · ' +
         formatBytes(Number(status.outputBytes || 0)) +
+        formatCompletedGuidedNativeBudget(comparison,formatBytes) +
         ' · 可直接保存';
       $('encodeBtn').disabled = false;
       $('encodeBtn').textContent = '保存上次成品';
