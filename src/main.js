@@ -6507,7 +6507,7 @@ mediaWorkspace=mountMediaWorkspace({
             speed:Number(result.speed||0),
             actualStart:Number(result.actualStart??started.actualStart??task.start??0)
           });
-          if(result.state==='completed')return {task,jobId:started.jobId,name,outputBytes:result.outputBytes,outputDuration:result.outputDuration,verified:true,actualStart:result.actualStart??started.actualStart??task.start};
+          if(result.state==='completed')return {task,jobId:started.jobId,name,outputBytes:result.outputBytes,outputDuration:result.outputDuration,outputPacketEvidence:result.outputPacketEvidence??null,verified:true,actualStart:result.actualStart??started.actualStart??task.start};
           if(['failed','cancelled'].includes(result.state))throw new Error(result.error||result.state);
           if(manualCancelRequested)bridge.cancelNativeEncode(started.jobId);
           await sleepMs(700);
