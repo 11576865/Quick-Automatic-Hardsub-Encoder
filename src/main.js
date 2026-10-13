@@ -6447,6 +6447,17 @@ mediaWorkspace=mountMediaWorkspace({
     if(!bridge?.__windowsNative||!bridge.measureSourceBudget)throw Error('当前仅 Windows Native 提供完整源流计量');
     return JSON.parse(await bridge.measureSourceBudget());
   },
+  refreshCompletedAudit: async jobId => {
+    const bridge=globalThis.NativeHardsub;
+    if(!bridge?.__windowsNative || !bridge.getNativeJobStatus || !jobId)return null;
+    const response=JSON.parse(await Promise.resolve(bridge.getNativeJobStatus(jobId)));
+    if(!response.ok || response.state!=='completed')return null;
+    return {
+      state:'completed',
+      outputPacketEvidence:response.outputPacketEvidence??null,
+      outputPacketAuditState:response.outputPacketAuditState??null
+    };
+  },
   save: completed => {
     if(completed.task?.budgetPolicy==='strict-ceiling' && outputReport(completed.task,completed,0).deliveryAllowed!==true)throw Error('严格成品字节上限未通过');
     if(completed.jobId){
