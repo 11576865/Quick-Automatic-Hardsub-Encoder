@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_b11_guided_branch_adoption_submitted_pending_exact_head_coverage",
-  "current_bounded_work_unit": "B11 cross-branch Guided proposal -> exact Native ASS-rendered VBR short receipt -> user confirm -> atomic selected codec/geometry update or rollback; actual NVENC p7 evidence integrity",
+  "status": "incomplete_full_report_b12_cpu_shared_compiler_parity_code_pending_hosted_acceptance",
+  "current_bounded_work_unit": "B12 source-scoped Guided-to-Manual authoritative CPU task precompile, ASS-before-bicubic-scale filter parity, precise whole-file ledger admission and applied form recompile/rollback",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -44,9 +44,9 @@
       "id": "B04",
       "source": "R19 §03、§14；R24 §19–20",
       "requirement": "引导和专业视图编辑执行同一份任务，切换无覆盖",
-      "implementation_status": "部分实现：已有统一媒体任务；Guided 现在在真实 ASS 渲染 VBR 双窗口验证后可明确确认并原子切换推荐的编码器/分辨率，正式选择变化时进行可回滚任务编译。完整跨 UI 共用编译/持久化仍未完成。",
-      "evidence": "shared-task-presentation.js；guided-task-handoff.js；shared-task-ui acceptance；decision-reference-scope.js + tests; main.js currentGuidedDecisionScope/model scope/readiness/Native sample invalidation; manual-transcode-comparison.js referenceScope + manual-transcode-compare-ui.js receipt reference domain; 7 isolated V8 logic checks PASS, exact-head CI Pending；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending",
-      "remaining": "三端同源任务交换、Manual/Guided 完全共用的任务编译/采用合同、真实长片/多候选/GPU/高密度字幕跨维测试及整片输出验收仍待完成。"
+      "implementation_status": "部分实现：Guided/Manual 交接现在通过共用 compileTask 正式任务预编译、逐流预算核查、执行参数回读与失败回滚；仍缺多平台统一任务序列化及全端验收。",
+      "evidence": "shared-task-presentation.js；guided-task-handoff.js；shared-task-ui acceptance；decision-reference-scope.js + tests; main.js currentGuidedDecisionScope/model scope/readiness/Native sample invalidation; manual-transcode-comparison.js referenceScope + manual-transcode-compare-ui.js receipt reference domain; 7 isolated V8 logic checks PASS, exact-head CI Pending；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending；src/guided-cpu-compiler-contract.js + 11 live-dependency V8 pure tests, src/media-task.js subtitleRenderOrder, guided-task-handoff.js bicubic+4% budget, media-workspace.js source-aware preflight and compiled rollback, frontend fast/full suite; exact-head Node/Browser/Native acceptance Pending",
+      "remaining": "真实浏览器/FFmpeg ASS rendering parity、Windows GPU 与 CPU 互通需另验，不可转移 Native VBR SSIM 收据；B16 裁切与 FLAC 计量、跨平台完整任务编译和 A01–A10 仍开放。"
     },
     {
       "id": "B05",
@@ -100,17 +100,17 @@
       "id": "B11",
       "source": "R19 §08–09；R24 §13–16、§20",
       "requirement": "共同参考上包络、证据域、CQ/VBR 分离、显式采用和回滚",
-      "implementation_status": "部分实现：Guided 多候选 RD 曲线、候选源参考作用域、实测 ASS VBR 及原子显式分支采用已接线；修正 NVENC 真正执行 p7 preset 的收据身份。真实跨候选 Windows/浏览器/设备和整片质量/体积仍需验收。",
-      "evidence": "manual-transcode-comparison/session/vbr-verification/adoption.js；decision-reference-scope.js + tests; main.js currentGuidedDecisionScope/model scope/readiness/Native sample invalidation; manual-transcode-comparison.js referenceScope + manual-transcode-compare-ui.js receipt reference domain; 7 isolated V8 logic checks PASS, exact-head CI Pending；windows/guided-rendered-sample-evidence.ps1 + native-bridge.ps1 exact Guided branch；src/guided-native-vbr-verification.js + 8 pure tests；main.js size-budget verify/explicit confirmation UI；scripts/check-guided-vbr-evidence.ps1 and actual Windows localhost 2-window extension to check-guided-budget-native.ps1, external CI Pending；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending",
-      "remaining": "三端同源任务交换、Manual/Guided 完全共用的任务编译/采用合同、真实长片/多候选/GPU/高密度字幕跨维测试及整片输出验收仍待完成。"
+      "implementation_status": "部分实现：Guided 多候选 RD 曲线、候选源参考作用域、实测 ASS VBR 及原子显式分支采用已接线；修正 NVENC 真正执行 p7 preset 的收据身份。真实跨候选 Windows/浏览器/设备和整片质量/体积仍需验收。；本轮补齐 Guided->Manual CPU ASS 渲染/缩放顺序身份一致性验证；不转移旧 SSIM/VBR Native 证据。",
+      "evidence": "manual-transcode-comparison/session/vbr-verification/adoption.js；decision-reference-scope.js + tests; main.js currentGuidedDecisionScope/model scope/readiness/Native sample invalidation; manual-transcode-comparison.js referenceScope + manual-transcode-compare-ui.js receipt reference domain; 7 isolated V8 logic checks PASS, exact-head CI Pending；windows/guided-rendered-sample-evidence.ps1 + native-bridge.ps1 exact Guided branch；src/guided-native-vbr-verification.js + 8 pure tests；main.js size-budget verify/explicit confirmation UI；scripts/check-guided-vbr-evidence.ps1 and actual Windows localhost 2-window extension to check-guided-budget-native.ps1, external CI Pending；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending；src/guided-cpu-compiler-contract.js + 11 live-dependency V8 pure tests, src/media-task.js subtitleRenderOrder, guided-task-handoff.js bicubic+4% budget, media-workspace.js source-aware preflight and compiled rollback, frontend fast/full suite; exact-head Node/Browser/Native acceptance Pending",
+      "remaining": "真实浏览器/FFmpeg ASS rendering parity、Windows GPU 与 CPU 互通需另验，不可转移 Native VBR SSIM 收据；B16 裁切与 FLAC 计量、跨平台完整任务编译和 A01–A10 仍开放。"
     },
     {
       "id": "B12",
       "source": "R19 §08、§16；R24 §13–16",
       "requirement": "有界 codec × resolution × preset 候选与明确可比范围",
-      "implementation_status": "部分实现：Guided 推荐分支与 Manual 验证采纳遵循同样的显式先验证、编译一致性与回滚原则；Guided 当前状态切换有事务保护，但不是共享统一任务编译器或所有执行策略的已验收合约。",
-      "evidence": "manual-candidate-set.js：x264/x265 × medium/fast × 原尺寸/1080p/720p；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending",
-      "remaining": "三端同源任务交换、Manual/Guided 完全共用的任务编译/采用合同、真实长片/多候选/GPU/高密度字幕跨维测试及整片输出验收仍待完成。"
+      "implementation_status": "部分实现：Guided 软件 CPU 交接采用权威 Manual 编译器、源来源成本和完整执行字段核对及原子表单回滚；ASS 先渲染再 bicubic 缩放显式编译，不再沿用隐式 Manual 高级选项。真实浏览器/FFmpeg 与跨设备统一合同未完成。",
+      "evidence": "manual-candidate-set.js：x264/x265 × medium/fast × 原尺寸/1080p/720p；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending；src/guided-cpu-compiler-contract.js + 11 live-dependency V8 pure tests, src/media-task.js subtitleRenderOrder, guided-task-handoff.js bicubic+4% budget, media-workspace.js source-aware preflight and compiled rollback, frontend fast/full suite; exact-head Node/Browser/Native acceptance Pending",
+      "remaining": "真实浏览器/FFmpeg ASS rendering parity、Windows GPU 与 CPU 互通需另验，不可转移 Native VBR SSIM 收据；B16 裁切与 FLAC 计量、跨平台完整任务编译和 A01–A10 仍开放。"
     },
     {
       "id": "B13",
@@ -236,9 +236,11 @@
     "B15 code submitted: Manual candidate preflight reuses Guided scene-risk selector and Native probe, bounded distinct paired windows, absolute trim offsets, stale-source refusal, explicit risk evidence scope and matching same-window protocol for all codecs; 6 isolated JS logic checks passed",
     "B11 code submitted: shared reference scope contract with separate Guided ASS and Manual tokens; tags Guided R-D models, Native source-paired asynchronous samples and formal CRF plan; seven isolated JS tests PASS",
     "B11 implementation submitted: genuine ASS-rendered Windows Native single-pass VBR exact samples with staged-source/font SHA256, paired JS verifier, explicit current-parameters confirmation and offline/real Native CI tests; exact-head hosted validation Pending",
-    "B11 submitted: Guided RD branch action no longer mutates selection before VBR; pending proposal identity and live frontier admission, explicit atomic commit with executable-plan comparison/rollback, NVENC actual preset evidence correction; 18 isolated JS assertions PASS."
+    "B11 submitted: Guided RD branch action no longer mutates selection before VBR; pending proposal identity and live frontier admission, explicit atomic commit with executable-plan comparison/rollback, NVENC actual preset evidence correction; 18 isolated JS assertions PASS.",
+    "B12 code submitted: actual shared Manual compileTask contract for Guided CPU handoff, frozen ASS render order and 4% reserve, reject inherited unrelated advanced flags, source-checked staged form and rollback; 11 real-module V8 checks passed, hosted CI pending."
   ],
   "next_units": [
+    "B12 exact-head Node frontend and real browser Guided->Manual form transaction/FFmpeg ASS reference-order acceptance; then Native GPU/Web/Android task capability adaptation and final-output source-scoped attestation.",
     "B11 exact-head Node/browser and Windows Native/real NVENC source-paired ASS VBR adoption acceptance; then unified Manual/Guided task serialisation and final-output attestation across strategies.",
     "B11 exact-head frontend and Windows Native localhost paired ASS VBR CI plus browser interaction acceptance; then implement true cross-branch Guided/Manual transaction with post-task result attestation, no shortcut for two-pass/strict ceiling.",
     "B11 exact-head Node frontend and browser/Windows Native async ASS/font change rejection, Manual source-only reference export and model identity acceptance; then implement shared Guided ASS VBR adoption contract.",
@@ -267,7 +269,8 @@
     "b15_shared_manual_risk": "6 source-equivalent isolated JS pure tests passed; CI exact-head pending after branch push; Native Windows real scene probe and browser UI pending",
     "b11_guided_manual_rendered_scope": "Seven extracted isolated V8 logic checks PASS; nine source wiring/compatibility checks PASS; Node Draft-fast/full frontend and Windows Native exact-head Pending",
     "b11_guided_exact_native_vbr": "8 actual-module isolated V8 behavior checks PASS; main JS syntax and 16 exact source wiring gates PASS; exact-head Draft-fast Node and hosted Windows Native localhost FFmpeg acceptance Pending",
-    "b11_guided_branch_adoption": "18 extracted actual-module V8 pure behavior tests PASS, 12 static/source wiring gates PASS and main JS parse PASS. Exact-head full Node/browser and real Windows PowerShell+FFmpeg+NVENC acceptance Pending."
+    "b11_guided_branch_adoption": "18 extracted actual-module V8 pure behavior tests PASS, 12 static/source wiring gates PASS and main JS parse PASS. Exact-head full Node/browser and real Windows PowerShell+FFmpeg+NVENC acceptance Pending.",
+    "b12_guided_cpu_shared_compiler": "11 extracted actual-module JS behavior checks PASS; exact-head frontend Node/browser and actual Native render-order field test Pending"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
