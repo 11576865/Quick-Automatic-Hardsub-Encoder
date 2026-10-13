@@ -4,7 +4,7 @@ import {manualCandidateSet} from './manual-candidate-set.js';
 // Optional Manual pure-transcode two-codec comparison. One shared chart,
 // one authoritative media-task state; no implicit encoder or rate adoption.
 import {compileTask} from './media-task.js';
-import {calibrationSampleStarts} from './transcode-curves.js';
+import {prepareManualPairedRiskPlan} from './manual-paired-risk-plan.js';
 import {calibrationTimeBudget} from './compression-decision.js';
 import {createManualTranscodeSession,runManualPairedSweep} from './manual-transcode-session.js';
 import {buildSizeFrontierPlot,targetBytesAtEvidenceFraction,evidenceFractionForTargetBytes} from './size-frontier-ui.js';
@@ -463,8 +463,23 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       if(!(duration>0))throw Error('无有效输出视频时长');
       const from=sourceTask.videoRange==='full'?0:Number(sourceTask.start);
       const to=sourceTask.videoRange==='full'?Number(prepared.duration):Number(sourceTask.end);
-      const windows=calibrationSampleStarts(from,to,2,2).map(start=>({start,duration:2}));
-      if(windows.length!==2)throw Error('需要至少 4 秒可用视频以取得两个互不重叠的采样窗口');
+      const snapshotKey=getSourceKey(raw,{duration:prepared.duration});
+      const snapshotSettings=JSON.stringify(raw);
+      const planCurrent=()=>!aborted&&!disposed&&
+        getSourceKey(hooks.settings(),{duration:prepared.duration})===snapshotKey&&
+        JSON.stringify(hooks.settings())===snapshotSettings;
+      const scenePlan=await prepareManualPairedRiskPlan({
+        rangeStart:from,rangeEnd:to,windowSeconds:2,
+        seekable:prepared.seekable!==false,
+        probeScene:hooks.sceneRiskProbe,
+        isCurrent:planCurrent,maxProbes:3,probeBudgetMs:9000
+      });
+      if(!scenePlan.ok)throw Error('场景配对窗口预检失败：'+scenePlan.reason);
+      if(!planCurrent())throw Error('场景预检后源或参数已更改');
+      const windows=scenePlan.windows;
+      message('配对场景窗口 '+windows.map(w=>w.start.toFixed(2)+'s').join(' / ')+
+        ' · '+(scenePlan.riskAware?'已测视觉风险分层':scenePlan.mode==='paired-uniform-fallback'?'非重叠时间分层兜底':'风险证据有限的时间分层')+
+        ' · 所有编码器共用同一组窗口；不将 ASS 参考混入纯转码结果。');
       const {candidates,maxRequests}=manualCandidateSet(activePolicy,geometry);
       sessionCandidates=candidates;
       for(const candidate of candidates){
@@ -493,7 +508,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         method:receipt.method,referenceMetric:receipt.referenceMetric,
         sourceToken:receipt.sourceToken,runtimeToken:receipt.runtimeToken,
         referenceToken:receipt.referenceToken,filterToken:receipt.filterToken,
-        samplePlanVersion:'manual-ui-paired-windows-2x2-v1',
+        samplePlanVersion:'manual-ui-paired-risk-v2:'+scenePlan.fingerprint,
         mediaDuration:Number(prepared.duration),rangeStart:from,rangeEnd:to,
         videoStream:0,referenceWidth:geometry.width,referenceHeight:geometry.height,
         windows
@@ -527,7 +542,10 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       if(!comparison.ok)throw Error(reasonLabel[comparison.reason]||comparison.reason);
       const f=currentFrontier();if(!f?.ok)throw Error(f?.detail||f?.reason||'预算未知');
       selectedBytes=basis.value==='whole'&&raw.rateMode==='size'?currentGoalBytes():Math.sqrt(f.minimumEvidenceTargetBytes*f.maximumEvidenceTargetBytes);lastGoalKey=goalKey();
-      message((candidates.length===2?'双编码器实测完成':'编码器与 preset 实测完成')+' · '+maxRequests+' 次配对样本。曲线仅给出当前预算坐标下的候选比较；不会自动采用推荐参数。');
+      message((candidates.length===2?'双编码器实测完成':'编码器与 preset 实测完成')+
+        ' · '+maxRequests+' 次配对样本 · '+scenePlan.mode+
+        '（风险实测 '+scenePlan.probedWindows+'/'+scenePlan.candidateWindows+'）。'+
+        ' 所有编码器共用窗口；纯转码来源参考不能替代 Guided ASS 渲染参考，不自动采用参数。');
     }catch(error){
       comparison=null;
       message('本次对比不可用于推荐：'+(error?.message||String(error)));
