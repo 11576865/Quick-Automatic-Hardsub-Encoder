@@ -56,20 +56,33 @@ export async function prepareManualPairedRiskPlan({
   if(!isCurrent())return {ok:false,reason:'stale-source-after-probing'};
   const scored=selectPairedSceneWindows({
     durationSeconds:span,windowSeconds,probes,
-    subtitleEvents:[],seekable:true,maxWindows:2
+    subtitleEvents:[],seekable:true,maxWindows:3
   });
+  // Two samples cannot represent all three strata. Keep the strongest known
+  // risk window plus a distant second stratum. With no reliable risk signals,
+  // prefer time-spaced uniform windows rather than arbitrary stratum 0/1.
+  const chooseTwo=()=>{
+    if(!scored.ok||scored.windows.length<2||probes.length===0)return [];
+    const rated=[...scored.windows].sort((a,b)=>b.score-a.score||a.start-b.start);
+    const first=rated[0];
+    const second=[...scored.windows].filter(w=>w.start!==first.start)
+      .sort((a,b)=>Math.abs(b.start-first.start)-Math.abs(a.start-first.start)||
+        b.score-a.score||a.start-b.start)[0];
+    if(!second)return [];
+    return [first,second].sort((a,b)=>a.start-b.start);
+  };
   const valid=windows=>Array.isArray(windows)&&windows.length===2&&
     windows.every(w=>finite(w.start)&&finite(w.duration)&&
       w.start>=from-1e-6&&w.start+w.duration<=to+1e-6)&&
     windows[1].start+1e-6>=windows[0].start+windows[0].duration;
-  let windows=scored.ok?scored.starts.map(start=>({
-    start:Number((from+start).toFixed(3)),duration:windowSeconds
-  })).sort((a,b)=>a.start-b.start):[];
+  let windows=chooseTwo().map(w=>({
+    start:Number((from+w.start).toFixed(3)),duration:windowSeconds
+  }));
   let mode=probes.length?'risk-stratified-observed':'time-stratified-no-risk-evidence';
   if(!valid(windows)){
     const uniform=calibrationSampleStarts(from,to,windowSeconds,2);
     windows=uniform.map(start=>({start,duration:windowSeconds}));
-    mode='paired-uniform-fallback';
+    mode=probes.length?'paired-uniform-fallback':'time-stratified-no-risk-evidence';
   }
   if(!valid(windows))return {ok:false,reason:'unable-to-create-nonoverlapping-paired-windows'};
   return {
