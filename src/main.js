@@ -26,6 +26,7 @@ import { guidedResolutionCandidates, COMMON_REFERENCE_METRIC } from './compressi
 import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from './scene-risk-selection.js';
 import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
 import { resolveGuidedSizePolicy, assessGuidedBudget } from './guided-size-policy.js';
+import { guidedWholeFileProjection } from './guided-whole-file-budget.js';
 
 const MAX_BYTES = 1024 ** 3;
 const APP_UPDATE_URL = './app-update.json';
@@ -1071,9 +1072,20 @@ function estimatedSizeBudgetAudioBitrate() {
 
 function currentSizeFrontier(codec = null) {
   if (!state.media?.duration) return null;
-  const budget={
-    durationSeconds:Number(state.media.duration),audioBitrate:estimatedSizeBudgetAudioBitrate(),
-    reservePercent:4,containerReservePercent:1,fixedReserveBytes:256*1024,minimumVideoBitrate:150000
+  const audio=guidedHardsubAudioSettings();
+  const evidence=mediaWorkspace?.getActiveBudgetEvidence?.()||null;
+  // No copy packet measurement means a *hypothesis*, not measured total size.
+  const fullCostKnown=audio.audio!=='copy'||Number(state.media.audioTracks||0)===0||!!evidence;
+  const budget=fullCostKnown
+    ? {durationSeconds:Number(state.media.duration),audioBitrate:0,reservePercent:0,
+        containerReservePercent:0,fixedReserveBytes:0,minimumVideoBitrate:150000}
+    : {durationSeconds:Number(state.media.duration),audioBitrate:estimatedSizeBudgetAudioBitrate(),
+        reservePercent:4,containerReservePercent:1,fixedReserveBytes:256*1024,minimumVideoBitrate:150000};
+  const finalize=video=>{
+    if(!video?.ok)return null;
+    if(!fullCostKnown)return {...video,guidedCostBasis:'estimated-copy'};
+    const projected=guidedWholeFileProjection(video,{media:state.media,audio,evidence});
+    return projected.ok?projected:null;
   };
   const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
     ':'+currentRuntimeEvidenceKey();
@@ -1097,7 +1109,7 @@ function currentSizeFrontier(codec = null) {
       const envelope=createMultiBranchFrontier(branches,{
         ...budget,incumbentId,hysteresisSsim:.003
       });
-      if(envelope.ok)return envelope;
+      if(envelope.ok)return finalize(envelope);
     }
   }
   const selected=codec||state.selectedCodec||chooseDefaultCodec('sizeBudget');
@@ -1108,7 +1120,7 @@ function currentSizeFrontier(codec = null) {
     ? scaledModel.model : selected?state.rateDistortionModels?.[selected]:null;
   if(!model?.ok)return null;
   const frontier=createSizeQualityFrontier(model,budget);
-  return frontier?.ok?frontier:null;
+  return finalize(frontier);
 }
 
 function currentSizeBudgetBytes() {
@@ -1225,10 +1237,15 @@ function renderSizeFrontier() {
 
   empty.classList.add('hidden');
   wrap.classList.remove('hidden');
-  $('sizeFrontierSubtitle').textContent = frontier.kind==='multi-branch'
+  $('sizeFrontierSubtitle').textContent = (frontier.kind==='multi-branch'
     ? frontier.branchIds.map(id=>id.toUpperCase()).join(' / ')+
       ' · 统一源尺寸参考画面 SSIM；仅在共同实测体积区间内形成上包络。'
-    : label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。';
+    : label + ' · ' + model.points.length + ' 个实测码率点 · 阴影表示当前样本离散范围，不是统计置信区间。')+
+    (frontier.guidedCostBasis==='estimated-copy'
+      ? ' · 复制音轨未实测：当前完整文件体积坐标仅为估算，不能当作预算通过。'
+      : frontier.guidedCostBasis==='measured-source-packets'
+        ? ' · 复制音轨按当前源文件实测包字节计入完整文件预算。'
+        : ' · 音频按设定码率计入完整文件预算；成品体积仍须验证。');
   $('sizeFrontierMin').textContent = formatBytes(frontier.minimumEvidenceTargetBytes);
   $('sizeFrontierMax').textContent = formatBytes(frontier.maximumEvidenceTargetBytes);
   $('sizeFrontierKnee').textContent = frontier.knee
