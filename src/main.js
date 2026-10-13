@@ -5675,9 +5675,18 @@ async function runNativeEncode() {
           256 * 1024 * 1024
         );
 
+  // The Guided legacy Native entry point must bind a measured copied-audio
+  // budget to the same source file that Windows will actually encode.
+  const measuredBudget = plan.mode === 'budget-rate' && audioSettings.audio === 'copy' && sourceAudioTracks > 0
+    ? mediaWorkspace?.getActiveBudgetEvidence?.() : null;
+  if (plan.mode === 'budget-rate' && audioSettings.audio === 'copy' && sourceAudioTracks > 0 &&
+      (!measuredBudget?.measurementId || measuredBudget.scope !== 'full-source')) {
+    throw new Error('Native 复制音轨体积预算缺少有效来源计量凭据；请重新测量当前素材。');
+  }
   const request = {
     codec: state.selectedCodec,
     mode: plan.mode,
+    budgetEvidence: measuredBudget,
     crf: plan.crf,
     preset: plan.preset,
     targetVideoBitrate: plan.mode === 'budget-rate' ? plan.targetVideoBitrate : 0,
