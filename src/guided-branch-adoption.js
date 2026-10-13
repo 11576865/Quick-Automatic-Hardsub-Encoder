@@ -3,7 +3,18 @@
 // an opt-in mutation of the selected Guided codec/resolution.
 const positiveInt=n=>Number.isSafeInteger(n)&&n>0;
 const sizeKey=s=>s?JSON.stringify([s.id,s.width,s.height]):'source';
-const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+// Compare executable fields, not diagnostic frontier interpolation objects.
+// The frontier incumbent changes after adoption, so nonexecuting predictions
+// may legitimately change while codec, rate, size and real budget stay fixed.
+const same=(a,b)=>JSON.stringify([a?.mode,a?.goal,a?.codec,a?.preset,
+  a?.targetVideoBitrate,a?.sizeCeiling,a?.sizeBudgetPolicy,a?.outputWidth,
+  a?.outputHeight,a?.safeBudgetBytes,a?.plannedBytes,a?.containerReserveBytes,
+  a?.audioPayloadBytes,a?.fixedPayloadBytes,a?.encodedAudioBytes,
+  a?.budgetCostBasis])===JSON.stringify([b?.mode,b?.goal,b?.codec,b?.preset,
+  b?.targetVideoBitrate,b?.sizeCeiling,b?.sizeBudgetPolicy,b?.outputWidth,
+  b?.outputHeight,b?.safeBudgetBytes,b?.plannedBytes,b?.containerReserveBytes,
+  b?.audioPayloadBytes,b?.fixedPayloadBytes,b?.encodedAudioBytes,
+  b?.budgetCostBasis]);
 export function createGuidedBranchProposal({
   branchId,codec,sourceScope,selectedBytes,videoBitrate,preset,
   outputSize=null,priorCodec,priorOutputSize=null
