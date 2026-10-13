@@ -13,6 +13,27 @@ const {spawn}=require('node:child_process');
   await require('./check-vvc-ui.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-whole-budget-ui.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-audio-plan-ui.cjs')(browser,'http://127.0.0.1:4179');
+  // Review disclosure must shorten a fresh phone view without hiding terminal states.
+  const compactPage=await browser.newPage({viewport:{width:320,height:800}});
+  await compactPage.goto('http://127.0.0.1:4179');
+  await compactPage.waitForSelector('#taskReviewDetails',{state:'attached'});
+  await compactPage.evaluate(()=>{const op=document.querySelector('[name=operation]');op.value='transcode';op.dispatchEvent(new Event('change',{bubbles:true}));});
+  if(await compactPage.locator('#taskReviewDetails').evaluate(el=>el.open))throw Error('Fresh phone review should be collapsed');
+  if(!(await compactPage.locator('[data-review-overview]').textContent()).includes('尚无成品'))throw Error('Collapsed review lost artifact state');
+  const collapsedHeight=await compactPage.locator('#taskReviewDetails').evaluate(el=>el.getBoundingClientRect().height);
+  await compactPage.locator('#taskReviewDetails>summary').focus();
+  await compactPage.keyboard.press('Enter');
+  if(!await compactPage.locator('#taskObjectReview').isVisible())throw Error('Keyboard cannot expand phone review');
+  const expandedHeight=await compactPage.locator('#taskReviewDetails').evaluate(el=>el.getBoundingClientRect().height);
+  if(expandedHeight-collapsedHeight<120)throw Error('Collapsed review did not reduce phone height');
+  await compactPage.selectOption('[name=preset]','fast');
+  if(!await compactPage.locator('#taskReviewDetails').evaluate(el=>el.open))throw Error('Parameter refresh reset review disclosure');
+  if(await compactPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Expanded review overflow at 320px');
+  await compactPage.screenshot({path:'media-workspace-review-phone-expanded.png',fullPage:true});
+  await compactPage.locator('#taskReviewDetails>summary').click();
+  await compactPage.screenshot({path:'media-workspace-review-phone-compact.png',fullPage:true});
+  await compactPage.close();
+
 
   // Exercise the real browser refresh boundary for Windows Native. The launch
   // URL is intentionally one-shot; the second load must reconnect from

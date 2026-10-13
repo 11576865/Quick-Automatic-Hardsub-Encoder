@@ -1,0 +1,30 @@
+{
+  "goal": "Reduce phone review height while preserving current plan and artifact evidence",
+  "status": "implemented_local_tests_pass_hosted_browser_pending",
+  "current_bounded_work_unit": "Native disclosure around source/plan/artifact review with always-visible state summary",
+  "completed_units": [
+    "Fresh <=820px view starts collapsed, desktop starts expanded",
+    "Parameter refresh and guided/professional switch preserve disclosure and original task nodes",
+    "Collapsed overview retains unprobed/unchecked/stale/save-failed/rejected states",
+    "Two red-to-green overview regressions; 236 tests pass, 9 conditional skips, build pass"
+  ],
+  "next_units": [
+    "Read hosted 320px keyboard/height/overflow and cross-view save-retry checks",
+    "Inspect hosted compact/expanded screenshots; physical device usability remains pending"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "29e991ebe4b885731a3ca5b328313d4b150d781f",
+  "external_validation_states": {
+    "browser": "Pending; local Chromium absent",
+    "physical_device": "Pending"
+  },
+  "blockers": [
+    "Compact review reduces only one region; whole phone workflow still requires further evaluation"
+  ],
+  "intake": {
+    "status": "Pending",
+    "note": "Foundry query found no exact shared-task-presentation name; scoped observation will be emitted after code checkpoint"
+  },
+  "updated_timestamp": "2026-10-13T11:39:38.448395+00:00"
+}

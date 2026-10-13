@@ -22,7 +22,12 @@ export function buildTaskReview({media=null,hasSource=false,task=null,artifact=n
   artifact:{available:!!artifact,status:artifactStatus,source:artifact?.source||'来源未记录',encoder:artifact?.task?.encoder||null,container:artifact?.task?.outputContainer||null,bytes:Number.isSafeInteger(report?.outputBytes)&&report.outputBytes>0?report.outputBytes:null,verification:report?.verified===true?'后端成品验证已通过':report?.verified===false?'后端成品验证未通过':'未提供后端验证回执',playback:'外部播放器与真实设备兼容性未验证'}
  };
 }
+export function taskReviewOverview(model){
+ return [model.source.status,model.plan.status,model.artifact.status].join(' · ');
+}
 export function renderTaskReview(root,model){
+ const overview=root.parentElement?.querySelector('[data-review-overview]');
+ if(overview)overview.textContent=taskReviewOverview(model);
  const put=(id,text)=>{root.querySelector('[data-review="'+id+'"]').textContent=text;};
  const list=(id,rows)=>{const el=root.querySelector('[data-review="'+id+'"]');el.replaceChildren();for(const text of rows){const li=document.createElement('li');li.textContent=text;el.append(li);}};
  put('source-status',model.source.status);list('source-facts',model.source.facts);

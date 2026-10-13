@@ -1843,3 +1843,11 @@ body.media-frame-lightbox-open {
 
 .shared-budget-tools { display: grid; gap: 8px; margin-block: 12px; }
 .shared-budget-tools button { justify-self: start; }
+
+/* Compact projection; native disclosure preserves keyboard and user ownership. */
+.task-review-details{min-width:0;margin:12px 0;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}
+.task-review-details>summary{cursor:pointer;padding:12px;min-height:44px;box-sizing:border-box;color:var(--text);overflow-wrap:anywhere}
+.task-review-details>summary>span{font-size:.86rem;font-weight:700}
+.task-review-details>summary>strong{display:block;font-size:.8rem;line-height:1.6;font-weight:400;color:var(--muted);margin-top:4px}
+.task-review-details>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.task-review-details>.task-object-review{margin:0;padding:0 10px 10px}

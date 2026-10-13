@@ -35,6 +35,7 @@ module.exports=async(browser,baseUrl)=>{
   assert.match(await page.locator('#taskStatus').textContent(),/禁止交付/);
   assert.equal(await page.evaluate(()=>window.budgetTest.saves),0);
   assert.match(await page.locator('[data-review="artifact-status"]').textContent(),/禁止交付/);
+  assert.match(await page.locator('[data-review-overview]').textContent(),/禁止交付/);
   await page.evaluate(()=>window.budgetTest.bytes=1000000);
   await page.click('#taskRun');await page.waitForFunction(()=>!window.budgetTest.busy);
   assert.equal(await page.locator('#taskSave').isDisabled(),false);
@@ -67,10 +68,12 @@ module.exports=async(browser,baseUrl)=>{
   assert.equal(await page.locator('#taskObjectReview').getAttribute('data-plan-checked'),'true');
   await page.locator('[data-hardsub-strategy="manual"]').click();
   await page.evaluate(()=>{window.budgetTest.set('preset','fast');window.budgetTest.set('audioPlan',JSON.stringify([{sourceOrdinal:0,action:'aac',bitrate:64000,channels:1}]));});
+  await page.evaluate(()=>document.querySelector('#taskReviewDetails').open=false);
   const beforeViewSwitch=await page.locator('#mediaTaskForm').evaluate(form=>JSON.stringify([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.value]).sort((a,b)=>a[0].localeCompare(b[0]))));
   await page.locator('[data-hardsub-strategy="guided"]').click();
   assert.equal(await page.locator('#mediaTaskForm').evaluate(form=>JSON.stringify([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.value]).sort((a,b)=>a[0].localeCompare(b[0])))),beforeViewSwitch,'switching views must preserve authoritative values');
   assert.equal(await page.locator('#mediaTaskForm').count(),1);
+  assert.equal(await page.locator('#taskReviewDetails').evaluate(el=>el.open),false,'view switch preserves disclosure');
   assert.equal(await page.locator('#taskEncoding').isVisible(),false);
   assert.equal(await page.locator('#mediaWorkspace').isVisible(),true);
   assert.equal(await page.locator('#encodeCard').isVisible(),false);
@@ -82,6 +85,8 @@ module.exports=async(browser,baseUrl)=>{
   await page.evaluate(()=>window.budgetTest.saveFailure=true);
   await page.click('#taskSave');
   assert.match(await page.locator('#taskStatus').textContent(),/保存失败/);
+  assert.match(await page.locator('[data-review-overview]').textContent(),/保存失败，可重试/);
+  assert.equal(await page.locator('#taskReviewDetails').evaluate(el=>el.open),false);
   await page.locator('[data-hardsub-strategy="manual"]').click();
   await page.evaluate(()=>window.budgetTest.saveFailure=false);
   await page.click('#taskSave');

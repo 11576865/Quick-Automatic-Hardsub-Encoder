@@ -176,11 +176,13 @@ export function mountMediaWorkspace(hooks) {
     <strong>视频 Stream Copy</strong><span>所选视频码流不重新编码；若视频使用 IN/OUT，主选视频流决定关键帧切入。音频可保持完整、独立剪辑、复制、转码或关闭。</span>
   </div>
   </details>
+  <details id="taskReviewDetails" class="task-review-details"><summary><span>来源、计划与成品</span><strong data-review-overview aria-live="polite">未选择来源 · 当前方案未检查 · 尚无成品</strong></summary>
   <section id="taskObjectReview" class="task-object-review" aria-label="来源、计划与成品">
     <article><h3>来源</h3><strong data-review="source-status"></strong><ul data-review="source-facts"></ul><p id="taskReviewSourceName"></p></article>
     <article><h3>拟输出计划</h3><strong data-review="plan-status"></strong><p data-review="plan-codec"></p><details><summary>逐流去向与完整预算</summary><ul data-review="plan-rows"></ul><ul data-review="plan-budget"></ul></details></article>
     <article><h3>实际成品</h3><strong data-review="artifact-status"></strong><p data-review="artifact-facts"></p><p data-review="artifact-evidence"></p></article>
   </section>
+  </details>
   <section id="taskPlanSummary" class="task-plan-summary" aria-live="polite">
     <div class="task-plan-heading"><span>当前方案</span><strong id="taskPlanTitle">等待选择参数</strong></div>
     <div class="task-plan-facts">
@@ -269,6 +271,8 @@ export function mountMediaWorkspace(hooks) {
   if (modeDock) modeDock.append(modeNav);
   else document.querySelector('#inputCard').before(modeNav);
   document.querySelector('#inputCard').after(section);
+  // Initial disclosure depends on viewport only; refreshes/view switches never reset user choice.
+  section.querySelector('#taskReviewDetails').open=window.matchMedia('(min-width: 821px)').matches;
   const form = section.querySelector('form'), get = name => form.elements.namedItem(name);
   const budgetTools=document.createElement('section');budgetTools.className='shared-budget-tools';budgetTools.id='taskBudgetTools';budgetTools.setAttribute('aria-label','完整文件预算');
   section.querySelector('#taskPlanSummary').after(budgetTools);
