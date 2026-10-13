@@ -527,10 +527,10 @@ test('final verified output reports predicted vs actual size without claiming pe
  const source=await readFile(new URL('./main.js',import.meta.url),'utf8');
  assert.match(source,/nativeJobProjection/);
  assert.match(source,/plannedBytes:Number\(plan\.plannedBytes/);
- assert.match(source,/const sizeError=projection\?\.plannedBytes/);
- assert.match(source,/体积误差/);
- assert.match(source,/已超出目标体积上限/);
- assert.match(source,/sizeComparison:projection/);
+ assert.match(source,/const comparison=completedGuidedNativeBudget\(/);
+ assert.match(source,/formatCompletedGuidedNativeBudget\(comparison,formatBytes\)/);
+ assert.match(source,/sizeComparison:comparison/);
+ assert.match(source,/const comparison=completedGuidedNativeBudget\(status,jobId\)/);
 });
 
 test('guided multi-resolution calibration keeps output scale, SSIM reference and execution branch aligned',async()=>{
