@@ -27,8 +27,9 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
       await new Promise(resolve => { state.release = resolve; });
       state.waiting = null;
     };
+    state.budgetEvidence=null;
     state.controller = mountTranscodeCurves(document.querySelector('#host'), {
-      settings:()=>({...state.raw}),sourceIdentity:()=>state.source,
+      settings:()=>({...state.raw}),sourceIdentity:()=>state.source,budgetEvidence:()=>state.budgetEvidence,
       busy:()=>state.busy,isWindows:()=>true,setBusy:v=>{state.busy=v;},
       prepare:async()=>{
         await hold('prepare');
@@ -47,7 +48,8 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
           duration,elapsedSeconds:.1};
       },
       applyQuality:q=>state.applied.push(['quality',q]),
-      applyBitrate:b=>state.applied.push(['bitrate',b])
+      applyBitrate:b=>state.applied.push(['bitrate',b]),
+      applySizeBudget:({budget,expectedSettings,expectedSourceIdentity})=>{if(JSON.stringify(state.raw)!==JSON.stringify(expectedSettings)||state.source!==expectedSourceIdentity)return {ok:false,reason:'stale'};state.applied.push(['size',budget]);return {ok:true};}
     });
     document.querySelector('#taskCurveProfile').value='quick';
   }, stage);
@@ -109,20 +111,29 @@ module.exports = async function checkCalibrationLifecycle(browser, baseUrl) {
     assert.equal(await page.locator('#taskAdoptCurveRate').isDisabled(),false,
       await page.locator('#taskCurveStatus').textContent());
     await page.click('#taskAdoptCurveRate');
-    assert.equal(await page.evaluate(()=>window.calibrationTest.applied[1]?.[0]),'bitrate',
-      'Current measured frontier must allow adopting bitrate');
+    assert.equal(await page.evaluate(()=>window.calibrationTest.applied[1]?.[0]),'size',
+      'Current measured frontier must allow adopting the full size contract');
+    const chosenBudget=await page.evaluate(()=>window.calibrationTest.applied[1][1]);
+    assert.ok(chosenBudget.targetBytes>0);assert.equal(chosenBudget.reservePercent,4);
+    assert.match(await page.locator('#taskCurveReadout').textContent(),/成品目标体积约/);
     await page.evaluate(()=>{window.calibrationTest.busy=true;});
     await page.locator('.media-curve-measurement button').first().click();
-    await page.click('#taskAdoptCurveRate');
+    await page.locator('#taskAdoptCurveRate').dispatchEvent('click');
     assert.equal(await page.evaluate(()=>window.calibrationTest.applied.length),2,
       'Another active media operation must block both adoption actions');
     await page.evaluate(()=>{window.calibrationTest.busy=false;});
     // A source identity can change without a form event. Guard at activation.
     await page.evaluate(()=>{window.calibrationTest.source='video-B';});
     await page.locator('.media-curve-measurement button').first().click();
-    await page.click('#taskAdoptCurveRate');
+    await page.locator('#taskAdoptCurveRate').dispatchEvent('click');
     assert.equal(await page.evaluate(()=>window.calibrationTest.applied.length),2,
       'Stale evidence must not change quality or bitrate');
+
+    await setup('');await start();await settle();
+    await page.click('#taskVerifyCurveRate');await settle();
+    await page.evaluate(()=>{window.calibrationTest.budgetEvidence={version:1,scope:'full-source',measurementId:'changed',audioPacketBytes:[],subtitlePacketBytes:[],attachmentBytes:[]};});
+    await page.click('#taskAdoptCurveRate');
+    assert.equal(await page.evaluate(()=>window.calibrationTest.applied.length),0,'cost snapshot change blocks old VBR adoption without a form event');
 
     await setup('');await page.evaluate(()=>{window.calibrationTest.sampleOverride=false;});
     await start();await settle();

@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_manual_whole_budget_implemented_hosted_pending",
-  "current_bounded_work_unit": "B13: whole-file coordinates in Windows Manual candidate comparison and size-preserving confirmed adoption",
+  "status": "incomplete_full_report_single_branch_budget_implemented_hosted_pending",
+  "current_bounded_work_unit": "B13 single-encoder complete-file projection and atomic size adoption",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -116,9 +116,9 @@
       "id": "B13",
       "source": "R19 §09、§11、P3；R24 §14、§18",
       "requirement": "总文件目标与固定/编码音轨、字幕、附件、封装预算接入同一决策坐标",
-      "implementation_status": "Windows Manual候选比较已接入完整账本，本地验证通过；CI待验收",
-      "evidence": "whole-file-frontier.js；compare-ui.js；size-preserving adoption；4 projection + 2 adoption regressions",
-      "remaining": "引导和单分支预算语义仍需统一；新browser/native复验待完成；B16成本覆盖仍有缺口；成品门禁不替代决策证据"
+      "implementation_status": "Windows候选比较及单编码器已共享完整账本；上一轮9CI成功；本轮外部验收Pending",
+      "evidence": "whole-file-frontier.js；transcode-calibration-panel.js；size-budget-adoption.js；245 local tests/build pass",
+      "remaining": "引导ASS预算决策仍待统一；单分支browser/native复验Pending；B16精确裁切/FLAC/跨端计量仍开放"
     },
     {
       "id": "B14",
@@ -220,10 +220,11 @@
   "completed_units": [
     "Report sections and acceptance gates mapped to current code and evidence",
     "Five-round completion classified as historical subset, not initial-version completion",
-    "Manual complete-file axis/ledger/default; explicit video diagnostic; exact compiled rate; strict policy transaction; local checks passed"
+    "Manual complete-file axis/ledger/default; explicit video diagnostic; exact compiled rate; strict policy transaction; local checks passed",
+    "Single-encoder panel uses shared whole ledger/frontier; current encoder preserved during exact size/strict-policy adoption; 245 local tests and build pass"
   ],
   "next_units": [
-    "Read hosted complete-file browser/native regressions; continue B13 shared Guided/single-branch budget semantics and B16 cost coverage",
+    "Read hosted single-branch complete-budget lifecycle and continue Guided/ASS budget decision integration; B16 cost coverage remains open",
     "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
     "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
     "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
@@ -231,12 +232,14 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "394cfc89978403ab44bb226d01951ad9b7c4c001",
+  "latest_durable_commit": "73c9470bc2c50bf225a8b39e8c9fa45e8527cc3b",
   "external_validation_states": {
     "latest_tested_implementation": "9/9 hosted success at bbec19d; not full report acceptance",
     "physical_devices": "Pending",
     "whole_product": "Incomplete",
-    "new_whole_file_frontier": "Pending hosted browser and platform"
+    "new_whole_file_frontier": "Pending hosted browser and platform",
+    "previous_whole_file_frontier": "9/9 success at 73c9470",
+    "new_single_budget": "Pending browser and platform regression"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -246,14 +249,13 @@
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/candidates/2026-10-10-measurement-identity-must-exclude-decision-and-presentation-inputs.md",
-    "foundry_commit": "1cebf15a39d60938f340ee726048a0840421071b"
+    "foundry_commit": "c5c717caee47e3346b88e8b3afe0e755f245b579"
   },
-  "updated_timestamp": "2026-10-13T12:14:36.208536+00:00",
+  "updated_timestamp": "2026-10-13T12:31:45.338458+00:00",
   "local_verification": {
-    "passed": 242,
+    "passed": 245,
     "skipped": 9,
     "failed": 0,
-    "real_ffmpeg_passed": 7,
     "build": "pass"
   }
 }

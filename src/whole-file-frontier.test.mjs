@@ -36,3 +36,8 @@ test('projected VBR rate is exactly the formal size compiler rate including ceil
  const formal=compileTask({...raw,rateMode:'size',targetSize:bytes/1e6,sizeUnit:'MB',budgetPolicy:'strict-ceiling'},media);
  assert.equal(e.videoBitrate,formal.bitrate);assert.equal(formal.sizeCeilingBytes,bytes);
 });
+
+test('full-duration encoded audio remains a fixed plan cost when video is only two seconds',()=>{
+ const l=wholeFileLedger({...task,expectedVideoDuration:2,trimDuration:2,audioPlan:[{action:'aac',bitrate:8000,range:'full'}],keepAttachments:false},evidence);
+ assert.equal(l.durationSeconds,2);assert.equal(l.encodedAudioBytes,8000);
+});

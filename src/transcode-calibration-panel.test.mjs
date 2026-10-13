@@ -15,7 +15,7 @@ test('manual transcode renders one measured size-quality curve with optional CQ 
   assert.equal((panel.match(/<svg id="task[^"]+Chart"/g)||[]).length,1);
   assert.match(panel,/exploreQuality\(/);
   assert.match(panel,/createMeasuredSizeFrontier/);
-  assert.match(panel,/hooks\.applyBitrate/);
+  assert.match(panel,/hooks\.applySizeBudget/);
   assert.match(panel,/hooks\.applyQuality/);
   assert.match(panel,/raw\.operation!=='transcode'/);
   assert.match(panel,/calibrationSampleStarts/);
@@ -41,7 +41,7 @@ test('calibration workflow retains source identity and stops incomplete trials s
   assert.match(panel,/clearEvidence\(\);[\s\S]*?label\(\(cancelRequested/);
   assert.match(panel,/const evidenceIsCurrent/);
   assert.match(panel,/evidenceIsCurrent\(\)/);
-  assert.match(panel,/expectedAudioDuration/);
+  assert.match(panel,/wholeFileLedger\(task,hooks\.budgetEvidence/);
   assert.match(workspace,/transcodeCurves\.invalidate\(\)/);
   assert.match(main,/sampleExact: true/);
   assert.match(main,/multipass, sampleExact: true/);

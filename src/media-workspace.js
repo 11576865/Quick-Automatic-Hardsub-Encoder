@@ -1,3 +1,4 @@
+import {commitVerifiedSizeBudget} from './size-budget-adoption.js';
 import {sharedTaskPresentation} from './shared-task-presentation.js';
 import {guidedTaskSettings} from './guided-task-handoff.js';
 import {buildTaskReview,renderTaskReview} from './task-review.js';
@@ -479,6 +480,11 @@ export function mountMediaWorkspace(hooks) {
     budgetEvidence:()=>budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:null,
     setBusy: hooks.setBusy,
     log: hooks.log,
+    applySizeBudget:({budget,expectedSettings,expectedSourceIdentity,media})=>{
+      const result=commitVerifiedSizeBudget({budget,expectedSettings,expectedSourceIdentity,read,sourceIdentity:()=>hooks.videoIdentity?.()||'',get,updateRate,compile:compileTask,media:{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined}});
+      if(result.ok)get('targetSize').dispatchEvent(new Event('input',{bubbles:true}));
+      return result;
+    },
     applyBitrate: bitrate => {
       markCompletedAsPrevious('bitrate');
       get('rateMode').value = 'bitrate';
@@ -2078,7 +2084,7 @@ export function mountMediaWorkspace(hooks) {
     const sourceName=event?.target?.name||'';
     if(!sourceName)return;
     if(['audio','audioTrack','audioRange','audioBitrate'].includes(sourceName))audioStreamPlan.refresh();
-    if(!new Set(['quality','bitrate','rateMode','targetSize','sizeUnit','sizeReserve','sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
+    if(!new Set(['sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
     markCompletedAsPrevious(sourceName);
     activeTask=null;currentPlanTask=null;
     renderContainerDecision(null);
