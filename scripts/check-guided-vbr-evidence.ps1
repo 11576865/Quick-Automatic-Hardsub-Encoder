@@ -17,7 +17,7 @@ try{
     start=12.0;duration=2.0;preset='medium';codec='h264'
     outputWidth=0;outputHeight=0;referenceWidth=0;referenceHeight=0
   }
-  $result=New-GuidedExactVbrReceipt $before $before $options 'libx264' 2.0 $a $a
+  $result=New-GuidedExactVbrReceipt $before $before $options 'libx264' 'medium' 2.0 $a $a
   if($result.method -ne 'windows-native-exact-guided-ass-vbr-v1' -or
      $result.assTextSha256 -ne $a.assTextSha256 -or
      $result.fontContentSha256 -ne $a.fontContentSha256 -or
@@ -27,15 +27,15 @@ try{
   $errorDetected=$false
   [IO.File]::WriteAllText((Join-Path $dir 'subtitle.ass'),'changed ASS',$utf8)
   $after=Get-GuidedRenderedAssetStamp $dir
-  try{[void](New-GuidedExactVbrReceipt $before $before $options 'libx264' 2.0 $a $after)}catch{$errorDetected=$true}
+  try{[void](New-GuidedExactVbrReceipt $before $before $options 'libx264' 'medium' 2.0 $a $after)}catch{$errorDetected=$true}
   if(-not $errorDetected){throw 'Changed staged ASS did not reject the receipt.'}
   $errorDetected=$false
   [IO.File]::WriteAllBytes((Join-Path $fontDir 'font1.ttf'),[byte[]](40,30,20,10))
   $fontAfter=Get-GuidedRenderedAssetStamp $dir
-  try{[void](New-GuidedExactVbrReceipt $before $before $options 'libx264' 2.0 $after $fontAfter)}catch{$errorDetected=$true}
+  try{[void](New-GuidedExactVbrReceipt $before $before $options 'libx264' 'medium' 2.0 $after $fontAfter)}catch{$errorDetected=$true}
   if(-not $errorDetected){throw 'Changed staged font did not reject the receipt.'}
   $errorDetected=$false
-  try{[void](New-GuidedExactVbrReceipt $before ([pscustomobject]@{source='changed';runtime=$before.runtime}) $options 'libx264' 2.0 $a $a)}catch{$errorDetected=$true}
+  try{[void](New-GuidedExactVbrReceipt $before ([pscustomobject]@{source='changed';runtime=$before.runtime}) $options 'libx264' 'medium' 2.0 $a $a)}catch{$errorDetected=$true}
   if(-not $errorDetected){throw 'Changed source did not reject the receipt.'}
   Write-Host 'B11 Guided Native rendered VBR evidence isolation passed.'
 }finally{
