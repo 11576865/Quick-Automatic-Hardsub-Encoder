@@ -28,6 +28,7 @@ import { planPairedRefinement, appendMatchedSceneObservation } from './calibrati
 import { resolveGuidedSizePolicy } from './guided-size-policy.js';
 import { guidedWholeFileProjection, assessGuidedWholeFileBudget } from './guided-whole-file-budget.js';
 import {guidedAssDecisionScope} from './decision-reference-scope.js';
+import {verifyGuidedNativeVbr} from './guided-native-vbr-verification.js';
 import { completedGuidedNativeBudget, formatCompletedGuidedNativeBudget } from './native-guided-budget-recovery.js';
 
 const MAX_BYTES = 1024 ** 3;
@@ -92,6 +93,7 @@ const state = {
   guidedOutputSize: null,
   sizeEnvelopeEnabled: false,
   guidedModelScopes: {},
+  guidedVbrVerification: null,
   qualityExplorationPoints: {},
   sizeBudgetTargetBytes: null,
   sizeFrontierPointerId: null,
@@ -398,6 +400,8 @@ app.innerHTML = `
             </div>
           </details>
           <div id="sizeBudgetDetail" class="plan-value-detail plan-slider-feedback">选择视频后显示对应的实际字节上限。</div>
+          <div class="button-row"><button id="guidedVerifyVbrBtn" type="button" class="plan-interaction secondary">实测当前 ASS VBR</button><button id="guidedConfirmVbrBtn" type="button" class="plan-interaction secondary" disabled>确认采用当前已验证参数</button></div>
+          <p id="guidedVbrResult" class="note" role="status">可选：Windows Native 单遍 VBR 同源配对 ASS 渲染测试；不证明整片质量、实际输出体积或两遍结果。</p>
           <label class="size-accuracy-control" for="guidedSizeBudgetPolicy">
             <strong>体积执行策略</strong>
             <select id="guidedSizeBudgetPolicy" class="plan-interaction" aria-describedby="guidedSizeBudgetPolicyHelp">
@@ -1487,6 +1491,8 @@ $('qualityTargetRange').addEventListener('input', updateQualityTargetPreview);
 $('qualityTargetRange').addEventListener('change', commitQualityTarget);
 $('sizeBudgetRange').addEventListener('input', updateSizeBudgetPreview);
 $('sizeBudgetRange').addEventListener('change', commitSizeBudget);
+$('guidedVerifyVbrBtn').addEventListener('click',()=>runWebTask(runGuidedVbrVerification));
+$('guidedConfirmVbrBtn').addEventListener('click',confirmGuidedVbrVerification);
 $('guidedSizeBudgetPolicy').addEventListener('change',()=>{
   updateSizeBudgetPreview();renderPlanOptions();refreshBenchmarkEnabled();
 });
@@ -4153,6 +4159,7 @@ function invalidateQualityCalibration() {
   state.qualityCalibration = {};
   state.rateDistortionModels = {};
   state.guidedModelScopes = {};
+  state.guidedVbrVerification = null;
   state.resolutionRateDistortionModels = {};
   state.guidedOutputSize = null;
   state.sizeEnvelopeEnabled = false;
@@ -4313,6 +4320,7 @@ function renderPlanOptions() {
   });
   updateChosenSummary();
   restoreSelectedTestForCurrentPlan();
+  refreshGuidedVbrControls();
   refreshBenchmarkEnabled();
 }
 
@@ -5140,6 +5148,117 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
     state.qualityCalibrationBusy = false;
     updateQualityCalibrationControls();
   }
+}
+
+// Short-window VBR evidence is optional and cannot change the current
+// formal bitrate or relax strict output-byte/quality verification.
+function guidedVbrKey(plan=buildEncodePlan(state.selectedCodec)) {
+  if(plan?.mode!=='budget-rate')return '';
+  try{return JSON.stringify([
+    currentGuidedDecisionScope(),state.selectedCodec,plan.codec,plan.preset,
+    plan.targetVideoBitrate,plan.sizeCeiling,plan.sizeBudgetPolicy,
+    plan.outputWidth||0,plan.outputHeight||0,
+    state.video?.name,state.video?.size,state.video?.lastModified,
+    guidedHardsubAudioSettings(),
+    resolveGuidedHardsubContainer(state.selectedCodec).key,
+    mediaWorkspace?.getActiveBudgetEvidence?.()||null
+  ]);}catch{return '';}
+}
+function refreshGuidedVbrControls(){
+  const verify=$('guidedVerifyVbrBtn'),confirm=$('guidedConfirmVbrBtn'),note=$('guidedVbrResult');
+  if(!verify||!confirm||!note)return;
+  const plan=buildEncodePlan(state.selectedCodec);
+  const supported=$('encodeGoal')?.value==='sizeBudget' &&
+    state.nativeBackend?.backend==='windows-native' &&
+    state.nativeSelfTest?.ssimSmoke===true &&
+    state.nativeInputProbe?.seekable!==false &&
+    plan?.mode==='budget-rate' && plan.sizeBudgetPolicy==='best-effort' &&
+    !!currentGuidedDecisionScope() && !!guidedVbrKey(plan);
+  const receipt=state.guidedVbrVerification;
+  const current=receipt?.key && receipt.key===guidedVbrKey(plan)&&receipt.result?.passed===true;
+  verify.disabled=!supported||state.operationBusy||state.qualityCalibrationBusy||!!state.nativeJobId;
+  confirm.disabled=!current||receipt.confirmed||state.operationBusy||state.qualityCalibrationBusy;
+  if(!supported)note.textContent='验证只支持 Windows Native、可寻址来源、SSIM 和快速单遍预算；两遍/严格上限不能借用单遍证据。';
+  else if(current)note.textContent=(receipt.confirmed?'已确认当前参数':'短样通过，等待明确确认')+
+    ' · 最低 ASS SSIM '+receipt.result.minimumSsim.toFixed(5)+
+    ' · '+receipt.result.measuredWindows+' 个窗口；整片与成品大小仍需独立验证。';
+  else note.textContent='当前方案尚无可采用的 ASS VBR 证据；修改来源、字幕、字体或预算后必须重新验证。';
+}
+async function guidedTextSha256(text){
+  if(!globalThis.crypto?.subtle)throw Error('缺少 SHA-256，不能证明字幕参考内容');
+  const bytes=new TextEncoder().encode(text);
+  const hash=await crypto.subtle.digest('SHA-256',bytes);
+  return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+async function runGuidedVbrVerification(){
+  const plan=buildEncodePlan(state.selectedCodec),key=guidedVbrKey(plan);
+  const status=$('guidedVbrResult');
+  if(!key||plan.sizeBudgetPolicy!=='best-effort'||
+     state.nativeBackend?.backend!=='windows-native'||
+     state.nativeInputProbe?.seekable===false||state.nativeSelfTest?.ssimSmoke!==true)
+    throw Error('当前方案不支持 ASS 单遍 VBR 精确验证');
+  const ass=state.activeAssText||state.assText;
+  const unchanged=()=>key===guidedVbrKey(buildEncodePlan(state.selectedCodec)) &&
+    ass===(state.activeAssText||state.assText);
+  state.guidedVbrVerification=null;
+  const quality=Number($('qualityTarget')?.value||.985);
+  const hw={h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc'};
+  const sw={h264:'libx264',h265:'libx265',av1:'libsvtav1'};
+  const available=name=>state.nativeBackend?.encoders?.some(e=>
+    (e.key||e.Key)===name&&(e.available===true||e.Available===true));
+  const encoder=available(hw[plan.codec])?hw[plan.codec]:sw[plan.codec];
+  if(!available(encoder))throw Error('当前 Native 正式编码器未声明可用');
+  try{
+    status.textContent='正在规划 ASS VBR 配对窗口…';
+    const schedule=await preparePairedQualitySamplePlan();
+    if(!unchanged()||schedule.decisionScope!==currentGuidedDecisionScope())
+      throw Error('规划时字幕、字体或源已变化');
+    const starts=[...new Set(schedule.starts)].sort((a,b)=>a-b);
+    if(starts.length<2)throw Error('至少需要两个不同源时间窗');
+    const windows=[starts[0],starts.at(-1)].map(start=>({start,duration:schedule.windowSeconds}));
+    if(windows[1].start<windows[0].start+windows[0].duration)
+      throw Error('两个 ASS VBR 采样窗口重叠');
+    const formal={...plan,referenceWidth:plan.outputWidth?Number(state.media?.width):0,
+      referenceHeight:plan.outputHeight?Number(state.media?.height):0};
+    const samples=[];
+    for(const window of windows){
+      if(!unchanged())throw Error('采样前方案已改变');
+      const shifted=shiftAssForPreview(ass,window.start);
+      const digest=await guidedTextSha256(shifted);
+      status.textContent='正在实测真实 ASS VBR '+(samples.length+1)+'/'+windows.length;
+      const sample=await requestNativeSample({
+        sampleExact:true,guidedRenderedReference:true,withSubtitles:true,measureSsim:true,
+        codec:plan.codec,encoder,preset:plan.preset,multipass:'disabled',
+        targetVideoBitrate:plan.targetVideoBitrate,start:window.start,duration:window.duration,
+        outputWidth:plan.outputWidth||0,outputHeight:plan.outputHeight||0,
+        referenceWidth:formal.referenceWidth,referenceHeight:formal.referenceHeight,
+        timeoutSeconds:45,retainSample:false
+      },shifted);
+      if(!unchanged())throw Error('Native 返回后源、ASS、字体或预算已改变');
+      samples.push({window,sample,assTextSha256:digest});
+    }
+    const checked=verifyGuidedNativeVbr({
+      plan:formal,referenceScope:currentGuidedDecisionScope(),
+      windows,samples,targetSsim:quality,expectedEncoder:encoder
+    });
+    if(!checked.ok)throw Error('Native ASS VBR 收据失败：'+checked.reason);
+    if(!checked.passed)throw Error('短样最低 SSIM '+checked.minimumSsim.toFixed(5)+
+      ' 未达到 '+quality.toFixed(5));
+    if(!unchanged())throw Error('验证结束时方案发生变化');
+    state.guidedVbrVerification={key,result:checked,confirmed:false};
+  }catch(error){
+    state.guidedVbrVerification=null;
+    status.textContent='未形成可采用的 ASS VBR 收据：'+error.message;
+    throw error;
+  }finally{refreshGuidedVbrControls();}
+}
+function confirmGuidedVbrVerification(){
+  const receipt=state.guidedVbrVerification,plan=buildEncodePlan(state.selectedCodec);
+  if(!receipt?.result?.passed||receipt.key!==guidedVbrKey(plan)||
+     receipt.confirmed||state.operationBusy)return;
+  receipt.confirmed=true;
+  refreshGuidedVbrControls();
+  log('已明确确认当前 Guided VBR 短样；原编码参数不变，成品仍需实际校验。');
 }
 
 async function runSelectedTest() {
