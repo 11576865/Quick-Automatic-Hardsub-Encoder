@@ -1,6 +1,7 @@
 name: Windows local smoke
 on:
   push:
+    branches: [main]
     paths:
       - 'windows/**'
       - 'scripts/check-guided-budget-native.ps1'
@@ -16,6 +17,7 @@ on:
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'windows/**'
       - 'scripts/check-guided-budget-native.ps1'
@@ -34,6 +36,7 @@ on:
 
 jobs:
   windows:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
