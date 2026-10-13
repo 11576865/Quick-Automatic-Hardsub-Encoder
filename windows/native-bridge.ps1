@@ -9,6 +9,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
 . (Join-Path $PSScriptRoot 'manual-sample-evidence.ps1')
+. (Join-Path $PSScriptRoot 'guided-rendered-sample-evidence.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
 . (Join-Path $PSScriptRoot 'compression-history.ps1')
@@ -1102,7 +1103,12 @@ function Invoke-Sample($Body) {
     if($duration -le 0 -or $duration -gt 8){throw 'Sample duration must be between 0 and 8 seconds.'}
     $start=[Math]::Max(0,[double]$o.start)
     $exactManualEvidence=[bool]$o.sampleExact -and -not [bool]$o.withSubtitles -and [bool]$o.measureSsim
-    $snapshotBefore=if($exactManualEvidence){
+    $exactGuidedEvidence=[bool]$o.sampleExact -and [bool]$o.guidedRenderedReference -and
+        [bool]$o.withSubtitles -and [bool]$o.measureSsim -and [long]$o.targetVideoBitrate -gt 0
+    if([bool]$o.sampleExact -and [bool]$o.withSubtitles -and -not $exactGuidedEvidence){
+        throw 'Exact ASS samples require explicit Guided bitrate reference mode.'
+    }
+    $snapshotBefore=if($exactManualEvidence -or $exactGuidedEvidence){
         $version=Get-FfmpegVersionInfo $script:Ffmpeg
         New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$version.Text)
     }else{$null}
@@ -1111,6 +1117,7 @@ function Invoke-Sample($Body) {
     try{
         $withSubs=[bool]$o.withSubtitles
         if($withSubs){Stage-BridgeAssets $work ([string]$Body.assText)}
+        $assetBefore=if($exactGuidedEvidence){Get-GuidedRenderedAssetStamp $work}else{$null}
         $reference=Join-Path $work 'reference.mkv'
         $candidate=Join-Path $work 'sample.mkv'
         $startText=$start.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
@@ -1123,7 +1130,7 @@ function Invoke-Sample($Body) {
         $scaled=$outW -gt 0 -or $outH -gt 0
         if([bool]$o.commonReference -and (-not $common -or -not $scaled)){throw 'Common reference requires exact measured manual geometry.'}
         if($scaled){
-            if(-not $common -and (-not $withSubs -or [bool]$o.sampleExact)){throw 'Resolution trials require subtitle-rendered common reference mode.'}
+            if(-not $common -and (-not $withSubs -or ([bool]$o.sampleExact -and -not $exactGuidedEvidence))){throw 'Resolution trials require subtitle-rendered common reference mode.'}
             if($outW -lt 2 -or $outH -lt 2 -or $outW -gt 16384 -or $outH -gt 16384 -or
                 ($outW % 2) -or ($outH % 2) -or
                 $refW -lt $outW -or $refH -lt $outH -or
@@ -1143,8 +1150,8 @@ function Invoke-Sample($Body) {
             if($scaled){$filter+=',scale='+$outW+':'+$outH+':flags=bicubic'}
             ' -vf "'+$filter+'"'
         }elseif($common){' -vf "scale='+$outW+':'+$outH+':flags=bicubic"'}else{''}
-        if(-not [bool]$o.sampleExact){
-            # Legacy hard-sub samples require the subtitle-rendered FFV1
+        if(-not [bool]$o.sampleExact -or $exactGuidedEvidence){
+            # Guided exact VBR samples also require the subtitle-rendered FFV1
             # reference; exact filter-free transcoding measures from source.
             $rr=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$referenceFilter+' -c:v ffv1 '+(Quote-NativeArg $reference)) $work
             if($rr.ExitCode -ne 0){throw ($rr.StdErr.Trim())}
@@ -1165,7 +1172,7 @@ function Invoke-Sample($Body) {
         }
         $packets=Get-PacketStats $candidate
         $ssim=if([bool]$o.measureSsim){
-            if([bool]$o.sampleExact){
+            if($exactManualEvidence){
                 Get-SsimAgainstSource $candidate $video $startText $durationText $work $(if($common){$refW}else{0}) $(if($common){$refH}else{0})
             }else{
                 if($scaled){Get-Ssim $candidate $reference $work $refW $refH}
@@ -1173,9 +1180,16 @@ function Invoke-Sample($Body) {
             }
         }else{$null}
         $sampleBytes=(Get-Item $candidate).Length
+        if($exactGuidedEvidence -and ($null -eq $ssim -or [double]$ssim -lt 0 -or [double]$ssim -gt 1)){
+            throw 'Guided rendered-reference SSIM not available.'
+        }
         $nativeEvidence=if($exactManualEvidence){
             $snapshotAfter=New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$snapshotBefore.runtimeVersion)
             New-ManualNativeSampleReceipt $snapshotBefore $snapshotAfter $o ([string]$profile.Encoder) $measured
+        }elseif($exactGuidedEvidence){
+            $snapshotAfter=New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$snapshotBefore.runtimeVersion)
+            $assetAfter=Get-GuidedRenderedAssetStamp $work
+            New-GuidedExactVbrReceipt $snapshotBefore $snapshotAfter $o ([string]$profile.Encoder) $measured $assetBefore $assetAfter
         }else{$null}
         if([bool]$o.retainSample){
             $keep=Join-Path ([IO.Path]::GetTempPath()) ("quick-hardsub-sample-$sampleId.mkv")
