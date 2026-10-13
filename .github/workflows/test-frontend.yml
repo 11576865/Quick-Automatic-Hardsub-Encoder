@@ -50,7 +50,7 @@ jobs:
       - run: node --test src/rate-distortion-model.test.mjs
       - run: node --test src/compression-decision.test.mjs
       - run: node --test src/manual-transcode-comparison.test.mjs
-      - run: node --test src/manual-transcode-session.test.mjs
+      - run: node --test src/manual-transcode-session.test.mjs src/manual-candidate-set.test.mjs
       - run: node --test src/manual-transcode-vbr-verification.test.mjs
       - run: node --test src/manual-transcode-adoption.test.mjs
       - run: node --test src/compression-resolutions.test.mjs
@@ -75,7 +75,7 @@ jobs:
       - run: node --test src/output-verification-wiring.test.mjs
       - run: node --test src/media-task.test.mjs src/media-planning.test.mjs src/whole-file-budget.test.mjs src/ci-delivery-fixtures.test.mjs src/task-review.test.mjs src/vvc-required-runtime.test.mjs src/ffmpeg-help-options.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs src/media-stream-plan.test.mjs
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
-      - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs src/media-stream-plan.integration.test.mjs src/whole-file-budget.integration.test.mjs
+      - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs src/media-stream-plan.integration.test.mjs src/whole-file-budget.integration.test.mjs src/manual-candidate-set.integration.test.mjs
       - run: FFMPEG_INTEGRATION=1 node --test src/source-ssim.integration.test.mjs
       - run: FFMPEG_INTEGRATION=1 node --test src/av1-alac-acceptance.integration.test.mjs
       - run: npm ci

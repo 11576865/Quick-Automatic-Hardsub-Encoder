@@ -152,7 +152,9 @@ test('optional real Native x264/x265 comparison reuses one Manual chart and refu
  assert.match(optional,/createManualTranscodeSession\(/);
  assert.match(optional,/await hooks\.validate/);
  assert.match(optional,/samplePlanVersion:'manual-ui-paired-windows-2x2-v1'/);
- assert.match(optional,/maxRequests:12/);
+ assert.match(optional,/manualCandidateSet\(activePolicy,geometry\)/);
+ assert.match(optional,/maxTotalSamples:maxRequests/);
+ assert.match(optional,/activePolicy===policy.value/);
  assert.match(optional,/audioEvidence:'estimated'/);
  assert.doesNotMatch(optional,/hooks\.applyQuality\(|hooks\.applyBitrate\(/);
  assert.match(css,/\.media-compare-controls/);

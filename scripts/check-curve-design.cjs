@@ -85,7 +85,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
         calibrationSample:async({codec,encoder,preset,multipass,quality,start,duration,mode='quality',bitrate})=>{
           const isVbr=mode==='bitrate';
           const rate=isVbr?bitrate:({18:1600000,28:850000,40:420000})[quality]*
-            (encoder==='libx265'?.91:1);
+            (encoder==='libx265'?.91:1)*(preset==='fast'?.9:1);
           const ssim=isVbr?.99:({18:.988,28:.95,40:.91})[quality]+
             (encoder==='libx265'?.004:0);
           return {encoder,ssim,duration,elapsedSeconds:.02,
@@ -191,6 +191,20 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.ok(['libx264','libx265'].includes(committed.encoder));
     assert.ok(+committed.bitrate>0);
     assert.equal(await page.locator('#taskCompareAdopt').isVisible(),false);
+    await page.locator('#taskComparePolicy').selectOption('codecs-presets');
+    assert.equal(await page.locator('#taskCompareCandidates li').count(),0,'candidate policy change clears old evidence');
+    await page.locator('#taskCompareStart').click();
+    await page.waitForFunction(()=>/编码器与 preset 实测完成|本次对比未形成/.test(document.querySelector('#taskCompareStatus')?.textContent||''));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/编码器与 preset 实测完成.*24 次/);
+    assert.equal(await page.locator('#taskCompareCandidates li').count(),4);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),1,'four-candidate comparison cannot auto-apply');
+    await page.locator('#taskCompareVerify').click();
+    await page.waitForFunction(()=>/VBR 短样已验证|VBR 验证失败/.test(document.querySelector('#taskCompareStatus')?.textContent||''));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/VBR 短样已验证/);
+    await page.locator('#taskCompareAdopt').click();
+    await page.waitForFunction(()=>/已按明确确认写入|未写入编码方案/.test(document.querySelector('#taskCompareStatus')?.textContent||''));
+    assert.equal(await page.evaluate(()=>window.__curveMock.raw.preset),'fast');
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),2);
     // Fail closed for a source/processing setting that cannot be reproduced
     // by the exact SDR/yuv420p native sample protocol.
     await page.evaluate(()=>{window.__curveMock.raw.pixelFormat='p010le';});
@@ -200,7 +214,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     ));
     assert.match(await page.locator('#taskCompareStatus').textContent(),/无额外滤镜/);
     assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),0);
-    assert.equal(await page.evaluate(()=>window.__curveMock.applied),1);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),2);
     console.log('Single curve + Manual native-mocked comparison: desktop, phone, keyboard, and fail-closed unsupported protocol passed');
   } finally {await page.close();}
 };

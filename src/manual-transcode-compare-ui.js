@@ -1,3 +1,4 @@
+import {manualCandidateSet} from './manual-candidate-set.js';
 // Optional Manual pure-transcode two-codec comparison. One shared chart,
 // one authoritative media-task state; no implicit encoder or rate adoption.
 import {compileTask} from './media-task.js';
@@ -8,10 +9,6 @@ import {buildSizeFrontierPlot,targetBytesAtEvidenceFraction,evidenceFractionForT
 import {renderRateDistortionSvg,plotXFromClientX,plotFractionAtX} from './curve-chart-svg.js';
 import {verifyManualNativeVbrCandidate} from './manual-transcode-vbr-verification.js';
 
-const CANDIDATES=[
-  {id:'h264-x264',codec:'h264',encoder:'libx264',preset:'medium'},
-  {id:'h265-x265',codec:'h265',encoder:'libx265',preset:'medium'}
-];
 const QUALITY_SETTINGS=[18,28,40];
 const reasonLabel={
   'insufficient-complete-branches':'至少两个编码器都需要两组完整的质量档位。',
@@ -31,10 +28,11 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   area.className='media-compare-controls';
   area.innerHTML=[
     '<div class="media-compare-heading"><div><strong>多编码器试压（实验性）</strong>',
-    '<small>Windows · x264 / x265 · 原尺寸 · 2 个时间窗口 × 3 档 CRF，共最多 12 次短片试压</small></div>',
+    '<small id="taskCompareScope">Windows · x264 / x265 · 原尺寸 · 2 个时间窗口 × 3 档 CRF，共最多 12 次短片试压</small></div>',
     '<div class="media-curve-actions"><button type="button" class="secondary" id="taskCompareStart">比较两个编码器</button>',
     '<button type="button" class="secondary" id="taskCompareStop" disabled>停止对比</button>',
     '<button type="button" class="secondary" id="taskCompareSingle" hidden>返回单编码器曲线</button></div></div>',
+    '<label>候选集合 <select id="taskComparePolicy"><option value="codecs">x264 / x265 · medium · 最多 12 次</option><option value="codecs-presets">x264 / x265 × medium / fast · 最多 24 次</option></select></label>',
     '<p class="note" id="taskCompareStatus" role="status">对比结果仅供查看，不能自动切换编码器。需要正式采用时仍应使用当前编码器的 VBR 短样验证。</p>',
     '<details id="taskCompareDetails" hidden><summary>查看同预算候选及采样覆盖</summary>',
     '<div id="taskCompareCandidates"></div></details>',
@@ -46,12 +44,14 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   insertBefore.before(area);
   const get=id=>area.querySelector('#'+id);
   const start=get('taskCompareStart'),stop=get('taskCompareStop'),back=get('taskCompareSingle'),verify=get('taskCompareVerify'),adopt=get('taskCompareAdopt');
+  const policy=get('taskComparePolicy');
+  let activePolicy='codecs',sessionCandidates=[];
   const status=get('taskCompareStatus'),details=get('taskCompareDetails'),rows=get('taskCompareCandidates');
   let active=false,running=false,aborted=false,disposed=false,session=null;
   let sourceKey='',sourceDuration=0,comparison=null,selectedBytes=null;
   let task=null,media=null,verifiedVbr=null;
   const isCurrent=()=>!!sourceKey &&
-    sourceKey===getSourceKey(hooks.settings(),{duration:sourceDuration});
+    sourceKey===getSourceKey(hooks.settings(),{duration:sourceDuration}) && activePolicy===policy.value;
   const message=text=>{if(!disposed)status.textContent=text;};
   const invalidate=()=>{
     // The SSIM target is a decision threshold, not a new video measurement.
@@ -65,16 +65,17 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     }
     aborted=true;
     session?.invalidate('current-source-or-task-changed');
-    session=null;comparison=null;selectedBytes=null;sourceKey='';sourceDuration=0;
+    session=null;sessionCandidates=[];comparison=null;selectedBytes=null;sourceKey='';sourceDuration=0;
     task=null;media=null;active=false;verifiedVbr=null;
     if(!disposed){
-      back.hidden=true;details.hidden=true;
+      back.hidden=true;details.hidden=true;rows.replaceChildren();
       message('来源或任务参数已改变；原多编码器证据已经作废。');
       renderControls();onRenderSingle();
     }
   };
   const renderControls=()=>{
     start.disabled=running||hooks.busy()||disposed;
+    policy.disabled=start.disabled;
     verify.hidden=!active;
     verify.disabled=running||hooks.busy()||!eligible();
     adopt.hidden=!hasCurrentVbr();
@@ -82,7 +83,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     stop.disabled=!running||aborted;
     back.disabled=running;
     back.hidden=!active;
-    start.textContent=running?'双编码器实测中…':'比较两个编码器';
+    start.textContent=running?'候选实测中…':policy.value==='codecs-presets'?'比较编码器与 preset':'比较两个编码器';
+    get('taskCompareScope').textContent='Windows · 原尺寸 · 2 个窗口 × 3 档 CRF · 最多 '+(policy.value==='codecs-presets'?24:12)+' 次短样；编码耗时预算不增加';
   };
   const eligible=()=>comparison?.ok && comparison.frontier?.ok &&
     session?.snapshot().ok && isCurrent() && !disposed;
@@ -212,7 +214,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     const frontier=comparison.frontier;
     const evaluation=frontier.evaluateTargetBytes(selectedBytes);
     if(evaluation?.status!=='within-evidence')return;
-    const selected=CANDIDATES.find(c=>c.id===evaluation.branchId);
+    const selected=sessionCandidates.find(c=>c.id===evaluation.branchId);
     const plannedBitrate=Math.round(evaluation.videoBitrate);
     const threshold=getTargetSsim?.();
     if(!selected||!(plannedBitrate>0)||!Number.isFinite(threshold)||
@@ -285,7 +287,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     // invalidates the short-window certificate; no curve may auto-commit.
     if(disposed||running||hooks.busy()||!hasCurrentVbr())return;
     const certificate=verifiedVbr;
-    const candidate=CANDIDATES.find(x=>x.id===certificate.candidateId);
+    const candidate=sessionCandidates.find(x=>x.id===certificate.candidateId);
     if(!candidate)return;
     running=true;aborted=false;renderControls();hooks.setBusy(true);
     try{
@@ -329,8 +331,10 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     chart.setAttribute('aria-label','选择实测范围内的目标视频码率');
     onRenderSingle();renderControls();
   });
+  policy.addEventListener('change',()=>{invalidate();renderControls();});
   start.addEventListener('click',async()=>{
     if(disposed||running||hooks.busy())return;
+    activePolicy=policy.value;
     aborted=false;running=true;active=true;
     session?.invalidate('new-comparison');session=null;comparison=null;verifiedVbr=null;
     selectedBytes=null;renderControls();onRenderSingle();
@@ -356,8 +360,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       const to=sourceTask.videoRange==='full'?Number(prepared.duration):Number(sourceTask.end);
       const windows=calibrationSampleStarts(from,to,2,2).map(start=>({start,duration:2}));
       if(windows.length!==2)throw Error('需要至少 4 秒可用视频以取得两个互不重叠的采样窗口');
-      const candidates=CANDIDATES.map(c=>({...c,outputWidth:geometry.width,
-        outputHeight:geometry.height,pixelFormat:'yuv420p'}));
+      const {candidates,maxRequests}=manualCandidateSet(activePolicy,geometry);
+      sessionCandidates=candidates;
       for(const candidate of candidates){
         const taskForCandidate=compileTask({...taskOptions,codec:candidate.codec,
           encoder:candidate.encoder,preset:candidate.preset,multipass:'disabled'},prepared);
@@ -370,7 +374,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       if(!unchanged())throw Error('来源或当前转码参数已改变');
       const maxEncodeSeconds=Math.min(180,Math.max(20,calibrationTimeBudget(duration)||90));
       const first=candidates[0],firstQuality=QUALITY_SETTINGS[0],firstWindow=windows[0];
-      message('建立真实原生来源和运行时身份；随后将执行 12 次短片采样。');
+      message('建立真实原生来源和运行时身份；随后将执行 '+maxRequests+' 次短片采样。');
       const firstSample=await hooks.calibrationSample({
         codec:first.codec,encoder:first.encoder,preset:first.preset,
         multipass:'disabled',quality:firstQuality,start:firstWindow.start,
@@ -390,12 +394,12 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         windows
       };
       session=createManualTranscodeSession({
-        protocol,candidates,maxCandidates:2,maxQualitySettings:3,
-        maxTotalSamples:12,maxEncodeSeconds
+        protocol,candidates,maxCandidates:candidates.length,maxQualitySettings:3,
+        maxTotalSamples:maxRequests,maxEncodeSeconds
       });
       if(!session.ok)throw Error('创建配对证据会话失败：'+session.reason);
       const sweep=await runManualPairedSweep({
-        session,branches:candidates,qualitySettings:QUALITY_SETTINGS,maxRequests:12,
+        session,branches:candidates,qualitySettings:QUALITY_SETTINGS,maxRequests,
         shouldStop:()=>!unchanged(),
         sampleNative:async({candidate,qualitySetting,window})=>{
           if(candidate.id===first.id&&qualitySetting===firstQuality&&
@@ -418,7 +422,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       if(!comparison.ok)throw Error(reasonLabel[comparison.reason]||comparison.reason);
       selectedBytes=Math.sqrt(comparison.frontier.minimumEvidenceTargetBytes*
         comparison.frontier.maximumEvidenceTargetBytes);
-      message('双编码器实测完成 · 12 次配对样本。曲线仅给出同一视频预算下的候选比较；不会自动采用推荐参数。');
+      message((candidates.length===2?'双编码器实测完成':'编码器与 preset 实测完成')+' · '+maxRequests+' 次配对样本。曲线仅给出同一视频预算下的候选比较；不会自动采用推荐参数。');
     }catch(error){
       comparison=null;
       message('本次对比不可用于推荐：'+(error?.message||String(error)));
