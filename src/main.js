@@ -27,6 +27,7 @@ import { SCENE_PLAN_VERSION, sceneProbeStarts, selectPairedSceneWindows } from '
 import { planPairedRefinement, appendMatchedSceneObservation } from './calibration-refinement.js';
 import { resolveGuidedSizePolicy } from './guided-size-policy.js';
 import { guidedWholeFileProjection, assessGuidedWholeFileBudget } from './guided-whole-file-budget.js';
+import {guidedAssDecisionScope} from './decision-reference-scope.js';
 import { completedGuidedNativeBudget, formatCompletedGuidedNativeBudget } from './native-guided-budget-recovery.js';
 
 const MAX_BYTES = 1024 ** 3;
@@ -90,6 +91,7 @@ const state = {
   resolutionRateDistortionModels: {},
   guidedOutputSize: null,
   sizeEnvelopeEnabled: false,
+  guidedModelScopes: {},
   qualityExplorationPoints: {},
   sizeBudgetTargetBytes: null,
   sizeFrontierPointerId: null,
@@ -1088,8 +1090,8 @@ function currentSizeFrontier(codec = null) {
     const projected=guidedWholeFileProjection(video,{media:state.media,audio,evidence});
     return projected.ok?projected:null;
   };
-  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
-    ':'+currentRuntimeEvidenceKey();
+  const sourceScope=currentGuidedDecisionScope();
+  if(!sourceScope)return null;
   const resolutionChoices=Object.values(state.resolutionRateDistortionModels)
     .filter(x=>x.model?.ok && x.metric===COMMON_REFERENCE_METRIC &&
       x.sourceScope===sourceScope);
@@ -1099,7 +1101,7 @@ function currentSizeFrontier(codec = null) {
       ? resolutionChoices.map(x=>({id:x.id,model:x.model,preset:x.preset,
         measurementScope:sourceScope+':'+COMMON_REFERENCE_METRIC}))
       : ['h264','h265','av1']
-        .filter(id=>state.softwareEncoders[id]!==false && state.rateDistortionModels[id]?.ok)
+        .filter(id=>state.softwareEncoders[id]!==false && state.rateDistortionModels[id]?.ok && state.guidedModelScopes[id]===sourceScope)
         .map(id=>({id,model:state.rateDistortionModels[id],
           preset:state.qualityCalibration[id]?.preset||profileFor(id,'balanced').preset,
           measurementScope:sourceScope}));
@@ -1118,7 +1120,8 @@ function currentSizeFrontier(codec = null) {
   const scaledModel=sizeId && codec===selected
     ? state.resolutionRateDistortionModels[selected+'@'+sizeId] : null;
   const model=scaledModel?.model?.ok && scaledModel.sourceScope===sourceScope
-    ? scaledModel.model : selected?state.rateDistortionModels?.[selected]:null;
+    ? scaledModel.model : selected && state.guidedModelScopes[selected]===sourceScope
+      ? state.rateDistortionModels?.[selected] : null;
   if(!model?.ok)return null;
   const frontier=createSizeQualityFrontier(model,budget);
   return finalize(frontier);
@@ -2192,6 +2195,16 @@ function currentSourceEvidenceKey() {
 
 function currentRuntimeEvidenceKey() {
   return runtimeEvidenceKey(state.nativeBackend || { backend: 'web' });
+}
+
+function currentGuidedDecisionScope() {
+  return guidedAssDecisionScope({
+    sourceKey:currentSourceEvidenceKey(),runtimeKey:currentRuntimeEvidenceKey(),
+    assText:state.activeAssText||state.assText,
+    fonts:state.effectiveFonts||[],fontBindings:state.fontBindings,
+    autoFontFallbacks:state.autoFontFallbacks,
+    renderer:'libass-'+(state.nativeBackend?.backend||'web')
+  });
 }
 
 function medianNumber(values) {
@@ -4122,6 +4135,7 @@ function chooseDefaultCodec(goal) {
 function invalidateQualityCalibration() {
   state.qualityCalibration = {};
   state.rateDistortionModels = {};
+  state.guidedModelScopes = {};
   state.resolutionRateDistortionModels = {};
   state.guidedOutputSize = null;
   state.sizeEnvelopeEnabled = false;
@@ -4529,7 +4543,8 @@ async function preparePairedQualitySamplePlan() {
   log('配对场景采样 '+plan.fingerprint+
     ' · 视频复杂度预检 '+plan.probedWindows+'/'+plan.candidateWindows+
     ' · '+(plan.riskAware?'场景风险辅助选择':'仅时间分层/字幕提示，非完整内容分析'));
-  return {...plan,source,subtitleSnapshot,windowSeconds:seconds,
+  return {...plan,source,subtitleSnapshot,
+    decisionScope:currentGuidedDecisionScope(),windowSeconds:seconds,
     preflightElapsedSeconds:(performance.now()-started)/1000};
 }
 
@@ -4540,15 +4555,17 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
   const starts = samplePlan?.starts || qualitySampleStarts(duration);
   const originalAss = state.activeAssText || state.assText;
   if(samplePlan && (samplePlan.source!==currentSourceEvidenceKey() ||
-    samplePlan.subtitleSnapshot!==originalAss)) throw Error('配对采样源证据已失效');
+    samplePlan.subtitleSnapshot!==originalAss ||
+    samplePlan.decisionScope!==currentGuidedDecisionScope())) throw Error('配对采样源或 ASS 渲染参考已失效');
   if(samplePlan && samplePlan.windowSeconds!==duration)
     throw Error('配对采样窗口长度不一致');
   const results = [];
 
   for (const start of starts) {
     if(samplePlan && (samplePlan.source!==currentSourceEvidenceKey() ||
-      samplePlan.subtitleSnapshot!==(state.activeAssText||state.assText)))
-      throw Error('配对采样源证据已失效');
+      samplePlan.subtitleSnapshot!==(state.activeAssText||state.assText) ||
+      samplePlan.decisionScope!==currentGuidedDecisionScope()))
+      throw Error('配对采样源或 ASS 渲染参考已失效');
     const sample = await requestNativeSample({
       codec,
       start,
@@ -4565,8 +4582,9 @@ async function evaluateQualityCandidate(codec, crf, preset, targetSsim = null, o
         Math.max(2,Math.ceil((calibrationTimeBudget(Number(state.media?.duration||0))||120)/Math.max(1,starts.length)))
     }, shiftAssForPreview(originalAss, start));
 
-    if(samplePlan && samplePlan.source!==currentSourceEvidenceKey())
-      throw Error('Native 样本返回后源已改变，拒绝旧证据');
+    if(samplePlan && (samplePlan.source!==currentSourceEvidenceKey() ||
+      samplePlan.decisionScope!==currentGuidedDecisionScope()))
+      throw Error('Native 样本返回后源或 ASS 渲染参考已改变，拒绝旧证据');
     const ssim=parseMeasuredQuality(sample?.ssim);
     const measuredDuration=parseMeasuredNumber(sample?.duration);
     const videoBytes=parseMeasuredNumber(sample?.totalVideoBytes);
@@ -4723,6 +4741,8 @@ async function calibrateCodecQuality(codec, target, budgetSeconds=null, outputSi
 // Optional second pass: only measured, same-position extra evidence may alter
 // the single envelope. Incomplete batches never update any public branch model.
 async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedAt,target,sourceScope}){
+  if(samplePlan?.decisionScope!==currentGuidedDecisionScope() || sourceScope!==samplePlan.decisionScope)
+    return {published:false,reason:'stale-guided-rendered-reference'};
   const frontier=currentSizeFrontier();
   if(frontier?.kind!=='multi-branch'){
     log('配对追加测量未执行：尚无共同体积证据。');
@@ -4818,9 +4838,11 @@ async function runBudgetedPairedRefinement({mode,samplePlan,budget,stageStartedA
         record.sampleFingerprint=plan.fingerprint;
         if(record.resolutionId==='source'){
           state.rateDistortionModels[record.codec]=p.model;
+          state.guidedModelScopes[record.codec]=sourceScope;
         }
       }else{
         state.rateDistortionModels[p.id]=p.model;
+        state.guidedModelScopes[p.id]=sourceScope;
         state.qualityCalibration[p.id].testedPoints=p.testedPoints;
       }
     }
@@ -4867,8 +4889,8 @@ async function runResolutionCalibration() {
   }
   const target=Number($('qualityTarget')?.value||.985);
   if(!(target>0&&target<1))return;
-  const sourceScope=sourceEvidenceKey(state.media,state.video?.name,Number(state.video?.size||0))+
-    ':'+currentRuntimeEvidenceKey();
+  const sourceScope=currentGuidedDecisionScope();
+  if(!sourceScope)throw Error('Guided ASS 渲染参考尚未就绪，不得开展曲线校准');
   state.qualityCalibrationBusy=true;
   state.sizeEnvelopeEnabled=false;
   state.resolutionRateDistortionModels={};
@@ -4884,6 +4906,7 @@ async function runResolutionCalibration() {
       const id=codec+'@'+size.id;
       try{
         const evidence=await calibrateCodecQuality(codec,target,eachBudget,size,samplePlan);
+        evidence.evidenceScope=sourceScope;
         const model=fitRateDistortionModel(evidence.testedPoints||[]);
         if(!model.ok)throw Error('有效实测点不足两个，不能构建体积—质量曲线');
         state.resolutionRateDistortionModels[id]={
@@ -4895,6 +4918,7 @@ async function runResolutionCalibration() {
         if(size.id==='source'){
           state.qualityCalibration[codec]=evidence;
           state.rateDistortionModels[codec]=model;
+          state.guidedModelScopes[codec]=sourceScope;
         }
         records.push({id,ok:true,pointCount:model.points.length});
         log('统一参考尺寸校准 '+id+' 成功：'+model.points.length+' 个码率观测点');
@@ -4962,6 +4986,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
   if (goal === 'efficiency'||compareForSize) {
     state.qualityCalibration = {};
     state.rateDistortionModels = {};
+    state.guidedModelScopes = {};
     state.resolutionRateDistortionModels = {};
     state.guidedOutputSize = null;
     state.qualityExplorationPoints = {};
@@ -4969,6 +4994,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
   } else {
     delete state.qualityCalibration[state.selectedCodec];
     delete state.rateDistortionModels[state.selectedCodec];
+    delete state.guidedModelScopes[state.selectedCodec];
     delete state.qualityExplorationPoints[state.selectedCodec];
   }
   state.qualityCalibrationTarget = target;
@@ -4980,8 +5006,10 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
     for (const codec of codecs) {
       try {
         state.qualityCalibration[codec] = await calibrateCodecQuality(codec, target, budgetPerCodec,null,samplePlan);
+        state.qualityCalibration[codec].evidenceScope=samplePlan.decisionScope;
         const rdModel = fitRateDistortionModel(state.qualityCalibration[codec].testedPoints || []);
         state.rateDistortionModels[codec] = rdModel.ok ? rdModel : null;
+        if(rdModel.ok)state.guidedModelScopes[codec]=samplePlan.decisionScope;
         if (rdModel.ok) {
           const knee = rdModel.estimateKnee();
           log(
@@ -4999,6 +5027,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
           error: error.message
         };
         delete state.rateDistortionModels[codec];
+        delete state.guidedModelScopes[codec];
         log('目标质量校准 ' + codec.toUpperCase() + ' 失败：' + error.message);
       }
       renderPlanOptions();
@@ -5008,8 +5037,7 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
       codecs.filter(id=>state.rateDistortionModels[id]?.ok).length>=2;
     const refinement=state.sizeEnvelopeEnabled
       ?await runBudgetedPairedRefinement({mode:'codec',samplePlan,budget,
-        stageStartedAt,target,sourceScope:sourceEvidenceKey(state.media,state.video?.name,
-          Number(state.video?.size||0))+':'+currentRuntimeEvidenceKey()})
+        stageStartedAt,target,sourceScope:samplePlan.decisionScope})
       :null;
     const values = codecs.map(codec => state.qualityCalibration[codec]);
     // Explicit size comparisons must not silently switch encoder merely
@@ -6057,6 +6085,7 @@ function buildEncodePlan(codec) {
     const calibration = state.qualityCalibration[codec];
     if (
       !calibration ||
+      calibration.evidenceScope!==currentGuidedDecisionScope() ||
       state.qualityCalibrationTarget !== target ||
       !calibration.meetsTarget
     ) {
