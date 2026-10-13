@@ -5464,6 +5464,9 @@ function mediaFromNativeProbe(p) {
   return {
     duration: Number(p.duration || 0),
     durationSource: 'native-ffprobe',
+    // Preserve Native seekability in the shared media contract; paired scene
+    // windows must not assume random access when the source forbids it.
+    seekable: p.seekable !== false,
     formatName: p.format || '',
     sourceName: state.video?.name || '',
     size: Number(p.statSize > 0 ? p.statSize : state.video?.size || 0),
