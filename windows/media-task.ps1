@@ -1,6 +1,12 @@
 ﻿# Structured output argument validation. No input URLs, file paths or shell commands.
 function Get-MediaTaskArgs($Task) {
     if ([int]$Task.version -notin @(1,2,3,4) -or $Task.operation -notin @('copy','transcode','hardsub')) { throw 'Unsupported media task.' }
+    $policy=[string]$Task.budgetPolicy
+    if($policy -and $policy -notin @('best-effort','strict-ceiling')){throw 'Unknown manual budget policy.'}
+    if($policy -eq 'strict-ceiling'){
+        $ceiling=0L
+        if($Task.operation -eq 'copy' -or $Task.rateMode -ne 'size' -or -not [long]::TryParse([string]$Task.sizeCeilingBytes,[ref]$ceiling) -or $ceiling -le 0 -or $ceiling -gt 10000000000000){throw 'Strict manual budget requires a valid whole-container byte ceiling and size rate mode.'}
+    }
     $start=[double]$Task.start; $end=[double]$Task.end
     if ([double]::IsNaN($start) -or [double]::IsInfinity($start) -or [double]::IsNaN($end) -or [double]::IsInfinity($end) -or $start -lt 0 -or $end -le $start) { throw 'Invalid task range.' }
     $values=@{

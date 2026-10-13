@@ -126,6 +126,9 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
     async readSelectedVideoInfo() {
       return JSON.stringify(await makeRequest(config, 'GET', '/api/selection/video'));
     },
+    async measureSourceBudget() {
+      return JSON.stringify(await makeRequest(config,'POST','/api/source-budget'));
+    },
     probeSelectedVideo() {
       const generation = ++inputProbeGeneration;
       void makeRequest(config, 'POST', '/api/probe')

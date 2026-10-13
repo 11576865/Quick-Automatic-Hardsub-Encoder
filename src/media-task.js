@@ -82,6 +82,10 @@ function applyExpectedDurations(t, media, outputFps = null) {
 
 export function compileTask(raw, media) {
   const t = { ...raw, version: TASK_VERSION };
+  // Measurements belong to the active source snapshot, never an imported config.
+  t.budgetEvidence = media.budgetEvidence;
+  t.budgetPolicy = raw.budgetPolicy || 'best-effort';
+  if (!['best-effort','strict-ceiling'].includes(t.budgetPolicy)) throw Error('未知体积交付策略');
   if (!['hardsub', 'transcode', 'copy'].includes(t.operation)) throw Error('未知任务模式');
 
   const number = (key, fallback, min, max, integer = false) => {
@@ -148,12 +152,13 @@ export function compileTask(raw, media) {
   const durationForBudget = t.expectedVideoDuration;
 
   if (t.rateMode === 'size') {
-    if (t.expectedAudioTracks > 0 && Math.abs(t.expectedAudioDuration - t.expectedVideoDuration) > 1e-6) {
-      throw Error('目标体积模式暂不支持视频与音频使用不同时间范围；请改用质量/码率模式或统一时间策略');
-    }
+    if (t.frames) throw Error('目标体积模式暂不支持输出总帧数上限');
     t.sizePlan = sizeBudget(t, durationForBudget, t.expectedAudioTracks);
     t.bitrate = t.sizePlan.videoRate;
+    t.sizeCeilingBytes = t.budgetPolicy === 'strict-ceiling' ? t.sizePlan.targetBytes : 0;
   }
+
+  if (t.budgetPolicy === 'strict-ceiling' && t.rateMode !== 'size') throw Error('严格体积上限要求目标体积模式');
 
   t.estimatedAudioRate = t.audioPlan ? (t.audioPlan.some(a=>['copy','flac'].includes(a.action))?null:t.audioPlan.reduce((sum,a)=>sum+(a.bitrate||0),0)) : t.audio === 'none' || t.expectedAudioTracks === 0
     ? 0
@@ -386,7 +391,9 @@ export function compileTask(raw, media) {
 
   applyExpectedDurations(t, media, outputFps);
 
-  if (t.rateMode !== 'quality' && t.estimatedAudioRate != null) {
+  if (t.sizePlan) {
+    t.estimatedBytes = t.sizePlan.estimatedBytes;
+  } else if (t.rateMode !== 'quality' && t.estimatedAudioRate != null) {
     const videoBytes = Number(t.bitrate) * t.expectedVideoTracks * t.expectedVideoDuration / 8;
     const audioBytes = Number(t.estimatedAudioRate) * t.expectedAudioDuration / 8;
     t.estimatedBytes = videoBytes + audioBytes;

@@ -234,6 +234,7 @@ class EncodeService : Service() {
         val fontsDir = File(jobDir, "fonts")
         var stagedInput: File? = null
         var safUrl: String? = null
+        var budgetRejected = false
 
         try {
             updateStatus(jobId, "staging", "准备输入、字幕和字体", 0.0)
@@ -681,8 +682,8 @@ class EncodeService : Service() {
                     val expected = if (action == "copy") audioStreams[track.getInt("sourceOrdinal")].getCodec() else if (action == "libopus") "opus" else action
                     require(outputAudios[index].getCodec() == expected) { "Planned audio codec differs from output" }
                     val properties = outputAudios[index].getAllProperties()
-                    if (track.has("channels")) require(properties.optInt("channels") == track.getInt("channels")) { "Planned audio channels differ" }
-                    if (track.has("sampleRate")) require(properties.optInt("sample_rate") == track.getInt("sampleRate")) { "Planned audio sample rate differs" }
+                    if (track.has("channels")) require(properties?.optInt("channels") == track.getInt("channels")) { "Planned audio channels differ" }
+                    if (track.has("sampleRate")) require(properties?.optInt("sample_rate") == track.getInt("sampleRate")) { "Planned audio sample rate differs" }
                 }
             }
             updateStatus(jobId, "validating", "正在完整扫描视频 packet", 0.990)
@@ -766,6 +767,9 @@ class EncodeService : Service() {
             checkCancelled()
             updateStatus(jobId, "validating", "完整解码通过，正在计算成品 SHA-256", 0.999)
             updateNotification("正在计算成品校验值…", 99)
+            val budgetCeiling = NativeJobStore.strictBudgetCeiling(task)
+            budgetRejected = budgetCeiling > 0L && output.length() > budgetCeiling
+            NativeJobStore.requireBudgetBytes(output.length(), budgetCeiling)
             val sha256 = sha256(output)
             val suggestedName = request.optString("suggestedName", "hardsub_" + codec + "." + NativeJobStore.outputExtension(this, jobId))
 
@@ -848,6 +852,7 @@ class EncodeService : Service() {
                     .put("audioDecodeSeconds", audioDecode?.second ?: JSONObject.NULL)
                     .put("outputBytes", output.length())
                     .put("sha256", sha256)
+                    .put("sizeCeilingBytes", budgetCeiling)
                     .put("suggestedName", suggestedName)
                     .put("codec", codec)
                     .put("mode", mode)
@@ -868,7 +873,9 @@ class EncodeService : Service() {
                         .put("message", "原生压制已取消")
                 )
             } else {
-                output.delete()
+                // A verified but oversized full container stays private and
+                // blocked from export; do not destroy it to meet a byte budget.
+                if (!budgetRejected) output.delete()
                 fail(jobId, e.message ?: e.javaClass.simpleName)
             }
         } finally {

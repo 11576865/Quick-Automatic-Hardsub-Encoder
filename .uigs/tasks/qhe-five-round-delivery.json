@@ -1,8 +1,8 @@
 {
   "goal": "Implement most researched QHE workflows including VVC and task-centered UI within five work units",
   "status": "agent_execution_complete_pending_external_validation",
-  "round": 2,
-  "current_bounded_work_unit": "per-stream audio/auxiliary output plan and rational FPS history repair",
+  "round": 3,
+  "current_bounded_work_unit": "whole-file payload ledger, strict byte ceiling at completion/export, previous Android/mobile CI repairs",
   "completed_units": [
     {
       "round": 1,
@@ -38,28 +38,61 @@
       "build": "pass",
       "independent_review": "5 Important findings addressed",
       "windows_android_browser": "pending CI"
+    },
+    {
+      "round": 3,
+      "implementation": "complete",
+      "scope": "whole-container payload ledger and completion/export strict gate; Android nullability and responsive sizing repairs",
+      "local_node_tests": {
+        "pass": 204,
+        "skipped": 7,
+        "failed": 0
+      },
+      "real_ffmpeg_integration": {
+        "pass": 5,
+        "failed": 0
+      },
+      "build": "pass",
+      "independent_review": "three Important findings addressed and duplicate BOM repaired",
+      "windows_android_browser": "pending CI",
+      "limits": [
+        "Windows-only source-cost measurement",
+        "trim-specific copied stream costs and FLAC re-encode unknown",
+        "SAF source mutation/readback/provider cleanup field tests pending"
+      ]
     }
   ],
   "next_units": [
-    "whole-file budgeting and artifact gate",
     "task-centered responsive UI",
     "integration and delivery acceptance"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
   "pr": 105,
-  "latest_durable_commit": "bba86515185d6d204ae653453244a27b5798b9e5",
+  "latest_durable_commit": "ac42de8",
   "external_validation_states": {
-    "windows_vvc": "Pending rerun after PS array reader correction",
-    "browser": "Round 2 pending",
+    "windows_vvc": "round 2 Windows smoke passed; VVC unsupported is separately reported by runtime fixture",
+    "browser": "round 2 failed mobile VVC horizontal overflow; intrinsic sizing repair implemented, round 3 rerun pending",
     "physical_device": "Pending",
-    "windows_stream_plan": "Pending",
-    "android_stream_plan": "Pending compile/runtime"
+    "windows_stream_plan": "round 2 runtime acceptance passed",
+    "android_stream_plan": "round 2 compile failed nullable output properties; safe access repair implemented, round 3 rerun pending",
+    "android_emulator": "round 2 failure; rerun pending",
+    "windows_budget": "Round 3 pending: source packet ledger/manual strict artifacts/export refusal",
+    "android_budget": "Round 3 pending: Kotlin compile and instrumentation byte/contract guards",
+    "browser_budget": "Round 3 pending: DOM budget/save/config/source/mode-switch fixtures",
+    "round3_ci": "Pending after publication"
   },
   "blockers": [],
-  "updated_timestamp": "2026-10-13T00:23:42.135513+00:00",
+  "updated_timestamp": "2026-10-13T03:09:57.577574+00:00",
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"
+  },
+  "publication": {
+    "status": "authorized_publication_in_progress",
+    "destination": "11576865/Quick-Automatic-Hardsub-Encoder",
+    "branch": "feat/qhe-five-round-delivery-20261013",
+    "authorization": "User explicitly authorized public publication of round 3 to named repository and branch, PR #105.",
+    "method": "GitHub connected API; command-line Git lacks HTTPS credentials"
   }
 }

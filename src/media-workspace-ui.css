@@ -1816,3 +1816,9 @@ body.media-frame-lightbox-open {
 .media-clip-queue-header-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center;}
 .media-clip-queue-row-editing{outline:2px solid rgba(130,200,223,.7);outline-offset:0;background:#1a2b38!important;}
 .media-clip-queue #taskCancelClipEdit[hidden]{display:none!important;}
+
+/* Intrinsic input/label widths must not enlarge the phone viewport. */
+.media-track-panel .task-grid > label,.media-core-decision-grid > label {min-width:0;overflow-wrap:anywhere}
+.media-track-panel input,.media-core-decision-grid input,.media-audio-plan-row input,.media-audio-plan-row select {box-sizing:border-box;max-width:100%}
+.media-audio-plan,.media-audio-plan-rows,.media-audio-plan-row {min-width:0}
+.task-budget-ledger {font-size:.8rem;line-height:1.6;overflow-wrap:anywhere;margin:8px 0}

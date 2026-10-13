@@ -1,3 +1,4 @@
+import {outputReport} from './media-planning.js';
 import { validateEncoderSupport, vvcCapability } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
 import { outputFileName, resolveOutputContainer } from './media-container.js';
@@ -6395,7 +6396,13 @@ mountMediaWorkspace({
     if(state.nativeJobId)globalThis.NativeHardsub?.cancelNativeEncode(state.nativeJobId);
     else void state.engine.api?.FFmpegKit?.cancel();
   },
+  measureBudget: async () => {
+    const bridge=globalThis.NativeHardsub;
+    if(!bridge?.__windowsNative||!bridge.measureSourceBudget)throw Error('当前仅 Windows Native 提供完整源流计量');
+    return JSON.parse(await bridge.measureSourceBudget());
+  },
   save: completed => {
+    if(completed.task?.budgetPolicy==='strict-ceiling' && outputReport(completed.task,completed,0).deliveryAllowed!==true)throw Error('严格成品字节上限未通过');
     if(completed.jobId){
       const bridge=globalThis.NativeHardsub;
       if(!bridge?.requestNativeExport)throw new Error('Native 成品保存桥不可用');
@@ -6454,7 +6461,7 @@ mountMediaWorkspace({
             speed:Number(result.speed||0),
             actualStart:Number(result.actualStart??started.actualStart??task.start??0)
           });
-          if(result.state==='completed')return {jobId:started.jobId,name,outputBytes:result.outputBytes,outputDuration:result.outputDuration,verified:true,actualStart:result.actualStart??started.actualStart??task.start};
+          if(result.state==='completed')return {task,jobId:started.jobId,name,outputBytes:result.outputBytes,outputDuration:result.outputDuration,verified:true,actualStart:result.actualStart??started.actualStart??task.start};
           if(['failed','cancelled'].includes(result.state))throw new Error(result.error||result.state);
           if(manualCancelRequested)bridge.cancelNativeEncode(started.jobId);
           await sleepMs(700);
@@ -6481,6 +6488,6 @@ mountMediaWorkspace({
     progress(.99,'正在验证成品…',{state:'validating',timeSec:task.expectedDuration,duration:task.expectedDuration,speed:0});
     const check=await state.engine.scanEncodedPackets(result.blob,task.expectedDuration,{task,allowShortAudio:true,expectedAudioTracks:task.expectedAudioTracks,tolerance:task.operation==='copy'?2:undefined});
     if(!check.ok)throw new Error('成品轨道或时长验证未通过：'+JSON.stringify(check));
-    return {blob:result.blob,name,verified:true,actualStart:task.start};
+    return {task,blob:result.blob,name,verified:true,actualStart:task.start};
   }
 });

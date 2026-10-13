@@ -19,6 +19,26 @@ import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
 class StreamPlanV4RuntimeTest {
+    @Test
+    fun strictWholeContainerBudgetContract() {
+        val task = JSONObject().put("operation", "transcode").put("rateMode", "size")
+            .put("budgetPolicy", "strict-ceiling").put("sizeCeilingBytes", 100L)
+        assertEquals(100L, NativeJobStore.strictBudgetCeiling(task))
+        NativeJobStore.requireBudgetBytes(100L, 100L)
+        fun rejects(block: () -> Unit) {
+            var rejected = false
+            try { block() } catch (_: IllegalArgumentException) { rejected = true }
+            assertTrue("invalid strict artifact or contract was accepted", rejected)
+        }
+        rejects { NativeJobStore.requireBudgetBytes(101L, 100L) }
+        rejects { NativeJobStore.requireBudgetBytes(0L, 100L) }
+        rejects { NativeJobStore.strictBudgetCeiling(JSONObject(task.toString()).put("sizeCeilingBytes", 1.5)) }
+        rejects { NativeJobStore.strictBudgetCeiling(JSONObject(task.toString()).put("rateMode", "quality")) }
+        rejects { NativeJobStore.strictBudgetCeiling(JSONObject(task.toString()).put("operation", "copy")) }
+        rejects { NativeJobStore.strictBudgetCeiling(JSONObject(task.toString()).put("budgetPolicy", "retry")) }
+        assertEquals(0L, NativeJobStore.strictBudgetCeiling(null))
+    }
+
     private fun readAsset(name: String): String {
         val assets = InstrumentationRegistry.getInstrumentation().context.assets
         return assets.open(name).bufferedReader(Charsets.UTF_8).use { it.readText() }

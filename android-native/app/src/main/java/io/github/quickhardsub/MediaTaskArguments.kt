@@ -57,6 +57,7 @@ object MediaTaskArguments {
     )
     fun validate(task: JSONObject): List<String> {
         require(task.optInt("version") in 1..4) { "Unsupported media task version" }
+        NativeJobStore.strictBudgetCeiling(task)
         val operation = task.getString("operation")
         require(operation in setOf("copy", "transcode", "hardsub"))
         val outputFormat = task.optString("outputFormat", "")

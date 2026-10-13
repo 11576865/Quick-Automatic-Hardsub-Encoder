@@ -693,6 +693,53 @@ function Get-ProbeMedia {
     }
 }
 
+# Stream packets with constant memory; stop on deadline/packet count instead of
+# retaining millions of JSON packet objects. Evidence describes full-source only.
+function Measure-AuxiliaryPackets([string]$Video,[string]$Kind) {
+    $p=New-Object Diagnostics.Process
+    $p.StartInfo.FileName=$script:Ffprobe
+    $p.StartInfo.Arguments='-v error -select_streams '+$Kind+' -show_packets -show_entries packet=stream_index,size -of csv=p=0 '+(Quote-NativeArg $Video)
+    $p.StartInfo.UseShellExecute=$false;$p.StartInfo.CreateNoWindow=$true
+    $p.StartInfo.RedirectStandardOutput=$true;$p.StartInfo.RedirectStandardError=$true
+    $clock=[Diagnostics.Stopwatch]::StartNew();$totals=@{};$count=0
+    try{
+        [void]$p.Start();$stderr=$p.StandardError.ReadToEndAsync()
+        while($true){
+            $lineTask=$p.StandardOutput.ReadLineAsync()
+            while(-not $lineTask.Wait(100)){if($clock.Elapsed.TotalSeconds -gt 30){throw 'Source cost scan timed out; costs remain unknown.'}}
+            if($clock.Elapsed.TotalSeconds -gt 30){throw 'Source cost scan timed out; costs remain unknown.'}
+            $line=$lineTask.Result;if($null -eq $line){break}
+            if(++$count -gt 2000000){throw 'Source packet scan exceeds bounded work limit.'}
+            if($line -notmatch '^(\d+),(\d+)(?:,.*)?$'){throw 'Malformed packet cost; costs remain unknown.'}
+            $index=[int]$Matches[1];$bytes=[long]$Matches[2]
+            if(-not $totals.ContainsKey($index)){$totals[$index]=0L}
+            $totals[$index]+=$bytes
+        }
+        if(-not $p.WaitForExit(1000) -or $p.ExitCode -ne 0){throw 'Source packet scan failed.'}
+        return $totals
+    }finally{try{if(-not $p.HasExited){$p.Kill();$p.WaitForExit()}}catch{};$p.Dispose()}
+}
+function Get-SourceBudgetEvidence {
+    $video=Get-SelectedPath 'video';if(-not $video){throw 'No video selected.'}
+    foreach($j in $script:Jobs.Values){if($j.State -in @('encoding','validating')){throw 'Cannot scan costs while a job is active.'}}
+    $before=Get-Item -LiteralPath $video
+    $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_streams -show_entries stream=index,codec_type,extradata_size -of json '+(Quote-NativeArg $video)) '' 10
+    if($probe.ExitCode -ne 0){throw 'Source stream scan failed.'}
+    $streams=@(($probe.StdOut | ConvertFrom-Json).streams)
+    if($streams.Count -gt 64){throw 'Source stream count exceeds measurement limit.'}
+    $audio=Measure-AuxiliaryPackets $video 'a';$sub=Measure-AuxiliaryPackets $video 's'
+    $after=Get-Item -LiteralPath $video
+    if($after.Length -ne $before.Length -or $after.LastWriteTimeUtc.Ticks -ne $before.LastWriteTimeUtc.Ticks){throw 'Source changed while measuring; costs remain unknown.'}
+    $script:BudgetMeasurement=[pscustomobject]@{Id=[guid]::NewGuid().ToString('N');Path=$video;Length=$after.Length;WriteTicks=$after.LastWriteTimeUtc.Ticks}
+    return [pscustomobject]@{
+        measurementId=$script:BudgetMeasurement.Id
+        version=1;scope='full-source'
+        audioPacketBytes=@($streams | Where-Object {$_.codec_type -eq 'audio'} | ForEach-Object {if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}})
+        subtitlePacketBytes=@($streams | Where-Object {$_.codec_type -eq 'subtitle'} | ForEach-Object {if($sub.ContainsKey([int]$_.index)){$sub[[int]$_.index]}else{$null}})
+        attachmentBytes=@($streams | Where-Object {$_.codec_type -eq 'attachment'} | ForEach-Object {if($null -ne $_.extradata_size){[long]$_.extradata_size}else{$null}})
+    }
+}
+
 function Get-SelfTest {
     $enc = @($script:Capabilities.Encoders)
     $filters = if($script:Ffmpeg){(Invoke-BridgeTool $script:Ffmpeg '-hide_banner -filters').StdOut}else{''}
@@ -1137,6 +1184,11 @@ function Start-MediaTaskJob($Body) {
     $outputArgs=Get-MediaTaskArgs $task
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
+    if($task.budgetEvidence){
+        $item=Get-Item -LiteralPath $video
+        $measured=$script:BudgetMeasurement
+        if(-not $measured -or [string]$task.budgetEvidence.measurementId -ne $measured.Id -or $video -ne $measured.Path -or $item.Length -ne $measured.Length -or $item.LastWriteTimeUtc.Ticks -ne $measured.WriteTicks){throw 'Budget measurement does not match current source; measure again.'}
+    }
     $probe=Get-ProbeMedia
     if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
     if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
@@ -1220,6 +1272,7 @@ function Start-MediaTaskJob($Body) {
         Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
         Duration=$duration;ExpectedVideoDuration=$videoDuration;ExpectedAudioDuration=$audioDuration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;Source=$video;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
+        StrictBudget=([string]$task.budgetPolicy -eq 'strict-ceiling');BudgetCeiling=[long]$task.sizeCeilingBytes;StrictVerifiedHash='';StrictVerifiedWriteTicks=0L;BudgetRejected=$false
         StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey='';VvcValidating=$false
     }
     $script:Jobs[$jobId]=$job
@@ -1431,7 +1484,7 @@ function Ensure-CompletedJobHistory($Job) {
 function Clear-IncompleteJobStaging($Job) {
     # Call only after process exit/disposal. Completed staging belongs to the
     # pending save operation and must survive cancellation retries.
-    if($Job.State -notin @('failed','cancelled')){return}
+    if($Job.State -notin @('failed','cancelled') -or $Job.BudgetRejected){return}
     try {
         if($Job.Work -and (Test-Path -LiteralPath $Job.Work)){
             Remove-Item -LiteralPath $Job.Work -Recurse -Force -ErrorAction Stop
@@ -1521,7 +1574,7 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
     # The completed state is only valid while its private staged *container*
     # stays within the user's explicit ceiling. An earlier successful check
     # cannot authorize a later, modified output or an export copy.
-    if(-not $Job.StrictBudget -or $Job.Task){return $true}
+    if(-not $Job.StrictBudget){return $true}
     $limit=[long]$Job.BudgetCeiling
     $actual=0L
     if(Test-Path -LiteralPath $Job.Output -PathType Leaf){
@@ -1560,6 +1613,7 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
             return $false
         }
     }
+    if($Job.Task -and $actual -gt $limit -and $limit -gt 0){$Job.BudgetRejected=$true}
     $Job.State='failed'
     $Job.Error=if($actual -gt $limit){
         'Strict container byte ceiling exceeded: actual '+$actual+
@@ -1567,8 +1621,7 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
     }else{
         'Strict container byte verification failed: staged output missing, empty or invalid ceiling.'
     }
-    Remove-Item -LiteralPath $Job.Output -Force -ErrorAction SilentlyContinue
-    Clear-IncompleteJobStaging $Job
+    if(-not $Job.Task){Remove-Item -LiteralPath $Job.Output -Force -ErrorAction SilentlyContinue;Clear-IncompleteJobStaging $Job}
     Write-BridgeLog ('Strict size guard rejected job '+$Job.Id+': '+$Job.Error) 'WARN'
     return $false
 }
@@ -1892,6 +1945,7 @@ function Handle-Request($Request) {
             $p=Get-SelectedPath 'ass';if(-not $p){throw 'No ASS selected.'};$item=Get-Item -LiteralPath $p
             Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($p))};return
         }
+        if($Request.Method -eq 'POST' -and $path -eq '/api/source-budget'){Send-HttpJson $Request 200 (Get-SourceBudgetEvidence);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/probe'){Send-HttpJson $Request 200 (Get-ProbeMedia);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/import/bink2'){Send-HttpJson $Request 200 (Start-Bink2ImportJob);return}
         if($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)$'){Send-HttpJson $Request 200 (Get-Bink2ImportJobStatus $Matches[1]);return}

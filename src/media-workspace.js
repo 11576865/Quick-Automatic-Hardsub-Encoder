@@ -187,8 +187,8 @@ export function mountMediaWorkspace(hooks) {
   <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">不确定时直接保留推荐方案；其他参数按需展开。</p><div class="task-grid media-core-decision-grid">
   ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1'],['h266','H.266 / VVC · 实验']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
   ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ（通常越低越保真）','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
-  ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}
-  </div><p id="taskVvcCapability" class="note" role="status"></p><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
+  ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}${select('budgetPolicy','体积交付策略',[['best-effort','目标体积 · 允许偏差'],['strict-ceiling','严格字节上限 · 超限禁止保存']])}
+  </div><p id="taskBudgetLedger" class="task-budget-ledger" role="status">复制流与附件成本未测量。</p><button type="button" id="taskMeasureBudget" class="secondary">测量源流与附件成本</button><p id="taskVvcCapability" class="note" role="status"></p><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
   ${check('legacyFps','兼容旧 FFmpeg（使用 -vsync）')}
   ${input('maxrate','最大码率（bit/s）','编码器默认')}${input('bufsize','码率缓冲区（bit）','编码器默认')}
   ${select('fpsMode','帧率策略',[['auto','编码器自动'],['passthrough','保持源时间戳'],['cfr','恒定帧率 CFR'],['vfr','可变帧率 VFR']])}${input('fps','目标帧率','例如 24 或 24000/1001；留空保持')}${input('frames','输出总帧数上限','留空表示不限；设置后需关闭音频')}
@@ -300,6 +300,7 @@ export function mountMediaWorkspace(hooks) {
     get('quality').dispatchEvent(new Event('input',{bubbles:true}));
   });
   get('quality').addEventListener('input', syncQualityRange);
+  let budgetEvidence=null,budgetSourceIdentity='';
   let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   const clips=[],clipList=section.querySelector('#taskClipQueueList');
   const clipPanel=section.querySelector('#taskClipQueuePanel');
@@ -1372,6 +1373,7 @@ export function mountMediaWorkspace(hooks) {
     const selectedVideos=String(raw.videoStreams||'0').trim().toLowerCase()==='all'?'全部视频流':'视频 #'+String(raw.videoStreams||'0').split(',').map(x=>x.trim()).filter(Boolean).join(' / #');
     const rangeSummary='视频'+(raw.videoRange==='full'?'完整':'IN/OUT')+' · 音频'+(raw.audioRange==='full'?'完整':'IN/OUT');
     section.querySelector('#taskPlanOutput').textContent=selectedVideos+' · '+size+' · '+audio+' · '+container;
+    if(task?.sizePlan){const b=task.sizePlan;section.querySelector('#taskBudgetLedger').textContent='目标 '+formatSize(b.targetBytes)+' · 固定流/附件 '+formatSize(b.fixedPayloadBytes)+' · 编码音频 '+formatSize(b.encodedAudioBytes)+' · 封装余量 '+formatSize(b.containerReserveBytes)+' · 视频 '+(b.videoRate/1e6).toFixed(3)+' Mbps';}
     section.querySelector('#taskPlanNote').textContent=note+' '+rangeSummary+'。'+(task?.estimatedBytes>0?' 当前任务估计数据量 '+formatSize(task.estimatedBytes)+'。':'');
   };
   const renderContainerDecision = task => {
@@ -1443,7 +1445,7 @@ export function mountMediaWorkspace(hooks) {
         ? (stateName==='save_failed'?'重试保存上一成品':stateName==='saved'?'再次保存上一成品':'保存上一成品')
         : stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
     save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
-    save.disabled=busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
+    save.disabled=lastReport?.deliveryAllowed===false||busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
     run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave;
     section.dataset.completedStale=previousResult?'true':'false';
   };
@@ -1660,6 +1662,7 @@ export function mountMediaWorkspace(hooks) {
       const nextMode=button.dataset.mediaMode;
       if(get('operation').value!==nextMode)markCompletedAsPrevious('operation');
       get('operation').value = nextMode;
+      if(nextMode==='copy')get('budgetPolicy').value='best-effort';
       updateMode();
       updateRate();
     });
@@ -1706,6 +1709,7 @@ export function mountMediaWorkspace(hooks) {
     const copy=get('operation').value==='copy';
     const vvc=get('codec').value==='h266';
     qualityField.firstChild.textContent=vvc?'量化参数 QP（0–63，越低通常越保真）':'质量值 CRF / CQ（通常越低越保真）';
+    setRateControl('budgetPolicy',!copy && mode==='size');
     get('rateMode').querySelector('option[value="quality"]').textContent=vvc?'固定量化参数 QP':'固定质量 CRF / CQ';
     setRateControl('quality', !copy && mode==='quality');
     setRateControl('bitrate', !copy && mode==='bitrate');
@@ -1723,7 +1727,8 @@ export function mountMediaWorkspace(hooks) {
     updateRate();audioStreamPlan.refresh();
     syncAudioPlaybackWarning();
   };
-  const mediaInfoListener = () => { audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
+  const invalidateBudgetEvidence = () => {if(budgetSourceIdentity!==hooks.videoIdentity?.()){budgetEvidence=null;section.querySelector('#taskBudgetLedger').textContent='来源已变更；复制流与附件成本未测量。';}};
+  const mediaInfoListener = () => { invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
@@ -1750,7 +1755,7 @@ export function mountMediaWorkspace(hooks) {
     syncQualityRange();transcodeCurves.refresh();
   };
   get('encoder').onchange=()=>{updatePreset();updateRate();};
-  get('operation').onchange=()=>{updateMode();updateRate();};
+  get('operation').onchange=()=>{if(get('operation').value==='copy')get('budgetPolicy').value='best-effort';updateMode();updateRate();};
   get('videoRange').onchange=()=>{updateMode();renderPlanSummary(activeTask);};
   get('audioRange').onchange=()=>renderPlanSummary(activeTask);
   get('subtitleRange').onchange=()=>renderPlanSummary(activeTask);
@@ -1760,7 +1765,7 @@ export function mountMediaWorkspace(hooks) {
   const platformTimer=setInterval(()=>{const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
   const prepare=async()=>{
     const raw=read(),media=await hooks.prepare(raw.operation);
-    const task=compileTask(raw,media);
+    const task=compileTask({...raw,budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined});
     await hooks.validate?.(task);
     renderContainerDecision(task);
     syncAudioPlaybackWarning(task,media);
@@ -1901,9 +1906,26 @@ export function mountMediaWorkspace(hooks) {
     }
   };
 
+  section.querySelector('#taskMeasureBudget').onclick=async()=>{
+    if(busy||hooks.busy())return;
+    const button=section.querySelector('#taskMeasureBudget'),ledger=section.querySelector('#taskBudgetLedger');
+    const identity=hooks.videoIdentity?.();
+    if(!hooks.measureBudget||!identity){ledger.textContent='当前后端未提供成本计量；可选择 AAC / Opus 并关闭未测流。';return;}
+    busy=true;hooks.setBusy(true);button.disabled=true;syncTaskActions();
+    ledger.textContent='正在扫描完整源文件，最多 80 秒；不会重编码…';
+    try{
+      const result=await hooks.measureBudget();
+      if(identity!==hooks.videoIdentity?.())throw Error('测量期间来源变更，结果已丢弃');
+      if(result?.version!==1||result.scope!=='full-source')throw Error('成本测量格式无效');
+      budgetEvidence=result;budgetSourceIdentity=identity;
+      ledger.textContent='完整源流成本已测量。点击“验证当前方案”查看预算分项；裁切复制流和 FLAC 重编码仍未知。';
+    }catch(e){budgetEvidence=null;ledger.textContent='成本仍未知：'+e.message;}
+    finally{busy=false;hooks.setBusy(false);button.disabled=false;syncTaskActions();}
+  };
   section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('当前方案验证通过，可以直接开始；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};
   section.querySelector('#taskSave').onclick=async()=>{
+    if(lastReport?.deliveryAllowed===false){status('成品超限或字节数未知，禁止保存。请增大预算、降低视频码率或调整流计划后重新执行。');return;}
     if(!completed||clipBatchRunning||busy||hooks.busy()||section.dataset.taskState==='saving')return;
     setTaskState('saving');
     syncClipQueue();
@@ -1953,6 +1975,7 @@ export function mountMediaWorkspace(hooks) {
       section.querySelector('#taskMediaTime').textContent=formatTaskClock(task.expectedDuration)+' / '+formatTaskClock(task.expectedDuration);
       section.querySelector('#taskElapsed').textContent=formatTaskClock((performance.now()-taskStartedAt)/1000);
       section.querySelector('#taskEta').textContent='处理完成';
+      if(!lastReport.deliveryAllowed){setTaskState('failed');status('成品超限或字节数未知，禁止交付。请增大预算、降低视频码率或调整流计划后重新执行；不会自动重编码。');return;}
       setTaskState('verified');
       syncOutputVerificationAvailability();
       status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 尚未保存到你的文件夹。下一步：保存成品。');
@@ -1977,11 +2000,11 @@ export function mountMediaWorkspace(hooks) {
     if(busy||hooks.busy())return;
     busy=true;hooks.setBusy(true);const raw=read();const results=section.querySelector('#taskSampleResults');
     try{
-      const media=await hooks.prepare(raw.operation),full=compileTask(raw,media),range=sampleSettings(raw,media);
+      const media=await hooks.prepare(raw.operation),full=compileTask({...raw,budgetPolicy:raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined}),range=sampleSettings(raw,media);
       results.replaceChildren();for(const url of sampleUrls)URL.revokeObjectURL(url);sampleUrls=[];
       for(const control of form.elements)control.disabled=true;section.querySelector('#taskCancel').disabled=false;
       for(const adjustment of [-1,0,1]){
-        const options={...raw,...range,frames:'',twoPass:false,keepAttachments:false,keepSubtitles:false,keepChapters:false};
+        const options={...raw,budgetPolicy:'best-effort',...range,frames:'',twoPass:false,keepAttachments:false,keepSubtitles:false,keepChapters:false};
         if(raw.rateMode==='quality')options.quality=sampleQualityTrial(full,adjustment).quality;
         else {options.rateMode='bitrate';options.bitrate=Math.round(Number(full.bitrate)*(1+adjustment*.2));}
         const task=compileTask(options,media);await hooks.validate?.(task);const started=performance.now();

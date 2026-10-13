@@ -40,6 +40,34 @@ try {
     if(Test-Path $stderr){Get-Content -Raw $stderr|Write-Host}
     throw 'Guided bridge failed to start'
   }
+  # Manual and guided jobs share the completed/export byte guard.
+  $cost=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/source-budget" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 80
+  if($cost.scope -ne 'full-source' -or @($cost.audioPacketBytes).Count -ne 2 -or [long]$cost.audioPacketBytes[0] -le 0){throw 'Native whole-source cost evidence is incomplete.'}
+  $sum=0L
+  foreach($line in (& ffprobe -v error -select_streams a:0 -show_packets -show_entries packet=size -of csv=p=0 $source)){$sum += [long]$line}
+  if($sum -ne [long]$cost.audioPacketBytes[0]){throw 'Native packet-byte ledger differs from independent FFprobe scan.'}
+  foreach($ceiling in @(100L,500000L)){
+    $task=@{version=4;operation='transcode';start=0;end=2;twoPass=$false;rateMode='size';budgetPolicy='strict-ceiling';sizeCeilingBytes=$ceiling;expectedAudioTracks=0
+      outputFormat='matroska';outputExtension='mkv';videoStreams=@(0);videoRange='full';audio='none';audioRange='full';keepSubtitles=$false;budgetEvidence=$cost
+      outputArgs=@('-map','0:v:0','-sn','-map_metadata','-1','-map_chapters','-1','-c:v','libx264','-preset','medium','-b:v','350000','-pix_fmt','yuv420p','-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0')}
+    $body=@{request=@{task=$task;expectedDuration=2.0;suggestedName='manual-budget.mkv'}} | ConvertTo-Json -Depth 12 -Compress
+    $started=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/encode" -Headers $headers -ContentType 'application/json' -Body $body
+    $result=$null
+    for($i=0;$i -lt 100;$i++){
+      Start-Sleep -Milliseconds 150
+      $result=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($started.jobId)" -Headers $headers
+      if($result.state -in @('completed','failed','cancelled')){break}
+    }
+    if($ceiling -eq 100L){
+      if($result.state -ne 'failed' -or $result.error -notlike '*Strict container byte ceiling exceeded*'){throw 'Manual oversized container was not rejected.'}
+      $stage=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-hardsub-job-"+[string]$started.jobId+"-*"))
+      if($stage.Count -ne 1 -or -not(Test-Path -LiteralPath (Join-Path $stage[0].FullName 'output.mkv'))){throw 'Manual verified oversized container was deleted.'}
+      $blocked=$false
+      try{Invoke-RestMethod -Method Post -Uri "$hostUrl/api/jobs/$($started.jobId)/export" -Headers $headers -ContentType 'application/json' -Body '{}' | Out-Null}catch{$blocked=$true}
+      if(-not $blocked){throw 'Manual oversized artifact reached save dialog.'}
+    }elseif($result.state -ne 'completed' -or [long]$result.outputBytes -gt $ceiling -or [long]$result.outputBytes -le 0){throw 'Manual within-budget artifact acceptance failed.'}
+  }
+  Write-Host 'Manual byte ceilings, blocked oversized export and independent source-cost scan passed.'
   function Test-CancelCleanup([int]$phase){
     $body=@{
       request=@{codec='h264';mode='budget-rate';preset='medium';crf=23
