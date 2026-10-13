@@ -122,3 +122,12 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - `src/guided-native-vbr-verification.js` 严格核对两窗、参考域、ASS 独立哈希、字体哈希一致性、实际编码器/码率/尺度及 SSIM；`src/main.js` 暴露 Windows-only 验证与“确认当前已验证参数”，确认仅针对**当前**配置，绝不自动修改编码器或码率，字幕/字体/体积/来源变化后必须重新验证。
 - `src/guided-native-vbr-verification.test.mjs` 已纳入快测与完整前端。Windows 离线收据测试 `scripts/check-guided-vbr-evidence.ps1` 和真实 2× Native localhost FFmpeg/ASS 短样已接入 `Windows local smoke`；真实 Windows 以及前端 CI 最新头部运行 Pending。
 - 严格文件上限与两遍 H.264 **不使用**此单遍 CQ/VBR 证明。完整跨候选 Guided / Manual 显式采用事务、整片质量与大小、设备/字幕系统字体验证仍未闭环，B04/B11/B12/B15 状态不晋升为完整初版已完成。
+
+
+## 2026-10-14 B04/B11/B12 推荐分支 VBR 验证与原子采用增量
+
+- 原 `adoptSizeFrontierBranchBtn` 会在未验证的 CQ 推荐上直接改变 Guided 编码器/分辨率；现在仅暂存不可变推荐提案，保留当前正式参数，使用 Native 精确 ASS 渲染参考两窗口 VBR 校验提案本身。
+- `src/guided-branch-adoption.js` 将原编码器/分辨率、候选 branch、来源/字幕/字体渲染 scope、目标体积、视频码率、preset 固定为决策身份。验证结果须与提案及当前曲线匹配；显式确认才进入预览编译→写入→正式编译→执行字段对照，不一致或异常自动尝试回滚。
+- Native NVENC Guided VBR 实测收据修复实际执行 preset `p7` 的声明和验证；此前 UI 通用 preset 不能代表真实硬件执行设置。候选输出容器现按提案 codec 校验，而非按旧选中 codec。
+- 2026-10-14 新增 `src/guided-branch-adoption.test.mjs`、扩展 `src/guided-native-vbr-verification.test.mjs`，纳入前端 Draft-fast 和完整工作流；18 项隔离 JS 核心逻辑测试通过、主入口语法解析通过。真实 Windows FFmpeg/NVENC 和浏览器 UI 测试仍 Pending。
+- 文档 `docs/b11-guided-vbr-branch-transaction-2026-10-14.md` 记载范围。此阶段是 Guided selected-state 事务，尚未把 Manual 正式字段编译/跨 UI 迁移/两遍与严格策略/整片结果完全归入同一可靠合同。B04/B11/B12 不作完成签收。
