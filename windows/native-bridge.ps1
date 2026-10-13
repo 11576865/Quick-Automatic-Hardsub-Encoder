@@ -730,11 +730,12 @@ function Get-SourceBudgetEvidence {
     $audio=Measure-AuxiliaryPackets $video 'a';$sub=Measure-AuxiliaryPackets $video 's'
     $after=Get-Item -LiteralPath $video
     if($after.Length -ne $before.Length -or $after.LastWriteTimeUtc.Ticks -ne $before.LastWriteTimeUtc.Ticks){throw 'Source changed while measuring; costs remain unknown.'}
-    $script:BudgetMeasurement=[pscustomobject]@{Id=[guid]::NewGuid().ToString('N');Path=$video;Length=$after.Length;WriteTicks=$after.LastWriteTimeUtc.Ticks}
+    $audioCosts=@($streams | Where-Object {$_.codec_type -eq 'audio'} | ForEach-Object {if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}})
+    $script:BudgetMeasurement=[pscustomobject]@{Id=[guid]::NewGuid().ToString('N');Path=$video;Length=$after.Length;WriteTicks=$after.LastWriteTimeUtc.Ticks;AudioPacketBytes=$audioCosts}
     return [pscustomobject]@{
         measurementId=$script:BudgetMeasurement.Id
         version=1;scope='full-source'
-        audioPacketBytes=@($streams | Where-Object {$_.codec_type -eq 'audio'} | ForEach-Object {if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}})
+        audioPacketBytes=$audioCosts
         subtitlePacketBytes=@($streams | Where-Object {$_.codec_type -eq 'subtitle'} | ForEach-Object {if($sub.ContainsKey([int]$_.index)){$sub[[int]$_.index]}else{$null}})
         attachmentBytes=@($streams | Where-Object {$_.codec_type -eq 'attachment'} | ForEach-Object {if($null -ne $_.extradata_size){[long]$_.extradata_size}else{$null}})
     }
@@ -1192,6 +1193,30 @@ function Invoke-Sample($Body) {
     }finally{Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue}
 }
 
+function Assert-CurrentCopyBudgetEvidence($Evidence,[string]$Video) {
+    $measured=$script:BudgetMeasurement
+    $item=Get-Item -LiteralPath $Video
+    if(-not $Evidence -or -not $measured -or
+       [string]$Evidence.measurementId -ne [string]$measured.Id -or
+       $Video -ne $measured.Path -or
+       $item.Length -ne $measured.Length -or
+       $item.LastWriteTimeUtc.Ticks -ne $measured.WriteTicks) {
+        throw 'Budget measurement does not match current source; measure again.'
+    }
+    # The token is not permission for the UI to rewrite the measured packet
+    # bytes. Bind the claimed copy cost to the Windows-local observation too.
+    $expected=@($measured.AudioPacketBytes)
+    $actual=@($Evidence.audioPacketBytes)
+    if($actual.Count -ne $expected.Count) {
+        throw 'Measured copied-audio packet costs differ from current source evidence.'
+    }
+    for($i=0;$i -lt $expected.Count;$i++) {
+        if([string]$actual[$i] -ne [string]$expected[$i]) {
+            throw 'Measured copied-audio packet costs differ from current source evidence.'
+        }
+    }
+}
+
 function Start-MediaTaskJob($Body) {
     if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
@@ -1200,9 +1225,7 @@ function Start-MediaTaskJob($Body) {
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
     if($task.budgetEvidence){
-        $item=Get-Item -LiteralPath $video
-        $measured=$script:BudgetMeasurement
-        if(-not $measured -or [string]$task.budgetEvidence.measurementId -ne $measured.Id -or $video -ne $measured.Path -or $item.Length -ne $measured.Length -or $item.LastWriteTimeUtc.Ticks -ne $measured.WriteTicks){throw 'Budget measurement does not match current source; measure again.'}
+        Assert-CurrentCopyBudgetEvidence $task.budgetEvidence $video
     }
     $probe=Get-ProbeMedia
     if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
@@ -1326,6 +1349,13 @@ function Start-EncodeJob($Body) {
     if(-not $video){throw 'No video selected.'}
     $request=$Body.request
     if($request.task){return Start-MediaTaskJob $Body}
+    # Legacy Guided ASS budgets may use measured copied audio from the shared
+    # ledger. The measured source must still be the selected Native input when
+    # the job is actually created; unchecked claims are never accepted.
+    if([string]$request.mode -eq 'budget-rate' -and [string]$request.audio -eq 'copy' -and
+       [int]$request.expectedAudioTracks -gt 0) {
+        Assert-CurrentCopyBudgetEvidence $request.budgetEvidence $video
+    }
     $probe=Get-ProbeMedia
     if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
     if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
