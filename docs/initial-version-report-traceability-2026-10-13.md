@@ -88,3 +88,12 @@ UIGS Intake：已去重并记录为 Case `inbox/cases/2026-10-13-qhe-report-base
 单编码器面板改用同一完整账本及投影，移除原独立音频折算；在原声成本未知时阻断完整预算推荐。VBR证书绑定精确目标、参数、来源、成本快照；确认采用通过通用size事务保留当前编码器及交付策略，重编译码率/上限不一致即回滚。补行为测试验证完整音轨不随视频裁切时长缩小。
 
 245本地测试通过、9条件跳过，build通过；浏览器成本快照变更和单分支size采用新增检查Pending。之前73c9470的9条CI已通过。本轮没有关闭引导ASS决策和B16成本覆盖；不宣称完整初版完成。
+
+
+## 2026-10-14 B14 增量证据（未更改初版验收分母）
+
+- `src/manual-time-tradeoff.js` 和 `src/manual-transcode-compare-ui.js` 将配对短样的真实 FFmpeg 编码时间与 SSIM / 视频码率并列展示，并新增下载范围明确的 JSON 观测收据。
+- 只有原始来源 / 运行时 / 参考标识一致、且视频质量最小值与均值均在 0.003 内的 **已有实测 CQ 档位** 才提供近似同质对照。曲线在未实测视频目标处的拟合推荐不继承编码时间；整片时间、功耗和资源收益仍未验证。
+- `src/manual-time-tradeoff.test.mjs` 与 `src/manual-transcode-session.test.mjs` 增加结构 / 失败封闭 / Native 会话到时间证据的测试。B14 分类维持「部分实现」；真实 Windows、浏览器与 exact-head CI 均 Pending。B04/B11/B12/B15 的 ASS Guided 统一决策合同仍未关闭。
+- 详细范围见 `docs/b14-observed-quality-size-encode-time-2026-10-14.md`，当前进度在 `.uigs/tasks/qhe-initial-version-full-report.json`。
+
