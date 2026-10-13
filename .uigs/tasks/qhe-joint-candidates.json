@@ -1,7 +1,7 @@
 {
   "goal": "Implement bounded joint compression candidate decisions beyond codec-only comparison",
-  "status": "local_resolution_cross_product_verified_hosted_pending",
-  "current_bounded_work_unit": "codec x preset x resolution, common-reference CQ/VBR and atomic geometry adoption",
+  "status": "joint_resolution_browser_and_windows_verified_remaining_regressions_pending",
+  "current_bounded_work_unit": "Hosted joint-resolution acceptance checkpoint",
   "completed_units": [
     "Selectable legacy 2-candidate or codec/preset 4-candidate session",
     "Finite 12/24 short sample limits under same encode-time quota",
@@ -10,15 +10,17 @@
     "Selectable x264/x265 x medium/fast x original/1080p/720p, up to 12 candidates and 72 samples without raising encode-time quota",
     "Native original-source bicubic-upscale SSIM protocol, independently probed source/output geometry and source/runtime identity",
     "Common-reference CQ/VBR geometry admission, explicit transactional dimensions/bicubic adoption and rollback",
-    "Local real four scaled encoder/preset outputs decoded and scored on original canvas"
+    "Local real four scaled encoder/preset outputs decoded and scored on original canvas",
+    "Hosted Windows Bridge PASS: eight complete branches, 32 CQ samples, two VBR windows and available common domain; synthetic 320x180/160x90",
+    "Hosted frontend build and check-media-ui browser regression passed"
   ],
   "next_units": [
-    "Read hosted 12-branch browser interaction and 8-branch actual Windows common-reference receipt acceptance",
+    "Read Android and required VVC regression conclusions when available",
     "Physical/long-form verification and final integration"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "6115fa562cce9604c6dee854e272b3e1dcdc1d50",
+  "latest_durable_commit": "8c7664787507af4292359196a0d27ebd34af0530",
   "local_tests": {
     "passed": 234,
     "skipped": 9,
@@ -28,9 +30,12 @@
   },
   "external_validation_states": {
     "previous_head": "9/9 success at 6115fa5",
-    "new_browser": "Pending; local Chromium absent",
-    "new_native": "Pending; eight synthetic codec/preset/resolution branches plus scaled VBR added to Windows CI",
-    "physical_devices": "Pending"
+    "new_browser": "success: run 38386942700, job 115260951142",
+    "new_native": "success: run 38386942566, job 115260950920",
+    "physical_devices": "Pending",
+    "android": "in_progress: run 38386942298",
+    "vvc": "in_progress: run 38386942711",
+    "hosted_summary": "7 success, 2 in_progress; one status read at implementation 8c76647"
   },
   "blockers": [
     "Finite Windows Native SDR yuv420p pure-transcode candidates only; not AV1/VVC/GPU or complex ASS joint optimization",
@@ -39,9 +44,9 @@
     "Whole-file quality and physical/long-form acceptance pending"
   ],
   "intake": {
-    "status": "recorded_locally",
+    "status": "Pending",
     "path": ".uigs/observations/2026-10-13-common-reference-resolution.json",
-    "foundry": "Pending separate processing"
+    "foundry": "Dedup searched: existing common-reference candidates found; acceptance update pending; no Canonical changes"
   },
-  "updated_timestamp": "2026-10-13T10:57:09.169661+00:00"
+  "updated_timestamp": "2026-10-13T11:02:00.067839+00:00"
 }
