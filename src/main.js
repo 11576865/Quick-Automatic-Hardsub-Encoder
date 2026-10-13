@@ -5207,7 +5207,7 @@ function guidedVbrKey(plan=guidedVbrTargetPlan(),proposal=currentGuidedPendingBr
     plan.outputWidth||0,plan.outputHeight||0,
     state.video?.name,state.video?.size,state.video?.lastModified,
     guidedHardsubAudioSettings(),
-    resolveGuidedHardsubContainer(state.selectedCodec).key,
+    resolveGuidedHardsubContainer(plan.codec).key,
     mediaWorkspace?.getActiveBudgetEvidence?.()||null
   ]);}catch{return '';}
 }
