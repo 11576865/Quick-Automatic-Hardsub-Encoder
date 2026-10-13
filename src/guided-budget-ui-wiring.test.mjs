@@ -30,3 +30,19 @@ test('Guided size feasibility and output bitrate use the same measured ledger as
   assert.doesNotMatch(builder,/const sourceEquivalent =/);
   assert.doesNotMatch(builder,/estimatedSizeBudgetAudioBitrate\(\)/);
 });
+
+test('audio setting mutations and restored configurations invalidate the Guided whole-file projection',async()=>{
+  const workspace=await readFile(new URL('./media-workspace.js',import.meta.url),'utf8');
+  assert.match(workspace,/const applyConfig=raw=>\{[^\n]*audioStreamPlan\.refresh\(\);hooks\.onBudgetEvidenceChange\?\.\(\);\};/);
+  const start=workspace.indexOf('const invalidateCompiledPlan = event =>');
+  const end=workspace.indexOf("outputPolicy?.addEventListener('input'",start);
+  assert.ok(start>=0&&end>start);
+  const invalidation=workspace.slice(start,end);
+  for(const field of ['audio','audioTrack','audioRange','audioBitrate',
+    'audioChannels','audioSampleRate','audioPlan']){
+    assert.match(invalidation,new RegExp("'"+field+"'"));
+  }
+  assert.match(invalidation,/hooks\.onBudgetEvidenceChange\?\.\(\);/);
+  assert.match(workspace,/form\.addEventListener\('input',invalidateCompiledPlan\)/);
+  assert.match(workspace,/form\.addEventListener\('change',invalidateCompiledPlan\)/);
+});
