@@ -131,3 +131,12 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - Native NVENC Guided VBR 实测收据修复实际执行 preset `p7` 的声明和验证；此前 UI 通用 preset 不能代表真实硬件执行设置。候选输出容器现按提案 codec 校验，而非按旧选中 codec。
 - 2026-10-14 新增 `src/guided-branch-adoption.test.mjs`、扩展 `src/guided-native-vbr-verification.test.mjs`，纳入前端 Draft-fast 和完整工作流；18 项隔离 JS 核心逻辑测试通过、主入口语法解析通过。真实 Windows FFmpeg/NVENC 和浏览器 UI 测试仍 Pending。
 - 文档 `docs/b11-guided-vbr-branch-transaction-2026-10-14.md` 记载范围。此阶段是 Guided selected-state 事务，尚未把 Manual 正式字段编译/跨 UI 迁移/两遍与严格策略/整片结果完全归入同一可靠合同。B04/B11/B12 不作完成签收。
+
+
+## 2026-10-14 B04/B12 引导→专业共同 CPU 正式任务编译合同
+
+- `guided-task-handoff.js` 不再仅拷贝体积目标交给可编辑表单；`guided-cpu-compiler-contract.js` 在改变 UI 之前调用真正的 `compileTask`，按当前媒体及同源逐流测量校验完整任务的容器、软件编码器/preset、分辨率、预算字节数、可用视频码率、音频固定成本、4% 容器余量以及两遍/严格体积策略。新合同不允许自动移植旧 Native ASS 质量证据。
+- 发现既有 Guided Native 是 **ASS 先渲染→bicubic 缩放**，Manual 默认是 **缩放→ASS 渲染**。共享 `media-task.js` 新增显式 `subtitleRenderOrder`（默认 `after-scale` 保持旧 Manual；交接用 `before-scale`），且 `media-workspace.js` 把该字段纳入真实表单/导入。交接必须核对生成的完整 `-vf` 而不只是分辨率。
+- 交接之后实际重读 Manual 表单再调用 `compileTask`，执行计划不同则恢复先前参数并输出失败状态；执行字段一致才转换为 Manual 控制策略。Native GPU/Web/Android 的一致性并未被假定。
+- `src/guided-cpu-compiler-contract.test.mjs` 使用仓库真实编译器、时长、音轨及预算函数执行 11 个隔离 JavaScript 用例，全部通过；Draft-fast/全量前端 CI 与真实浏览器/FFmpeg 动画字幕/滤镜顺序仍待验收。文档 `docs/b12-guided-manual-shared-cpu-compiler-parity-2026-10-14.md`。
+- B04/B11/B12 均保持部分实现，完整 B01–B25/A01–A10 理论初版分母和重型 CI 退出条件不变。
