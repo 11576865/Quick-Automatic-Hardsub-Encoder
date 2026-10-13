@@ -89,7 +89,8 @@ export function outputReport(task, result, elapsedSeconds) {
   const audioRate = task.estimatedAudioRate || 0;
   const suggestedVideoRate = withinBudget === false
     ? Math.max(1000, Math.floor((Number(task.bitrate) + audioRate) * (limit - (task.sizePlan?.fixedPayloadBytes || 0)) / Math.max(1,bytes - (task.sizePlan?.fixedPayloadBytes || 0)) * .97 - audioRate)) : null;
-  const trimCopyAudit=auditTrimCopyPayload(task,result.outputPacketEvidence);
+  const trimCopyAudit=result.verified===true && validBytes
+    ? auditTrimCopyPayload(task,result.outputPacketEvidence) : null;
   return {version:1, operation:task.operation, encoder:task.encoder || 'copy', parameters:task,
     trimCopyAudit,
     outputBytes:Number.isFinite(bytes) ? bytes : null, outputDuration:duration, elapsedSeconds,
