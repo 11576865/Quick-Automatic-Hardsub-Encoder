@@ -4170,6 +4170,10 @@ function renderQualityExploration() {
   if (!readout) return;
   const codec = state.selectedCodec || chooseDefaultCodec('targetQuality');
   const trials = state.qualityExplorationPoints?.[codec] || [];
+  if(trials.length && state.qualityCalibration[codec]?.evidenceScope!==currentGuidedDecisionScope()){
+    readout.textContent='字幕文字、字体、来源或运行时已经变化；此前短样的 SSIM 与耗时证据已失效，需要重新校准。';
+    return;
+  }
   if (!trials.length) {
     readout.textContent = '当前编码器尚无实测参数；校准期间会逐点显示进度。';
     return;
@@ -4925,10 +4929,14 @@ async function runResolutionCalibration() {
   updateQualityCalibrationControls();
   try{
     const samplePlan=await preparePairedQualitySamplePlan();
+    if(samplePlan.decisionScope!==sourceScope)
+      throw Error('跨分辨率校准开始时 ASS 渲染参考已发生变化');
     for(const size of candidates) {
       const id=codec+'@'+size.id;
       try{
         const evidence=await calibrateCodecQuality(codec,target,eachBudget,size,samplePlan);
+        if(samplePlan.decisionScope!==currentGuidedDecisionScope())
+          throw Error('跨分辨率采样结束后 ASS 渲染参考失效');
         evidence.evidenceScope=sourceScope;
         const model=fitRateDistortionModel(evidence.testedPoints||[]);
         if(!model.ok)throw Error('有效实测点不足两个，不能构建体积—质量曲线');
@@ -4951,8 +4959,10 @@ async function runResolutionCalibration() {
       }
       renderPlanOptions();
     }
+    if(samplePlan.decisionScope!==currentGuidedDecisionScope())
+      throw Error('跨分辨率决策结束前 ASS 渲染参考已发生变化');
     state.sizeEnvelopeEnabled=Object.values(state.resolutionRateDistortionModels)
-      .filter(b=>b.model?.ok).length>=2;
+      .filter(b=>b.model?.ok && b.sourceScope===samplePlan.decisionScope).length>=2;
     const refinement=state.sizeEnvelopeEnabled
       ?await runBudgetedPairedRefinement({mode:'resolution',samplePlan,budget,
         stageStartedAt,target,sourceScope})
@@ -5056,8 +5066,11 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
       renderPlanOptions();
     }
 
+    if(samplePlan.decisionScope!==currentGuidedDecisionScope())
+      throw Error('质量候选比较完成前 ASS 字幕或字体已变化；拒绝使用旧决策证据');
     state.sizeEnvelopeEnabled=compareForSize &&
-      codecs.filter(id=>state.rateDistortionModels[id]?.ok).length>=2;
+      codecs.filter(id=>state.rateDistortionModels[id]?.ok &&
+        state.guidedModelScopes[id]===samplePlan.decisionScope).length>=2;
     const refinement=state.sizeEnvelopeEnabled
       ?await runBudgetedPairedRefinement({mode:'codec',samplePlan,budget,
         stageStartedAt,target,sourceScope:samplePlan.decisionScope})
