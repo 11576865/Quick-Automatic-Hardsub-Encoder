@@ -1,7 +1,7 @@
 {
   "goal": "Implement bounded joint compression candidate decisions beyond codec-only comparison",
-  "status": "joint_resolution_browser_and_windows_verified_remaining_regressions_pending",
-  "current_bounded_work_unit": "Hosted joint-resolution acceptance checkpoint",
+  "status": "bounded_joint_resolution_hosted_acceptance_complete_field_validation_pending",
+  "current_bounded_work_unit": "Close joint-resolution hosted acceptance and synchronize evidence lineage",
   "completed_units": [
     "Selectable legacy 2-candidate or codec/preset 4-candidate session",
     "Finite 12/24 short sample limits under same encode-time quota",
@@ -12,11 +12,13 @@
     "Common-reference CQ/VBR geometry admission, explicit transactional dimensions/bicubic adoption and rollback",
     "Local real four scaled encoder/preset outputs decoded and scored on original canvas",
     "Hosted Windows Bridge PASS: eight complete branches, 32 CQ samples, two VBR windows and available common domain; synthetic 320x180/160x90",
-    "Hosted frontend build and check-media-ui browser regression passed"
+    "Hosted frontend build and check-media-ui browser regression passed",
+    "All nine hosted workflows succeeded at implementation 8c76647; Android independent exported output verification 8/8",
+    "Updated existing Foundry Candidate with common-reference receipt/geometry evidence and explicit synthetic-source limitations"
   ],
   "next_units": [
-    "Read Android and required VVC regression conclusions when available",
-    "Physical/long-form verification and final integration"
+    "Prepare field and final integration acceptance; physical-device and user-media execution require available environments/material",
+    "Keep exact trim/FLAC/cross-platform measurement, more encoder families and phone layout as open product work"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -33,9 +35,9 @@
     "new_browser": "success: run 38386942700, job 115260951142",
     "new_native": "success: run 38386942566, job 115260950920",
     "physical_devices": "Pending",
-    "android": "in_progress: run 38386942298",
-    "vvc": "in_progress: run 38386942711",
-    "hosted_summary": "7 success, 2 in_progress; one status read at implementation 8c76647"
+    "android": "success: run 38386942298, job 115260949331; exported outputs 8/8 independently verified",
+    "vvc": "success: run 38386942711, job 115260950905; real QP/bitrate/ASS required",
+    "hosted_summary": "9/9 success at implementation 8c76647; subsequent documentation commits are not claimed as tested executable revisions"
   },
   "blockers": [
     "Finite Windows Native SDR yuv420p pure-transcode candidates only; not AV1/VVC/GPU or complex ASS joint optimization",
@@ -44,9 +46,11 @@
     "Whole-file quality and physical/long-form acceptance pending"
   ],
   "intake": {
-    "status": "Pending",
+    "status": "recorded",
     "path": ".uigs/observations/2026-10-13-common-reference-resolution.json",
-    "foundry": "Dedup searched: existing common-reference candidates found; acceptance update pending; no Canonical changes"
+    "foundry": "Updated existing Candidate; no Canonical changes",
+    "foundry_path": "inbox/candidates/2026-10-03-target-size-mode-should-expose-a-content-aware-rate-distortion-frontier.md",
+    "foundry_commit": "d40c334b77b2241153c715260ad244a86cc512e1"
   },
-  "updated_timestamp": "2026-10-13T11:02:00.067839+00:00"
+  "updated_timestamp": "2026-10-13T11:34:30.398843+00:00"
 }
