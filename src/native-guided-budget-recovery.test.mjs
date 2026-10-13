@@ -64,3 +64,45 @@ test('recoverable Native budget is wired to both normal completion and page refr
     bridge.indexOf('function Export-Job(',bridge.indexOf('function Get-JobStatus(')));
   assert.equal((getStatus.match(/Get-GuidedCompletedBudgetProjection \$j \$actualBytes/g)||[]).length,2);
 });
+
+test('a page reload reads the completed Native receipt rather than losing size comparison',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const vm=await import('node:vm');
+  const main=await readFile(new URL('./main.js',import.meta.url),'utf8');
+  const start=main.indexOf('async function recoverNativeJob()');
+  const end=main.indexOf('function sleepMs(',start);
+  assert.ok(start>=0&&end>start);
+  const elements=new Map();
+  const $=id=>{
+    if(!elements.has(id))elements.set(id,{
+      textContent:'',disabled:false,style:{width:''},
+      classList:{add(){},remove(){}}
+    });
+    return elements.get(id);
+  };
+  const state={nativeCompletedJob:null,nativeJobProjection:null};
+  const snapshot={...base,budgetProjection:{
+    ...base.budgetProjection,policy:'strict-ceiling',strictVerified:true
+  }};
+  let queries=0;
+  const context=vm.createContext({
+    state,$,JSON,Number,
+    completedGuidedNativeBudget,formatCompletedGuidedNativeBudget,formatBytes,
+    syncMobileStageNav(){},setMobileStage(){},log(){},
+    document:{body:{classList:{contains:()=>false}}},
+    localStorage:{getItem:key=>key==='nativeEncodeJobId'?'recovered-strict':null,
+      removeItem(){throw Error('Completed job must remain recoverable');}},
+    NativeHardsub:{async getNativeJobStatus(id){
+      queries++;assert.equal(id,'recovered-strict');return JSON.stringify(snapshot);
+    }}
+  });
+  vm.runInContext(main.slice(start,end),context);
+  await context.recoverNativeJob();
+  assert.equal(queries,1);
+  assert.equal(state.nativeCompletedJob.jobId,'recovered-strict');
+  assert.equal(state.nativeCompletedJob.sizeComparison.strictVerified,true);
+  assert.match($('liveEta').textContent,/规划 1050000B/);
+  assert.match($('liveEta').textContent,/严格字节上限已由 Native 核验/);
+  assert.equal($('encodeBtn').disabled,false);
+  assert.equal($('progressBar').style.width,'100%');
+});
