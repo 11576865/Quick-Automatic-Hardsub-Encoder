@@ -89,7 +89,7 @@
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
   "pr": 105,
-  "latest_durable_commit": "c64cf42474655afb6e275c2bcef22bd0f1d41f2c",
+  "latest_durable_commit": "eff12de96ddaf1128d26484775932c11296b5e86",
   "external_validation_states": {
     "windows_vvc": "round 2 Windows smoke passed; VVC unsupported is separately reported by runtime fixture",
     "browser": "VVC phone passed; saved-state plan inspection failure addressed in round 4, rerun Pending",
@@ -102,22 +102,22 @@
     "browser_budget": "Round 3 pending: DOM budget/save/config/source/mode-switch fixtures",
     "round3_ci": "5 success, 2 fixture failures (repair submitted next), Android emulator pending at single status read",
     "round3_fixture_repair": "Pending hosted Windows staging and settled-phone overflow validation",
-    "round4_ci": "Pending publication"
+    "round4_ci": "Pending after publication; no polling of repair generation"
   },
   "blockers": [],
-  "updated_timestamp": "2026-10-13T03:30:38.484570+00:00",
+  "updated_timestamp": "2026-10-13T03:32:07.142595+00:00",
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"
   },
   "publication": {
-    "status": "round_four_publication_in_progress",
+    "status": "published",
     "destination": "11576865/Quick-Automatic-Hardsub-Encoder",
     "branch": "feat/qhe-five-round-delivery-20261013",
     "authorization": "User explicitly authorized public publication of round 3 to named repository and branch, PR #105.",
     "method": "GitHub connected API; command-line Git lacks HTTPS credentials",
-    "remote_commit": "bd3b0536fc7b5a2f60a30fa4706e49ae4efd638c",
-    "verified_tree": "5d9f010de46573f034d1c9a47e3504984d37e065"
+    "remote_commit": "eff12de96ddaf1128d26484775932c11296b5e86",
+    "verified_tree": "b2eed07363bfebf5dc70d4284adccd3a824940ed"
   },
   "repair": {
     "tests": {
