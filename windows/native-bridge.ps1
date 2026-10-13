@@ -1118,8 +1118,10 @@ function Invoke-Sample($Body) {
     $exactManualEvidence=[bool]$o.sampleExact -and -not [bool]$o.withSubtitles -and [bool]$o.measureSsim
     $exactGuidedEvidence=[bool]$o.sampleExact -and [bool]$o.guidedRenderedReference -and
         [bool]$o.withSubtitles -and [bool]$o.measureSsim -and [long]$o.targetVideoBitrate -gt 0
-    if([bool]$o.sampleExact -and [bool]$o.withSubtitles -and -not $exactGuidedEvidence){
-        throw 'Exact ASS samples require explicit Guided bitrate reference mode.'
+    if([bool]$o.sampleExact -and
+       (([bool]$o.withSubtitles -and -not $exactGuidedEvidence) -or
+        ([bool]$o.guidedRenderedReference -and -not $exactGuidedEvidence))){
+        throw 'Exact Guided and Manual sample reference modes cannot be mixed.'
     }
     $snapshotBefore=if($exactManualEvidence -or $exactGuidedEvidence){
         $version=Get-FfmpegVersionInfo $script:Ffmpeg
