@@ -20,6 +20,7 @@ function executableProjection(task){
   rateMode:task.rateMode,bitrate:task.bitrate,
   outputContainer:task.outputContainer,outputFormat:task.outputFormat,
   outputExtension:task.outputExtension,
+  subtitleRenderOrder:task.subtitleRenderOrder||'after-scale',
   width:task.expectedWidth||0,height:task.expectedHeight||0,
   audio:task.audio,expectedAudioTracks:task.expectedAudioTracks,
   audioRange:task.audioRange,videoRange:task.videoRange,
@@ -100,10 +101,15 @@ export function compileGuidedCpuHandoff({
  if((task.expectedWidth||0)!==(Number(plan.outputWidth)||0)||
     (task.expectedHeight||0)!==(Number(plan.outputHeight)||0))
   return fail('compiled-guided-geometry-divergence');
+ if(task.subtitleRenderOrder!=='before-scale')
+  return fail('compiled-guided-ass-render-order-divergence');
+ const vf=task.outputArgs[task.outputArgs.indexOf('-vf')+1]||'';
+ const renderAt=vf.indexOf('ass=__ASS__:fontsdir=__FONTS__');
+ if(renderAt<0)return fail('compiled-guided-ass-filter-missing');
  if(plan.outputWidth>0||plan.outputHeight>0){
-  const vf=task.outputArgs[task.outputArgs.indexOf('-vf')+1]||'';
-  if(!vf.includes('scale='+plan.outputWidth+':'+plan.outputHeight+':flags=bicubic'))
-    return fail('compiled-guided-scaling-divergence');
+  const scaleAt=vf.indexOf('scale='+plan.outputWidth+':'+plan.outputHeight+':flags=bicubic');
+  if(scaleAt<0||renderAt>=scaleAt)
+   return fail('compiled-guided-scaling-or-ass-order-divergence');
  }
  if(plan.mode==='budget-rate'){
   if(task.rateMode!=='size'||!task.sizePlan||
