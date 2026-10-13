@@ -39,7 +39,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     '<label>预算坐标 <select id="taskCompareBudgetBasis"><option value="whole">成品目标体积 · 完整预算</option><option value="video">仅视频负载 · 诊断</option></select></label>',
     '<p class="note" id="taskCompareStatus" role="status">对比结果仅供查看，不能自动切换编码器。需要正式采用时仍应使用当前编码器的 VBR 短样验证。</p>',
     '<details id="taskCompareDetails" hidden><summary>查看同预算候选及采样覆盖</summary>',
-    '<div id="taskCompareCandidates"></div><div id="taskCompareCostEvidence"></div></details>',
+    '<div id="taskCompareCandidates"></div><div id="taskCompareCostEvidence"></div>',
+    '<button type="button" class="secondary" id="taskCompareExportCost">导出当前实测成本收据</button></details>',
     '<button type="button" class="secondary" id="taskCompareVerify" disabled hidden>实测验证当前推荐编码器的 VBR</button>',
     '<button type="button" class="secondary" id="taskCompareAdopt" disabled hidden>确认写入已验证的编码方案</button>',
     '<p class="note">成品预算包含已测复制流、附件、计划音频和封装余量；成本未知时拒绝推荐。仅视频坐标只供诊断。拟合不证明整片质量或实际成品大小。停止会等待当前原生调用结束；编码耗时配额不是严格墙钟时间上限。</p>'
@@ -48,7 +49,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   insertBefore.before(area);
   const get=id=>area.querySelector('#'+id);
   const start=get('taskCompareStart'),stop=get('taskCompareStop'),back=get('taskCompareSingle'),verify=get('taskCompareVerify'),adopt=get('taskCompareAdopt');
-  const policy=get('taskComparePolicy'),basis=get('taskCompareBudgetBasis');
+  const policy=get('taskComparePolicy'),basis=get('taskCompareBudgetBasis'),exportCost=get('taskCompareExportCost');
   const budgetContext=()=>JSON.stringify([basis.value,hooks.budgetEvidence?.()||null]);
   function currentFrontier(){
     if(!comparison?.frontier?.ok)return comparison?.frontier;
@@ -94,6 +95,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   const renderControls=()=>{
     start.disabled=running||hooks.busy()||disposed;
     policy.disabled=start.disabled;basis.disabled=start.disabled;
+    exportCost.disabled=running||hooks.busy()||!eligible();
     verify.hidden=!active;
     verify.disabled=running||hooks.busy()||!eligible()||currentFrontier()?.evaluateTargetBytes(selectedBytes)?.status!=='within-evidence';
     adopt.hidden=!hasCurrentVbr();
@@ -389,6 +391,37 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       running=false;hooks.setBusy(false);
       if(!disposed){renderControls();onRenderSingle();}
     }
+  });
+  exportCost.addEventListener('click',()=>{
+    if(!eligible()||running||hooks.busy())return;
+    const current=currentFrontier()?.evaluateTargetBytes(selectedBytes);
+    if(current?.status!=='within-evidence')return;
+    const measured=summarizeManualEncodeCost(session.trials(),{
+      referenceVideoBitrate:Number(current.videoBitrate)>0?Number(current.videoBitrate):null
+    });
+    if(!measured.ok){message('没有完整有效的耗时证据可以导出。');return;}
+    const receipt={
+      version:1,kind:'manual-native-observed-time-quality-size-v1',
+      measurementScope:comparison.evidenceScope,
+      protocol:session.snapshot().protocol,
+      selectedCoordinate:basis.value,
+      selectedBytes,
+      selectedVideoBitrate:current.videoBitrate,
+      observed:measured,
+      exactOutputSizeVerified:false,
+      fullMovieEncodeTimeVerified:false,
+      vbrResultNotImplied:true,
+      canAutoAdopt:false,
+      sourceIdentityKind:'file-stat-snapshot-not-content-hash'
+    };
+    const blob=new Blob([JSON.stringify(receipt,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const link=document.createElement('a');
+    link.href=url;link.download='manual-native-encode-cost-evidence.json';
+    link.style.display='none';
+    document.body.append(link);
+    link.click();link.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
   });
   stop.addEventListener('click',()=>{
     if(!running)return;
