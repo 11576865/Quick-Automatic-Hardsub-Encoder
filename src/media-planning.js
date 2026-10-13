@@ -93,6 +93,7 @@ export function outputReport(task, result, elapsedSeconds) {
     ? auditTrimCopyPayload(task,result.outputPacketEvidence) : null;
   return {version:1, operation:task.operation, encoder:task.encoder || 'copy', parameters:task,
     trimCopyAudit,
+    trimCopyAuditState:trimCopyAudit?'ready':(result.outputPacketAuditState??null),
     outputBytes:Number.isFinite(bytes) ? bytes : null, outputDuration:duration, elapsedSeconds,
     actualStart:result.actualStart ?? task.start, targetBytes:limit ?? null,
     withinBudget, deliveryAllowed, recoveryOptions:deliveryAllowed?[]:['increase-budget','reduce-video-rate','change-stream-plan'], suggestedVideoRate, verified:result.verified ?? null,
