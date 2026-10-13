@@ -51,7 +51,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/vvc-runtime.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1', 'scripts/check-vvc-native.ps1','windows/media-frame-rate.ps1','scripts/check-media-frame-rate.ps1','scripts/check-stream-plan-arguments.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/trim-packet-audit.ps1', 'windows/native-backend.ps1', 'windows/vvc-runtime.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1', 'scripts/check-vvc-native.ps1','windows/media-frame-rate.ps1','scripts/check-media-frame-rate.ps1','scripts/check-stream-plan-arguments.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
