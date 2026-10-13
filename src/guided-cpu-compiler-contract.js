@@ -9,7 +9,7 @@ const encoderFor=Object.freeze({h264:'libx264',h265:'libx265',av1:'libsvtav1'});
 const fail=(reason,detail='')=>({ok:false,reason,detail});
 const settingsFields=[
   'operation','codec','encoder','preset','rateMode','quality','bitrate',
-  'width','height','scaleAlgorithm','targetSize','sizeUnit','sizeReserve',
+  'width','height','scaleAlgorithm','subtitleRenderOrder','targetSize','sizeUnit','sizeReserve',
   'budgetPolicy','twoPass','audio','audioTrack','audioPlan','audioRange',
   'audioBitrate','audioChannels','audioSampleRate','videoStreams','videoRange',
   'keepSubtitles','keepAttachments','outputContainer'
