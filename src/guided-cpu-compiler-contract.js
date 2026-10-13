@@ -33,6 +33,40 @@ function executableProjection(task){
   outputArgs:[...(task.outputArgs||[])]
  };
 }
+// Apply only after a complete source-scoped CPU compile. Verify what the
+// DOM actually accepted, then reverse the form transaction on any drift.
+export function commitGuidedCpuHandoff({
+ contract,read,apply,media,evidence=null,
+ sourceIdentity,expectedSourceIdentity
+}={}){
+ if(!contract?.ok||typeof read!=='function'||typeof apply!=='function'||
+    typeof sourceIdentity!=='function'||!expectedSourceIdentity||
+    sourceIdentity()!==expectedSourceIdentity||!media)
+  return fail('invalid-or-stale-guided-cpu-handoff');
+ const prior=read();
+ let changed=false;
+ try{
+  if(sourceIdentity()!==expectedSourceIdentity)
+    throw Error('source-changed-before-handoff');
+  changed=true;
+  apply(contract.settings);
+  if(sourceIdentity()!==expectedSourceIdentity)
+    throw Error('source-changed-during-handoff');
+  const current=compileTask(read(),{...media,budgetEvidence:evidence||undefined});
+  const projection=executableProjection(current);
+  if(JSON.stringify(projection)!==JSON.stringify(contract.execution))
+    throw Error('applied-formal-task-diverged');
+  return {ok:true,kind:'guided-to-manual-cpu-handoff-v1',
+    task:current,requiresFreshExecutionValidation:true};
+ }catch(error){
+  if(changed){
+    try{apply(prior);}catch(e){
+      return fail('guided-cpu-handoff-rollback-failed',String(e?.message||e));
+    }
+  }
+  return fail('guided-cpu-handoff-rejected',String(error?.message||error));
+ }
+}
 export function compileGuidedCpuHandoff({
  snapshot,defaults={},media,evidence=null,sourceKey='',evidenceSourceKey=''
 }={}){
