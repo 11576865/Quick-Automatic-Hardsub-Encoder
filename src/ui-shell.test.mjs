@@ -594,7 +594,9 @@ test('guided size target distinguishes CQ samples from formal VBR and actual fil
  assert.match(main,/CQ 短样曲线/);
  assert.match(main,/CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM/);
  assert.match(main,/可能明显超出预算/);
- assert.match(main,/actualBytes>projection\.budgetBytes/);
+ const receipt=await readFile(new URL('./native-guided-budget-recovery.js',import.meta.url),'utf8');
+ assert.match(receipt,/const withinBudget=actualBytes<=budgetBytes/);
+ assert.match(receipt,/严格验收凭据不完整，不能宣称已核验/);
 });
 
 test('guided size budget explicitly records execution policy and byte ceiling',async()=>{
