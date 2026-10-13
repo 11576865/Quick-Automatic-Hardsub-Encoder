@@ -1312,7 +1312,7 @@ function Start-MediaTaskJob($Body) {
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
         StrictBudget=([string]$task.budgetPolicy -eq 'strict-ceiling');BudgetCeiling=[long]$task.sizeCeilingBytes;StrictVerifiedHash='';StrictVerifiedWriteTicks=0L;BudgetRejected=$false
         StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey='';VvcValidating=$false
-        TrimPacketAuditFinished=$false;TrimPacketEvidence=$null;TrimPacketAuditState='not-requested';TrimPacketAuditStarted=$null;TrimPacketAuditReceipt=''
+        TrimPacketAuditFinished=$false;TrimPacketEvidence=$null;TrimPacketAuditState='not-requested';TrimPacketAuditStarted=$null;TrimPacketAuditReceipt='';TrimPacketAuditExpectedLength=0L;TrimPacketAuditExpectedTicks=0L
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
@@ -1683,6 +1683,9 @@ function Get-AsyncTrimPacketEvidence($Job) {
         try{
             $worker=Join-Path $PSScriptRoot 'trim-packet-audit.ps1'
             if(-not(Test-Path -LiteralPath $worker -PathType Leaf)){throw 'Long trim audit worker is missing.'}
+            $snapshot=Get-Item -LiteralPath $Job.Output
+            $Job.TrimPacketAuditExpectedLength=[long]$snapshot.Length
+            $Job.TrimPacketAuditExpectedTicks=[long]$snapshot.LastWriteTimeUtc.Ticks
             $Job.TrimPacketAuditReceipt=Join-Path $Job.Work 'trim-packet-audit.json'
             $args='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File '+(Quote-NativeArg $worker)+
                 ' -Ffprobe '+(Quote-NativeArg $script:Ffprobe)+
@@ -1709,7 +1712,9 @@ function Get-AsyncTrimPacketEvidence($Job) {
         $artifact=Get-Item -LiteralPath $Job.Output
         if($receipt.version -ne 1 -or $receipt.scope -ne 'completed-artifact' -or
            [long]$receipt.sourceLength -ne [long]$artifact.Length -or
-           [long]$receipt.sourceWriteTicks -ne [long]$artifact.LastWriteTimeUtc.Ticks){
+           [long]$receipt.sourceWriteTicks -ne [long]$artifact.LastWriteTimeUtc.Ticks -or
+           [long]$receipt.sourceLength -ne [long]$Job.TrimPacketAuditExpectedLength -or
+           [long]$receipt.sourceWriteTicks -ne [long]$Job.TrimPacketAuditExpectedTicks){
             throw 'Trim audit output identity changed.'
         }
         $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries stream=codec_type -of json '+(Quote-NativeArg $Job.Output)) '' 10
