@@ -337,6 +337,20 @@ export function compileTask(raw, media) {
   }
 
   const filters = [];
+  const assOrder=t.subtitleRenderOrder||'after-scale';
+  if(!['after-scale','before-scale'].includes(assOrder))
+    throw Error('ASS 字幕渲染顺序无效');
+  // Native Guided paints ASS at source resolution and then bicubic-scales.
+  // Preserve the existing Manual default (scale before ASS) except when an
+  // explicit Guided-to-Manual handoff freezes the alternate order.
+  const shiftedAss=t.operation==='hardsub'&&t.hasTrimRange&&
+    t.videoRange==='trim'&&t.start>0;
+  const addAss=()=>{
+    if(shiftedAss)filters.push(`setpts=PTS+${t.start}/TB`);
+    filters.push('ass=__ASS__:fontsdir=__FONTS__');
+    if(shiftedAss)filters.push(`setpts=PTS-${t.start}/TB`);
+  };
+  if(t.operation==='hardsub'&&assOrder==='before-scale')addAss();
   if (t.crop) {
     if (!/^\d+:\d+:\d+:\d+$/.test(t.crop)) throw Error('裁切格式为 宽:高:x:y');
     filters.push('crop=' + t.crop);
@@ -360,12 +374,7 @@ export function compileTask(raw, media) {
   if (t.deband) filters.push('deband');
   if (t.sharpen) filters.push('unsharp');
 
-  if (t.operation === 'hardsub') {
-    const shifted = t.hasTrimRange && t.videoRange === 'trim' && t.start > 0;
-    if (shifted) filters.push(`setpts=PTS+${t.start}/TB`);
-    filters.push('ass=__ASS__:fontsdir=__FONTS__');
-    if (shifted) filters.push(`setpts=PTS-${t.start}/TB`);
-  }
+  if(t.operation==='hardsub'&&assOrder==='after-scale')addAss();
 
   filters.push('pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0');
   args.push('-vf', filters.join(','));
