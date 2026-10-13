@@ -46,6 +46,22 @@ test('missing, partial, wrong-scope and impossible evidence never creates exact-
   assert.equal(auditTrimCopyPayload(task,{...out,audioPacketBytes:[-1,1]}),null);
   assert.equal(outputReport(task,{outputBytes:250000},5).trimCopyAudit,null);
 });
+test('pending/failed long-output packet audit does not modify strict delivery contract',()=>{
+  const pending=outputReport(task,{
+    outputBytes:250000,verified:true,outputPacketEvidence:null,outputPacketAuditState:'running'
+  },5);
+  assert.equal(pending.trimCopyAudit,null);
+  assert.equal(pending.trimCopyAuditState,'running');
+  assert.equal(pending.withinBudget,true);
+  assert.equal(pending.deliveryAllowed,true);
+  assert.equal(pending.parameters.sizePlan.copiedTrimReserveBytes,144000);
+  const unavailable=outputReport(task,{
+    outputBytes:250000,verified:true,outputPacketAuditState:'unavailable'
+  },5);
+  assert.equal(unavailable.trimCopyAuditState,'unavailable');
+  assert.equal(unavailable.trimCopyAudit,null);
+  assert.equal(unavailable.parameters.sizePlan.copiedTrimReserveBytes,144000);
+});
 test('a larger observed copy payload flags a mismatch without claiming an available cost reduction',()=>{
   const a=auditTrimCopyPayload(task,{...out,audioPacketBytes:[120000,45000]});
   assert.equal(a.status,'output-exceeds-source-cost');
