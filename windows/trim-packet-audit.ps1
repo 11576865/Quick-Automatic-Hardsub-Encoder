@@ -33,7 +33,8 @@ function Run-BoundedProbe([string]$args,[int]$limitSeconds,[bool]$packetStream=$
             if($timer.Elapsed.TotalSeconds -gt $limitSeconds){throw 'Packet audit worker exceeded time limit.'}
             $line=$read.Result
             if($null -eq $line){break}
-            if(++$count -gt $(packetStream?2000000:128)){throw 'Packet audit worker exceeded bounded scan limit.'}
+            $maxLines=if($packetStream){2000000}else{128}
+            if(++$count -gt $maxLines){throw 'Packet audit worker exceeded bounded scan limit.'}
             if($packetStream){
                 if($line -notmatch '^(\d+),(\d+)(?:,.*)?$'){throw 'Malformed completed output packet.'}
                 $id=[int]$Matches[1];$length=[long]$Matches[2]
