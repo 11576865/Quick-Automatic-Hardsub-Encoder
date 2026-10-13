@@ -618,6 +618,7 @@ test('two-pass software execution cannot inherit CQ/NVENC quality and speed pred
  assert.match(main,/executionPolicy\.policy==='best-effort'\s*\? currentSizeFrontier\(codec\) : null/);
  assert.match(main,/sizeBudgetPolicy!=='best-effort'/);
  assert.match(main,/containerReserveBytes,/);
- assert.match(main,/严格字节上限已核验/);
+ const budgetReceipt=await readFile(new URL('./native-guided-budget-recovery.js',import.meta.url),'utf8');
+ assert.match(budgetReceipt,/严格字节上限已由 Native 核验/);
  assert.match(main,/Strict container byte ceiling exceeded/);
 });
