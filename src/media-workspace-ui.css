@@ -496,11 +496,11 @@ body[data-media-operation="copy"] #mediaTaskForm {
 }
 
 .media-workspace[data-task-state="verified"] #taskLoadPreset,
-.media-workspace[data-task-state="verified"] #taskInspect,
+.media-workspace[data-task-state="verified"][data-completed-stale="false"] #taskInspect,
 .media-workspace[data-task-state="save_failed"] #taskLoadPreset,
-.media-workspace[data-task-state="save_failed"] #taskInspect,
+.media-workspace[data-task-state="save_failed"][data-completed-stale="false"] #taskInspect,
 .media-workspace[data-task-state="saved"] #taskLoadPreset,
-.media-workspace[data-task-state="saved"] #taskInspect,
+.media-workspace[data-task-state="saved"][data-completed-stale="false"] #taskInspect,
 .media-workspace[data-task-state="saving"] #taskLoadPreset,
 .media-workspace[data-task-state="saving"] #taskInspect {
   display: none;
@@ -1822,3 +1822,14 @@ body.media-frame-lightbox-open {
 .media-track-panel input,.media-core-decision-grid input,.media-audio-plan-row input,.media-audio-plan-row select {box-sizing:border-box;max-width:100%}
 .media-audio-plan,.media-audio-plan-rows,.media-audio-plan-row {min-width:0}
 .task-budget-ledger {font-size:.8rem;line-height:1.6;overflow-wrap:anywhere;margin:8px 0}
+
+/* Source/plan/artifact are projections of one task, with independent evidence. */
+.task-object-review{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0;min-width:0}
+.task-object-review article{min-width:0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)}
+.task-object-review h3{font-size:.86rem;margin:0 0 8px;color:var(--text)}
+.task-object-review strong{display:block;font-size:.8rem;line-height:1.6}
+.task-object-review p,.task-object-review li,.task-object-review summary{font-size:.76rem;line-height:1.65;overflow-wrap:anywhere}
+.task-object-review p{margin:6px 0;color:var(--muted)}
+.task-object-review ul{margin:6px 0;padding-inline-start:18px}
+.task-object-review summary{cursor:pointer;min-height:36px;padding:6px 0}
+@media(max-width:820px){.task-object-review{grid-template-columns:minmax(0,1fr)}}

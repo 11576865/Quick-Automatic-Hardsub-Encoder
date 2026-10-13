@@ -1,3 +1,4 @@
+import {buildTaskReview,renderTaskReview} from './task-review.js';
 import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { vvcCapability } from './media-capabilities.js';
@@ -173,6 +174,11 @@ export function mountMediaWorkspace(hooks) {
     <strong>视频 Stream Copy</strong><span>所选视频码流不重新编码；若视频使用 IN/OUT，主选视频流决定关键帧切入。音频可保持完整、独立剪辑、复制、转码或关闭。</span>
   </div>
   </details>
+  <section id="taskObjectReview" class="task-object-review" aria-label="来源、计划与成品">
+    <article><h3>来源</h3><strong data-review="source-status"></strong><ul data-review="source-facts"></ul><p id="taskReviewSourceName"></p></article>
+    <article><h3>拟输出计划</h3><strong data-review="plan-status"></strong><p data-review="plan-codec"></p><details><summary>逐流去向与完整预算</summary><ul data-review="plan-rows"></ul><ul data-review="plan-budget"></ul></details></article>
+    <article><h3>实际成品</h3><strong data-review="artifact-status"></strong><p data-review="artifact-facts"></p><p data-review="artifact-evidence"></p></article>
+  </section>
   <section id="taskPlanSummary" class="task-plan-summary" aria-live="polite">
     <div class="task-plan-heading"><span>当前方案</span><strong id="taskPlanTitle">等待选择参数</strong></div>
     <div class="task-plan-facts">
@@ -302,6 +308,13 @@ export function mountMediaWorkspace(hooks) {
   get('quality').addEventListener('input', syncQualityRange);
   let budgetEvidence=null,budgetSourceIdentity='';
   let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
+  let currentPlanTask=null,artifactReview=null,executingSourceName='',reviewSourceIdentity=hooks.videoIdentity?.()||'';
+  function syncTaskReview(){
+    const media=hooks.mediaSnapshot?.()||null;
+    const model=buildTaskReview({media,hasSource:!!hooks.videoIdentity?.(),task:currentPlanTask,artifact:artifactReview,stale:completedStale,state:section.dataset.taskState});
+    renderTaskReview(section.querySelector('#taskObjectReview'),model);
+    section.querySelector('#taskReviewSourceName').textContent=hooks.sourceName?.()||'';
+  }
   const clips=[],clipList=section.querySelector('#taskClipQueueList');
   const clipPanel=section.querySelector('#taskClipQueuePanel');
   const clipMessage=section.querySelector('#taskClipQueueStatus');
@@ -1345,6 +1358,7 @@ export function mountMediaWorkspace(hooks) {
     return '均衡';
   };
   const renderPlanSummary = task => {
+    syncTaskReview();
     const raw=read(),operation=raw.operation,copy=operation==='copy';
     const operationLabel=operation==='hardsub'?'硬字幕压制':operation==='transcode'?'纯视频转码':'视频流复制 / 快速剪辑';
   const codecLabel={h264:'H.264',h265:'H.265 / HEVC',av1:'AV1',h266:'H.266 / VVC'}[raw.codec]||raw.codec||'—';
@@ -1448,6 +1462,7 @@ export function mountMediaWorkspace(hooks) {
     save.disabled=lastReport?.deliveryAllowed===false||busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
     run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave;
     section.dataset.completedStale=previousResult?'true':'false';
+    syncTaskReview();
   };
   const setTaskState = next => {
     section.dataset.taskState=next;
@@ -1462,6 +1477,7 @@ export function mountMediaWorkspace(hooks) {
   };
   const nonOutputFields=new Set(['configName','savedConfig','sampleStart','sampleLength']);
   const markCompletedAsPrevious = sourceName => {
+    if(!sourceName||!nonOutputFields.has(sourceName))currentPlanTask=null;
     const stateName=section.dataset.taskState||'idle';
     if(!completed||!['verified','save_failed','saved'].includes(stateName))return;
     if(sourceName&&nonOutputFields.has(sourceName))return;
@@ -1670,6 +1686,7 @@ export function mountMediaWorkspace(hooks) {
 
   function updateMode() {
     const mode=get('operation').value;
+    if(currentPlanTask&&currentPlanTask.operation!==mode)currentPlanTask=null;
     const copy=mode==='copy';
     if(!copy)clipEditingIndex=-1;
     syncModeChrome(mode);
@@ -1728,7 +1745,12 @@ export function mountMediaWorkspace(hooks) {
     syncAudioPlaybackWarning();
   };
   const invalidateBudgetEvidence = () => {if(budgetSourceIdentity!==hooks.videoIdentity?.()){budgetEvidence=null;section.querySelector('#taskBudgetLedger').textContent='来源已变更；复制流与附件成本未测量。';}};
-  const mediaInfoListener = () => { invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
+  function syncReviewSource(){
+    currentPlanTask=null;const identity=hooks.videoIdentity?.()||'';
+    if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
+    syncTaskReview();
+  }
+  const mediaInfoListener = () => { syncReviewSource();invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
@@ -1767,6 +1789,7 @@ export function mountMediaWorkspace(hooks) {
     const raw=read(),media=await hooks.prepare(raw.operation);
     const task=compileTask({...raw,budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined});
     await hooks.validate?.(task);
+    currentPlanTask=task;
     renderContainerDecision(task);
     syncAudioPlaybackWarning(task,media);
     const compat = Array.isArray(task.compatibilityWarnings) && task.compatibilityWarnings.length
@@ -1794,6 +1817,7 @@ export function mountMediaWorkspace(hooks) {
     }):null;
     try{
       const saved=await Promise.resolve(hooks.save(result));
+      if(artifactReview)artifactReview.saveKind=saved?.kind||'';
       if(saved?.ok===false)throw Error(saved.error||'保存失败');
       if(saved?.pending){
         if(!nativeOutcome)throw Error('无法确认成品保存完成，批量任务已暂停');
@@ -1848,7 +1872,7 @@ export function mountMediaWorkspace(hooks) {
         if(clipBatchStopRequested)break;
         current=item;clipBatchCurrent=item.clip;phase='run';
         item.clip.state='running';
-        activeTask=item.task;taskStartedAt=performance.now();
+        activeTask=item.task;currentPlanTask=item.task;executingSourceName=hooks.sourceName?.()||'执行时来源';taskStartedAt=performance.now();
         section.querySelector('#taskProgress').value=0;
         section.querySelector('#taskPercent').textContent='0%';
         showClipMessage('正在处理片段 '+(item.index+1)+' / '+clips.length+'：'+item.clip.startText+' → '+item.clip.endText);
@@ -1859,6 +1883,7 @@ export function mountMediaWorkspace(hooks) {
         // The output is unique even for repeated same-source clips.
         completed={...result,name:clipOutputName(result.name,item.index+1)};
         completedStale=false;lastReport=null;
+        artifactReview={source:executingSourceName,task:structuredClone(item.task),report:outputReport(item.task,completed,(performance.now()-taskStartedAt)/1000)};
         section.querySelector('#taskProgress').value=1;
         section.querySelector('#taskPercent').textContent='100%';
         setTaskState('verified');
@@ -1934,6 +1959,7 @@ export function mountMediaWorkspace(hooks) {
       const result=await Promise.resolve(hooks.save(completed));
       if(result?.pending)return;
       if(result?.ok===false)throw Error(result.error||'保存失败');
+      if(artifactReview)artifactReview.saveKind=result?.kind||'';
       setTaskState('saved');
       settlePendingClipSave(true);
       status(result?.kind==='browser-download'?'已交给浏览器保存。':'成品已保存。');
@@ -1948,7 +1974,7 @@ export function mountMediaWorkspace(hooks) {
     e.preventDefault();
     if(clipAwaitingSave){status('先重试保存已验证的片段成品，避免重新剪切或覆盖。');return;}
     if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
-    busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
+    busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;artifactReview=null;currentPlanTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
     section.querySelector('#taskReport').disabled=true;
     section.querySelector('#taskProgress').value=0;
     section.querySelector('#taskPercent').textContent='0%';
@@ -1961,7 +1987,7 @@ export function mountMediaWorkspace(hooks) {
     try {
       status('正在读取素材与检查设置…');
       const {task,media}=await prepare();
-      activeTask=task;
+      activeTask=task;executingSourceName=hooks.sourceName?.()||'执行时来源';
       renderPlanSummary(task);
       for(const control of form.elements)control.disabled=true;
       section.querySelector('#taskCancel').disabled=false;
@@ -1969,6 +1995,7 @@ export function mountMediaWorkspace(hooks) {
       const started=performance.now();
       completed=await hooks.run(task,media,(p,message,meta)=>updateTaskProgress(p,message,meta));
       lastReport=outputReport(task,completed,(performance.now()-started)/1000);
+      artifactReview={source:executingSourceName,task:structuredClone(task),report:structuredClone(lastReport)};
       section.querySelector('#taskReport').disabled=false;
       section.querySelector('#taskProgress').value=1;
       section.querySelector('#taskPercent').textContent='100%';
@@ -2025,7 +2052,7 @@ export function mountMediaWorkspace(hooks) {
     if(['audio','audioTrack','audioRange','audioBitrate'].includes(sourceName))audioStreamPlan.refresh();
     if(!new Set(['quality','bitrate','rateMode','targetSize','sizeUnit','sizeReserve','sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
     markCompletedAsPrevious(sourceName);
-    activeTask=null;
+    activeTask=null;currentPlanTask=null;
     renderContainerDecision(null);
     syncAudioPlaybackWarning();
     renderPlanSummary();

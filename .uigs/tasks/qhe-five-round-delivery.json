@@ -1,8 +1,8 @@
 {
   "goal": "Implement most researched QHE workflows including VVC and task-centered UI within five work units",
   "status": "agent_execution_complete_pending_external_validation",
-  "round": 3,
-  "current_bounded_work_unit": "one bounded repair generation for round-three hosted fixture failures; round-four task UI remains next",
+  "round": 4,
+  "current_bounded_work_unit": "source/checked-plan/original-artifact manual review projection and post-completion inspect reachability",
   "completed_units": [
     {
       "round": 1,
@@ -60,37 +60,58 @@
         "trim-specific copied stream costs and FLAC re-encode unknown",
         "SAF source mutation/readback/provider cleanup field tests pending"
       ]
+    },
+    {
+      "round": 4,
+      "implementation": "complete",
+      "scope": "manual source/plan/artifact review; copied/removed stream and budget projection; original result ownership; saved-state inspect fix",
+      "local_node_tests": {
+        "pass": 211,
+        "skipped": 7,
+        "failed": 0
+      },
+      "real_ffmpeg_integration": {
+        "pass": 5,
+        "failed": 0
+      },
+      "build": "pass",
+      "review": "self-review; source frame ownership and browser save-kind addressed",
+      "limits": [
+        "guided hard-sub retains existing presentation",
+        "browser visual/runtime Pending",
+        "physical device Pending"
+      ]
     }
   ],
   "next_units": [
-    "task-centered responsive UI",
     "integration and delivery acceptance"
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
   "pr": 105,
-  "latest_durable_commit": "bd3b0536fc7b5a2f60a30fa4706e49ae4efd638c",
+  "latest_durable_commit": "c64cf42474655afb6e275c2bcef22bd0f1d41f2c",
   "external_validation_states": {
     "windows_vvc": "round 2 Windows smoke passed; VVC unsupported is separately reported by runtime fixture",
-    "browser": "round 2 failed mobile VVC horizontal overflow; intrinsic sizing repair implemented, round 3 rerun pending",
+    "browser": "VVC phone passed; saved-state plan inspection failure addressed in round 4, rerun Pending",
     "physical_device": "Pending",
     "windows_stream_plan": "round 2 runtime acceptance passed",
     "android_stream_plan": "round 2 compile failed nullable output properties; safe access repair implemented, round 3 rerun pending",
     "android_emulator": "round 2 failure; rerun pending",
-    "windows_budget": "Round 3 pending: source packet ledger/manual strict artifacts/export refusal",
+    "windows_budget": "Passed hosted Windows smoke run 38341203400",
     "android_budget": "Round 3 pending: Kotlin compile and instrumentation byte/contract guards",
     "browser_budget": "Round 3 pending: DOM budget/save/config/source/mode-switch fixtures",
     "round3_ci": "5 success, 2 fixture failures (repair submitted next), Android emulator pending at single status read",
-    "round3_fixture_repair": "Pending hosted Windows staging and settled-phone overflow validation"
+    "round3_fixture_repair": "Pending hosted Windows staging and settled-phone overflow validation",
+    "round4_ci": "Pending publication"
   },
   "blockers": [],
-  "updated_timestamp": "2026-10-13T03:19:32.595670+00:00",
+  "updated_timestamp": "2026-10-13T03:30:38.484570+00:00",
   "intake": {
     "status": "recorded",
-    "foundry_path": "inbox/tests/2026-10-11-qhe-phone-tablet-responsive-matrix.md"
+    "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"
   },
   "publication": {
-    "status": "published",
+    "status": "round_four_publication_in_progress",
     "destination": "11576865/Quick-Automatic-Hardsub-Encoder",
     "branch": "feat/qhe-five-round-delivery-20261013",
     "authorization": "User explicitly authorized public publication of round 3 to named repository and branch, PR #105.",

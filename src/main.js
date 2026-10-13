@@ -6170,6 +6170,7 @@ mountMediaWorkspace({
     if (state.nativeInputProbe?.ok) return mediaFromNativeProbe(state.nativeInputProbe);
     return null;
   },
+  sourceName: () => state.video?.name||'',
   videoIdentity: () => state.video
     ? [state.video.name,state.video.size,state.video.lastModified].join('|') : '',
   setBusy: value => {
