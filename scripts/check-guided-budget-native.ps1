@@ -151,6 +151,26 @@ try {
       [long]$trimStatus.outputPacketEvidence.audioPacketBytes[0]){
     throw 'Repeated Native completed job status lost the cached trim cost observation'
   }
+  # Independent short-media exercise of the same asynchronous worker that
+  # Windows Bridge uses for long completed output. It must not modify output.
+  $auditReceipt=Join-Path $work 'long-audit-worker-receipt.json'
+  $workerPath=(Resolve-Path './windows/trim-packet-audit.ps1').Path
+  $ffprobeExe=(Get-Command ffprobe.exe -ErrorAction Stop).Source
+  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $workerPath -Ffprobe $ffprobeExe -OutputFile $trimArtifact -ReceiptFile $auditReceipt
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $auditReceipt)){
+    throw 'B16 separate bounded post-output FFprobe worker failed.'
+  }
+  $workerEvidence=Get-Content -Raw -LiteralPath $auditReceipt | ConvertFrom-Json
+  $artifactStamp=Get-Item -LiteralPath $trimArtifact
+  if([string]$workerEvidence.scope -ne 'completed-artifact' -or
+     [long]$workerEvidence.sourceLength -ne [long]$artifactStamp.Length -or
+     [long]$workerEvidence.sourceWriteTicks -ne [long]$artifactStamp.LastWriteTimeUtc.Ticks -or
+     @($workerEvidence.audioPacketBytes).Count -ne 2 -or
+     [long]$workerEvidence.audioPacketBytes[0] -ne [long]$trimStatus.outputPacketEvidence.audioPacketBytes[0] -or
+     [long]$workerEvidence.audioPacketBytes[1] -ne [long]$trimStatus.outputPacketEvidence.audioPacketBytes[1]){
+    throw 'B16 independent async worker receipt differs from synchronous FFprobe output audit.'
+  }
+  Write-Host 'B16 isolated packet worker, source stamp and independent copied-audio totals passed.'
   Write-Host "B16 Native completed trim copy packet audit passed: source upper $sourceUpper, actual $trimTotal bytes."
   Write-Host 'Manual byte ceilings, blocked oversized export and independent source-cost scan passed.'
   function Test-CancelCleanup([int]$phase){
