@@ -21,6 +21,13 @@ module.exports=async(browser,baseUrl)=>{
   assert.equal(await page.locator('#taskObjectReview').getAttribute('data-plan-checked'),'true');
   assert.match(await page.locator('[data-review="plan-rows"]').textContent(),/音频 #0.*复制/);
   assert.match(await page.locator('#taskBudgetLedger').textContent(),/固定流\/附件.*0.00 MB/);
+  await page.evaluate(()=>{window.budgetTest.set('start','1');window.budgetTest.set('end','4');});
+  await page.click('#taskInspect');
+  assert.match(await page.locator('#taskBudgetLedger').textContent(),/裁切复制流按完整源流预留/);
+  assert.match(await page.locator('[data-review="plan-budget"]').textContent(),/裁切复制流按完整源流预留/);
+  await page.evaluate(()=>{window.budgetTest.set('start','0');window.budgetTest.set('end','');});
+  await page.click('#taskInspect');
+  assert.doesNotMatch(await page.locator('#taskBudgetLedger').textContent(),/裁切复制流/);
   await page.evaluate(()=>{const s=window.budgetTest;s.set('configName','budget-fixture');document.querySelector('#taskStore').click();});
   assert.equal(await page.evaluate(()=>JSON.stringify(JSON.parse(localStorage.getItem('media-workspace-configs-v2'))).includes('audioPacketBytes')),false);
   await page.click('#taskRun');await page.waitForFunction(()=>!window.budgetTest.busy);

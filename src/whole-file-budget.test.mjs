@@ -11,7 +11,7 @@ test('measured copied payload and attachments reduce the available video budget'
 });
 test('unknown, missing or fractional packet costs cannot become zero-cost evidence',()=>{
  for(const audioPacketBytes of [[],[null],[1.5],[-1]])assert.throws(()=>sizeBudget({...raw,keepAttachments:false,budgetEvidence:{version:1,scope:'full-source',audioPacketBytes}},10,1));
- assert.throws(()=>sizeBudget({...raw,keepAttachments:false,hasTrimRange:true,budgetEvidence:{version:1,scope:'full-source',audioPacketBytes:[10]}},10,1));
+ assert.throws(()=>sizeBudget({...raw,keepAttachments:false,hasTrimRange:true},10,1));
 });
 test('strict budget acceptance rejects oversized artifacts and offers bounded recovery',()=>{
  const report=outputReport({operation:'transcode',bitrate:100000,audio:'none',expectedDuration:10,budgetPolicy:'strict-ceiling',sizePlan:{targetBytes:100000,fixedPayloadBytes:10000}}, {outputBytes:120000,verified:true},1);
@@ -46,4 +46,17 @@ test('Windows task entry point has exactly one UTF-8 BOM before its comment',asy
  const {readFile}=await import('node:fs/promises');
  const bytes=await readFile(new URL('../windows/media-task.ps1',import.meta.url));
  assert.equal(bytes.subarray(0,4).toString('hex'),'efbbbf23');
+});
+
+test('trimmed copies reserve whole-source payload without proportional extrapolation',()=>{
+ const b=sizeBudget({...raw,keepAttachments:false,keepSubtitles:true,hasTrimRange:true,sourceDuration:100,trimDuration:5,audioPlan:[{sourceOrdinal:0,action:'copy',range:'trim'},{sourceOrdinal:1,action:'copy',range:'full'}],subtitleRange:'trim',budgetEvidence:{version:1,scope:'full-source',audioPacketBytes:[100000,20000],subtitlePacketBytes:[5000]}},5,2);
+ assert.equal(b.fixedPayloadBytes,125000);
+ assert.equal(b.copiedTrimReserveBytes,105000);
+ assert.equal(b.videoRate,Math.floor((960000-125000)*8/5));
+ const full=sizeBudget({...raw,keepAttachments:false,budgetEvidence:{version:1,scope:'full-source',audioPacketBytes:[100000]}},100,1);
+ assert.equal(full.copiedTrimReserveBytes,0);
+});
+test('full-source reserve refuses invalid evidence and insufficient budget even for tiny trims',()=>{
+ const base={...raw,keepAttachments:false,hasTrimRange:true,sourceDuration:1000,trimDuration:1};
+ for(const evidence of [{version:1,scope:'trim',audioPacketBytes:[10]},{version:1,scope:'full-source',audioPacketBytes:[null]},{version:1,scope:'full-source',audioPacketBytes:[1000000]}]) assert.throws(()=>sizeBudget({...base,budgetEvidence:evidence},1,1));
 });

@@ -2,7 +2,7 @@
   "goal": "Implement most researched QHE workflows including VVC and task-centered UI within five work units",
   "status": "five_round_scoped_delivery_complete_field_validation_pending",
   "round": 5,
-  "current_bounded_work_unit": "final integrated evidence acceptance and screenshot review",
+  "current_bounded_work_unit": "follow-up conservative budget reservation for trimmed copied streams",
   "completed_units": [
     {
       "round": 1,
@@ -106,9 +106,9 @@
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
   "pr": 105,
-  "latest_durable_commit": "95fc86dee63585493818f9c452b69649dd68fc1c",
+  "latest_durable_commit": "4549acf57e13514c5bcbfe66612b1c3d847fa76e",
   "external_validation_states": {
-    "windows_vvc": "Structured PASS; actual UNSUPPORTED (libvvenc not included in CI), not runtime acceptance",
+    "windows_vvc": "PASS hosted three actual jobs, run 38345727802; physical Pending",
     "browser": "Passed run 38342175981; production desktop and VVC phone screenshots visually reviewed",
     "physical_device": "Pending",
     "windows_stream_plan": "Passed exact checkpoint 95fc86d, run 38342175957",
@@ -124,14 +124,13 @@
     "windows_smoke_latest": "Passed run 38342175973"
   },
   "blockers": [
-    "Windows VVC actual runtime not tested: libvvenc absent in CI",
     "physical GPU/Windows/Android/SAF/provider dialogs/long-form/player compatibility Pending",
     "source-cost measurement Windows-only; trimmed copied payload and FLAC re-encode costs unknown",
     "guided hard-sub retains prior interface",
     "long vertical manual editor and duplicated overview content remain UI refinement debt",
     "no main merge or deployment"
   ],
-  "updated_timestamp": "2026-10-13T03:43:40.440605+00:00",
+  "updated_timestamp": "2026-10-13T05:57:36.349621+00:00",
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"

@@ -13,16 +13,21 @@ export function sizeBudget(raw, duration, audioTracks) {
   if (!(duration > 0) || !Number.isFinite(bytes) || bytes <= 0 || bytes > 1e13) throw Error('目标体积或时长无效');
   if (!Number.isFinite(reserve) || reserve < 1 || reserve > 30) throw Error('体积余量须为 1–30%');
   const evidence = raw.budgetEvidence;
+  let copiedTrimReserveBytes = 0;
   const measured = (key, ordinals, trimmed=false) => {
     if (!ordinals.length) return 0;
-    if (trimmed || evidence?.version !== 1 || evidence.scope !== 'full-source')
-      throw Error('体积预算中的复制流/附件成本未知：请测量当前完整源文件；裁切复制流尚无范围专属计量');
+    if (evidence?.version !== 1 || evidence.scope !== 'full-source')
+      throw Error('体积预算中的复制流/附件成本未知：请测量当前完整源文件');
     const values = evidence[key];
-    return ordinals.reduce((sum, ordinal) => {
+    const total = ordinals.reduce((sum, ordinal) => {
       const value = values?.[ordinal];
       if (!Number.isSafeInteger(value) || value < 0) throw Error('复制流/附件测量不完整，请重新测量或改用有损音频');
       return sum + value;
     }, 0);
+    // Keep the whole measured payload for a trimmed copy. Never scale by duration:
+    // packet boundaries and overlapping subtitle events need not scale linearly.
+    if (trimmed) copiedTrimReserveBytes += total;
+    return total;
   };
   let fixedPayloadBytes = 0, encodedAudioBytes = 0;
   const sourceDuration = Number(raw.sourceDuration || duration), trimDuration = Number(raw.trimDuration || duration);
@@ -54,7 +59,7 @@ export function sizeBudget(raw, duration, audioTracks) {
   const containerReserveBytes = Math.ceil(bytes * reserve / 100);
   const videoRate = Math.floor((bytes - containerReserveBytes - fixedPayloadBytes - encodedAudioBytes) * 8 / duration);
   if (videoRate < 1000) throw Error('音频、固定流与封装余量已用尽预算，请增大目标体积或调整输出计划');
-  return { targetBytes: Math.round(bytes), reservePercent: reserve, containerReserveBytes, fixedPayloadBytes, encodedAudioBytes,
+  return { targetBytes: Math.round(bytes), reservePercent: reserve, containerReserveBytes, fixedPayloadBytes, encodedAudioBytes, copiedTrimReserveBytes,
     audioRate, videoRate, estimatedBytes: videoRate * duration / 8 + encodedAudioBytes + fixedPayloadBytes };
 
 }

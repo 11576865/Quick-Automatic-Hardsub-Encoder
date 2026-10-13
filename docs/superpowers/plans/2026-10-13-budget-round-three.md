@@ -32,3 +32,27 @@ persist branch/PR/task record. Native/mobile/browser checks remain separate evid
 - Publication checkpoint: implementation commit 2c8aef3, validation checkpoint ac42de8. Automatic approval review rejected the public GitHub push both before and after owner/public-visibility verification. PR #105 remains at f916c5a; round-three CI has not started. No connector workaround attempted. Await explicit user authorization for this exact public feature-branch push.
 
 - 2026-10-13 hosted repair generation: Android compiler and Windows per-stream/paired-codec passed. Windows strict fixture searched guided instead of manual staging namespace; corrected. VVC fixture measured immediately after resize unlike existing matrix; added uiShell and animation-frame synchronization with unchanged overflow assertion plus diagnostics. Both local guards RED→GREEN; 206 pass/7 skips, build pass. Hosted repair Pending; round-four UI remains next.
+
+
+## Follow-up: conservative trimmed-copy budgets — 2026-10-13
+
+The original exact trim-cost gap remains. To unblock bounded size jobs safely,
+selected trimmed copied audio/subtitles reserve their entire measured source-stream
+packet payload rather than scaling by duration. Full-range copied streams and
+attachments retain their prior accounting. `copiedTrimReserveBytes` is a subset
+of fixedPayloadBytes, never added twice; the ledger and checked-plan UI disclose
+the reservation. No new measurement protocol or imported source authorization.
+
+Missing/invalid measurements and insufficient budgets still refuse compilation.
+Actual artifact byte ceiling remains authoritative; the allocation is not a claim
+of output-size convergence or exact trim packet selection. Large source payload
+may consume a small clip's budget; change the plan or budget instead of inventing
+a proportional estimate. FLAC re-encode remains unknown.
+
+Local RED: two pure/model failures and actual FFmpeg trim compilation refusal.
+GREEN: 218 Node passes/7 conditional skips; real FFmpeg 5/5; Vite build pass.
+Real test verifies trimmed FLAC/SRT packet byte costs against full-source reserve,
+attachment retention budget and independent full decode. Fixture includes both
+cross-boundary and in-range subtitle events; no promise of subtitle boundary fidelity.
+Browser regression checks ledger/plan disclosure and removal after clearing trim;
+local Chromium missing, hosted browser/Windows validation Pending.

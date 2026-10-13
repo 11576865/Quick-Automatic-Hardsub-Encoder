@@ -7,3 +7,10 @@ test('compiled output plan exposes retained and removed source rows',()=>{const 
 test('editing a plan cannot relabel the earlier artifact encoder or source',()=>{const artifact={source:'原始素材',task,report:{verified:true,deliveryAllowed:true,outputBytes:1234}};const m=buildTaskReview({task:{...task,encoder:'libx264'},artifact,stale:true,state:'saved'});assert.match(m.artifact.status,/上一任务/);assert.equal(m.artifact.encoder,'libx265');assert.equal(m.artifact.source,'原始素材');assert.equal(m.plan.encoder,'libx264');assert.equal(artifact.task.encoder,'libx265');});
 test('unverified or rejected output never claims verified delivery',()=>{const m=buildTaskReview({artifact:{task,report:{verified:null,deliveryAllowed:false,outputBytes:null}},state:'failed'});assert.match(m.artifact.status,/禁止交付/);assert.match(m.artifact.verification,/未提供/);assert.equal(m.artifact.bytes,null);});
 test('saved status distinguishes browser handoff from file-system confirmation',()=>{const m=buildTaskReview({artifact:{task,report:{verified:true,deliveryAllowed:true,outputBytes:10},saveKind:'browser-download'},state:'saved'});assert.match(m.artifact.status,/浏览器/);assert.match(m.artifact.playback,/未验证/);});
+
+test('checked budget discloses full-source reservation for trimmed copied streams',()=>{
+ const m=buildTaskReview({task:{...task,sizePlan:{targetBytes:1000000,fixedPayloadBytes:200000,encodedAudioBytes:0,containerReserveBytes:40000,copiedTrimReserveBytes:200000}}});
+ assert.match(m.plan.budget.join(' '),/裁切复制流.*完整源流.*0.20 MB/);
+ const full=buildTaskReview({task:{...task,sizePlan:{targetBytes:1000000,fixedPayloadBytes:200000,encodedAudioBytes:0,containerReserveBytes:40000,copiedTrimReserveBytes:0}}});
+ assert.doesNotMatch(full.plan.budget.join(' '),/裁切复制流/);
+});

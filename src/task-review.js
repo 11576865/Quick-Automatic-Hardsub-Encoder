@@ -18,7 +18,7 @@ export function buildTaskReview({media=null,hasSource=false,task=null,artifact=n
  }
  return {
   source:{status:media?'来源参数已读取':hasSource?'来源未读取参数':'未选择来源',facts:media?[media.videoCodec||media.codec||'视频编码未知',media.width&&media.height?media.width+'×'+media.height:'尺寸未知',Number(media.duration)>0?Number(media.duration).toFixed(2)+' 秒':'时长未知',Number(media.audioTracks??media.audioStreams?.length??0)+' 条音轨']:[]},
-  plan:{status:task?'当前方案已检查':'当前方案未检查',encoder:task?.encoder||null,container:task?.outputContainer||null,rows,budget:task?.sizePlan?['目标 '+formatSize(task.sizePlan.targetBytes),'固定负载 '+formatSize(task.sizePlan.fixedPayloadBytes),'编码音频 '+formatSize(task.sizePlan.encodedAudioBytes),'封装余量 '+formatSize(task.sizePlan.containerReserveBytes)]:[]},
+  plan:{status:task?'当前方案已检查':'当前方案未检查',encoder:task?.encoder||null,container:task?.outputContainer||null,rows,budget:task?.sizePlan?['目标 '+formatSize(task.sizePlan.targetBytes),'固定负载 '+formatSize(task.sizePlan.fixedPayloadBytes),'编码音频 '+formatSize(task.sizePlan.encodedAudioBytes),'封装余量 '+formatSize(task.sizePlan.containerReserveBytes),...(task.sizePlan.copiedTrimReserveBytes>0?['裁切复制流按完整源流预留 '+formatSize(task.sizePlan.copiedTrimReserveBytes)]:[])]:[]},
   artifact:{available:!!artifact,status:artifactStatus,source:artifact?.source||'来源未记录',encoder:artifact?.task?.encoder||null,container:artifact?.task?.outputContainer||null,bytes:Number.isSafeInteger(report?.outputBytes)&&report.outputBytes>0?report.outputBytes:null,verification:report?.verified===true?'后端成品验证已通过':report?.verified===false?'后端成品验证未通过':'未提供后端验证回执',playback:'外部播放器与真实设备兼容性未验证'}
  };
 }

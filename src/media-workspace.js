@@ -1387,7 +1387,7 @@ export function mountMediaWorkspace(hooks) {
     const selectedVideos=String(raw.videoStreams||'0').trim().toLowerCase()==='all'?'全部视频流':'视频 #'+String(raw.videoStreams||'0').split(',').map(x=>x.trim()).filter(Boolean).join(' / #');
     const rangeSummary='视频'+(raw.videoRange==='full'?'完整':'IN/OUT')+' · 音频'+(raw.audioRange==='full'?'完整':'IN/OUT');
     section.querySelector('#taskPlanOutput').textContent=selectedVideos+' · '+size+' · '+audio+' · '+container;
-    if(task?.sizePlan){const b=task.sizePlan;section.querySelector('#taskBudgetLedger').textContent='目标 '+formatSize(b.targetBytes)+' · 固定流/附件 '+formatSize(b.fixedPayloadBytes)+' · 编码音频 '+formatSize(b.encodedAudioBytes)+' · 封装余量 '+formatSize(b.containerReserveBytes)+' · 视频 '+(b.videoRate/1e6).toFixed(3)+' Mbps';}
+    if(task?.sizePlan){const b=task.sizePlan;section.querySelector('#taskBudgetLedger').textContent='目标 '+formatSize(b.targetBytes)+' · 固定流/附件 '+formatSize(b.fixedPayloadBytes)+' · 编码音频 '+formatSize(b.encodedAudioBytes)+' · 封装余量 '+formatSize(b.containerReserveBytes)+' · 视频 '+(b.videoRate/1e6).toFixed(3)+' Mbps'+(b.copiedTrimReserveBytes>0?' · 裁切复制流按完整源流预留 '+formatSize(b.copiedTrimReserveBytes):'');}
     section.querySelector('#taskPlanNote').textContent=note+' '+rangeSummary+'。'+(task?.estimatedBytes>0?' 当前任务估计数据量 '+formatSize(task.estimatedBytes)+'。':'');
   };
   const renderContainerDecision = task => {
@@ -1943,7 +1943,7 @@ export function mountMediaWorkspace(hooks) {
       if(identity!==hooks.videoIdentity?.())throw Error('测量期间来源变更，结果已丢弃');
       if(result?.version!==1||result.scope!=='full-source')throw Error('成本测量格式无效');
       budgetEvidence=result;budgetSourceIdentity=identity;
-      ledger.textContent='完整源流成本已测量。点击“验证当前方案”查看预算分项；裁切复制流和 FLAC 重编码仍未知。';
+      ledger.textContent='完整源流成本已测量。点击“验证当前方案”查看预算分项；裁切复制流按完整源流保守预留，FLAC 重编码仍未知。';
     }catch(e){budgetEvidence=null;ledger.textContent='成本仍未知：'+e.message;}
     finally{busy=false;hooks.setBusy(false);button.disabled=false;syncTaskActions();}
   };
