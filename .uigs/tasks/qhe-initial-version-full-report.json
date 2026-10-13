@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_single_branch_budget_implemented_hosted_pending",
-  "current_bounded_work_unit": "B13 single-encoder complete-file projection and atomic size adoption",
+  "status": "incomplete_full_report_guided_budget_projection_implemented_hosted_pending",
+  "current_bounded_work_unit": "B13 Guided ASS measured whole-file frontier projection and source-change refresh",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -116,9 +116,9 @@
       "id": "B13",
       "source": "R19 §09、§11、P3；R24 §14、§18",
       "requirement": "总文件目标与固定/编码音轨、字幕、附件、封装预算接入同一决策坐标",
-      "implementation_status": "Windows候选比较及单编码器已共享完整账本；上一轮9CI成功；本轮外部验收Pending",
-      "evidence": "whole-file-frontier.js；transcode-calibration-panel.js；size-budget-adoption.js；245 local tests/build pass",
-      "remaining": "引导ASS预算决策仍待统一；单分支browser/native复验Pending；B16精确裁切/FLAC/跨端计量仍开放"
+      "implementation_status": "Manual multi/single complete ledger paths implemented; Guided ASS curve now projects source-owned measured packet costs and planned encoded audio; separate Guided formal rate-planning still legacy; latest exact-head platform CI pending",
+      "evidence": "whole-file-frontier.js；transcode-calibration-panel.js；size-budget-adoption.js；245 local tests/build pass；guided-whole-file-budget.js + 3 unit regressions (90f4162 frontend success)；2f73032 UI refresh hook/wiring regressions frontend success",
+      "remaining": "Guide actual plan feasibility/rate calculation currentGuidedBudgetAssessment/buildEncodePlan still uses separate estimated audio and fixed reserve; must reconcile with compiler and classify measured-vs-estimated copy costs. B16 exact trim/FLAC/cross-platform unresolved; physical and long-form field pending"
     },
     {
       "id": "B14",
@@ -221,10 +221,12 @@
     "Report sections and acceptance gates mapped to current code and evidence",
     "Five-round completion classified as historical subset, not initial-version completion",
     "Manual complete-file axis/ledger/default; explicit video diagnostic; exact compiled rate; strict policy transaction; local checks passed",
-    "Single-encoder panel uses shared whole ledger/frontier; current encoder preserved during exact size/strict-policy adoption; 245 local tests and build pass"
+    "Single-encoder panel uses shared whole ledger/frontier; current encoder preserved during exact size/strict-policy adoption; 245 local tests and build pass",
+    "Guided ASS source-owned copy packet budget projection shares wholeFileLedger; preserves explicit estimated-copy distinction, 3 new pure budget regressions (frontend CI PASS at 90f4162)",
+    "Guided shared budget measurement/source change notifies decision UI to recompute; UI wiring regression PASS in exact-head frontend workflow at 2f73032; physical/browser loaded source acceptance remains open"
   ],
   "next_units": [
-    "Read hosted single-branch complete-budget lifecycle and continue Guided/ASS budget decision integration; B16 cost coverage remains open",
+    "Close B13 Guided plan generation vs shared budget coordinate: currentGuidedBudgetAssessment/buildEncodePlan still use legacy audio/rate estimator; verify exact compiled rate and fail-closed copy cost before claiming full contract; B16 trim/FLAC/cross-platform remains open",
     "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
     "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
     "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
@@ -232,14 +234,15 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "73c9470bc2c50bf225a8b39e8c9fa45e8527cc3b",
+  "latest_durable_commit": "2f730325f618648d6d3acd0e654b699037741304",
   "external_validation_states": {
-    "latest_tested_implementation": "9/9 hosted success at bbec19d; not full report acceptance",
+    "latest_tested_implementation": "QHE source implementation 90f4162 frontend/Windows VVC smoke/paired/Stream Plan and UIGS green; Android emulator in progress at checkpoint. 2f73032 exact-head frontend green; Windows/Android pending. No full-report acceptance.",
     "physical_devices": "Pending",
     "whole_product": "Incomplete",
     "new_whole_file_frontier": "Pending hosted browser and platform",
     "previous_whole_file_frontier": "9/9 success at 73c9470",
-    "new_single_budget": "Pending browser and platform regression"
+    "new_single_budget": "Pending browser and platform regression",
+    "new_guided_budget": "2f73032 source-owned Guided shared projection + UI refresh; frontend run 38411712071 SUCCESS; Windows/Android physical and remaining current-head workflows Pending at checkpoint"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
