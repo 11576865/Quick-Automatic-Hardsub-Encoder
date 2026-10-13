@@ -2,14 +2,14 @@ const assert=require('node:assert/strict');
 // Real production workspace; only source/encode/save callbacks are simulated.
 module.exports=async(browser,baseUrl)=>{
  const page=await browser.newPage();
- await page.route('**/whole-budget-fixture',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><body><section id="inputCard"></section><button id="guidedToManual">CPU 参数方案</button></body></html>'}));
+ await page.route('**/whole-budget-fixture',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><body><style>.hardsub-strategy-suppressed{display:none}</style><section id="inputCard"></section><section id="subtitleCard"></section><div id="hardsubManualMount"></div><section id="planCard"></section><div id="sharedMediaOutputMount"></div><section id="encodeCard"></section><button data-hardsub-strategy="guided">引导</button><button data-hardsub-strategy="manual">专业</button><button id="guidedToManual">CPU 参数方案</button></body></html>'}));
  try{
   await page.goto(baseUrl+'/whole-budget-fixture');
   await page.evaluate(async()=>{
    const {mountMediaWorkspace}=await import('/src/media-workspace.js');
    const state=window.budgetTest={source:'A',busy:false,saves:0,bytes:1100000,tasks:[]};
    const media={duration:5,fps:24,videoTracks:1,audioTracks:1,audioCodecs:['flac'],audioStreams:[{codec:'flac'}],formatName:'matroska'};
-   mountMediaWorkspace({guidedSnapshot:()=>({plan:{codec:'h265',mode:'crf',crf:22,preset:'medium'},audio:{audio:'aac',audioBitrate:128000},container:'mkv'}),busy:()=>state.busy,setBusy:v=>state.busy=v,isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.source,sourceName:()=>state.source,mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},log:()=>{},cancel:()=>{},save:()=>{state.saves++;return {ok:true};},measureBudget:async()=>({version:1,scope:'full-source',audioPacketBytes:[1000],subtitlePacketBytes:[],attachmentBytes:[]}),run:async task=>{state.tasks.push(task);return {outputBytes:state.bytes,verified:true};}});
+   state.workspace=mountMediaWorkspace({guidedSnapshot:()=>({plan:{codec:'h265',mode:'crf',crf:22,preset:'medium'},audio:{audio:'aac',audioBitrate:128000},container:'mkv'}),busy:()=>state.busy,setBusy:v=>state.busy=v,isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.source,sourceName:()=>state.source,mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},log:()=>{},cancel:()=>{state.rejectRun?.(Error('已取消'));},save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true};},measureBudget:async()=>({version:1,scope:'full-source',audioPacketBytes:[1000],subtitlePacketBytes:[],attachmentBytes:[]}),run:async task=>{state.tasks.push(task);if(state.deferRun)return new Promise((resolve,reject)=>{state.rejectRun=reject;});return {outputBytes:state.bytes,verified:true};}});
    const form=document.querySelector('#mediaTaskForm');
    const set=(key,value)=>{const el=form.elements.namedItem(key);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));};
    set('operation','transcode');set('rateMode','size');set('targetSize','1');set('budgetPolicy','strict-ceiling');
@@ -65,6 +65,33 @@ module.exports=async(browser,baseUrl)=>{
   assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeHandoff,'handoff must not encode');
   await page.click('#taskInspect');
   assert.equal(await page.locator('#taskObjectReview').getAttribute('data-plan-checked'),'true');
+  await page.locator('[data-hardsub-strategy="manual"]').click();
+  await page.evaluate(()=>{window.budgetTest.set('preset','fast');window.budgetTest.set('audioPlan',JSON.stringify([{sourceOrdinal:0,action:'aac',bitrate:64000,channels:1}]));});
+  const beforeViewSwitch=await page.locator('#mediaTaskForm').evaluate(form=>JSON.stringify([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.value]).sort((a,b)=>a[0].localeCompare(b[0]))));
+  await page.locator('[data-hardsub-strategy="guided"]').click();
+  assert.equal(await page.locator('#mediaTaskForm').evaluate(form=>JSON.stringify([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.value]).sort((a,b)=>a[0].localeCompare(b[0])))),beforeViewSwitch,'switching views must preserve authoritative values');
+  assert.equal(await page.locator('#mediaTaskForm').count(),1);
+  assert.equal(await page.locator('#taskEncoding').isVisible(),false);
+  assert.equal(await page.locator('#mediaWorkspace').isVisible(),true);
+  assert.equal(await page.locator('#encodeCard').isVisible(),false);
+  await page.evaluate(()=>window.budgetTest.workspace.runCurrent());
+  assert.equal(await page.evaluate(()=>window.budgetTest.tasks.at(-1).preset),'fast');
+  assert.equal(await page.evaluate(()=>window.budgetTest.tasks.at(-1).audioPlan[0].channels),1);
+  assert.equal(await page.locator('#taskSave').isDisabled(),false);
+  const runsBeforeRetry=await page.evaluate(()=>window.budgetTest.tasks.length);
+  await page.evaluate(()=>window.budgetTest.saveFailure=true);
+  await page.click('#taskSave');
+  assert.match(await page.locator('#taskStatus').textContent(),/保存失败/);
+  await page.locator('[data-hardsub-strategy="manual"]').click();
+  await page.evaluate(()=>window.budgetTest.saveFailure=false);
+  await page.click('#taskSave');
+  assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeRetry,'save retry after changing view must not re-encode');
+  await page.locator('[data-hardsub-strategy="guided"]').click();
+  await page.evaluate(()=>{window.budgetTest.deferRun=true;void window.budgetTest.workspace.runCurrent();});
+  await page.waitForFunction(()=>!!window.budgetTest.rejectRun);
+  await page.click('#taskCancel');
+  await page.waitForFunction(()=>!window.budgetTest.busy);
+  assert.match(await page.locator('#taskStatus').textContent(),/任务已取消/);
 
  }finally{await page.close();}
  console.log('Whole-file workspace budget, strict save gate, config exclusion and source invalidation passed (simulated media backend).');

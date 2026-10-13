@@ -1,0 +1,42 @@
+{
+  "goal": "Guided and professional views share authoritative current task and complete execution lifecycle",
+  "status": "local_implementation_verified_external_validation_pending",
+  "current_bounded_work_unit": "shared current task, validation, encode, cancellation, result and save retry across views",
+  "completed_units": [
+    "One authoritative form remains visible in guided compact and professional expanded presentations",
+    "Switching views retains existing fields, checked plan and original artifact",
+    "Normal guided execution delegates to same submit handler; legacy recovered job monitor/export retained",
+    "Budget measurement remains accessible in guided; reparented output controls invalidate checked evidence"
+  ],
+  "next_units": [
+    "Read hosted browser full flow, failure/cancel/save retry and responsive screenshots",
+    "Finish remaining compression resolution comparison and acceptance separately"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "104d9cd41477a3c2aca465037e2bca679e5e1851",
+  "local_tests": {
+    "passed": 229,
+    "skipped": 8,
+    "failed": 0,
+    "real_ffmpeg_passed": 6,
+    "build": "pass"
+  },
+  "external_validation_states": {
+    "previous_head": "all nine workflows pass at 104d9cd",
+    "new_browser": "Pending",
+    "native_shared_task": "existing task API; new regression generation Pending",
+    "physical_devices": "Pending"
+  },
+  "blockers": [
+    "Browser full flow and production screenshots not yet observed",
+    "Guided goal exploration remains an explicitly applied CPU template, not automatic adoption",
+    "Legacy recovered tasks retain separate archived monitor/export lifecycle",
+    "Physical, long-form and independent quality/compatibility claims remain Pending"
+  ],
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/observations/2026-10-13-qhe-shared-task-presentation-and-execution.md"
+  },
+  "updated_timestamp": "2026-10-13T07:01:08.751092+00:00"
+}

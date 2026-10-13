@@ -1,3 +1,4 @@
+import {sharedTaskPresentation} from './shared-task-presentation.js';
 import {guidedTaskSettings} from './guided-task-handoff.js';
 import {buildTaskReview,renderTaskReview} from './task-review.js';
 import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
@@ -269,6 +270,10 @@ export function mountMediaWorkspace(hooks) {
   else document.querySelector('#inputCard').before(modeNav);
   document.querySelector('#inputCard').after(section);
   const form = section.querySelector('form'), get = name => form.elements.namedItem(name);
+  const budgetTools=document.createElement('section');budgetTools.className='shared-budget-tools';budgetTools.id='taskBudgetTools';budgetTools.setAttribute('aria-label','完整文件预算');
+  section.querySelector('#taskPlanSummary').after(budgetTools);
+  budgetTools.append(section.querySelector('#taskBudgetLedger'),section.querySelector('#taskMeasureBudget'));
+
   const modeButtons = [...modeNav.querySelectorAll('[data-media-mode]')];
   const strategyButtons = [...document.querySelectorAll('[data-hardsub-strategy]')];
   const manualMount = document.querySelector('#hardsubManualMount');
@@ -1655,9 +1660,12 @@ export function mountMediaWorkspace(hooks) {
       if (outputPolicy && outputPolicy.parentElement !== form) outputPolicyAnchor.after(outputPolicy);
     }
 
-    section.classList.toggle('hardsub-strategy-suppressed', hardsub && (guided || !productionAvailable));
-    document.querySelector('#planCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
-    document.querySelector('#encodeCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
+    const view=sharedTaskPresentation({operation:mode,strategy:hardsubStrategy,sourceReady:!!productionAvailable,legacyJob:!!hooks.legacyGuidedJob?.()});
+    section.classList.toggle('hardsub-strategy-suppressed',view.workspaceSuppressed);
+    section.classList.toggle('guided-shared-task',view.hideParameters);
+    section.querySelector('#taskEncoding').hidden=view.hideParameters;
+    document.querySelector('#planCard')?.classList.toggle('hardsub-strategy-suppressed',view.hideGoalExplorer);
+    document.querySelector('#encodeCard')?.classList.toggle('hardsub-strategy-suppressed',view.hideLegacyExecution);
   }
 
   for (const button of strategyButtons) {
@@ -1677,7 +1685,6 @@ export function mountMediaWorkspace(hooks) {
       const settings=guidedTaskSettings(hooks.guidedSnapshot?.(),initialManualSettings);
       applyConfig(settings);
       activeTask=null;currentPlanTask=null;transcodeCurves.invalidate();
-      hardsubStrategy='manual';localStorage.setItem('hardsub-control-strategy-v1','manual');
       syncHardsubStrategyChrome();syncTaskReview();renderPlanSummary();
       status('已按引导目标生成 CPU 参数方案；需重新验证，原采样证据未转移。目标体积将按逐流计划重新核算。');
       section.scrollIntoView?.({block:'start'});
@@ -1800,7 +1807,7 @@ export function mountMediaWorkspace(hooks) {
   get('videoStreams').addEventListener('input',()=>{clearTimelineFrameCache();renderPlanSummary(activeTask);});
   section.querySelector('#taskLoadPreset').onclick=()=>{markCompletedAsPrevious('preset');updatePreset(true);get('quality').value=['av1','h266'].includes(get('codec').value)?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
   let platformKey='';
-  const platformTimer=setInterval(()=>{const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
+  const platformTimer=setInterval(()=>{syncHardsubStrategyChrome();const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
   const prepare=async()=>{
     const raw=read(),media=await hooks.prepare(raw.operation);
     const task=compileTask({...raw,budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined});
@@ -2073,9 +2080,11 @@ export function mountMediaWorkspace(hooks) {
     syncAudioPlaybackWarning();
     renderPlanSummary();
   };
+  outputPolicy?.addEventListener('input',event=>{if(!form.contains(event.target))invalidateCompiledPlan(event);});
+  outputPolicy?.addEventListener('change',event=>{if(!form.contains(event.target))invalidateCompiledPlan(event);});
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
   initialManualSettings=read();
-  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,runCurrent:()=>form.onsubmit({preventDefault(){}}),refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }

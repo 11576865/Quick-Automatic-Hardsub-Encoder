@@ -1,3 +1,5 @@
+import {executeGuidedTask} from './shared-task-presentation.js';
+let mediaWorkspace;
 import {outputReport} from './media-planning.js';
 import { validateEncoderSupport, vvcCapability } from './media-capabilities.js';
 import { mountMediaWorkspace } from './media-workspace.js';
@@ -307,8 +309,9 @@ app.innerHTML = `
   </section>
   <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
-    <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>目标与编码器</p></div></div>
-    <button type="button" id="guidedToManual" class="secondary">以当前目标生成 CPU 参数方案</button>
+    <div class="card-heading"><span class="step-no">04</span><div><h2>引导目标</h2><p>探索目标，确认后写入下方当前任务</p></div></div>
+    <button type="button" id="guidedToManual" class="secondary">将引导目标写入当前任务（CPU）</button>
+    <p class="note">目标探索不会直接改变下方当前任务；确认写入后，执行与保存都使用当前任务。</p>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -1571,7 +1574,9 @@ $('adoptSizeFrontierBranchBtn').addEventListener('click',()=>{
 });
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
 $('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
-$('encodeBtn').addEventListener('click', () => runWebTask(runEncode));
+$('encodeBtn').addEventListener('click', () => {
+  void executeGuidedTask({legacyJob:!!state.nativeCompletedJob||!!state.nativeJobId,shared:mediaWorkspace,runLegacy:()=>runWebTask(runEncode)}).catch(error=>log(error.message));
+});
 $('cancelEncodeBtn').addEventListener('click', () => {
   if (!state.nativeJobId) return;
   try {
@@ -5218,7 +5223,7 @@ function renderCodecCards() {
       '<dt>样本视频码率</dt><dd>' + formatBitrate(sampleBitrate) + '</dd>' +
       '<dt>SSIM</dt><dd>' + (r.ssim ? r.ssim.toFixed(5) : '未取得') + '</dd>' +
       '<dt>参数</dt><dd>CRF ' + r.crf + ' · ' + r.preset + '</dd></dl>' +
-      '<div class="button-row"><button class="advanced-choose" data-codec="' + codec + '">采用此编码器</button></div></div>';
+      '<div class="button-row"><button class="advanced-choose" data-codec="' + codec + '">作为引导候选</button></div></div>';
   }).join('');
   document.querySelectorAll('.advanced-choose').forEach(btn => btn.onclick = () => selectCodec(btn.dataset.codec));
 }
@@ -6153,7 +6158,8 @@ function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&am
 
 // Manual tasks use the same selected files and owned native job lifecycle.
 let manualCancelRequested = false;
-mountMediaWorkspace({
+mediaWorkspace=mountMediaWorkspace({
+  legacyGuidedJob:()=>!!state.nativeCompletedJob||!!state.nativeJobId&&!state.operationBusy,
   guidedSnapshot: () => ({plan:buildEncodePlan(state.selectedCodec),audio:guidedHardsubAudioSettings(),container:resolveGuidedHardsubContainer().key}),
   busy: () => state.operationBusy || !!state.nativeJobId || !!state.nativeImportJobId,
   onModeChange: mode => {

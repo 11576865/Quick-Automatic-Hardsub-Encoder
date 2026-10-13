@@ -366,7 +366,9 @@ const {spawn}=require('node:child_process');
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile horizontal overflow: '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})).filter(el=>el.right>innerWidth+1).slice(0,12))));
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
   await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('[data-hardsub-strategy="guided"]').click();});
-  if(await page.locator('#mediaWorkspace').isVisible())throw Error('Goal-controlled hardsub exposes parameter controls on mobile');
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub lost the shared task workspace on mobile');
+  if(await page.locator('#taskEncoding').isVisible())throw Error('Guided hardsub exposes precision parameters on mobile');
+  if(await page.locator('#encodeCard').isVisible())throw Error('Guided hardsub exposes a second legacy executor without a recovered job');
   const phonePlanTabs=await page.locator('#planCard .plan-mode-tab').evaluateAll(tabs=>
     tabs.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width,visible:getComputedStyle(el).display!=='none'};}));
   if(phonePlanTabs.length!==3||phonePlanTabs.some(t=>!t.visible||t.left<-1||t.right>390.5||t.width<80))
