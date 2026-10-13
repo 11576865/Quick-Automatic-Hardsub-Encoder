@@ -113,3 +113,12 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - `src/manual-transcode-comparison.js` 为现有 Native source/reference/filter/window 证据附加 `referenceScope` 与纯转码域声明；`src/manual-transcode-compare-ui.js` 导出的观察收据保留该声明，VBR 实测和显式参数交接规则不变。
 - `src/decision-reference-scope.test.mjs` 已纳入 Draft-fast 和完整前端检查；7 项隔离 JavaScript 纯逻辑测试通过。完整 Node/浏览器/Native 及真实修改字幕字体的 UI 测试仍待验收。缓存哈希仅供失效判断，不代表源文件完整性认证。
 - B04/B11/B12/B15 均**未关闭**：完整 Guided ASS VBR/Manual 统一采用和回滚合同、复杂 ASS 字幕场景与实际成品仍待工程闭环。
+
+
+## 2026-10-14 B11 Windows Native 真正 ASS 渲染参考的单遍 VBR 两窗验收路径
+
+- 新增原生 `sampleExact + guidedRenderedReference + withSubtitles + measureSsim`，与现有 Manual `windows-native-exact-vbr-v1` 分开。Native 先以相同 ASS/font filter 构造 FFV1 渲染参考，再对实际 Guided 参数的 VBR 结果测 SSIM；不能使用 Manual 的无字幕源视频作为参考。
+- Windows 源/FFmpeg 快照与 staged ASS UTF-8 SHA256、字体内容 SHA256 进入 `windows/guided-rendered-sample-evidence.ps1` 收据。Native Guide 硬件 p7/tune/maxrate/bufsize 与软件 preset/码率的实测参数按正式单遍编码路径选择；不借用 Manual 不同的 NVENC 参数。
+- `src/guided-native-vbr-verification.js` 严格核对两窗、参考域、ASS 独立哈希、字体哈希一致性、实际编码器/码率/尺度及 SSIM；`src/main.js` 暴露 Windows-only 验证与“确认当前已验证参数”，确认仅针对**当前**配置，绝不自动修改编码器或码率，字幕/字体/体积/来源变化后必须重新验证。
+- `src/guided-native-vbr-verification.test.mjs` 已纳入快测与完整前端。Windows 离线收据测试 `scripts/check-guided-vbr-evidence.ps1` 和真实 2× Native localhost FFmpeg/ASS 短样已接入 `Windows local smoke`；真实 Windows 以及前端 CI 最新头部运行 Pending。
+- 严格文件上限与两遍 H.264 **不使用**此单遍 CQ/VBR 证明。完整跨候选 Guided / Manual 显式采用事务、整片质量与大小、设备/字幕系统字体验证仍未闭环，B04/B11/B12/B15 状态不晋升为完整初版已完成。
