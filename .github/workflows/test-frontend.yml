@@ -54,7 +54,7 @@ jobs:
           cache: npm
       - name: Run targeted model and task regressions
         run: |
-          node --test src/media-task.test.mjs src/media-planning.test.mjs src/media-stream-plan.test.mjs src/manual-transcode-comparison.test.mjs src/manual-transcode-session.test.mjs src/manual-time-tradeoff.test.mjs src/manual-transcode-vbr-verification.test.mjs src/manual-transcode-adoption.test.mjs src/guided-whole-file-budget.test.mjs src/trim-copy-audit.test.mjs src/whole-file-budget.test.mjs src/vvc-required-runtime.test.mjs
+          node --test src/media-task.test.mjs src/media-planning.test.mjs src/media-stream-plan.test.mjs src/manual-transcode-comparison.test.mjs src/manual-transcode-session.test.mjs src/manual-paired-risk-plan.test.mjs src/manual-time-tradeoff.test.mjs src/manual-transcode-vbr-verification.test.mjs src/manual-transcode-adoption.test.mjs src/guided-whole-file-budget.test.mjs src/trim-copy-audit.test.mjs src/whole-file-budget.test.mjs src/vvc-required-runtime.test.mjs
       - name: Install locked frontend dependencies
         run: npm ci
       - name: Build production frontend
@@ -81,6 +81,7 @@ jobs:
       - run: node --test src/manual-transcode-adoption.test.mjs
       - run: node --test src/compression-resolutions.test.mjs
       - run: node --test src/scene-risk-selection.test.mjs
+      - run: node --test src/manual-paired-risk-plan.test.mjs
       - run: node --test src/calibration-refinement.test.mjs
       - run: node --test src/guided-size-policy.test.mjs src/guided-task-handoff.test.mjs src/guided-whole-file-budget.test.mjs src/guided-budget-ui-wiring.test.mjs src/shared-task-presentation.test.mjs
       - run: node --test src/size-frontier-ui.test.mjs
