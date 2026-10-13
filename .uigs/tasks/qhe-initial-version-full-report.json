@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_b16_long_output_async_audit_pending_native_acceptance",
-  "current_bounded_work_unit": "B16 completed-output large trim copied-stream packet audit: bounded asynchronous Windows worker, status states and user-invoked report refresh; strict preflight unchanged",
+  "status": "incomplete_full_report_b14_measured_encode_cost_submitted_pending_frontend_acceptance",
+  "current_bounded_work_unit": "B14 source-paired Native CQ time/size/SSIM observed cost tradeoff, diagnostic UI and explicit provenance export; integration and true field acceptance Pending",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -124,9 +124,9 @@
       "id": "B14",
       "source": "R19 §10、§15；R24 §13、§17",
       "requirement": "质量/大小/编码时间及资源与兼容条件的可解释取舍",
-      "implementation_status": "部分实现",
-      "evidence": "manual-transcode-session.js encode-time quota；main.js 风险采样",
-      "remaining": "配额限制不等于显示同预算候选耗时/收益，也不等于按用户时间意图选择；需真实成本呈现及策略"
+      "implementation_status": "部分实现：Windows Native Manual 多候选 CQ 实测 FFmpeg 编码耗时、相同配对窗口的质量/码率/速度可解释对照、近似同画质配对和 JSON 收据已写入 Draft；新增单测/前端实际 CI 待验收。",
+      "evidence": "manual-transcode-session.js encode-time quota；main.js 风险采样；src/manual-time-tradeoff.js + tests, manual-transcode-compare-ui.js observed time/SSIM/bitrate + exported evidence, manual-transcode-session.test.mjs end-to-end in-memory receipt, frontend draft-fast/full suite wiring; exact-head CI Pending",
+      "remaining": "真实长片/多设备/ASS 与 VBR 任务的整体速度、能耗、资源占用、重复测量方差及用户时间意图优化未完成；近似同画质样本不构成整片性能承诺。"
     },
     {
       "id": "B15",
@@ -231,9 +231,11 @@
     "B13 Windows Native source budget receipt: Native-selected source/packet cost validation rejects missing, stale, tampered or false zero-track claims, and real two-pass Guided ASS preserves two copied audio packet SHA256 hashes; 9/9 CI PASS at ad917ef, Native step and 9/9 CI PASS at 09ce78c.",
     "B13 Native same-process page-reload completed budget comparison: budgetProjection is returned on both completed status paths after strict output gate; UI recovers original planning target, actual output, origin and Native-only strict verification. Pure/VM recovery tests and hosted real Windows Guided two-pass/strict smoke step PASS; 429de52 frontend PASS; entire exact-head platform suite still completing at checkpoint.",
     "B16 post-output audit: native completed structured trim task returns source-linked completed-artifact audio/subtitle packet byte observation; normalized report maps output ordinals, reveals full-source overreserve, leaves formal strict ceiling unchanged. Linux actual MKV and Windows Native two-PCM trim tests PASS at 7d3b784/451be21; newer exact code fb07c74 CI pending.",
-    "B16 code submitted: bounded constant-memory Windows FFprobe auxiliary packet audit worker and Native status owner, output identity checks, pending/ready/unavailable receipts, report refresh, short-clip independent Windows worker test (hosted execution Pending)"
+    "B16 code submitted: bounded constant-memory Windows FFprobe auxiliary packet audit worker and Native status owner, output identity checks, pending/ready/unavailable receipts, report refresh, short-clip independent Windows worker test (hosted execution Pending)",
+    "B14 code submitted: paired Native CQ short-sample encoding time/quality/video bitrate observability, matched-quality cost ratio, per-candidate UI rows and explicit JSON receipts; CI Pending"
   ],
   "next_units": [
+    "B14 exact-head fast/full frontend tests and real Windows Native UI/receipt acceptance; then add real final-job resource/time and strict capability coverage (NOT automatic whole-movie estimates)",
     "B16 acceptance next: exact-head frontend and Windows PowerShell Native worker CI, actual >180s or >512MiB trim/receipt/strict-gate fixture and user report refresh; then precise pre-encode trim cost, FLAC recompression, Android/Web metering remain open.",
     "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
     "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
@@ -252,7 +254,8 @@
     "new_single_budget": "Pending browser and platform regression",
     "new_guided_budget": "Source receipts: real Windows Native copied audio total and ordered packet SHA256, rejected stale/tampered/fake zero count 9/9 CI at ad917ef. Source 429de52 recovery byte receipt: pure/VM+frontend PASS, real Windows Native step PASS; whole exact-head suite pending at last observation.",
     "b16_trim_audit": "PASS short-source real Linux FFmpeg and Windows Native completed output packet audits; still post-output only, no strict-preflight replacement; newer exact-head runs pending",
-    "b16_async_long_output": "Implementation checkpoint complete on QHE work branch; exact PR head hosted frontend/Windows long-form validation Pending"
+    "b16_async_long_output": "Implementation checkpoint complete on QHE work branch; exact PR head hosted frontend/Windows long-form validation Pending",
+    "b14_observed_encode_cost": "Pending exact-head draft-fast/frontend CI and real Manual UI acceptance"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
