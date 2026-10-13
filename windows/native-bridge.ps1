@@ -1678,7 +1678,24 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
 # Long-duration post-output packet measurement runs in its own bounded worker.
 # Status reads only launch/poll it; the output remains saveable independently.
 function Get-AsyncTrimPacketEvidence($Job) {
-    if($Job.TrimPacketAuditFinished){return $Job.TrimPacketEvidence}
+    if($Job.TrimPacketAuditFinished){
+        # Even after the worker has exited, never reuse an observed receipt for
+        # a staged file whose ordinary stat identity has since changed.
+        if($null -ne $Job.TrimPacketEvidence){
+            try{
+                $current=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+                if([long]$current.Length -ne [long]$Job.TrimPacketAuditExpectedLength -or
+                   [long]$current.LastWriteTimeUtc.Ticks -ne [long]$Job.TrimPacketAuditExpectedTicks){
+                    $Job.TrimPacketEvidence=$null
+                    $Job.TrimPacketAuditState='unavailable'
+                }
+            }catch{
+                $Job.TrimPacketEvidence=$null
+                $Job.TrimPacketAuditState='unavailable'
+            }
+        }
+        return $Job.TrimPacketEvidence
+    }
     if(-not $Job.TrimPacketAuditStarted){
         try{
             $worker=Join-Path $PSScriptRoot 'trim-packet-audit.ps1'
