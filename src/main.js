@@ -29,6 +29,7 @@ import { resolveGuidedSizePolicy } from './guided-size-policy.js';
 import { guidedWholeFileProjection, assessGuidedWholeFileBudget } from './guided-whole-file-budget.js';
 import {guidedAssDecisionScope} from './decision-reference-scope.js';
 import {verifyGuidedNativeVbr} from './guided-native-vbr-verification.js';
+import {createGuidedBranchProposal,currentGuidedBranchProposal,commitVerifiedGuidedBranch} from './guided-branch-adoption.js';
 import { completedGuidedNativeBudget, formatCompletedGuidedNativeBudget } from './native-guided-budget-recovery.js';
 
 const MAX_BYTES = 1024 ** 3;
@@ -94,6 +95,7 @@ const state = {
   sizeEnvelopeEnabled: false,
   guidedModelScopes: {},
   guidedVbrVerification: null,
+  guidedPendingBranch: null,
   qualityExplorationPoints: {},
   sizeBudgetTargetBytes: null,
   sizeFrontierPointerId: null,
@@ -1296,7 +1298,7 @@ function renderSizeFrontier() {
       branchAction.dataset.codec=plot.selected.branchId;
       branchAction.disabled=state.qualityCalibrationBusy||state.operationBusy;
       branchAction.classList.remove('hidden');
-      branchAction.textContent='采用推荐配置 '+plot.selected.branchId.toUpperCase();
+      branchAction.textContent='待验证推荐 '+plot.selected.branchId.toUpperCase();
     }
   } else if (directBytes > 0) {
     const evaluation = frontier.evaluateTargetBytes(directBytes);
@@ -1586,20 +1588,37 @@ $('calibrateSizeFrontierBtn').addEventListener('click', () => runWebTask(runQual
 $('compareSizeFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true})));
 $('compareResolutionFrontierBtn').addEventListener('click', () => runWebTask(()=>runQualityCalibration({compareForSize:true,compareResolution:true})));
 $('adoptSizeFrontierBranchBtn').addEventListener('click',()=>{
+  // Stage an immutable recommendation. NEVER switch selectedCodec from an
+  // interpolated CQ frontier without Native rendered-reference VBR evidence.
   const frontier=currentSizeFrontier();
-  const recommendation=frontier?.evaluateTargetBytes(Number(state.sizeBudgetTargetBytes||0));
+  const bytes=Number(state.sizeBudgetTargetBytes||0);
+  const evaluation=frontier?.evaluateTargetBytes(bytes);
   if(state.operationBusy||state.qualityCalibrationBusy||frontier?.kind!=='multi-branch'||
-    recommendation?.status!=='within-evidence'||!recommendation.branchId||
-    recommendation.branchId===state.selectedCodec)return;
-  const resolution=state.resolutionRateDistortionModels[recommendation.branchId];
-  if(resolution) {
-    state.selectedCodec=resolution.codec;
-    state.guidedOutputSize=resolution.outputWidth>0
-      ? {id:resolution.resolutionId,width:resolution.outputWidth,height:resolution.outputHeight}
-      : null;
-    renderPlanOptions();
-    refreshGuidedContainerDecision();
-  } else selectCodec(recommendation.branchId);
+     evaluation?.status!=='within-evidence'||!evaluation.branchId)return;
+  const record=state.resolutionRateDistortionModels[evaluation.branchId];
+  const codec=record?.codec||evaluation.branchId;
+  const outputSize=record?.outputWidth>0
+    ?{id:record.resolutionId,width:record.outputWidth,height:record.outputHeight}:null;
+  const currentScope=currentGuidedDecisionScope();
+  const preset=record?.preset||state.qualityCalibration[codec]?.preset||
+    profileFor(codec,'balanced').preset;
+  if(record?record.sourceScope!==currentScope:state.guidedModelScopes[codec]!==currentScope)
+    return;
+  const proposed=createGuidedBranchProposal({
+    branchId:evaluation.branchId,codec,sourceScope:currentScope,
+    selectedBytes:Math.round(bytes),videoBitrate:Math.round(evaluation.videoBitrate),
+    preset,outputSize,priorCodec:state.selectedCodec,
+    priorOutputSize:state.guidedOutputSize
+  });
+  if(!proposed.ok){
+    log('推荐不能作为正式候选：'+proposed.reason);
+    return;
+  }
+  state.guidedPendingBranch=proposed;
+  state.guidedVbrVerification=null;
+  renderPlanOptions();
+  $('guidedVbrResult').textContent='已暂存推荐 '+proposed.branchId.toUpperCase()+
+    '，原编码方案未变。请先进行真实 ASS VBR 验证，再确认采用。';
 });
 $('benchmarkBtn').addEventListener('click', () => runWebTask(runBenchmarks));
 $('testSelectedBtn').addEventListener('click', () => runWebTask(runSelectedTest));
@@ -4162,6 +4181,7 @@ function invalidateQualityCalibration() {
   state.rateDistortionModels = {};
   state.guidedModelScopes = {};
   state.guidedVbrVerification = null;
+  state.guidedPendingBranch = null;
   state.resolutionRateDistortionModels = {};
   state.guidedOutputSize = null;
   state.sizeEnvelopeEnabled = false;
@@ -6220,7 +6240,7 @@ function currentGuidedBudgetAssessment() {
   };
 }
 
-function buildEncodePlan(codec) {
+function buildEncodePlan(codec,outputSizeOverride=undefined) {
   const media = state.media;
   if (!media?.duration || !state.video || state.softwareEncoders[codec] === false) return null;
   const goal = $('encodeGoal')?.value || 'balanced';
@@ -6316,8 +6336,8 @@ function buildEncodePlan(codec) {
     budgetSource: directBudgetBytes > 0 ? 'frontier' : 'multiplier',
     sizeBudgetPolicy:executionPolicy.policy,
     frontierPrediction,
-    outputWidth:state.guidedOutputSize?.width||0,
-    outputHeight:state.guidedOutputSize?.height||0
+    outputWidth:(outputSizeOverride===undefined?state.guidedOutputSize:outputSizeOverride)?.width||0,
+    outputHeight:(outputSizeOverride===undefined?state.guidedOutputSize:outputSizeOverride)?.height||0
   };
 }
 
