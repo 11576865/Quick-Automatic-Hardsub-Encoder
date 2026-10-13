@@ -94,6 +94,64 @@ try {
       if(-not $blocked){throw 'Manual oversized artifact reached save dialog.'}
     }elseif($result.state -ne 'completed' -or [long]$result.outputBytes -gt $ceiling -or [long]$result.outputBytes -le 0){throw 'Manual within-budget artifact acceptance failed.'}
   }
+  # B16: a real trimmed two-audio size task gets an independently measured
+  # completed-output packet ledger; it must not rewrite the preflight whole
+  # source copied-payload upper bound or bypass the strict container gate.
+  $sourceUpper=[long]$cost.audioPacketBytes[0]+[long]$cost.audioPacketBytes[1]
+  $trimTask=@{
+    version=4;operation='transcode';codec='h264';encoder='libx264'
+    start=0.5;end=1.5;hasTrimRange=$true;usesTrimInput=$true
+    videoStreams=@(0);videoRange='trim';expectedVideoTracks=1;expectedVideoDuration=1.0
+    audio='copy';audioTrack='all';audioRange='trim';expectedAudioTracks=2;expectedDuration=1.0
+    keepSubtitles=$false;keepAttachments=$false;rateMode='size'
+    budgetPolicy='strict-ceiling';sizeCeilingBytes=5000000L
+    outputFormat='matroska';outputExtension='mkv';budgetEvidence=$cost
+    sizePlan=@{copiedTrimReserveBytes=$sourceUpper}
+    outputArgs=@('-ss','0','-map','1:v:0','-map','1:a?','-sn',
+      '-map_metadata','-1','-map_chapters','-1','-c:v','libx264',
+      '-preset','medium','-b:v','350000','-pix_fmt','yuv420p',
+      '-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0','-c:a','copy')
+  }
+  $trimBody=@{request=@{task=$trimTask;expectedDuration=1.0;suggestedName='trim-audit.mkv'}}|ConvertTo-Json -Depth 16 -Compress
+  $trimStarted=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/encode" -Headers $headers -ContentType 'application/json' -Body $trimBody
+  if(-not $trimStarted.ok -or -not $trimStarted.jobId){throw 'B16 Native trim audit task was not created'}
+  $trimStatus=$null
+  for($poll=0;$poll -lt 120;$poll++){
+    Start-Sleep -Milliseconds 150
+    $trimStatus=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($trimStarted.jobId)" -Headers $headers
+    if($trimStatus.state -in @('completed','failed','cancelled')){break}
+  }
+  if($trimStatus.state -ne 'completed'){throw ('Native trim audit failed: '+$trimStatus.error)}
+  if($trimStatus.outputPacketEvidence.scope -ne 'completed-artifact' -or
+     @($trimStatus.outputPacketEvidence.audioPacketBytes).Count -ne 2){
+    throw 'Native completed trim task did not report two measured output audio packet totals'
+  }
+  $trimStages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ("quick-media-job-"+$trimStarted.jobId+"-*"))
+  if($trimStages.Count -ne 1){throw 'Native trim audit staged output not found'}
+  $trimArtifact=Join-Path $trimStages[0].FullName 'output.mkv'
+  if(-not(Test-Path -LiteralPath $trimArtifact)){throw 'Native trim audit output file absent'}
+  $trimTotal=0L
+  for($track=0;$track -lt 2;$track++){
+    $selector="a:$track";$independent=0L
+    foreach($packet in (& ffprobe -v error -select_streams $selector -show_packets -show_entries packet=size -of csv=p=0 $trimArtifact)){
+      $independent+=[long]$packet
+    }
+    $reported=[long]$trimStatus.outputPacketEvidence.audioPacketBytes[$track]
+    if($reported -le 0 -or $reported -ne $independent -or $reported -gt [long]$cost.audioPacketBytes[$track]){
+      throw "Native trim packet audit diverged from independent output FFprobe for $selector"
+    }
+    $trimTotal+=$reported
+  }
+  if($trimTotal -ge $sourceUpper -or [long]$trimStatus.outputBytes -gt 5000000L){
+    throw 'Native trim output did not demonstrate a smaller observed packet payload under the strict container gate'
+  }
+  $again=Invoke-RestMethod -Uri "$hostUrl/api/jobs/$($trimStarted.jobId)" -Headers $headers
+  if(@($again.outputPacketEvidence.audioPacketBytes).Count -ne 2 -or
+      [long]$again.outputPacketEvidence.audioPacketBytes[0] -ne
+      [long]$trimStatus.outputPacketEvidence.audioPacketBytes[0]){
+    throw 'Repeated Native completed job status lost the cached trim cost observation'
+  }
+  Write-Host "B16 Native completed trim copy packet audit passed: source upper $sourceUpper, actual $trimTotal bytes."
   Write-Host 'Manual byte ceilings, blocked oversized export and independent source-cost scan passed.'
   function Test-CancelCleanup([int]$phase){
     $body=@{
