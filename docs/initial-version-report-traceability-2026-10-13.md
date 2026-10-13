@@ -28,7 +28,7 @@ R19：《QHE_未来产品架构与压缩决策工程研究报告_2026-10-12_更�
 | B10 | R19 §12、§18；R24 §16、§21 | 色彩变化必须明确，HDR/位深不能混同 | 保护性门禁已有 | media-task.js；media-capabilities.js | 保持不安全输入阻断；端到端色彩正确性/显示实验仍缺，不能以门禁等同色彩能力完成 |
 | B11 | R19 §08–09；R24 §13–16、§20 | 共同参考上包络、证据域、CQ/VBR 分离、显式采用和回滚 | 限定路径已实现并 CI 验收 | manual-transcode-comparison/session/vbr-verification/adoption.js | Windows SDR 纯转码实证；ASS/引导与专业比较的统一合同仍未闭环 |
 | B12 | R19 §08、§16；R24 §13–16 | 有界 codec × resolution × preset 候选与明确可比范围 | 有限交叉集合已实现 | manual-candidate-set.js：x264/x265 × medium/fast × 原尺寸/1080p/720p | 不能宣称完整候选适配；AV1、其他可用实现、ASS 渲染参考和高级处理的准入仍待完善；不追求无限全局最优 |
-| B13 | R19 §09、§11、P3；R24 §14、§18 | 总文件目标与固定/编码音轨、字幕、附件、封装预算接入同一决策坐标 | 主干未打通 | compare-ui.js 明示视频估算预算、不含音频；sizeBudget 独立账本 | 把完整账本投影到曲线预算域并保留来源身份、未知项和不可行域；现有成品门禁不能替代决策接入 |
+| B13 | R19 §09、§11、P3；R24 §14、§18 | 总文件目标与固定/编码音轨、字幕、附件、封装预算接入同一决策坐标 | Windows Manual候选比较已接入完整账本，本地验证通过；CI待验收 | whole-file-frontier.js；compare-ui.js；size-preserving adoption；4 projection + 2 adoption regressions | 引导和单分支预算语义仍需统一；新browser/native复验待完成；B16成本覆盖仍有缺口；成品门禁不替代决策证据 |
 | B14 | R19 §10、§15；R24 §13、§17 | 质量/大小/编码时间及资源与兼容条件的可解释取舍 | 部分实现 | manual-transcode-session.js encode-time quota；main.js 风险采样 | 配额限制不等于显示同预算候选耗时/收益，也不等于按用户时间意图选择；需真实成本呈现及策略 |
 | B15 | R19 §10；R24 §17 | 风险场景、配对窗口、追加测量和不足证据结果 | 引导已有，专业未全面共享 | scene-risk-selection.js；calibration-refinement.js；main.js；Manual 两窗口 | 统一候选调度/风险覆盖；字幕高密度、暗场/噪声真实素材验证仍待补；不伪造统计覆盖率 |
 | B16 | R19 §11；R24 §18 | 复制流精确范围成本、重编码音频成本、附件和余量完整计量 | 部分实现 | media-planning.js；Windows source-budget；whole-file-budget tests | 裁切采用全源保守预留；FLAC重编码拒绝；Android/Web计量缺；必须保留为初版开放项 |
@@ -74,3 +74,11 @@ R19：《QHE_未来产品架构与压缩决策工程研究报告_2026-10-12_更�
 实现 `bbec19d` 的9条 hosted工作流在本次重新读取时均为success；这只支持相应 fixture，不关闭上表缺项。没有修改执行代码，本轮无新编码/安装/真机/截图通过声明。
 
 UIGS Intake：已去重并记录为 Case `inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md`，Foundry提交 `c4299f7c4f058dcb640f7671e53ccbd2cb85c18c`；不修改Canonical。
+
+## B13 实施补记
+
+2026-10-13：Windows Manual 多候选比较默认改用完整文件目标坐标，调用现有逐流账本，加入复制流/附件、各轨时长的编码音频及封装余量。显式视频负载坐标只供诊断；坐标改变保留 CQ 测量、撤销旧 VBR。
+
+采用事务写入目标体积/单位/余量/size模式/原交付策略，正式编译码率必须与已验证码率一致；任何不一致回滚。当前目标超域或不可行时不自动换成中点。成本未知时拒绝完整预算推荐。
+
+验证：242 pass、9 conditional skip；7 真实 FFmpeg 回归通过；build通过。新增浏览器成本缺失/非零复制负载/坐标重投影无新采样/严格目标采用检查仍为 Pending；本地 Chromium不可用。B13 未整体关闭：引导与单分支语义、B16精确裁切/FLAC/跨端计量继续在初版范围内。

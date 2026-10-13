@@ -65,24 +65,27 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
         fpsMode:'auto',pixelFormat:'yuv420p',scaleAlgorithm:'lanczos',
         rotation:'none',deinterlace:'none',multipass:'disabled',outputContainer:'mkv',
         lookahead:'',aqStrength:''};
-      let busy=false,applied=0;
+      let busy=false,applied=0,sampleCalls=0;
+      let budgetEvidence=null;
       const hooks={
+        budgetEvidence:()=>budgetEvidence,
         settings:()=>raw,sourceIdentity:()=> 'synthetic-playwright-source',
         mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},
         isWindows:()=>true,busy:()=>busy,setBusy:v=>{busy=v;},
         applyQuality:()=>{applied++;},applyBitrate:()=>{applied++;},
-        adoptCandidate:({candidate,bitrate,expectedSettings,expectedSourceIdentity})=>{
+        adoptCandidate:({candidate,bitrate,wholeBudget,expectedSettings,expectedSourceIdentity})=>{
           if(JSON.stringify(raw)!==JSON.stringify(expectedSettings)||
              expectedSourceIdentity!=='synthetic-playwright-source')
             return {ok:false,reason:'stale-adoption-settings'};
           Object.assign(raw,{codec:candidate.codec,encoder:candidate.encoder,
             preset:candidate.preset,...(candidate.scaleAlgorithm==='bicubic'?{width:candidate.outputWidth,height:candidate.outputHeight,scaleAlgorithm:'bicubic'}:{}),rateMode:'bitrate',bitrate:String(bitrate),
-            multipass:'disabled',twoPass:false});
+            multipass:'disabled',twoPass:false,...(wholeBudget?{rateMode:'size',targetSize:wholeBudget.targetBytes/1e6,sizeUnit:'MB',sizeReserve:wholeBudget.reservePercent,budgetPolicy:wholeBudget.budgetPolicy}:{})});
           applied++;
           return {ok:true};
         },
         log:()=>{},
         calibrationSample:async({codec,encoder,preset,multipass,quality,start,duration,mode='quality',bitrate,commonReference,outputWidth,outputHeight,referenceWidth,referenceHeight})=>{
+          sampleCalls++;
           const isVbr=mode==='bitrate';
           const rate=isVbr?bitrate:({18:1600000,28:850000,40:420000})[quality]*
             (encoder==='libx265'?.91:1)*(preset==='fast'?.9:1);
@@ -107,7 +110,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
         }
       };
       mountTranscodeCurves(section,hooks);
-      window.__curveMock={media,get applied(){return applied;},section,raw};
+      window.__curveMock={media,get sampleCalls(){return sampleCalls;},get applied(){return applied;},section,raw,hooks,setBudget:v=>{budgetEvidence=v;}};
     });
     assert.equal(await page.locator('#manual-compare-test svg').count(),1,
       'Optional codec comparison must reuse the one Manual SVG');
@@ -187,7 +190,8 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.match(await page.locator('#taskCompareStatus').textContent(),/已按明确确认写入/);
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),1);
     const committed=await page.evaluate(()=>window.__curveMock.raw);
-    assert.equal(committed.rateMode,'bitrate');
+    assert.equal(committed.rateMode,'size');
+    assert.ok(+committed.targetSize>0);
     assert.equal(committed.multipass,'disabled');
     assert.ok(['libx264','libx265'].includes(committed.encoder));
     assert.ok(+committed.bitrate>0);
@@ -222,6 +226,33 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     assert.ok(await page.evaluate(()=>[2160,1080,720].includes(+window.__curveMock.raw.height)));
     assert.equal(await page.evaluate(()=>window.__curveMock.applied),3);
     await page.evaluate(()=>{window.__curveMock.raw.width='';window.__curveMock.raw.height='';});
+    // Same video measurements support two coordinates; no new encodes on axis switch.
+    await page.evaluate(()=>{const s=window.__curveMock;s.raw.rateMode='quality';s.raw.audio='copy';s.raw.keepAttachments=true;s.raw.attachmentStreams='all';s.raw.budgetPolicy='strict-ceiling';s.media.audioTracks=1;s.media.audioStreams=[{codec:'flac'}];s.media.attachmentTracks=1;s.setBudget(null);});
+    await page.locator('#taskCompareStart').click();
+    await page.waitForFunction(()=>/本次对比不可用于推荐/.test(document.querySelector('#taskCompareStatus').textContent));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/成本未知/);
+    await page.evaluate(()=>window.__curveMock.setBudget({version:1,scope:'full-source',audioPacketBytes:[100000],attachmentBytes:[10000]}));
+    await page.locator('#taskCompareStart').click();
+    await page.waitForFunction(()=>/实测完成|本次对比不可用于推荐/.test(document.querySelector('#taskCompareStatus').textContent));
+    assert.match(await page.locator('#taskCurveReadout').textContent(),/成品目标体积.*固定流\/附件/);
+    await page.locator('#taskCompareVerify').click();
+    await page.waitForFunction(()=>/VBR 短样已验证|VBR 验证失败/.test(document.querySelector('#taskCompareStatus').textContent));
+    assert.match(await page.locator('#taskCompareStatus').textContent(),/VBR 短样已验证/);
+    const beforeAxis=await page.evaluate(()=>window.__curveMock.sampleCalls);
+    await page.locator('#taskCompareBudgetBasis').selectOption('video');
+    assert.equal(await page.locator('#taskCompareAdopt').isVisible(),false);
+    assert.match(await page.locator('#taskCurveReadout').textContent(),/视频估算预算/);
+    await page.locator('#taskCompareBudgetBasis').selectOption('whole');
+    assert.match(await page.locator('#taskCurveReadout').textContent(),/成品目标体积/);
+    assert.equal(await page.evaluate(()=>window.__curveMock.sampleCalls),beforeAxis,'axis projection cannot rerun CQ measurement');
+    await page.locator('#taskCompareVerify').click();
+    await page.waitForFunction(()=>/VBR 短样已验证|VBR 验证失败/.test(document.querySelector('#taskCompareStatus').textContent));
+    await page.locator('#taskCompareAdopt').click();
+    await page.waitForFunction(()=>/已按明确确认写入|未写入编码方案/.test(document.querySelector('#taskCompareStatus').textContent));
+    assert.equal(await page.evaluate(()=>window.__curveMock.raw.budgetPolicy),'strict-ceiling');
+    assert.equal(await page.evaluate(()=>window.__curveMock.raw.rateMode),'size');
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),4);
+    await page.evaluate(()=>{const s=window.__curveMock;s.raw.width='';s.raw.height='';s.raw.audio='none';s.raw.keepAttachments=false;s.raw.rateMode='quality';s.raw.budgetPolicy='best-effort';});
     // Fail closed for a source/processing setting that cannot be reproduced
     // by the exact SDR/yuv420p native sample protocol.
     await page.evaluate(()=>{window.__curveMock.raw.pixelFormat='p010le';});
@@ -231,7 +262,7 @@ module.exports = async function checkCurveDesign(browser, baseUrl) {
     ));
     assert.match(await page.locator('#taskCompareStatus').textContent(),/无额外滤镜/);
     assert.equal(await page.locator('#taskEfficiencyChart .curve-fit').count(),0);
-    assert.equal(await page.evaluate(()=>window.__curveMock.applied),3);
+    assert.equal(await page.evaluate(()=>window.__curveMock.applied),4);
     console.log('Single curve + Manual native-mocked comparison: desktop, phone, keyboard, and fail-closed unsupported protocol passed');
   } finally {await page.close();}
 };

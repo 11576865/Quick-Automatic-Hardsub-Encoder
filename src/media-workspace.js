@@ -476,6 +476,7 @@ export function mountMediaWorkspace(hooks) {
     prepare: hooks.prepare,
     validate: hooks.validate,
     calibrationSample: hooks.calibrationSample,
+    budgetEvidence:()=>budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:null,
     setBusy: hooks.setBusy,
     log: hooks.log,
     applyBitrate: bitrate => {
@@ -493,11 +494,11 @@ export function mountMediaWorkspace(hooks) {
       updateRate();
       get('quality').dispatchEvent(new Event('input',{bubbles:true}));
     },
-    adoptCandidate: ({candidate,bitrate,expectedSettings,expectedSourceIdentity,media})=>{
+    adoptCandidate: ({candidate,bitrate,wholeBudget,expectedSettings,expectedSourceIdentity,media})=>{
       const committed=commitVerifiedManualCandidate({
-        candidate,bitrate,expectedSettings,expectedSourceIdentity,
+        candidate,bitrate,wholeBudget,expectedSettings,expectedSourceIdentity,
         read,sourceIdentity:()=>hooks.videoIdentity?.()||'',get,
-        updateEncoder,updatePreset,updateRate,compile:compileTask,media
+        updateEncoder,updatePreset,updateRate,compile:compileTask,media:{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined}
       });
       if(!committed.ok)return committed;
       // Exactly one coherent event after all form fields have been committed:
@@ -1972,7 +1973,7 @@ export function mountMediaWorkspace(hooks) {
       budgetEvidence=result;budgetSourceIdentity=identity;
       ledger.textContent='完整源流成本已测量。点击“验证当前方案”查看预算分项；裁切复制流按完整源流保守预留，FLAC 重编码仍未知。';
     }catch(e){budgetEvidence=null;ledger.textContent='成本仍未知：'+e.message;}
-    finally{busy=false;hooks.setBusy(false);button.disabled=false;syncTaskActions();}
+    finally{busy=false;hooks.setBusy(false);button.disabled=false;transcodeCurves.invalidate();syncTaskActions();}
   };
   section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('当前方案验证通过，可以直接开始；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};

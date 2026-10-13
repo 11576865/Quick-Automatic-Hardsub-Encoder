@@ -91,7 +91,7 @@ export function renderRateDistortionSvg(plot) {
   const formatSize = bytes=>(Number(bytes)/scale.divisor).toFixed(3)+' '+scale.unit;
   const ticks = axes(plot,{
     min:plot.qualityMin,max:plot.qualityMax,y:qualityTicks(plot.qualityMin,plot.qualityMax),x:scale.ticks
-  },'体积预算 · '+scale.unit+' · 对数刻度','短样拟合 SSIM');
+  },(plot.budgetLabel||'体积预算')+' · '+scale.unit+' · 对数刻度','短样拟合 SSIM');
   const band = '<path class="curve-band size-frontier-band" d="'+plot.bandPath+'"></path>';
   const fit = '<path class="curve-fit size-frontier-line" d="'+plot.curvePath+'"></path>';
   const points = plot.evidencePoints.map(p =>

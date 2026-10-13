@@ -127,3 +127,21 @@ test('adoption writes and rolls back verified resolution and bicubic scaling ato
  assert.equal(y.run({override:{candidate:c,expectedSettings:previous},compile:()=>{throw Error('reject');}}).ok,false);
  assert.deepEqual(y.read(),previous);
 });
+
+function wholeBudgetFixture(){
+ const media={duration:6,fps:24,videoTracks:1,videoCodec:'h264',audioTracks:0,audioStreams:[]};
+ const raw={operation:'transcode',codec:'h264',encoder:'libx264',preset:'medium',rateMode:'quality',quality:'23',bitrate:'1000000',multipass:'disabled',twoPass:false,audio:'none',start:'0',end:'',videoRange:'full',fpsMode:'auto',pixelFormat:'yuv420p',rotation:'none',deinterlace:'none',outputContainer:'mkv',targetSize:'9',sizeUnit:'MB',sizeReserve:'4',budgetPolicy:'best-effort'};
+ const controls=Object.fromEntries(Object.entries(raw).map(([k,v])=>[k,{value:String(v),checked:v===true}]));
+ const read=()=>Object.fromEntries(Object.entries(controls).map(([k,v])=>[k,k==='twoPass'?v.checked:v.value]));
+ const before=read();
+ const run=(bitrate=1280000)=>commitVerifiedManualCandidate({candidate,bitrate,wholeBudget:{targetBytes:1000000,reservePercent:4,budgetPolicy:'strict-ceiling'},expectedSettings:before,expectedSourceIdentity:'source',read,sourceIdentity:()=> 'source',get:k=>controls[k],updateEncoder:()=>{},updatePreset:()=>{},updateRate:()=>{},compile:compileTask,media});
+ return {run,read,before};
+}
+test('whole-file confirmed adoption preserves size mode and strict ceiling with exact verified rate',()=>{
+ const x=wholeBudgetFixture(),r=x.run();assert.equal(r.ok,true,JSON.stringify(r));
+ assert.equal(r.task.rateMode,'size');assert.equal(r.task.sizeCeilingBytes,1000000);assert.equal(r.task.bitrate,1280000);
+ assert.equal(x.read().budgetPolicy,'strict-ceiling');assert.equal(x.read().targetSize,'1');
+});
+test('whole-file rate mismatch refuses adoption and rolls back size controls and delivery policy',()=>{
+ const x=wholeBudgetFixture(),r=x.run(1280001);assert.equal(r.ok,false);assert.deepEqual(x.read(),x.before);
+});

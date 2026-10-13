@@ -1,3 +1,5 @@
+import {wholeFileLedger,projectWholeFileFrontier} from './whole-file-frontier.js';
+import {SIZE_UNITS} from './media-planning.js';
 import {manualCandidateSet} from './manual-candidate-set.js';
 // Optional Manual pure-transcode two-codec comparison. One shared chart,
 // one authoritative media-task state; no implicit encoder or rate adoption.
@@ -33,19 +35,32 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     '<button type="button" class="secondary" id="taskCompareStop" disabled>停止对比</button>',
     '<button type="button" class="secondary" id="taskCompareSingle" hidden>返回单编码器曲线</button></div></div>',
     '<label>候选集合 <select id="taskComparePolicy"><option value="codecs">x264 / x265 · medium · 最多 12 次</option><option value="codecs-presets">x264 / x265 × medium / fast · 最多 24 次</option><option value="codecs-presets-resolutions">编码器 × preset × 原尺寸 / 1080p / 720p · 最多 72 次</option></select></label>',
+    '<label>预算坐标 <select id="taskCompareBudgetBasis"><option value="whole">成品目标体积 · 完整预算</option><option value="video">仅视频负载 · 诊断</option></select></label>',
     '<p class="note" id="taskCompareStatus" role="status">对比结果仅供查看，不能自动切换编码器。需要正式采用时仍应使用当前编码器的 VBR 短样验证。</p>',
     '<details id="taskCompareDetails" hidden><summary>查看同预算候选及采样覆盖</summary>',
     '<div id="taskCompareCandidates"></div></details>',
     '<button type="button" class="secondary" id="taskCompareVerify" disabled hidden>实测验证当前推荐编码器的 VBR</button>',
     '<button type="button" class="secondary" id="taskCompareAdopt" disabled hidden>确认写入已验证的编码方案</button>',
-    '<p class="note">此图仅比较视频率失真和估算的视频预算；没有计入复制音轨、附件或实际容器开销。停止会等待当前原生调用结束；编码耗时配额不是严格墙钟时间上限。</p>'
+    '<p class="note">成品预算包含已测复制流、附件、计划音频和封装余量；成本未知时拒绝推荐。仅视频坐标只供诊断。拟合不证明整片质量或实际成品大小。停止会等待当前原生调用结束；编码耗时配额不是严格墙钟时间上限。</p>'
   ].join('');
   const insertBefore=panel.querySelector('.media-curve-grid');
   insertBefore.before(area);
   const get=id=>area.querySelector('#'+id);
   const start=get('taskCompareStart'),stop=get('taskCompareStop'),back=get('taskCompareSingle'),verify=get('taskCompareVerify'),adopt=get('taskCompareAdopt');
-  const policy=get('taskComparePolicy');
-  let activePolicy='codecs',sessionCandidates=[];
+  const policy=get('taskComparePolicy'),basis=get('taskCompareBudgetBasis');
+  const budgetContext=()=>JSON.stringify([basis.value,hooks.budgetEvidence?.()||null]);
+  function currentFrontier(){
+    if(!comparison?.frontier?.ok)return comparison?.frontier;
+    if(basis.value==='video')return comparison.frontier;
+    try{const raw=hooks.settings();const t=compileTask({...raw,rateMode:'quality',budgetPolicy:'best-effort',twoPass:false},media);return projectWholeFileFrontier(comparison.frontier,wholeFileLedger(t,hooks.budgetEvidence?.()));}
+    catch(e){return {ok:false,reason:'unknown-whole-file-budget',detail:e.message};}
+  }
+  const wholeBudgetForSelection=()=>basis.value==='whole'?{targetBytes:Math.round(selectedBytes),reservePercent:Number(hooks.settings().sizeReserve??4),budgetPolicy:hooks.settings().budgetPolicy||'best-effort'}:null;
+  const mediaForBudget=()=>({...media,budgetEvidence:hooks.budgetEvidence?.()});
+  const selectionSettings=()=>{const b=wholeBudgetForSelection();return b?{rateMode:'size',targetSize:b.targetBytes/1e6,sizeUnit:'MB',sizeReserve:b.reservePercent,budgetPolicy:b.budgetPolicy}:{rateMode:'bitrate',budgetPolicy:'best-effort'};};
+  let activePolicy='codecs',sessionCandidates=[],lastGoalKey='';
+  const goalKey=()=>JSON.stringify([hooks.settings().rateMode,hooks.settings().targetSize,hooks.settings().sizeUnit]);
+  const currentGoalBytes=()=>Number(hooks.settings().targetSize)*SIZE_UNITS[hooks.settings().sizeUnit||'MB'];
   const status=get('taskCompareStatus'),details=get('taskCompareDetails'),rows=get('taskCompareCandidates');
   let active=false,running=false,aborted=false,disposed=false,session=null;
   let sourceKey='',sourceDuration=0,comparison=null,selectedBytes=null;
@@ -59,7 +74,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     // geometry have not changed; do not unnecessarily repeat 12 encodes.
     if(active&&isCurrent()){
       verifiedVbr=null;
-      message('目标 SSIM 已变化：保留 CQ 配对测量；此前 VBR 通过状态不再适用。');
+      if(basis.value==='whole'&&hooks.settings().rateMode==='size'&&lastGoalKey!==goalKey())selectedBytes=currentGoalBytes();
+      lastGoalKey=goalKey();
+      message('目标、输出策略或成本已变化：保留同源 CQ 配对测量；此前 VBR 通过状态不再适用。');
       if(!running)onRenderSingle();
       return;
     }
@@ -75,9 +92,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   };
   const renderControls=()=>{
     start.disabled=running||hooks.busy()||disposed;
-    policy.disabled=start.disabled;
+    policy.disabled=start.disabled;basis.disabled=start.disabled;
     verify.hidden=!active;
-    verify.disabled=running||hooks.busy()||!eligible();
+    verify.disabled=running||hooks.busy()||!eligible()||currentFrontier()?.evaluateTargetBytes(selectedBytes)?.status!=='within-evidence';
     adopt.hidden=!hasCurrentVbr();
     adopt.disabled=running||hooks.busy()||!hasCurrentVbr();
     stop.disabled=!running||aborted;
@@ -87,15 +104,16 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     get('taskCompareScope').textContent='Windows · '+(policy.value==='codecs-presets-resolutions'?'公共原尺寸参考 · ':'原尺寸 · ')+'2 个窗口 × 3 档 CRF · 最多 '+(policy.value==='codecs-presets-resolutions'?72:policy.value==='codecs-presets'?24:12)+' 次短样；编码耗时预算不增加';
   };
   const eligible=()=>comparison?.ok && comparison.frontier?.ok &&
-    session?.snapshot().ok && isCurrent() && !disposed;
+    session?.snapshot().ok && isCurrent() && !disposed && currentFrontier()?.ok;
   const hasCurrentVbr=()=>{
     if(!verifiedVbr?.passed || !eligible())return false;
-    const chosen=comparison.frontier.evaluateTargetBytes(selectedBytes);
+    if(basis.value==='video'&&hooks.settings().budgetPolicy==='strict-ceiling')return false;
+    const chosen=currentFrontier().evaluateTargetBytes(selectedBytes);
     return chosen?.status==='within-evidence' &&
       verifiedVbr.sourceKey===sourceKey && verifiedVbr.selectedBytes===selectedBytes &&
       verifiedVbr.candidateId===chosen.branchId &&
       verifiedVbr.requestedVideoBitrate===Math.round(chosen.videoBitrate) &&
-      verifiedVbr.targetSsim===getTargetSsim?.() &&
+      verifiedVbr.targetSsim===getTargetSsim?.() && verifiedVbr.budgetContext===budgetContext() &&
       JSON.stringify(hooks.settings())===JSON.stringify(verifiedVbr.expectedSettings) &&
       hooks.sourceIdentity?.()===verifiedVbr.expectedSourceIdentity;
   };
@@ -105,7 +123,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       chart.replaceChildren();chart.removeAttribute('aria-valuenow');
       chart.setAttribute('aria-valuetext','暂无可比较的两个完整候选');
       chart.setAttribute('aria-label','多编码器比较暂时没有有效的共同实测范围');
-      readout.textContent='尚无两个完整且可比较的编码器；已完成的样本不会被当成正式质量承诺。';
+      readout.textContent=currentFrontier()?.detail?('完整预算不可用：'+currentFrontier().detail):'尚无两个完整且可比较的编码器；已完成的样本不会被当成正式质量承诺。';
       const partial=session?.snapshot();
       if(partial?.ok&&partial.candidates?.length){
         const list=document.createElement('ul');
@@ -123,30 +141,31 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       verify.disabled=true;adopt.hidden=true;adopt.disabled=true;
       return true;
     }
-    const f=comparison.frontier;
-    if(!(selectedBytes>0)||percent(f,selectedBytes)===0 &&
-       selectedBytes<f.minimumEvidenceTargetBytes)
+    const f=currentFrontier();
+    if(!(selectedBytes>0))
       selectedBytes=Math.sqrt(f.minimumEvidenceTargetBytes*f.maximumEvidenceTargetBytes);
+    if(basis.value==='whole')selectedBytes=Math.round(selectedBytes);
     const plotted=buildSizeFrontierPlot(f,{selectedTargetBytes:selectedBytes});
     if(!plotted.ok){chart.replaceChildren();readout.textContent='无法在共同实测体积范围绘制曲线。';return true;}
     chart.innerHTML=renderRateDistortionSvg(plotted);
     const evalResult=f.evaluateTargetBytes(selectedBytes);
+    if(evalResult.status!=='within-evidence'){readout.textContent='当前目标不在共同实测预算范围：'+evalResult.status+'；不会外推推荐或替换目标。';verify.disabled=true;adopt.hidden=true;adopt.disabled=true;return true;}
     chart.setAttribute('role','slider');
-    chart.setAttribute('aria-label','同一视频预算下选择多编码器估算对比位置');
+    chart.setAttribute('aria-label',basis.value==='whole'?'同一成品目标体积下选择多编码器估算对比位置':'同一视频预算下选择多编码器估算对比位置');
     chart.setAttribute('aria-valuenow',String(Math.round(100*percent(f,selectedBytes))));
-    chart.setAttribute('aria-valuetext','视频预算约 '+(selectedBytes/1e6).toFixed(2)+' MB');
-    const budgetText='视频估算预算 '+(selectedBytes/1e6).toFixed(2)+' MB';
+    chart.setAttribute('aria-valuetext',(basis.value==='whole'?'成品目标约 ':'视频预算约 ')+(selectedBytes/1e6).toFixed(2)+' MB');
+    const budgetText=(basis.value==='whole'?'成品目标体积 ':'视频估算预算 ')+(selectedBytes/1e6).toFixed(2)+' MB'+(evalResult.budget?' · 固定流/附件 '+(evalResult.budget.fixedPayloadBytes/1e6).toFixed(3)+' MB · 编码音频 '+(evalResult.budget.encodedAudioBytes/1e6).toFixed(3)+' MB · 封装余量 '+(evalResult.budget.containerReserveBytes/1e6).toFixed(3)+' MB':'');
     const currentVbr=verifiedVbr && verifiedVbr.passed &&
       verifiedVbr.sourceKey===sourceKey &&
       verifiedVbr.selectedBytes===selectedBytes &&
       verifiedVbr.candidateId===evalResult.branchId &&
       verifiedVbr.requestedVideoBitrate===Math.round(evalResult.videoBitrate) &&
-      verifiedVbr.targetSsim===getTargetSsim?.();
+      verifiedVbr.targetSsim===getTargetSsim?.() && verifiedVbr.budgetContext===budgetContext();
     readout.textContent=budgetText+' · 择优上包络 SSIM '+Number(evalResult.prediction?.quality??0).toFixed(5)+
       ' · 当前建议 '+String(evalResult.branchId||'未知').toUpperCase()+
       (currentVbr ? ' · VBR 短样已通过（最低 SSIM '+
         verifiedVbr.minimumSsim.toFixed(5)+'；正式方案未改变）。':
-        '。仅限同源短样的拟合；不含音频，也未执行目标码率验证。');
+        '。仅限同源短样的拟合；未执行目标码率验证，未验证实际成品体积。');
     const list=document.createElement('ul');
     for(const item of evalResult.alternatives||[]){
       const li=document.createElement('li');
@@ -166,7 +185,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   }
   const selectPointer=event=>{
     if(!active||!eligible()||running)return false;
-    const f=comparison.frontier,plot=buildSizeFrontierPlot(f);
+    const f=currentFrontier(),plot=buildSizeFrontierPlot(f);
     if(!plot.ok)return true;
     const x=plotXFromClientX(event.clientX,chart.getBoundingClientRect(),plot.width);
     const fraction=plotFractionAtX(plot,x);
@@ -178,7 +197,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   };
   const selectKeyboard=event=>{
     if(!active||!eligible()||running)return false;
-    const f=comparison.frontier;let x=percent(f,selectedBytes);
+    const f=currentFrontier();let x=percent(f,selectedBytes);
     if(['ArrowLeft','ArrowDown'].includes(event.key))x-=.02;
     else if(['ArrowRight','ArrowUp'].includes(event.key))x+=.02;
     else if(event.key==='Home')x=0;
@@ -213,7 +232,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
   }
   verify.addEventListener('click',async()=>{
     if(running||hooks.busy()||!eligible())return;
-    const frontier=comparison.frontier;
+    const frontier=currentFrontier();
     const evaluation=frontier.evaluateTargetBytes(selectedBytes);
     if(evaluation?.status!=='within-evidence')return;
     const selected=sessionCandidates.find(c=>c.id===evaluation.branchId);
@@ -225,17 +244,18 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       return;
     }
     const candidate={...selected};
-    const chosenBytes=selectedBytes,chosenKey=sourceKey;
+    const chosenBytes=selectedBytes,chosenKey=sourceKey,chosenContext=budgetContext(),verifySettings=JSON.stringify(hooks.settings());
     verifiedVbr=null;running=true;aborted=false;renderControls();
     hooks.setBusy(true);
     const current=()=>!disposed&&!aborted&&isCurrent()&&
       sourceKey===chosenKey&&selectedBytes===chosenBytes&&
-      getTargetSsim?.()===threshold;
+      getTargetSsim?.()===threshold && budgetContext()===chosenContext && JSON.stringify(hooks.settings())===verifySettings;
     try{
       const raw=hooks.settings();
       const formal=compileTask({...raw,codec:selected.codec,encoder:selected.encoder,
-        preset:selected.preset,...geometrySettings(selected),multipass:'disabled',rateMode:'bitrate',
-        bitrate:plannedBitrate,twoPass:false},media);
+        preset:selected.preset,...geometrySettings(selected),multipass:'disabled',...selectionSettings(),
+        bitrate:plannedBitrate,twoPass:false},mediaForBudget());
+      if(formal.bitrate!==plannedBitrate)throw Error('完整预算与已选视频码率不一致');
       await hooks.validate?.(formal);
       if(!current())throw Error('参数或来源已改变，验证结果作废。');
       const outcomes=[];
@@ -268,7 +288,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
           '，目标 '+threshold.toFixed(5)+'。不能采用该推算码率。');
       }else{
         verifiedVbr={...result,sourceKey:chosenKey,selectedBytes:chosenBytes,
-          expectedSettings:JSON.parse(JSON.stringify(raw)),
+          budgetContext:chosenContext,wholeBudget:wholeBudgetForSelection(),expectedSettings:JSON.parse(JSON.stringify(raw)),
           expectedSourceIdentity:hooks.sourceIdentity?.()};
         message('VBR 短样已验证：'+selected.id.toUpperCase()+
           ' · 最低 SSIM '+result.minimumSsim.toFixed(5)+
@@ -296,12 +316,13 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       if(!hasCurrentVbr())throw Error('来源、预算或已验证配置发生变化');
       const formal=compileTask({...raw,codec:candidate.codec,
         encoder:candidate.encoder,preset:candidate.preset,...geometrySettings(candidate),
-        rateMode:'bitrate',bitrate,multipass:'disabled',twoPass:false},media);
+        ...selectionSettings(),bitrate,multipass:'disabled',twoPass:false},mediaForBudget());
+      if(formal.bitrate!==bitrate)throw Error('当前预算与已验证视频码率不一致');
       await hooks.validate?.(formal);
       if(aborted||disposed||!hasCurrentVbr())
         throw Error('预检期间配置变化，已阻止旧证据写入');
       const outcome=hooks.adoptCandidate?.({
-        candidate,bitrate,
+        candidate,bitrate,wholeBudget:certificate.wholeBudget,
         expectedSettings:certificate.expectedSettings,
         expectedSourceIdentity:certificate.expectedSourceIdentity,media
       });
@@ -333,6 +354,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     onRenderSingle();renderControls();
   });
   policy.addEventListener('change',()=>{invalidate();renderControls();});
+  basis.addEventListener('change',()=>{verifiedVbr=null;selectedBytes=basis.value==='whole'&&hooks.settings().rateMode==='size'?currentGoalBytes():null;message('预算坐标已改变，保留CQ测量；VBR需重新验证。');showResult();renderControls();});
   start.addEventListener('click',async()=>{
     if(disposed||running||hooks.busy())return;
     activePolicy=policy.value;
@@ -351,8 +373,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       if(originalKey!==getSourceKey(hooks.settings(),{duration:prepared.duration}))
         throw Error('准备来源期间发生更改，拒绝旧试压参数');
       const geometry=preflight(raw,prepared);
-      const taskOptions={...raw,rateMode:'quality',twoPass:false};
+      const taskOptions={...raw,rateMode:'quality',budgetPolicy:'best-effort',twoPass:false};
       const sourceTask=compileTask(taskOptions,prepared);
+      if(basis.value==='whole')wholeFileLedger(sourceTask,hooks.budgetEvidence?.());
       if(sourceTask.expectedVideoTracks!==1||sourceTask.videoStreams[0]!==0)
         throw Error('当前仅支持主视频流 v:0');
       const duration=Number(sourceTask.expectedVideoDuration);
@@ -421,9 +444,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
         durationSeconds:duration,audioBitrate:0,audioEvidence:'estimated',reservePercent:0
       });
       if(!comparison.ok)throw Error(reasonLabel[comparison.reason]||comparison.reason);
-      selectedBytes=Math.sqrt(comparison.frontier.minimumEvidenceTargetBytes*
-        comparison.frontier.maximumEvidenceTargetBytes);
-      message((candidates.length===2?'双编码器实测完成':'编码器与 preset 实测完成')+' · '+maxRequests+' 次配对样本。曲线仅给出同一视频预算下的候选比较；不会自动采用推荐参数。');
+      const f=currentFrontier();if(!f?.ok)throw Error(f?.detail||f?.reason||'预算未知');
+      selectedBytes=basis.value==='whole'&&raw.rateMode==='size'?currentGoalBytes():Math.sqrt(f.minimumEvidenceTargetBytes*f.maximumEvidenceTargetBytes);lastGoalKey=goalKey();
+      message((candidates.length===2?'双编码器实测完成':'编码器与 preset 实测完成')+' · '+maxRequests+' 次配对样本。曲线仅给出当前预算坐标下的候选比较；不会自动采用推荐参数。');
     }catch(error){
       comparison=null;
       message('本次对比不可用于推荐：'+(error?.message||String(error)));
