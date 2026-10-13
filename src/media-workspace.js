@@ -40,7 +40,7 @@ export function mountMediaWorkspace(hooks) {
     </div>
     <div class="media-workspace-badges"><span>同一任务格式</span><span>Native / Web</span></div>
   </div>
-  <form id="mediaTaskForm">
+  <form id="mediaTaskForm"><input type="hidden" name="subtitleRenderOrder" value="after-scale">
   <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','视频流复制 / 快速剪辑']])}${input('start','开始时间','例如 3:57.250','0')}${input('end','结束时间','留空表示片尾；例如 5:12.800')}</div>
   <p class="note media-time-format-note">支持 MM:SS.mmm / HH:MM:SS.mmm</p>
   <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="媒体剪辑时间轴">
