@@ -25,3 +25,7 @@ Prior `guidedTaskSettings` built an editable Manual form from a Guided plan, but
 - This contract only covers a freshly compiled **software CPU** task. Native Guided NVENC p7/tune/VBR/maxrate policy is deliberately not called equivalent to Manual CPU x264; Native GPU and Android/Web must have separate evidence and capability adaptation.
 - An exact byte target/bitrate match is a **plan** match; it is not a final file size guarantee nor proof of identical codec output or ASS font rendering on different backends.
 - Actual UI handoff on Windows, browser persisted configuration, high-density ASS scaling and independent FFmpeg rendered image parity remain Pending. True cross-platform single compiler and output attestation, B16 exact trim/FLAC costs and full B01–B25/A01–A10 exit gates remain open.
+
+
+## Reference reconstitution check
+The new pre-scale ASS task is independently consumed by the already existing `src/media-verification.js::hardsubReferenceFilter`, which reconstructs the filter steps in their encoded `outputArgs` order. The new regression also requires a 2.5 s output-reference frame to apply ASS at the source's timeline **before** bicubic scaling. This preserves the separation of rendered-content intent from codec compression quality (related UIGS Candidate `2026-10-12-intended-reference-and-subtitle-render-order-for-media-qa`). The fixture is a filter-chain oracle, not a real FFmpeg frame or a typography/pixel-identity acceptance.
