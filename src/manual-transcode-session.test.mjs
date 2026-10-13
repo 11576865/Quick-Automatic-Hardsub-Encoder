@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createManualTranscodeSession,runManualPairedSweep} from './manual-transcode-session.js';
+import {summarizeManualEncodeCost} from './manual-time-tradeoff.js';
 
 const protocol=()=>({
  method:'windows-native-exact-cq-v1',
@@ -76,6 +77,13 @@ test('complete paired samples form bounded comparable frontier; incomplete never
  assert.ok(model.frontier.minimumEvidenceTargetBytes<model.frontier.maximumEvidenceTargetBytes);
  assert.equal(model.frontier.evaluateTargetBytes(model.frontier.maximumEvidenceTargetBytes*2).status,'above-evidence');
  assert.equal(session.trials()[0].points[0].sampleMeasurements.length,2);
+ const costs=summarizeManualEncodeCost(session.trials(),{referenceVideoBitrate:900000});
+ assert.equal(costs.ok,true);
+ assert.equal(costs.candidates.length,2);
+ assert.equal(costs.candidates[0].nearestObserved.measuredEncodeSeconds,.22);
+ assert.equal(costs.candidates[0].nearestObserved.measuredMediaSeconds,3);
+ assert.equal(costs.candidates[0].nearestObserved.timeBasis,'windows-native-ffmpeg-encode-stopwatch-v1');
+ assert.equal(costs.candidates[0].canRankUnmeasuredTarget,false);
  const snapshot=session.snapshot();
  assert.equal(Object.isFrozen(snapshot.protocol),true);
  assert.equal(Object.isFrozen(snapshot.protocol.windows[0]),true);
