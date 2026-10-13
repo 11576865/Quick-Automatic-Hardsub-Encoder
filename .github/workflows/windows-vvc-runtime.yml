@@ -1,0 +1,54 @@
+name: Windows required VVC runtime acceptance
+on:
+  pull_request:
+    paths:
+      - 'windows/**'
+      - 'src/media-task.js'
+      - 'src/media-capabilities.js'
+      - 'src/vvc*.mjs'
+      - 'scripts/check-vvc-native.ps1'
+      - 'scripts/build-vvc-tasks.mjs'
+      - 'scripts/install-ci-vvc-toolchain.ps1'
+      - '.github/workflows/windows-vvc-runtime.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  vvc-runtime:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate fixtures and PowerShell syntax
+        shell: powershell
+        run: |
+          node --test src/vvc-required-runtime.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs
+          if($LASTEXITCODE -ne 0){throw 'VVC fixture tests failed.'}
+          foreach($path in @('scripts/install-ci-vvc-toolchain.ps1','scripts/check-vvc-native.ps1')){
+            $tokens=$null;$errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path),[ref]$tokens,[ref]$errors) | Out-Null
+            if($errors.Count){throw ($errors | Out-String)}
+          }
+      - name: Fetch hash-verified isolated libvvenc toolchain
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/install-ci-vvc-toolchain.ps1
+      - name: Require real QP, bitrate and ASS hard-sub bridge outputs
+        shell: powershell
+        run: |
+          $ffmpeg=(Get-Command ffmpeg.exe -ErrorAction Stop).Source
+          $ffprobe=(Get-Command ffprobe.exe -ErrorAction Stop).Source
+          ./scripts/check-vvc-native.ps1 -Ffmpeg $ffmpeg -Ffprobe $ffprobe -RequireRuntime -IncludeHardsub
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vvc-required-runtime-evidence
+          path: |
+            vvc-native-acceptance.json
+            vvc-runtime-evidence/
+          if-no-files-found: ignore
+          retention-days: 14

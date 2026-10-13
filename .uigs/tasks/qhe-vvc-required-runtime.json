@@ -1,0 +1,36 @@
+{
+  "goal": "Close actual Windows VVC runtime acceptance gap without replacing user toolchains",
+  "status": "agent_execution_complete_pending_external_validation",
+  "current_bounded_work_unit": "dedicated hash-verified isolated CI toolchain plus required QP/bitrate/ASS real Bridge output acceptance",
+  "completed_units": [
+    "RequireRuntime fails on unsupported encoder",
+    "optional hard-sub task and ASS fixture",
+    "independent probe/decode and generated artifact evidence",
+    "official asset digest verification and provenance",
+    "dedicated Windows workflow"
+  ],
+  "next_units": [
+    "read exact-head required VVC workflow conclusion and artifact; one bounded repair if necessary"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "3fde4e564f009a447335e32b5394c451aa3be0e2",
+  "external_validation_states": {
+    "windows_required_vvc": "Pending after publication",
+    "physical_device": "Pending"
+  },
+  "local_tests": {
+    "pass": 213,
+    "skipped": 7,
+    "failed": 0
+  },
+  "build": "pass",
+  "blockers": [
+    "actual CI libvvenc encode/mux/probe/decode has not run in this work unit"
+  ],
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/observations/2026-10-13-qhe-vvc-capability-chain-and-cancellable-validation.md"
+  },
+  "updated_timestamp": "2026-10-13T03:55:28.230118+00:00"
+}
