@@ -11,7 +11,7 @@ if(-not (Test-Path -LiteralPath $OutputFile -PathType Leaf)){throw 'Completed ou
 $before=Get-Item -LiteralPath $OutputFile
 if($before.Length -le 0){throw 'Completed output is empty.'}
 
-function Run-BoundedProbe([string]$args,[int]$limitSeconds){
+function Run-BoundedProbe([string]$args,[int]$limitSeconds,[bool]$packetStream=$false){
     $p=New-Object Diagnostics.Process
     $p.StartInfo.FileName=$Ffprobe
     $p.StartInfo.Arguments=$args
@@ -21,6 +21,7 @@ function Run-BoundedProbe([string]$args,[int]$limitSeconds){
     $p.StartInfo.RedirectStandardError=$true
     $timer=[Diagnostics.Stopwatch]::StartNew()
     $lines=New-Object 'System.Collections.Generic.List[string]'
+    $totals=@{};$count=0
     try{
         [void]$p.Start()
         $stderr=$p.StandardError.ReadToEndAsync()
@@ -32,13 +33,19 @@ function Run-BoundedProbe([string]$args,[int]$limitSeconds){
             if($timer.Elapsed.TotalSeconds -gt $limitSeconds){throw 'Packet audit worker exceeded time limit.'}
             $line=$read.Result
             if($null -eq $line){break}
-            if($lines.Count -ge 2000000){throw 'Packet audit worker exceeded packet limit.'}
-            $lines.Add($line)
+            if(++$count -gt $(packetStream?2000000:128)){throw 'Packet audit worker exceeded bounded scan limit.'}
+            if($packetStream){
+                if($line -notmatch '^(\d+),(\d+)(?:,.*)?$'){throw 'Malformed completed output packet.'}
+                $id=[int]$Matches[1];$length=[long]$Matches[2]
+                if(-not $totals.ContainsKey($id)){$totals[$id]=0L}
+                if($totals[$id] -gt ([long]::MaxValue-$length)){throw 'Packet-size sum overflow.'}
+                $totals[$id]+=$length
+            }else{$lines.Add($line)}
         }
         if(-not $p.WaitForExit(1000) -or $p.ExitCode -ne 0){
             throw 'FFprobe audit worker failed.'
         }
-        return $lines
+        return [pscustomobject]@{Lines=@($lines.ToArray());Totals=$totals}
     }finally{
         try{if(-not $p.HasExited){$p.Kill();[void]$p.WaitForExit(3000)}}catch{}
         $p.Dispose()
@@ -50,7 +57,7 @@ function Quote-Arg([string]$value){
 }
 $quoted=Quote-Arg $OutputFile
 # The stream inventory is cheap; the bounded packet scans below handle long videos.
-$streamLines=Run-BoundedProbe ('-v error -show_entries stream=index,codec_type -of csv=p=0 '+$quoted) 15
+$streamLines=(Run-BoundedProbe ('-v error -show_entries stream=index,codec_type -of csv=p=0 '+$quoted) 15).Lines
 $streamTable=@()
 foreach($line in $streamLines){
     if($line -notmatch '^(\d+),(audio|subtitle|video|attachment|data)(?:,.*)?$'){continue}
@@ -59,16 +66,7 @@ foreach($line in $streamLines){
 if($streamTable.Count -gt 64 -or $streamTable.Count -eq 0){throw 'Output stream inventory unavailable or exceeds safe limit.'}
 # Independently probe only auxiliary tracks, never scale source packets by duration.
 function Get-PacketTotals([string]$kind){
-    $rows=Run-BoundedProbe ('-v error -select_streams '+$kind+' -show_packets -show_entries packet=stream_index,size -of csv=p=0 '+$quoted) 120
-    $totals=@{}
-    foreach($line in $rows){
-        if($line -notmatch '^(\d+),(\d+)(?:,.*)?$'){throw 'Malformed packet size in completed output.'}
-        $id=[int]$Matches[1];$length=[long]$Matches[2]
-        if(-not $totals.ContainsKey($id)){$totals[$id]=0L}
-        $totals[$id]+=$length
-        if($totals[$id] -lt 0){throw 'Packet-size sum overflow.'}
-    }
-    return ,$totals
+    return (Run-BoundedProbe ('-v error -select_streams '+$kind+' -show_packets -show_entries packet=stream_index,size -of csv=p=0 '+$quoted) 120 $true).Totals
 }
 $audio=Get-PacketTotals 'a'
 $subs=Get-PacketTotals 's'
