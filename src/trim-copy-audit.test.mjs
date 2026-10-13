@@ -65,3 +65,25 @@ test('Windows Native completed status emits one bounded audited packet snapshot'
   assert.equal((bridge.match(/\$outputPacketEvidence=Get-CompletedTrimPacketEvidence \$j/g)||[]).length,2);
   assert.match(main,/outputPacketEvidence:result\.outputPacketEvidence\?\?null/);
 });
+test('large completed trim output uses a bounded owned worker, never blocks status or changes strict budget',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const [bridge,worker,smoke]=await Promise.all([
+    readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8'),
+    readFile(new URL('../windows/trim-packet-audit.ps1',import.meta.url),'utf8'),
+    readFile(new URL('../scripts/check-guided-budget-native.ps1',import.meta.url),'utf8')
+  ]);
+  assert.match(bridge,/function Get-AsyncTrimPacketEvidence\(\$Job\)/);
+  assert.match(bridge,/return Get-AsyncTrimPacketEvidence \$Job/);
+  assert.match(bridge,/if\(-not \$proc.HasExited\)\{return \$null\}/);
+  assert.match(bridge,/TrimPacketAuditState='running'/);
+  assert.match(bridge,/TrimPacketAuditState='ready'/);
+  assert.match(bridge,/TrimPacketAuditState='unavailable'/);
+  assert.equal((bridge.match(/outputPacketAuditState=\$j.TrimPacketAuditState/g)||[]).length,2);
+  assert.match(worker,/sourceWriteTicks/);
+  assert.match(worker,/ReadLineAsync\(\)/);
+  assert.match(worker,/2000000/);
+  assert.match(worker,/if\(\$after.Length -ne \$before.Length/);
+  assert.match(worker,/Move-Item -LiteralPath \$temp -Destination \$ReceiptFile/);
+  assert.match(smoke,/B16 isolated packet worker, source stamp and independent copied-audio totals passed/);
+});
+
