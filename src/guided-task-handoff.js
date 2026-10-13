@@ -10,7 +10,7 @@ export function guidedTaskSettings({plan,audio,container}={},defaults={}) {
   start:0,end:'',videoStreams:'0',videoRange:'full',audioRange:'full',subtitleRange:'full',audioTrack:'all',audioPlan:'',
   audio:audio.audio,audioBitrate:audio.audioBitrate||128000,audioChannels:audio.audioChannels||'',audioSampleRate:audio.audioSampleRate||'',
   outputContainer:container,keepSubtitles:false,keepAttachments:false,subtitleStreams:'all',attachmentStreams:'all',
-  width:plan.outputWidth||'',height:plan.outputHeight||'',scaleAlgorithm:'bicubic',sizeReserve:4,rateMode:plan.mode==='crf'?'quality':'size',quality:plan.crf,
+  width:plan.outputWidth||'',height:plan.outputHeight||'',scaleAlgorithm:'bicubic',subtitleRenderOrder:'before-scale',sizeReserve:4,rateMode:plan.mode==='crf'?'quality':'size',quality:plan.crf,
   targetSize:plan.mode==='budget-rate'?Number(plan.sizeCeiling)/1000000:defaults.targetSize,sizeUnit:'MB',
   budgetPolicy:policy==='strict-ceiling'?'strict-ceiling':'best-effort',twoPass:policy!=='best-effort'};
  if(s.rateMode==='size'&&!(s.targetSize>0))throw Error('引导目标体积无效');
