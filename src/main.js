@@ -308,6 +308,7 @@ app.innerHTML = `
   <div id="hardsubManualMount"></div>
   <section id="planCard" class="card plan-card hidden" data-mobile-stage-section="produce">
     <div class="card-heading"><span class="step-no">04</span><div><h2>输出策略</h2><p>目标与编码器</p></div></div>
+    <button type="button" id="guidedToManual" class="secondary">以当前目标生成 CPU 参数方案</button>
 
     <input id="encodeGoal" type="hidden" value="balanced">
     <input id="qualityTarget" type="hidden" value="0.985">
@@ -6153,6 +6154,7 @@ function escapeHtml(s='') { return String(s).replace(/[&<>"']/g, c => ({'&':'&am
 // Manual tasks use the same selected files and owned native job lifecycle.
 let manualCancelRequested = false;
 mountMediaWorkspace({
+  guidedSnapshot: () => ({plan:buildEncodePlan(state.selectedCodec),audio:guidedHardsubAudioSettings(),container:resolveGuidedHardsubContainer().key}),
   busy: () => state.operationBusy || !!state.nativeJobId || !!state.nativeImportJobId,
   onModeChange: mode => {
     if (mode !== 'hardsub') setMobileStage('prepare', { scroll: false });

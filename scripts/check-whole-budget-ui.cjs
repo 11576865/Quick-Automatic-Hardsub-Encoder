@@ -2,14 +2,14 @@ const assert=require('node:assert/strict');
 // Real production workspace; only source/encode/save callbacks are simulated.
 module.exports=async(browser,baseUrl)=>{
  const page=await browser.newPage();
- await page.route('**/whole-budget-fixture',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><body><section id="inputCard"></section></body></html>'}));
+ await page.route('**/whole-budget-fixture',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><html><body><section id="inputCard"></section><button id="guidedToManual">CPU 参数方案</button></body></html>'}));
  try{
   await page.goto(baseUrl+'/whole-budget-fixture');
   await page.evaluate(async()=>{
    const {mountMediaWorkspace}=await import('/src/media-workspace.js');
    const state=window.budgetTest={source:'A',busy:false,saves:0,bytes:1100000,tasks:[]};
    const media={duration:5,fps:24,videoTracks:1,audioTracks:1,audioCodecs:['flac'],audioStreams:[{codec:'flac'}],formatName:'matroska'};
-   mountMediaWorkspace({busy:()=>state.busy,setBusy:v=>state.busy=v,isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.source,sourceName:()=>state.source,mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},log:()=>{},cancel:()=>{},save:()=>{state.saves++;return {ok:true};},measureBudget:async()=>({version:1,scope:'full-source',audioPacketBytes:[1000],subtitlePacketBytes:[],attachmentBytes:[]}),run:async task=>{state.tasks.push(task);return {outputBytes:state.bytes,verified:true};}});
+   mountMediaWorkspace({guidedSnapshot:()=>({plan:{codec:'h265',mode:'crf',crf:22,preset:'medium'},audio:{audio:'aac',audioBitrate:128000},container:'mkv'}),busy:()=>state.busy,setBusy:v=>state.busy=v,isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.source,sourceName:()=>state.source,mediaSnapshot:()=>media,prepare:async()=>media,validate:async()=>{},log:()=>{},cancel:()=>{},save:()=>{state.saves++;return {ok:true};},measureBudget:async()=>({version:1,scope:'full-source',audioPacketBytes:[1000],subtitlePacketBytes:[],attachmentBytes:[]}),run:async task=>{state.tasks.push(task);return {outputBytes:state.bytes,verified:true};}});
    const form=document.querySelector('#mediaTaskForm');
    const set=(key,value)=>{const el=form.elements.namedItem(key);el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}));};
    set('operation','transcode');set('rateMode','size');set('targetSize','1');set('budgetPolicy','strict-ceiling');
@@ -55,6 +55,17 @@ module.exports=async(browser,baseUrl)=>{
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'review must fit phone');
   await page.screenshot({path:'media-workspace-task-review-mobile.png',fullPage:true});
   await page.click('#taskInspect');assert.match(await page.locator('#taskStatus').textContent(),/成本未知/);
+  const runsBeforeHandoff=await page.evaluate(()=>window.budgetTest.tasks.length);
+  await page.click('#guidedToManual');
+  assert.equal(await page.locator('[name="encoder"]').inputValue(),'libx265');
+  assert.equal(await page.locator('[name="start"]').inputValue(),'0');
+  assert.equal(await page.locator('[name="audioPlan"]').inputValue(),'');
+  assert.match(await page.locator('#taskStatus').textContent(),/CPU 参数方案.*重新验证/);
+  assert.equal(await page.locator('#taskObjectReview').getAttribute('data-plan-checked'),'false');
+  assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeHandoff,'handoff must not encode');
+  await page.click('#taskInspect');
+  assert.equal(await page.locator('#taskObjectReview').getAttribute('data-plan-checked'),'true');
+
  }finally{await page.close();}
  console.log('Whole-file workspace budget, strict save gate, config exclusion and source invalidation passed (simulated media backend).');
 };

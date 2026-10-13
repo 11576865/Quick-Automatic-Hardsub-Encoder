@@ -1,3 +1,4 @@
+import {guidedTaskSettings} from './guided-task-handoff.js';
 import {buildTaskReview,renderTaskReview} from './task-review.js';
 import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
@@ -1668,6 +1669,21 @@ export function mountMediaWorkspace(hooks) {
     });
   }
 
+  const guidedHandoffButton=document.querySelector('#guidedToManual');
+  let initialManualSettings;
+  if(guidedHandoffButton)guidedHandoffButton.onclick=()=>{
+    if(busy||hooks.busy()||clipBatchRunning||clipAwaitingSave)return;
+    try{
+      const settings=guidedTaskSettings(hooks.guidedSnapshot?.(),initialManualSettings);
+      applyConfig(settings);
+      activeTask=null;currentPlanTask=null;transcodeCurves.invalidate();
+      hardsubStrategy='manual';localStorage.setItem('hardsub-control-strategy-v1','manual');
+      syncHardsubStrategyChrome();syncTaskReview();renderPlanSummary();
+      status('已按引导目标生成 CPU 参数方案；需重新验证，原采样证据未转移。目标体积将按逐流计划重新核算。');
+      section.scrollIntoView?.({block:'start'});
+    }catch(error){hooks.log?.('方案交接未完成：'+error.message);alert(error.message);}
+  };
+
   const subtitleCardObserver = new MutationObserver(() => syncHardsubStrategyChrome());
   const observedSubtitleCard = document.querySelector('#subtitleCard');
   if (observedSubtitleCard) subtitleCardObserver.observe(observedSubtitleCard, { attributes:true, attributeFilter:['class'] });
@@ -2060,5 +2076,6 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
+  initialManualSettings=read();
   return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }
