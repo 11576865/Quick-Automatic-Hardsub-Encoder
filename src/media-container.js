@@ -44,6 +44,7 @@ function selectedAudioStreams(task={}, media={}) {
 }
 
 function copiedAudioCodecs(task={}, media={}) {
+  if(task.audioPlan)return task.audioPlan.filter(t=>t.action==='copy').map(t=>cleanCodec(media.audioStreams?.[t.sourceOrdinal]?.codec||media.audioStreams?.[t.sourceOrdinal]?.codec_name||media.audioCodecs?.[t.sourceOrdinal]||'')).filter(Boolean);
   const selected = selectedAudioStreams(task, media);
   if (selected.length) {
     return selected.map(stream => cleanCodec(stream?.codec || stream?.codec_name || '')).filter(Boolean);
@@ -84,13 +85,14 @@ function audioCodecLabel(codec='') {
 }
 
 export function audioCopyPlaybackWarning(task={}, media={}) {
-  if(task.audio!=='copy' || Number(media.audioTracks||0)<=0)return null;
+  if(typeof task.audioPlan==='string'&&task.audioPlan){try{return audioCopyPlaybackWarning({...task,audioPlan:JSON.parse(task.audioPlan)},media);}catch{return null;}}
+  if((task.audioPlan?!task.audioPlan.some(t=>t.action==='copy'):task.audio!=='copy') || Number(media.audioTracks||0)<=0)return null;
   const codecs=[...new Set(copiedAudioCodecs(task,media))];
-  const tracks=task.audioTrack==='all' || task.audioTrack == null
+  const tracks=task.audioPlan?task.audioPlan.filter(t=>t.action==='copy').length:task.audioTrack==='all' || task.audioTrack == null
     ? Math.max(1,Number(media.audioTracks||0))
     : 1;
   const detected=codecs.length ? codecs.map(audioCodecLabel).join(' / ') : '未能确认';
-  const selectedStreams=selectedAudioStreams(task,media);
+  const selectedStreams=task.audioPlan?task.audioPlan.filter(t=>t.action==='copy').map(t=>media.audioStreams?.[t.sourceOrdinal]).filter(Boolean):selectedAudioStreams(task,media);
   const selectedBitrate=selectedStreams.reduce((sum,stream)=>sum+Number(stream?.bitRate||stream?.bit_rate||0),0);
   const bitrate=selectedBitrate>0 ? selectedBitrate : Number(media.audioBitRate||0);
   const broad=codecs.length>0 && codecs.every(codec=>BROAD_PLAYBACK_AUDIO.has(codec));
@@ -128,8 +130,8 @@ export function checkContainerCompatibility(key, task={}, media={}) {
   const badVideo=videoCodecs.find(codec=>!MP4_VIDEO.has(codec));
   if(badVideo)return {ok:false,reason:`所选视频流编码 ${badVideo} 未列入 MP4 安全组合`};
 
-  if(task.audio==='libopus')return {ok:false,reason:'当前策略不把 Opus 作为 MP4 安全默认；请改用 AAC、关闭音频或选择 MKV'};
-  if(task.audio==='copy'){
+  if(task.audioPlan?.some(t=>['libopus','flac'].includes(t.action))||(!task.audioPlan&&task.audio==='libopus'))return {ok:false,reason:'当前策略不把 Opus / FLAC 作为 MP4 安全默认；请改用 AAC、关闭音频或选择 MKV'};
+  if(task.audioPlan?task.audioPlan.some(t=>t.action==='copy'):task.audio==='copy'){
     const codecs=copiedAudioCodecs(task,media);
     if(Number(media.audioTracks||0)>0 && !codecs.length)return {ok:false,reason:'无法确认所选复制音轨是否适合 MP4；请选择 MKV 或显式转为 AAC'};
     const bad=codecs.find(codec=>!MP4_AUDIO.has(codec));

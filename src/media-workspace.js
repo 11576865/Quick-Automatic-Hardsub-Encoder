@@ -1,6 +1,7 @@
 import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { vvcCapability } from './media-capabilities.js';
+import { mountAudioStreamPlan } from './audio-stream-plan-ui.js';
 import { audioCopyPlaybackWarning } from './media-container.js';
 import { mountTranscodeCurves } from './transcode-calibration-panel.js';
 import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
@@ -205,6 +206,7 @@ export function mountMediaWorkspace(hooks) {
   ${input('audioTrack','音频轨','all 或音频轨序号，从 0 开始','all')}${select('audioRange','音频时间轴',[['trim','按 IN / OUT 剪辑'],['full','保持完整音频']])}
   ${select('subtitleRange','软字幕时间轴',[['trim','按 IN / OUT 剪辑'],['full','保持完整软字幕']])}
   ${check('keepSubtitles','保留内封软字幕')}${check('keepAttachments','保留附件 / 字体')}${check('keepMetadata','保留元数据',true)}${check('keepChapters','保留章节')}</div>
+  <div class="task-grid">${input('subtitleStreams','内封字幕选择','all 或字幕轨序号，例如 0,2','all')}${input('attachmentStreams','附件选择','all 或附件序号，例如 0,1','all')}</div>
   <p id="taskVideoStreamInfo">读取容器后显示可用视频流。视频流序号按 FFmpeg 的 v:N 顺序，从 0 开始。</p>
   <p>时间策略彼此独立：例如“视频按 IN/OUT、音频保持完整”会只剪视频。主动制造不同时长的流可能改变音画对应关系，这是显式任务语义，不会被自动修正。</p></details>
   <section id="taskOutputPolicy" class="media-output-policy">
@@ -267,6 +269,7 @@ export function mountMediaWorkspace(hooks) {
   const inputCard = document.querySelector('#inputCard');
   const productionDeck = document.querySelector('#hardsubControlDeck');
   const outputPolicy = section.querySelector('#taskOutputPolicy');
+  const audioStreamPlan=mountAudioStreamPlan({container:outputPolicy,form,media:()=>hooks.mediaSnapshot?.(),sourceIdentity:()=>hooks.videoIdentity?.()});
   const outputPolicyAnchor = document.createComment('task-output-policy-home');
   outputPolicy?.before(outputPolicyAnchor);
   outputPolicy?.querySelectorAll('[name]').forEach(control => control.setAttribute('form','mediaTaskForm'));
@@ -437,7 +440,7 @@ export function mountMediaWorkspace(hooks) {
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
   const refreshConfigs=()=>{get('savedConfig').innerHTML=Object.keys(configs()).map(n=>`<option value="${escape(n)}">${escape(n)}</option>`).join('');};
-  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();};
+  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=key==='audioPlan'&&Array.isArray(value)?JSON.stringify(value):String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();audioStreamPlan.refresh();};
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
@@ -1348,7 +1351,7 @@ export function mountMediaWorkspace(hooks) {
     const speed=copy?'无需编码':presetIntent(raw.encoder,raw.preset);
     let rate='无损复制',note='不重新编码；实际切入点受关键帧约束。';
     if(!copy && raw.rateMode==='quality'){
-      rate='质量优先 · '+(String(raw.encoder).endsWith('_nvenc')?'CQ ':'CRF ')+(raw.quality||'—');
+      rate='质量优先 · '+(raw.encoder==='libvvenc'?'QP ':String(raw.encoder).endsWith('_nvenc')?'CQ ':'CRF ')+(raw.quality||'—');
       note='质量模式不会根据 CQ / CRF 伪造精确成品大小；需要大小判断时先做短片试压。';
     }else if(!copy && raw.rateMode==='bitrate'){
       const b=Number(raw.bitrate||0);
@@ -1359,7 +1362,8 @@ export function mountMediaWorkspace(hooks) {
       note='目标体积会换算为视频码率预算；封装、音频和实际编码偏差仍会影响最终大小。';
     }
     const size=copy?'保持源画面':raw.width&&raw.height?raw.width+'×'+raw.height:raw.width?raw.width+' 宽 · 高度按比例':raw.height?'宽度按比例 · '+raw.height+' 高':'保持源分辨率';
-    const audio=raw.audio==='copy'?'原音频复制':raw.audio==='none'?'无音频':String(raw.audio||'').toUpperCase();
+    let audio=raw.audio==='copy'?'原音频复制':raw.audio==='none'?'无音频':String(raw.audio||'').toUpperCase();
+    if(raw.audioPlan){try{audio='逐轨 · '+JSON.parse(raw.audioPlan).filter(a=>a.action!=='drop').map(a=>'a:'+a.sourceOrdinal+' '+a.action).join(' / ');}catch{audio='音轨计划待修正';}}
     const container=task?.outputContainer ? task.outputContainer.toUpperCase() : ({auto:'AUTO',keep:'保持源容器',mkv:'MKV',mp4:'MP4'}[raw.outputContainer]||'AUTO');
     section.querySelector('#taskPlanTitle').textContent=operationLabel+(copy?'':' · '+codecLabel+' · '+speed);
     section.querySelector('#taskPlanEncoder').textContent=copy?'直接复制':codecLabel+' · '+encoderLabel;
@@ -1603,6 +1607,7 @@ export function mountMediaWorkspace(hooks) {
   function syncHardsubStrategyChrome(mode = get('operation').value) {
     const hardsub = mode === 'hardsub';
     const guided = hardsubStrategy === 'guided';
+    audioStreamPlan.panel.hidden=hardsub&&guided;
     document.body.dataset.hardsubStrategy = hardsubStrategy;
     section.dataset.mobileStageSection = hardsub ? 'produce' : 'prepare';
     for (const button of strategyButtons) {
@@ -1715,10 +1720,10 @@ export function mountMediaWorkspace(hooks) {
   const handleSharedAudioChange = event => {
     const audioControl=outputPolicy?.querySelector('[name="audio"]');
     if (event.target !== audioControl) return;
-    updateRate();
+    updateRate();audioStreamPlan.refresh();
     syncAudioPlaybackWarning();
   };
-  const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
+  const mediaInfoListener = () => { audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
@@ -1892,7 +1897,7 @@ export function mountMediaWorkspace(hooks) {
       for(const element of form.elements)element.disabled=false;
       for(const button of modeButtons)button.disabled=false;
       section.querySelector('#taskCancel').disabled=true;
-      updateMode();updateRate();syncTaskActions();syncClipQueue();
+      updateMode();updateRate();audioStreamPlan.refresh();syncTaskActions();syncClipQueue();
     }
   };
 
@@ -1965,7 +1970,7 @@ export function mountMediaWorkspace(hooks) {
     }
     finally{
       busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;
-      updateMode();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;updateRate();syncTaskActions();
+      updateMode();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;updateRate();audioStreamPlan.refresh();syncTaskActions();
     }
   };
   section.querySelector('#taskSamples').onclick=async()=>{
@@ -1989,11 +1994,12 @@ export function mountMediaWorkspace(hooks) {
       }
       status('三组试压完成；浏览器播放受 AV1 / H.266 / MKV 支持限制，可保存短片比较。');
     }catch(e){status('试压失败：'+e.message);}
-    finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
+    finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();audioStreamPlan.refresh();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
   };
   const invalidateCompiledPlan = event => {
     const sourceName=event?.target?.name||'';
     if(!sourceName)return;
+    if(['audio','audioTrack','audioRange','audioBitrate'].includes(sourceName))audioStreamPlan.refresh();
     if(!new Set(['quality','bitrate','rateMode','targetSize','sizeUnit','sizeReserve','sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
     markCompletedAsPrevious(sourceName);
     activeTask=null;

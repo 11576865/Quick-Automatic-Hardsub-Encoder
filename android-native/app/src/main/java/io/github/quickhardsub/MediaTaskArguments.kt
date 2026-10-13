@@ -7,9 +7,9 @@ import com.arthenica.ffmpegkit.FFmpegKit
 object MediaTaskArguments {
     private val values = mapOf(
         "-ss" to "0".toRegex(),
-        "-map" to "(?:(?:0|1):(?:v:\\d{1,2}|a\\?|a:\\d{1,2}|s\\?)|0:t\\?)".toRegex(),
+        "-map" to "(?:(?:0|1):(?:v:\\d{1,2}|a\\?|a:\\d{1,2}|s\\?|s:\\d{1,2})|0:t\\?|0:t:\\d{1,2})".toRegex(),
         "-c:v" to "copy|libx264|libx265|libsvtav1|h264_nvenc|hevc_nvenc|av1_nvenc".toRegex(),
-        "-c:a" to "copy|aac|libopus".toRegex(),
+        "-c:a" to "copy|aac|libopus|flac".toRegex(),
         "-ac" to "\\d{1,2}".toRegex(),
         "-ar" to "\\d{4,6}".toRegex(),
         "-vsync" to "0|cfr|vfr".toRegex(),
@@ -70,7 +70,7 @@ object MediaTaskArguments {
         val end = task.getDouble("end")
         require(start.isFinite() && end.isFinite() && start >= 0 && end > start)
         val array = task.getJSONArray("outputArgs")
-        require(array.length() in 2..128)
+        require(array.length() in 2..512)
         val result = mutableListOf<String>()
         val seen = mutableSetOf<String>()
         var i = 0
@@ -86,7 +86,11 @@ object MediaTaskArguments {
                 require(operation != "copy")
                 value.split(',').forEach { part -> require(filters.any { it.matches(part) }) { "Unsupported filter" } }
                 require(value.contains("ass=__ASS__") == (operation == "hardsub"))
-            } else require(values[flag]?.matches(value) == true) { "Unsupported output option: $flag" }
+            } else {
+                val indexed = Regex("^-(c|b|ac|ar):a:([0-9]|[12][0-9]|3[01])$").matchEntire(flag)
+                val key = if (indexed == null) flag else indexed.groupValues[1].let { if (it in setOf("c", "b")) "-$it:a" else "-$it" }
+                require(values[key]?.matches(value) == true) { "Unsupported output option: $flag" }
+            }
             if (flag == "-c:v") require((value == "copy") == (operation == "copy"))
             if (flag == "-c:v") require(!value.endsWith("_nvenc")) { "NVENC is Windows only" }
             result.add(value)
@@ -136,6 +140,7 @@ object MediaTaskArguments {
             val flag = args[i++]
             if (flag == "-sn") continue
             val value = args[i++]
+            if (Regex("^-(c|b|ac|ar):a:[0-9]+$").matches(flag)) continue
             if (flag in setOf("-c:a", "-b:a", "-ac", "-ar", "-c:s", "-c:t", "-map_metadata", "-map_chapters")) continue
             if (flag == "-map" && !Regex("^\\d+:v:").containsMatchIn(value)) continue
             out.addAll(listOf(flag, value))
@@ -149,9 +154,11 @@ object MediaTaskArguments {
     fun supportsFpsMode(): Boolean = Regex("(?m)^\\s*-fps_mode(?:\\s|$)").containsMatchIn(help("full"))
     fun validateSupport(args: List<String>) {
         val encoder = args[args.indexOf("-c:v") + 1]
-        if ("-c:a" in args) {
-            val audio = args[args.indexOf("-c:a") + 1]
-            if (audio != "copy") require(help(audio).contains("Encoder $audio ")) { "Audio encoder is unavailable" }
+        for (i in args.indices) {
+            if (Regex("^-c:a(?::[0-9]+)?$").matches(args[i])) {
+                val audio = args[i + 1]
+                if (audio != "copy") require(help(audio).contains("Encoder $audio ")) { "Audio encoder is unavailable" }
+            }
         }
         if (encoder == "copy") return
         val encoderHelp = help(encoder)

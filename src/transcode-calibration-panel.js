@@ -57,6 +57,13 @@ export function mountTranscodeCurves(section, hooks) {
     label('已采用实际测试过的 CQ/CRF ' + q + '。改变参数后应再次检查输出。');
   };
   const audioPlan = (raw, task) => {
+    if(task.audioPlan){
+      if(task.audioPlan.some(a=>['copy','flac'].includes(a.action)))return {rate:0,uncertain:true};
+      const videoSeconds=Number(task.expectedVideoDuration||0);
+      if(!(videoSeconds>0))return {rate:0,uncertain:true};
+      const bytes=task.audioPlan.reduce((sum,a)=>sum+(a.bitrate||0)*(a.range==='full'?Number(task.sourceDuration):Number(task.trimDuration))/8,0);
+      return {rate:bytes*8/videoSeconds,uncertain:false};
+    }
     const tracks = Number(task.expectedAudioTracks || 0);
     if (raw.audio === 'none' || tracks === 0) return { rate: 0, uncertain: false };
     if (raw.audio === 'copy') return { rate: 0, uncertain: true };

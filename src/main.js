@@ -5422,7 +5422,7 @@ function mediaFromNativeProbe(p) {
         codec:stream.codec||stream.codec_name||'',
         bitRate:Number(stream.bitRate||stream.bit_rate||0),
         channels:Number(stream.channels||0),
-        sampleRate:Number(stream.sampleRate||stream.sample_rate||0)
+        sampleRate:Number(stream.sampleRate||stream.sample_rate||0),language:stream.language||'',title:stream.title||''
       }))
     : (Array.isArray(p.audioCodecs)?p.audioCodecs:[]).map((codec,index)=>({ordinal:index,index,codec,bitRate:0,channels:0,sampleRate:0}));
   return {
@@ -5448,6 +5448,8 @@ function mediaFromNativeProbe(p) {
     highBitDepth: !!primary.highBitDepth,
     unsafeColorPipeline: !!primary.unsafeColorPipeline,
     audioStreams,
+    subtitleTracks:p.subtitleTracks,subtitleStreams:p.subtitleStreams,
+    attachmentTracks:p.attachmentTracks,attachmentStreams:p.attachmentStreams,
     audioCodec: audioStreams[0]?.codec || p.audioCodec || '',
     audioCodecs: audioStreams.length ? audioStreams.map(x=>x.codec).filter(Boolean) : (Array.isArray(p.audioCodecs) ? p.audioCodecs : (p.audioCodec ? [p.audioCodec] : [])),
     audioTracks: Number(p.audioTracks ?? audioStreams.length),

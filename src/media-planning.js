@@ -12,9 +12,10 @@ export function sizeBudget(raw, duration, audioTracks) {
   const bytes = amount * SIZE_UNITS[raw.sizeUnit || 'MB'];
   if (!(duration > 0) || !Number.isFinite(bytes) || bytes <= 0 || bytes > 1e13) throw Error('目标体积或时长无效');
   if (!Number.isFinite(reserve) || reserve < 1 || reserve > 30) throw Error('体积余量须为 1–30%');
-  if (raw.audio === 'copy' && audioTracks > 0) throw Error('目标体积模式请指定 AAC / Opus 码率或关闭音频；复制音频大小无法可靠预估');
+  if (!raw.audioPlan && raw.audio === 'copy' && audioTracks > 0) throw Error('目标体积模式请指定 AAC / Opus 码率或关闭音频；复制音频大小无法可靠预估');
   if (raw.keepAttachments) throw Error('目标体积模式请关闭附件保留；附件大小尚未计入预算');
-  const audioRate = raw.audio === 'none' ? 0 : Number(raw.audioBitrate || 128000) * audioTracks;
+  if(raw.audioPlan&&raw.audioPlan.some(a=>['copy','flac'].includes(a.action)))throw Error('逐轨复制/FLAC 体积预算尚未确定，请使用质量或码率模式');
+  const audioRate = raw.audioPlan?raw.audioPlan.reduce((sum,a)=>sum+(a.bitrate||0),0):raw.audio === 'none' ? 0 : Number(raw.audioBitrate || 128000) * audioTracks;
   if (!Number.isFinite(audioRate) || audioRate < 0) throw Error('音频码率无效');
   const payloadBytes = bytes * (1 - reserve / 100);
   const videoRate = Math.floor(payloadBytes * 8 / duration - audioRate);

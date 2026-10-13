@@ -1,6 +1,7 @@
 import { sizeBudget } from './media-planning.js';
 import { audioCopyPlaybackWarning, resolveOutputContainer } from './media-container.js';
 import { parseMediaTime } from './media-time.js';
+import { normalizeAudioPlan, auxiliarySelection, appendPlannedAudioArgs, createOutputPlan } from './media-stream-plan.js';
 
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
 export const TASK_VERSION = 4;
@@ -37,6 +38,7 @@ function rangePolicy(value, label) {
 }
 
 function appendAudioEncodingArgs(args, t, number) {
+  if(t.audioPlan){appendPlannedAudioArgs(args,t.audioPlan);return;}
   if (t.audio === 'none') return;
   args.push('-c:a', t.audio);
   if (['aac','libopus'].includes(t.audio)) {
@@ -65,7 +67,7 @@ function applyExpectedDurations(t, media, outputFps = null) {
     );
   }
   t.expectedAudioDuration = t.expectedAudioTracks > 0
-    ? (t.audioRange === 'full' ? sourceDuration : trimDuration)
+    ? (t.audioPlan ? Math.max(...t.audioPlan.filter(a=>a.action!=='drop').map(a=>a.range==='full'?sourceDuration:trimDuration)) : t.audioRange === 'full' ? sourceDuration : trimDuration)
     : 0;
   t.expectedSubtitleDuration = t.keepSubtitles
     ? (t.subtitleRange === 'full' ? sourceDuration : trimDuration)
@@ -106,9 +108,13 @@ export function compileTask(raw, media) {
   if (!['copy', 'aac', 'libopus', 'none'].includes(t.audio)) throw Error('未知音频策略');
   t.audioTrack = t.audioTrack || 'all';
   const audioTracks = streamCount(media, 'audioTracks', 0);
-  if (t.audioTrack !== 'all' && !/^\d+$/.test(t.audioTrack)) throw Error('音轨索引无效');
-  if (t.audioTrack !== 'all' && Number(t.audioTrack) >= audioTracks) throw Error('音轨索引不存在');
+  t.audioPlan=normalizeAudioPlan(raw.audioPlan,media,t.audioRange);
+  if (!t.audioPlan && t.audioTrack !== 'all' && !/^\d+$/.test(t.audioTrack)) throw Error('音轨索引无效');
+  if (!t.audioPlan && t.audioTrack !== 'all' && Number(t.audioTrack) >= audioTracks) throw Error('音轨索引不存在');
   t.expectedAudioTracks = t.audio === 'none' ? 0 : t.audioTrack === 'all' ? audioTracks : 1;
+  if(t.audioPlan)t.expectedAudioTracks=t.audioPlan.filter(a=>a.action!=='drop').length;
+  t.subtitleSelection=t.keepSubtitles?auxiliarySelection(raw.subtitleStreams,media.subtitleTracks??media.subtitleStreams?.length,'字幕'):null;
+  t.attachmentSelection=t.keepAttachments?auxiliarySelection(raw.attachmentStreams,media.attachmentTracks??media.attachmentStreams?.length,'附件'):null;
 
   t.compatibilityWarnings = Array.isArray(t.compatibilityWarnings) ? t.compatibilityWarnings : [];
   const audioCopyWarning = audioCopyPlaybackWarning(t, media);
@@ -116,7 +122,7 @@ export function compileTask(raw, media) {
 
   const trimNeeded = !!(t.hasTrimRange && (
     t.videoRange === 'trim' ||
-    (t.expectedAudioTracks > 0 && t.audioRange === 'trim') ||
+    (t.expectedAudioTracks > 0 && (t.audioPlan?t.audioPlan.some(a=>a.action!=='drop'&&a.range==='trim'):t.audioRange === 'trim')) ||
     (t.keepSubtitles && t.subtitleRange === 'trim')
   ));
   t.usesTrimInput = trimNeeded;
@@ -149,7 +155,7 @@ export function compileTask(raw, media) {
     t.bitrate = t.sizePlan.videoRate;
   }
 
-  t.estimatedAudioRate = t.audio === 'none' || t.expectedAudioTracks === 0
+  t.estimatedAudioRate = t.audioPlan ? (t.audioPlan.some(a=>['copy','flac'].includes(a.action))?null:t.audioPlan.reduce((sum,a)=>sum+(a.bitrate||0),0)) : t.audio === 'none' || t.expectedAudioTracks === 0
     ? 0
     : t.audio === 'copy'
       ? null
@@ -162,17 +168,25 @@ export function compileTask(raw, media) {
   const args = t.hasTrimRange ? ['-ss','0'] : [];
   const videoInput = inputFor(t.videoRange);
   for (const ordinal of t.videoStreams) args.push('-map', `${videoInput}:v:${ordinal}`);
-  if (t.audio !== 'none') {
+  if(t.audioPlan){
+    for(const track of t.audioPlan)if(track.action!=='drop')args.push('-map',`${inputFor(track.range)}:a:${track.sourceOrdinal}`);
+  }else if (t.audio !== 'none') {
     const audioInput = inputFor(t.audioRange);
     args.push('-map', t.audioTrack === 'all' ? `${audioInput}:a?` : `${audioInput}:a:${t.audioTrack}`);
   }
   if (t.keepSubtitles) {
     const subtitleInput = inputFor(t.subtitleRange);
-    args.push('-map', `${subtitleInput}:s?`, '-c:s', 'copy');
+    if(t.subtitleSelection)for(const index of t.subtitleSelection)args.push('-map',`${subtitleInput}:s:${index}`);
+    else args.push('-map', `${subtitleInput}:s?`);
+    args.push('-c:s','copy');
   } else {
     args.push('-sn');
   }
-  if (t.keepAttachments) args.push('-map', '0:t?', '-c:t', 'copy');
+  if (t.keepAttachments){
+    if(t.attachmentSelection)for(const index of t.attachmentSelection)args.push('-map',`0:t:${index}`);
+    else args.push('-map','0:t?');
+    args.push('-c:t','copy');
+  }
   args.push('-map_metadata', t.keepMetadata ? '0' : '-1', '-map_chapters', t.keepChapters ? '0' : '-1');
 
   const finalizeContainer = () => {
@@ -184,6 +198,7 @@ export function compileTask(raw, media) {
     t.outputMime = resolved.mime;
     t.sourceContainer = resolved.source;
     t.containerReason = resolved.reason;
+    t.outputPlan=createOutputPlan(t,media);
   };
 
   if (t.operation === 'copy') {
@@ -366,7 +381,7 @@ export function compileTask(raw, media) {
   if (t.frames) {
     t.frames = number('frames', 0, 1, 100000000, true);
     args.push('-frames:v', String(t.frames));
-    if (t.audio !== 'none') throw Error('限制输出帧数时请关闭音频，避免音视频长度歧义');
+    if (t.expectedAudioTracks>0) throw Error('限制输出帧数时请关闭音频，避免音视频长度歧义');
   }
 
   applyExpectedDurations(t, media, outputFps);
@@ -430,7 +445,7 @@ export function firstPassArgs(args) {
       continue;
     }
     const value = args[++i];
-    if (['-c:a','-b:a','-ac','-ar','-c:s','-c:t','-map_metadata','-map_chapters'].includes(flag)) continue;
+    if (/^-(?:c|b|ac|ar):a:\d+$/.test(flag)||['-c:a','-b:a','-ac','-ar','-c:s','-c:t','-map_metadata','-map_chapters'].includes(flag)) continue;
     if (flag === '-map' && !/^\d+:v:/.test(value)) continue;
     out.push(flag, value);
   }

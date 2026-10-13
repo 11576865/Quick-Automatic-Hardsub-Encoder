@@ -13,6 +13,7 @@ on:
       - 'scripts/check-curve-design.cjs'
       - 'scripts/check-calibration-lifecycle.cjs'
       - 'scripts/check-vvc-ui.cjs'
+      - 'scripts/check-audio-plan-ui.cjs'
       - '.uigs/**'
   push:
     branches: [main]
@@ -28,6 +29,7 @@ on:
       - 'scripts/check-curve-design.cjs'
       - 'scripts/check-calibration-lifecycle.cjs'
       - 'scripts/check-vvc-ui.cjs'
+      - 'scripts/check-audio-plan-ui.cjs'
 
 jobs:
   frontend:
@@ -69,9 +71,9 @@ jobs:
       - run: node --test src/timeline-no-audio-wiring.test.mjs
       - run: node --test src/media-verification.test.mjs
       - run: node --test src/output-verification-wiring.test.mjs
-      - run: node --test src/media-task.test.mjs src/media-planning.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs
+      - run: node --test src/media-task.test.mjs src/media-planning.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs src/media-stream-plan.test.mjs
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
-      - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs
+      - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs src/media-stream-plan.integration.test.mjs
       - run: FFMPEG_INTEGRATION=1 node --test src/source-ssim.integration.test.mjs
       - run: FFMPEG_INTEGRATION=1 node --test src/av1-alac-acceptance.integration.test.mjs
       - run: npm ci

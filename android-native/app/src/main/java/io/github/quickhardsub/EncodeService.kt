@@ -328,7 +328,13 @@ class EncodeService : Service() {
             if (audioMode !in setOf("copy", "aac", "libopus", "none")) {
                 throw IllegalStateException("未知音频策略")
             }
-            val audioTracks = if (audioMode == "none") 0 else if (task == null || task.optString("audioTrack", "all") == "all") sourceAudioTracks else 1
+            val plannedAudio = task?.optJSONArray("audioPlan")?.let { array ->
+                (0 until array.length()).map { array.getJSONObject(it) }.also { rows ->
+                    require(rows.size <= 32 && rows.map { it.getInt("sourceOrdinal") }.distinct().size == rows.size)
+                    require(rows.all { it.getInt("sourceOrdinal") in audioStreams.indices && it.getString("action") in setOf("copy", "aac", "libopus", "flac", "drop") })
+                }
+            }
+            val audioTracks = if (plannedAudio != null) plannedAudio.count { it.getString("action") != "drop" } else if (audioMode == "none") 0 else if (task == null || task.optString("audioTrack", "all") == "all") sourceAudioTracks else 1
             val requestedAudioTracks = request.optInt("expectedAudioTracks", -1)
             if (requestedAudioTracks >= 0 && requestedAudioTracks != audioTracks) {
                 throw IllegalStateException(
@@ -388,7 +394,7 @@ class EncodeService : Service() {
                     ?.takeIf { it > 0.0 } ?: sourceDuration
             }
             val expectedAudioDuration = if (task != null) {
-                if (audioTracks <= 0) 0.0 else if (task.optString("audioRange", "trim") == "full") sourceDuration else trimDuration
+                if (audioTracks <= 0) 0.0 else if (plannedAudio != null) plannedAudio.filter { it.getString("action") != "drop" }.maxOf { if (it.optString("range", "trim") == "full") sourceDuration else trimDuration } else if (task.optString("audioRange", "trim") == "full") sourceDuration else trimDuration
             } else {
                 audioStreams.mapNotNull { stream ->
                     stream.getAllProperties()?.optString("duration", "")?.toDoubleOrNull()?.takeIf { it > 0.0 }
@@ -665,6 +671,18 @@ class EncodeService : Service() {
                     val outputFps = if (parts.size == 2) (parts[0].toDoubleOrNull() ?: 0.0) / (parts[1].toDoubleOrNull() ?: 1.0) else parts[0].toDoubleOrNull() ?: 0.0
                     if (wantedFps > 0 && (!outputFps.isFinite() || abs(outputFps - wantedFps) > 0.01)) throw IllegalStateException("成品帧率与设置不符")
                     if (task.optInt("expectedBitDepth", 0) > 0 && inferBitDepth("", outVideo.getFormat().orEmpty()) != task.getInt("expectedBitDepth")) throw IllegalStateException("成品位深与设置不符")
+                }
+            }
+            if (plannedAudio != null) {
+                val kept = plannedAudio.filter { it.getString("action") != "drop" }
+                val outputAudios = outputStreams.filter { it.getType() == "audio" }
+                kept.forEachIndexed { index, track ->
+                    val action = track.getString("action")
+                    val expected = if (action == "copy") audioStreams[track.getInt("sourceOrdinal")].getCodec() else if (action == "libopus") "opus" else action
+                    require(outputAudios[index].getCodec() == expected) { "Planned audio codec differs from output" }
+                    val properties = outputAudios[index].getAllProperties()
+                    if (track.has("channels")) require(properties.optInt("channels") == track.getInt("channels")) { "Planned audio channels differ" }
+                    if (track.has("sampleRate")) require(properties.optInt("sample_rate") == track.getInt("sampleRate")) { "Planned audio sample rate differs" }
                 }
             }
             updateStatus(jobId, "validating", "正在完整扫描视频 packet", 0.990)

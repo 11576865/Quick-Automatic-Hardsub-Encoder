@@ -3,6 +3,12 @@
    interface. This layer only changes presentation; compileTask remains the
    canonical task compiler. */
 
+.media-audio-plan { margin: 12px 0; }
+.media-audio-plan-rows { display:grid;gap:8px;margin-top:10px; }
+.media-audio-plan-row { display:grid;grid-template-columns:minmax(100px,1fr) repeat(3,minmax(90px,1fr));gap:8px;align-items:center; }
+.media-audio-plan-row input,.media-audio-plan-row select { min-width:0;width:100%; }
+@media(max-width:640px){.media-audio-plan-row {grid-template-columns:1fr 1fr;} .media-audio-plan-row span {overflow-wrap:anywhere;} }
+
 .media-mode-switcher {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

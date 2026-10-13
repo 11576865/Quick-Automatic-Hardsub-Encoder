@@ -22,7 +22,9 @@ try {
     $tasksPath=Join-Path $work 'tasks.json'
     & node (Join-Path $PSScriptRoot 'build-vvc-tasks.mjs') $tasksPath
     if($LASTEXITCODE -ne 0){throw 'VVC task generation failed.'}
-    $tasks=@(Get-Content $tasksPath -Raw | ConvertFrom-Json)
+    $parsedTasks=Get-Content $tasksPath -Raw | ConvertFrom-Json
+    $tasks=@($parsedTasks)
+    if($tasks.Count -ne 2 -or $tasks[0].version -is [array]){throw 'Top-level task array was not enumerated.'}
     foreach($task in $tasks){[void](Get-MediaTaskArgs $task)}
     $bad=$tasks[0] | ConvertTo-Json -Depth 20 | ConvertFrom-Json
     $bad.outputArgs=@($bad.outputArgs)+@('-crf','32')

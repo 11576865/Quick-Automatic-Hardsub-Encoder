@@ -1,8 +1,8 @@
 {
   "goal": "Implement most researched QHE workflows including VVC and task-centered UI within five work units",
   "status": "agent_execution_complete_pending_external_validation",
-  "round": 1,
-  "current_bounded_work_unit": "Windows VVC task compilation, runtime capability gate and UI",
+  "round": 2,
+  "current_bounded_work_unit": "per-stream audio/auxiliary output plan and rational FPS history repair",
   "completed_units": [
     {
       "round": 1,
@@ -19,12 +19,28 @@
       },
       "build": "pass",
       "review": "3 Important findings addressed; no Critical findings",
-      "windows_runtime": "pending",
-      "browser": "pending"
+      "windows_runtime": "Windows smoke failed in new top-level-array reader; fixed in round 2, awaiting rerun",
+      "browser": "hosted frontend success, mocked Native capability scope"
+    },
+    {
+      "round": 2,
+      "implementation": "complete",
+      "scope": "heterogeneous audio plan, auxiliary mapping, authoritative UI, output audio contract, rational FPS parser and prior PS array fix",
+      "local_node_tests": {
+        "pass": 196,
+        "skipped": 6,
+        "failed": 0
+      },
+      "real_ffmpeg_integration": {
+        "pass": 4,
+        "failed": 0
+      },
+      "build": "pass",
+      "independent_review": "5 Important findings addressed",
+      "windows_android_browser": "pending CI"
     }
   ],
   "next_units": [
-    "per-stream output plan and rational FPS history repair",
     "whole-file budgeting and artifact gate",
     "task-centered responsive UI",
     "integration and delivery acceptance"
@@ -32,14 +48,16 @@
   "branch": "feat/qhe-five-round-delivery-20261013",
   "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
   "pr": 105,
-  "latest_durable_commit": "87d0ae59d8da6d9e38a93442362c1b651239cf64",
+  "latest_durable_commit": "101a605334d4b8f00fbd65c935c3249c054a6bd4",
   "external_validation_states": {
-    "windows_vvc": "pending CI; UNSUPPORTED is distinct from PASS",
-    "browser": "pending CI; local Chromium download returned invalid archive",
-    "physical_device": "pending"
+    "windows_vvc": "Pending rerun after PS array reader correction",
+    "browser": "Round 2 pending",
+    "physical_device": "Pending",
+    "windows_stream_plan": "Pending",
+    "android_stream_plan": "Pending compile/runtime"
   },
   "blockers": [],
-  "updated_timestamp": "2026-10-12T18:57:17.128971+00:00",
+  "updated_timestamp": "2026-10-13T00:20:30.505990+00:00",
   "intake": {
     "status": "recorded",
     "foundry_path": "inbox/observations/2026-10-13-qhe-vvc-capability-chain-and-cancellable-validation.md"

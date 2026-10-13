@@ -12,6 +12,7 @@ Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
 . (Join-Path $PSScriptRoot 'compression-history.ps1')
+. (Join-Path $PSScriptRoot 'media-frame-rate.ps1')
 . (Join-Path $PSScriptRoot 'bink-import.ps1')
 
 $ErrorActionPreference = 'Stop'
@@ -648,6 +649,7 @@ function Get-ProbeMedia {
             ordinal=$i; index=if($null -ne $stream.index){[int]$stream.index}else{$i}
             codec=[string]$stream.codec_name
             bitRate=if($adapterApplied){0L}elseif($stream.bit_rate){[long]$stream.bit_rate}else{0L}
+            language=[string]$stream.tags.language;title=[string]$stream.tags.title
             channels=if($stream.channels){[int]$stream.channels}else{0}
             sampleRate=if($stream.sample_rate){[int]$stream.sample_rate}else{0}
         }
@@ -673,6 +675,10 @@ function Get-ProbeMedia {
         pixelFormat=[string]$v.pixelFormat; bitDepth=[int]$v.bitDepth
         colorTransfer=[string]$v.colorTransfer; colorPrimaries=[string]$v.colorPrimaries
         colorSpace=[string]$v.colorSpace; hdr=[bool]$v.hdr; unsafeColorPipeline=[bool]$v.unsafeColorPipeline
+        subtitleTracks=@($json.streams | Where-Object {$_.codec_type -eq 'subtitle'}).Count
+        subtitleStreams=@($json.streams | Where-Object {$_.codec_type -eq 'subtitle'})
+        attachmentTracks=@($json.streams | Where-Object {$_.codec_type -eq 'attachment'}).Count
+        attachmentStreams=@($json.streams | Where-Object {$_.codec_type -eq 'attachment'})
         audioTracks=$audios.Count; audioStreams=$audioFacts
         audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}
         audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$audioRate
@@ -1153,7 +1159,14 @@ function Start-MediaTaskJob($Body) {
         if($profile.PixelFormats.Count -and $outputArgs -contains '-pix_fmt' -and $profile.PixelFormats -notcontains $outputArgs[[Array]::IndexOf($outputArgs,'-pix_fmt')+1]){throw 'Selected pixel format is unsupported.'}
         foreach($flag in @('-fps_mode','-vsync','-multipass','-rc-lookahead','-spatial-aq','-temporal-aq','-aq-strength','-cq','-crf','-qp','-preset','-tune')){if($outputArgs -contains $flag -and $profile.Options -notcontains $flag -and $script:Capabilities.GlobalOptions -notcontains $flag){throw "FFmpeg encoder does not support $flag"}}
     }
-    if($task.audio -in @('aac','libopus')){$audioHelp=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -h encoder='+$task.audio);if($audioHelp.StdOut -notmatch ('(?m)^Encoder '+[regex]::Escape([string]$task.audio)+'\s')){throw 'Selected audio encoder is unavailable.'}}
+    $audioEncoders=@()
+    for($i=0;$i -lt $outputArgs.Count;$i++){if($outputArgs[$i] -match '^-c:a(?::[0-9]+)?$'){$audioEncoders+=$outputArgs[$i+1]}}
+    foreach($name in @($audioEncoders | Select-Object -Unique)){
+        if($name -eq 'copy'){continue}
+        $audioHelp=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -h encoder='+$name)
+        if($audioHelp.StdOut -notmatch ('(?m)^Encoder '+[regex]::Escape([string]$name)+'\s')){throw 'Selected audio encoder is unavailable.'}
+    }
+
     $actualStart=[double]$task.start
     if($task.operation -eq 'copy' -and [string]$task.videoRange -ne 'full' -and $actualStart -gt 0){
         $stop=($actualStart+1).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture)
@@ -1200,7 +1213,7 @@ function Start-MediaTaskJob($Body) {
     $trimDuration=[Math]::Max(0.0,[double]$task.end-$actualStart)
     $sourceDuration=[double]$probe.duration
     $videoDuration=if([int]$task.version -ge 4 -and [string]$task.videoRange -eq 'full'){$sourceDuration}else{$trimDuration}
-    $audioDuration=if([int]$task.expectedAudioTracks -le 0){0.0}elseif([int]$task.version -ge 4 -and [string]$task.audioRange -eq 'full'){$sourceDuration}else{$trimDuration}
+    $audioDuration=if([int]$task.expectedAudioTracks -le 0){0.0}elseif($task.audioPlan){if(@($task.audioPlan | Where-Object {$_.action -ne 'drop' -and $_.range -eq 'full'}).Count){$sourceDuration}else{$trimDuration}}elseif([int]$task.version -ge 4 -and [string]$task.audioRange -eq 'full'){$sourceDuration}else{$trimDuration}
     $subtitleDuration=if(-not [bool]$task.keepSubtitles){0.0}elseif([int]$task.version -ge 4 -and [string]$task.subtitleRange -eq 'full'){$sourceDuration}else{$trimDuration}
     $duration=[Math]::Max($videoDuration,[Math]::Max($audioDuration,$subtitleDuration))
     $job=[pscustomobject]@{
@@ -1372,7 +1385,7 @@ function Ensure-CompletedJobHistory($Job) {
         $targetVideoBitrate=if($request -and $request.targetVideoBitrate){[long]$request.targetVideoBitrate}elseif($task -and $task.rateMode -ne 'quality'){[long]$task.bitrate}else{0L}
         $width=if($request -and $request.sourceWidth){[int]$request.sourceWidth}elseif($source){[int]$source.width}else{0}
         $height=if($request -and $request.sourceHeight){[int]$request.sourceHeight}elseif($source){[int]$source.height}else{0}
-        $fps=if($request -and $request.sourceFps){[double]$request.sourceFps}elseif($source){[double]$source.fps}else{0.0}
+        $fps=if($request -and $request.sourceFps){Convert-MediaFrameRate $request.sourceFps}elseif($source){Convert-MediaFrameRate $source.fps}else{0.0}
         $sourceCodec=if($request -and $request.sourceCodec){[string]$request.sourceCodec}elseif($source){[string]$source.videoCodec}else{''}
         $sourcePixelFormat=if($request -and $request.sourcePixelFormat){[string]$request.sourcePixelFormat}elseif($source){[string]$source.pixelFormat}else{''}
         $sourceVideoBitrate=if($request -and $request.sourceVideoBitrate){[long]$request.sourceVideoBitrate}elseif($source){[long]$source.videoBitRate}else{0L}
@@ -1676,6 +1689,7 @@ function Get-JobStatus([string]$JobId) {
                         $expectedVideos=if($null -ne $j.Task.expectedVideoTracks){[int]$j.Task.expectedVideoTracks}else{1}
                         if($videos.Count -ne $expectedVideos -or $audios.Count -ne [int]$j.Task.expectedAudioTracks -or $duration -le 0 -or [Math]::Abs($duration-$j.Duration) -gt 2){throw 'Output stream count/duration validation failed.'}
                         foreach($outVideo in $videos){Test-MediaOutput $j.Task $outVideo}
+                        Test-PlannedAudioOutput $j.Task $audios $j.SourceProbe.audioStreams
                         $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -i '+(Quote-NativeArg $j.Output)+' -map 0:v -map 0:a? -c copy -f null -')
                         if($scan.ExitCode -ne 0){throw 'Output packet scan failed.'}
                     }catch{$j.State='failed';$j.Error=$_.Exception.Message}

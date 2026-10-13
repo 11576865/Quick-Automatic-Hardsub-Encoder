@@ -11,6 +11,7 @@ const {spawn}=require('node:child_process');
   await require('./check-curve-design.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-calibration-lifecycle.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-vvc-ui.cjs')(browser,'http://127.0.0.1:4179');
+  await require('./check-audio-plan-ui.cjs')(browser,'http://127.0.0.1:4179');
 
   // Exercise the real browser refresh boundary for Windows Native. The launch
   // URL is intentionally one-shot; the second load must reconnect from

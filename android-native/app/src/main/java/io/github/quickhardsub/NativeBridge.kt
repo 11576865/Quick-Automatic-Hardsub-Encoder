@@ -298,6 +298,8 @@ class NativeBridge(
                     .put("unsafeColorPipeline", hdr || inferredDepth > 8)
                     .put("audioTracks", audioTracks)
                     .put("audioStreams", audioFacts)
+                    .put("subtitleTracks", streams.count { it.getType() == "subtitle" })
+                    .put("attachmentTracks", streams.count { it.getType() == "attachment" })
                     .put("audioCodec", audioStreams.firstOrNull()?.getCodec() ?: "")
                     .put("audioCodecs", JSONArray(audioStreams.map { it.getCodec() ?: "" }))
                     .put("audioBitRate", audioBitRate)

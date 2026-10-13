@@ -5,9 +5,9 @@ function Get-MediaTaskArgs($Task) {
     if ([double]::IsNaN($start) -or [double]::IsInfinity($start) -or [double]::IsNaN($end) -or [double]::IsInfinity($end) -or $start -lt 0 -or $end -le $start) { throw 'Invalid task range.' }
     $values=@{
         '-ss'='^(?:0)$'
-        '-map'='^(?:(?:0|1):(?:v:\d{1,2}|a\?|a:\d{1,2}|s\?)|0:t\?)$'
+        '-map'='^(?:(?:0|1):(?:v:\d{1,2}|a\?|a:\d{1,2}|s\?|s:\d{1,2})|0:t\?|0:t:\d{1,2})$'
         '-c:v'='^(?:copy|libx264|libx265|libsvtav1|libvvenc|h264_nvenc|hevc_nvenc|av1_nvenc)$'
-        '-c:a'='^(?:copy|aac|libopus)$'
+        '-c:a'='^(?:copy|aac|libopus|flac)$'
         '-ac'='^(?:\d{1,2})$'
         '-ar'='^(?:\d{4,6})$'
         '-vsync'='^(?:0|cfr|vfr)$'
@@ -55,7 +55,7 @@ function Get-MediaTaskArgs($Task) {
         '^(?:pad=ceil\(iw/2\)\*2:ceil\(ih/2\)\*2:0:0)$'
     )
     $args=@($Task.outputArgs)
-    if($args.Count -lt 2 -or $args.Count -gt 128){throw 'Invalid output options.'}
+    if($args.Count -lt 2 -or $args.Count -gt 512){throw 'Invalid output options.'}
     $result=New-Object 'System.Collections.Generic.List[string]'
     $seen=@{}
     for($i=0;$i -lt $args.Count;$i++){
@@ -76,6 +76,9 @@ function Get-MediaTaskArgs($Task) {
                 if(-not $valid){throw 'Unsupported filter.'}
             }
             if($value.Contains('ass=__ASS__') -ne ($Task.operation -eq 'hardsub')){throw 'Subtitle mode mismatch.'}
+        }elseif($flag -cmatch '^-(c|b|ac|ar):a:([0-9]|[12][0-9]|3[01])$'){
+            $base=if($Matches[1] -in @('c','b')){'-'+$Matches[1]+':a'}else{'-'+$Matches[1]}
+            if($value -cnotmatch $values[$base]){throw 'Unsupported indexed audio option.'}
         }elseif(-not $values.ContainsKey($flag) -or $value -cnotmatch $values[$flag]){throw "Unsupported output option: $flag"}
         if($flag -eq '-c:v' -and (($value -eq 'copy') -ne ($Task.operation -eq 'copy'))){throw 'Codec mode mismatch.'}
         $result.Add($value)
@@ -101,6 +104,7 @@ function Get-MediaFirstPassArgs([string[]]$OutputOptions) {
         $flag=$OutputOptions[$i]
         if($flag -eq '-sn'){continue}
         $i++;$value=$OutputOptions[$i]
+        if($flag -match '^-(c|b|ac|ar):a:[0-9]+$'){continue}
         if($flag -in @('-c:a','-b:a','-ac','-ar','-c:s','-c:t','-map_metadata','-map_chapters')){continue}
         if($flag -eq '-map' -and $value -notmatch '^\d+:v:'){continue}
         $out.Add($flag);$out.Add($value)
@@ -119,5 +123,18 @@ function Test-MediaOutput($Task, $Video) {
     if($Task.operation -ne 'copy' -and $Task.expectedBitDepth){
         $bits=if([string]$Video.pix_fmt -match '10|p010'){10}else{8}
         if($bits -ne [int]$Task.expectedBitDepth){throw 'Output bit depth differs from settings.'}
+    }
+}
+function Test-PlannedAudioOutput($Task,$OutputAudio,$SourceAudio){
+    if(-not $Task.audioPlan){return}
+    $kept=@($Task.audioPlan | Where-Object {$_.action -ne 'drop'})
+    if(@($OutputAudio).Count -ne $kept.Count){throw 'Planned audio output count differs.'}
+    for($i=0;$i -lt $kept.Count;$i++){
+        $track=$kept[$i];$ordinal=[int]$track.sourceOrdinal
+        if($ordinal -lt 0 -or $ordinal -ge @($SourceAudio).Count){throw 'Planned source audio does not exist.'}
+        $codec=if($track.action -eq 'copy'){$SourceAudio[$ordinal].codec}elseif($track.action -eq 'libopus'){'opus'}else{[string]$track.action}
+        if([string]$OutputAudio[$i].codec_name -ne $codec){throw 'Planned audio output codec differs.'}
+        if($track.channels -and [int]$OutputAudio[$i].channels -ne [int]$track.channels){throw 'Planned audio channels differ.'}
+        if($track.sampleRate -and [int]$OutputAudio[$i].sample_rate -ne [int]$track.sampleRate){throw 'Planned audio sample rate differs.'}
     }
 }

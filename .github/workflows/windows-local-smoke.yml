@@ -6,6 +6,9 @@ on:
       - 'scripts/check-guided-budget-native.ps1'
       - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'scripts/check-vvc-native.ps1'
+      - 'scripts/check-media-frame-rate.ps1'
+      - 'scripts/check-stream-plan-arguments.ps1'
+      - 'scripts/build-stream-plan-tasks.mjs'
       - 'scripts/build-vvc-tasks.mjs'
       - 'src/main.js'
       - 'src/media-workspace.js'
@@ -18,6 +21,9 @@ on:
       - 'scripts/check-guided-budget-native.ps1'
       - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'scripts/check-vvc-native.ps1'
+      - 'scripts/check-media-frame-rate.ps1'
+      - 'scripts/check-stream-plan-arguments.ps1'
+      - 'scripts/build-stream-plan-tasks.mjs'
       - 'scripts/build-vvc-tasks.mjs'
       - 'src/main.js'
       - 'src/media-workspace.js'
@@ -38,7 +44,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/vvc-runtime.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1', 'scripts/check-vvc-native.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/vvc-runtime.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1', 'scripts/check-vvc-native.ps1','windows/media-frame-rate.ps1','scripts/check-media-frame-rate.ps1','scripts/check-stream-plan-arguments.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -159,6 +165,12 @@ jobs:
       - name: Validate native Manual sample evidence receipts on real FFmpeg source
         shell: powershell
         run: ./scripts/check-manual-sample-evidence.ps1
+      - name: Validate per-stream structured task contract
+        shell: powershell
+        run: ./scripts/check-stream-plan-arguments.ps1
+      - name: Validate rational FPS parser
+        shell: powershell
+        run: ./scripts/check-media-frame-rate.ps1
       - name: Validate H.266 structured task and actual VVC runtime when available
         shell: powershell
         run: ./scripts/check-vvc-native.ps1
