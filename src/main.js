@@ -5172,12 +5172,36 @@ async function runQualityCalibration({compareForSize=false,compareResolution=fal
   }
 }
 
-// Short-window VBR evidence is optional and cannot change the current
-// formal bitrate or relax strict output-byte/quality verification.
-function guidedVbrKey(plan=buildEncodePlan(state.selectedCodec)) {
+// Short-window VBR evidence is optional and cannot relax strict output-byte
+// or quality verification. A pending branch has its own hypothetical plan.
+function currentGuidedPendingBranch() {
+  const proposal=state.guidedPendingBranch;
+  if(!proposal?.ok)return null;
+  const frontier=currentSizeFrontier();
+  const evaluation=frontier?.kind==='multi-branch'
+    ?frontier.evaluateTargetBytes(Number(state.sizeBudgetTargetBytes||0)):null;
+  const resolution=state.resolutionRateDistortionModels[proposal.branchId];
+  const approvedPreset=resolution?.preset||
+    state.qualityCalibration[proposal.codec]?.preset||
+    profileFor(proposal.codec,'balanced').preset;
+  return currentGuidedBranchProposal(proposal,{
+    referenceScope:currentGuidedDecisionScope(),
+    budgetBytes:Math.round(Number(state.sizeBudgetTargetBytes||0)),
+    selectedCodec:state.selectedCodec,selectedOutputSize:state.guidedOutputSize,
+    evaluation,approvedPreset
+  })?proposal:null;
+}
+function guidedVbrTargetPlan() {
+  const pending=currentGuidedPendingBranch();
+  if(state.guidedPendingBranch&&!pending)return null;
+  return pending?buildEncodePlan(pending.codec,pending.outputSize):
+    buildEncodePlan(state.selectedCodec);
+}
+function guidedVbrKey(plan=guidedVbrTargetPlan(),proposal=currentGuidedPendingBranch()) {
   if(plan?.mode!=='budget-rate')return '';
   try{return JSON.stringify([
-    currentGuidedDecisionScope(),state.selectedCodec,plan.codec,plan.preset,
+    currentGuidedDecisionScope(),state.selectedCodec,
+    proposal?.identity||'selected',plan.codec,plan.preset,
     Number($('qualityTarget')?.value||.985),
     plan.targetVideoBitrate,plan.sizeCeiling,plan.sizeBudgetPolicy,
     plan.outputWidth||0,plan.outputHeight||0,
@@ -5190,22 +5214,28 @@ function guidedVbrKey(plan=buildEncodePlan(state.selectedCodec)) {
 function refreshGuidedVbrControls(){
   const verify=$('guidedVerifyVbrBtn'),confirm=$('guidedConfirmVbrBtn'),note=$('guidedVbrResult');
   if(!verify||!confirm||!note)return;
-  const plan=buildEncodePlan(state.selectedCodec);
+  const plan=guidedVbrTargetPlan();
+  const pending=currentGuidedPendingBranch();
   const supported=$('encodeGoal')?.value==='sizeBudget' &&
     state.nativeBackend?.backend==='windows-native' &&
     state.nativeSelfTest?.ssimSmoke===true &&
     state.nativeInputProbe?.seekable!==false &&
     plan?.mode==='budget-rate' && plan.sizeBudgetPolicy==='best-effort' &&
-    !!currentGuidedDecisionScope() && !!guidedVbrKey(plan);
+    !!currentGuidedDecisionScope() && !!guidedVbrKey(plan) &&
+    (!state.guidedPendingBranch||!!pending);
   const receipt=state.guidedVbrVerification;
-  const current=receipt?.key && receipt.key===guidedVbrKey(plan)&&receipt.result?.passed===true;
+  const current=receipt?.key && receipt.key===guidedVbrKey(plan,pending) &&
+    receipt.result?.passed===true &&
+    (!pending||receipt.proposalIdentity===pending.identity);
   verify.disabled=!supported||state.operationBusy||state.qualityCalibrationBusy||!!state.nativeJobId;
   confirm.disabled=!current||receipt.confirmed||state.operationBusy||state.qualityCalibrationBusy;
   if(!supported)note.textContent='验证只支持 Windows Native、可寻址来源、SSIM 和快速单遍预算；两遍/严格上限不能借用单遍证据。';
   else if(current)note.textContent=(receipt.confirmed?'已确认当前参数':'短样通过，等待明确确认')+
     ' · 最低 ASS SSIM '+receipt.result.minimumSsim.toFixed(5)+
     ' · '+receipt.result.measuredWindows+' 个窗口；整片与成品大小仍需独立验证。';
-  else note.textContent='当前方案尚无可采用的 ASS VBR 证据；修改来源、字幕、字体或预算后必须重新验证。';
+  else note.textContent=state.guidedPendingBranch
+    ?(pending?'推荐 '+pending.branchId.toUpperCase()+' 尚未完成 ASS VBR 验证，原方案保持不变。':'推荐已过期；请重新选择当前曲线上的候选。')
+    :'当前方案尚无可采用的 ASS VBR 证据；修改来源、字幕、字体或预算后必须重新验证。';
 }
 async function guidedTextSha256(text){
   if(!globalThis.crypto?.subtle)throw Error('缺少 SHA-256，不能证明字幕参考内容');
@@ -5214,14 +5244,17 @@ async function guidedTextSha256(text){
   return [...new Uint8Array(hash)].map(x=>x.toString(16).padStart(2,'0')).join('');
 }
 async function runGuidedVbrVerification(){
-  const plan=buildEncodePlan(state.selectedCodec),key=guidedVbrKey(plan);
+  const proposal=currentGuidedPendingBranch();
+  if(state.guidedPendingBranch&&!proposal)throw Error('当前推荐已过期，拒绝验证旧候选');
+  const plan=guidedVbrTargetPlan(),key=guidedVbrKey(plan,proposal);
   const status=$('guidedVbrResult');
   if(!key||plan.sizeBudgetPolicy!=='best-effort'||
      state.nativeBackend?.backend!=='windows-native'||
      state.nativeInputProbe?.seekable===false||state.nativeSelfTest?.ssimSmoke!==true)
     throw Error('当前方案不支持 ASS 单遍 VBR 精确验证');
   const ass=state.activeAssText||state.assText;
-  const unchanged=()=>key===guidedVbrKey(buildEncodePlan(state.selectedCodec)) &&
+  const unchanged=()=>key===guidedVbrKey(guidedVbrTargetPlan(),currentGuidedPendingBranch()) &&
+    (!proposal||currentGuidedPendingBranch()?.identity===proposal.identity)&&
     ass===(state.activeAssText||state.assText);
   state.guidedVbrVerification=null;
   const quality=Number($('qualityTarget')?.value||.985);
@@ -5268,7 +5301,8 @@ async function runGuidedVbrVerification(){
     if(!checked.passed)throw Error('短样最低 SSIM '+checked.minimumSsim.toFixed(5)+
       ' 未达到 '+quality.toFixed(5));
     if(!unchanged())throw Error('验证结束时方案发生变化');
-    state.guidedVbrVerification={key,result:checked,confirmed:false};
+    state.guidedVbrVerification={key,result:checked,confirmed:false,
+      proposalIdentity:proposal?.identity||null};
   }catch(error){
     state.guidedVbrVerification=null;
     status.textContent='未形成可采用的 ASS VBR 收据：'+error.message;
@@ -5276,10 +5310,46 @@ async function runGuidedVbrVerification(){
   }finally{refreshGuidedVbrControls();}
 }
 function confirmGuidedVbrVerification(){
-  const receipt=state.guidedVbrVerification,plan=buildEncodePlan(state.selectedCodec);
-  if(!receipt?.result?.passed||receipt.key!==guidedVbrKey(plan)||
-     receipt.confirmed||state.operationBusy)return;
-  receipt.confirmed=true;
+  const record=state.guidedVbrVerification;
+  const proposal=currentGuidedPendingBranch();
+  const plan=guidedVbrTargetPlan();
+  if(!record?.result?.passed||record.key!==guidedVbrKey(plan,proposal)||
+     record.confirmed||state.operationBusy)return;
+  if(proposal){
+    const check=()=>currentGuidedPendingBranch()?.identity===proposal.identity&&
+      record.key===guidedVbrKey(guidedVbrTargetPlan(),proposal);
+    const receipt=commitVerifiedGuidedBranch({
+      proposal,verification:record,isCurrent:check,
+      readSelection:()=>({
+        codec:state.selectedCodec,
+        outputSize:state.guidedOutputSize?{...state.guidedOutputSize}:null
+      }),
+      writeSelection:selection=>{
+        state.selectedCodec=selection.codec;
+        state.guidedOutputSize=selection.outputSize?{...selection.outputSize}:null;
+      },
+      preview:p=>buildEncodePlan(p.codec,p.outputSize),
+      compile:()=>buildEncodePlan(state.selectedCodec)
+    });
+    if(!receipt.ok){
+      $('guidedVbrResult').textContent='推荐方案未采用：'+receipt.reason+
+        (receipt.detail?' · '+receipt.detail:'')+'；已保留原先选择。';
+      return;
+    }
+    record.confirmed=true;
+    state.guidedPendingBranch=null;
+    // Keep the original verification receipt, but its key intentionally
+    // becomes ineligible after adoption because the incumbent has changed.
+    // This is not a reusable certification of later codecs/outputs.
+    state.guidedVbrVerification=null;
+    renderPlanOptions();
+    refreshGuidedContainerDecision();
+    log('正式采用已通过 ASS VBR 短样验证的推荐 '+proposal.branchId+
+      '；编码器/分辨率原子写入，后续成品仍须实际验证。');
+    return;
+  }
+  if(state.guidedPendingBranch)return;
+  record.confirmed=true;
   refreshGuidedVbrControls();
   log('已明确确认当前 Guided VBR 短样；原编码参数不变，成品仍需实际校验。');
 }
