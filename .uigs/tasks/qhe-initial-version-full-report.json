@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_guided_formal_budget_aligned_hosted_pending",
-  "current_bounded_work_unit": "B13 Guided ASS source-owned byte budget, compiler-rate equality and fail-closed copied audio",
+  "status": "incomplete_full_report_guided_real_mkv_budget_ci_pass_native_pending",
+  "current_bounded_work_unit": "B13 Guided ASS real FFmpeg two-audio copied-cost/full-container confirmation and shared-workspace budget refresh",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -116,9 +116,9 @@
       "id": "B13",
       "source": "R19 §09、§11、P3；R24 §14、§18",
       "requirement": "总文件目标与固定/编码音轨、字幕、附件、封装预算接入同一决策坐标",
-      "implementation_status": "Manual multi/single + Guided ASS size planning now use shared full-file ledger for copied and encoded audio, fixed payload, ceil reserve and video rate. Guided blocks unknown copy costs rather than claiming formal feasibility. UI refresh on source budget changes. Latest exact-head frontend successful; full-product/field acceptance pending",
-      "evidence": "whole-file-frontier.js; size-budget-adoption.js; guided-whole-file-budget.js assessGuidedWholeFileBudget; main.js currentGuidedBudgetAssessment / buildEncodePlan; guided-whole-file-budget.test.mjs + guided-budget-ui-wiring.test.mjs; frontend CI 38417854286 PASS on d517d44; prior Windows/Android CI separate",
-      "remaining": "Shared Guided/ASS matched sample quality and formal VBR verification, platform-specific legacy execution recovery, real media loaded-source/native end-to-end and physical/long-form output remain open; B16 exact trim/FLAC/Android/Web cost measurements still missing"
+      "implementation_status": "Manual multiple/single and Guided ASS share whole-file budget coordinate; Guided formal capacity/codec bitrate matches v4 compiler; measured copy cost unknown fails closed; short real two-AAC MKV FFmpeg regression and Chromium event refresh regression pass, Native source-owned field acceptance pending.",
+      "evidence": "whole-file-frontier.js; size-budget-adoption.js; guided-whole-file-budget.js assessGuidedWholeFileBudget; main.js currentGuidedBudgetAssessment / buildEncodePlan; guided-whole-file-budget.test.mjs + guided-budget-ui-wiring.test.mjs; frontend CI 38417854286 PASS on d517d44; prior Windows/Android CI separate；guided-whole-file-budget.integration.test.mjs 真实双音轨AAC复制+硬ASS+丢弃软字幕附件，FFmpeg/FFprobe CI 38422475740 PASS；Chromium shared-workspace audio policy/input/config restore checks，frontend 38423311878 PASS；QHE ee9ab66",
+      "remaining": "Windows Native measured packet source-to-actual-ASS encode byte/identity and recovery, multiple-candidate Guide/ASS matched CQ/VBR source-reference, full-source/field/physical/user media output, B16 exact trimming/FLAC/Android/Web measurement and long-form acceptance still open."
     },
     {
       "id": "B14",
@@ -225,10 +225,12 @@
     "Guided ASS source-owned copy packet budget projection shares wholeFileLedger; preserves explicit estimated-copy distinction, 3 new pure budget regressions (frontend CI PASS at 90f4162)",
     "Guided shared budget measurement/source change notifies decision UI to recompute; UI wiring regression PASS in exact-head frontend workflow at 2f73032; physical/browser loaded source acceptance remains open",
     "Guided ASS formal size feasibility now derives video rate, fixed/coded audio bytes and ceil reserve from shared wholeFileLedger; no separate source-codec budget headroom; 4 new behavioral regressions exact compiler equality / missing copied bytes / minimum byte boundary / multi-copy track, plus source wiring test",
-    "Updated stale UI-shell implementation-specific assertion to validate shared compiler-rate behavior; exact-head frontend 38417854286 SUCCESS"
+    "Updated stale UI-shell implementation-specific assertion to validate shared compiler-rate behavior; exact-head frontend 38417854286 SUCCESS",
+    "Guided ASS short real MKV (2 AAC copied audio, SRT+attachment dropped, burned ASS) budget parity to formal v4 compiler, independent ffprobe packet-byte and output gate regressions; frontend hosted full suite 38422475740 succeeded.",
+    "Shared workbench audio edits and config restoration now notify Guided cost-projection views; source wiring and actual Chromium DOM-event/no-encode regression; exact implementation frontend 38423311878 succeeded."
   ],
   "next_units": [
-    "Verify Guided ASS real loaded-source and Windows Native full output budget acceptance with copied-audio measured evidence; ensure run-time plan/recovery does not reintroduce legacy estimate; B13 joint decision/VBR calibration still incomplete",
+    "B13 Native end-to-end: measure actual source packets through Windows source-budget bridge; validate source-owned Guid​​ed ASS plan and completed artifact bytes/stream ownership after recovery, including strict ceiling and VBR quality separation. Short synthetic FFmpeg CI alone does not close it.",
     "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
     "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
     "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
@@ -236,7 +238,7 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "d517d44cd6b24e160e6c75d05460c3e748b18917",
+  "latest_durable_commit": "ee9ab6619b089f1c40c5868d1edea2d4562a6647",
   "external_validation_states": {
     "latest_tested_implementation": "d517d44: exact-head frontend CI succeeded; platform workflows pending or partly successful at checkpoint. This is not full initial-version acceptance.",
     "physical_devices": "Pending",
@@ -244,7 +246,7 @@
     "new_whole_file_frontier": "Pending hosted browser and platform",
     "previous_whole_file_frontier": "9/9 success at 73c9470",
     "new_single_budget": "Pending browser and platform regression",
-    "new_guided_budget": "d517d44 exact-head frontend test/build CI 38417854286 success, including new budget regression/wiring/UI shell; remaining Windows/Android workflow jobs still being checked at checkpoint. No physical/long-form/user playback."
+    "new_guided_budget": "Source 5a48fba+463c91c: real Linux FFmpeg short dual AAC Guided ASS test, frontend 38422475740 SUCCESS. Source 0a4f08a+a41be90+ee9ab66: Chromium audio field and restored configuration budget-reprojection check, frontend 38423311878 SUCCESS. Exact-head Windows/Android/VVC other workflows pending at this update."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
