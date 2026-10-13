@@ -3,6 +3,7 @@
 // or make whole-file output-quality/size guarantees.
 import { fitRateDistortionModel } from './rate-distortion-model.js';
 import { createMultiBranchFrontier } from './compression-decision.js';
+import {manualSourceDecisionScope} from './decision-reference-scope.js';
 
 const finite = v => typeof v === 'number' && Number.isFinite(v);
 const nonempty = v => typeof v === 'string' && v.trim().length > 0;
@@ -119,6 +120,8 @@ export function createManualTranscodeComparison({trials,budget,incumbentId=null,
     return {ok:false,reason:'unknown-output-budget'};
   const first=normalizeManualComparisonProtocol(trials[0]?.protocol);
   if(!first.ok) return first;
+  const referenceScope=manualSourceDecisionScope(first.protocol);
+  if(!referenceScope)return {ok:false,reason:'invalid-manual-reference-scope'};
   // Output duration may be shorter than the source range on explicit transforms,
   // but the current exact Manual sample protocol forbids speed/time transforms.
   if(!within(budget.durationSeconds,first.protocol.rangeEnd-first.protocol.rangeStart,1e-3))
@@ -128,7 +131,7 @@ export function createManualTranscodeComparison({trials,budget,incumbentId=null,
   for(const trial of trials){
     const normalized=normalizeManualComparisonProtocol(trial?.protocol);
     if(!normalized.ok) return normalized;
-    if(normalized.scope!==first.scope)
+    if(normalized.scope!==first.scope || manualSourceDecisionScope(normalized.protocol)!==referenceScope)
       return {ok:false,reason:'incompatible-measurement-protocol'};
     const candidate=checkCandidate(trial.candidate,first.protocol);
     if(!candidate.ok) return candidate;
@@ -152,7 +155,8 @@ export function createManualTranscodeComparison({trials,budget,incumbentId=null,
   if(!frontier.ok) return {ok:false,reason:frontier.reason};
   return {
     ok:true,kind:'manual-comparable-candidates-v1',
-    evidenceScope:first.scope,protocol:first.protocol,
+    evidenceScope:first.scope,referenceScope,referenceDomain:'pure-source-sdr-no-ass',
+    protocol:first.protocol,
     audioEvidence:budget.audioEvidence,branchIds:frontier.branchIds,
     // The decision engine remains read-only; adopting a different codec
     // requires a new formal task compiler run and independent VBR evidence.
