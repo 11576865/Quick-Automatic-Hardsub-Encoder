@@ -246,7 +246,7 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "750cd04663a2f8343f3c5f16401c6512a74c61f2",
+  "latest_durable_commit": "2137358420d0f0b81fa05de16e2ca9c5e51ce26c",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -258,7 +258,7 @@
     "b16_trim_audit": "PASS short-source real Linux FFmpeg and Windows Native completed output packet audits; still post-output only, no strict-preflight replacement; newer exact-head runs pending",
     "b16_async_long_output": "Implementation checkpoint complete on QHE work branch; exact PR head hosted frontend/Windows long-form validation Pending",
     "b14_observed_encode_cost": "Code/syntax and 6 isolated source-equivalent V8 logic tests passed; exact-head Node/frontend CI and Windows/real-browser UI acceptance Pending",
-    "b15_shared_manual_risk": "6 isolated source-equivalent JS logic tests PASS; real native scene probe, browser and exact-head CI Pending"
+    "b15_shared_manual_risk": "6 source-equivalent isolated JS pure tests passed; CI exact-head pending after branch push; Native Windows real scene probe and browser UI pending"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
