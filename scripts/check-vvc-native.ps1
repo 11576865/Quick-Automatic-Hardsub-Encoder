@@ -6,6 +6,8 @@ $repo=Split-Path $PSScriptRoot -Parent
 $work=Join-Path ([IO.Path]::GetTempPath()) ('qhe-vvc-acceptance-'+[guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $work)
 $bridge=$null
+$evidence=Join-Path $repo 'vvc-runtime-evidence'
+[void](New-Item -ItemType Directory -Path $evidence -Force)
 try {
     # A live validation process must remain immediately queryable and cancellable.
     $sleep=Start-Process powershell -ArgumentList '-NoProfile -Command Start-Sleep -Seconds 30' -PassThru
@@ -43,6 +45,8 @@ try {
     try{Test-MediaOutput $tasks[0] ([pscustomobject]@{codec_name='hevc';pix_fmt='yuv420p10le';avg_frame_rate='24/1'})}catch{$rejected=$true}
     if(-not $rejected){throw 'VVC output codec substitution was accepted.'}
 
+    $fullHelp=Invoke-NativeTool $Ffmpeg '-hide_banner -h full'
+    $fullHelp.StdOut | Set-Content (Join-Path $evidence 'ffmpeg-full-help.txt') -Encoding UTF8
     $listed=Invoke-NativeTool $Ffmpeg '-hide_banner -encoders'
     if(-not (Test-EncoderListed $listed.StdOut 'libvvenc')){
         @{status='UNSUPPORTED';reason='libvvenc not included';structuredTaskTests='PASS'} | ConvertTo-Json | Set-Content (Join-Path $repo 'vvc-native-acceptance.json') -Encoding UTF8
@@ -68,8 +72,7 @@ try {
     if(-not $health){throw 'VVC bridge health timeout.'}
     $profile=@($health.encoders | Where-Object {$_.Key -eq 'libvvenc'}) | Select-Object -First 1
     if(-not $profile.Available -or $profile.RuntimeValidation -ne 'encode-mkv-decode-v1'){throw 'VVC health gate did not pass.'}
-    $evidence=Join-Path $repo 'vvc-runtime-evidence'
-    [void](New-Item -ItemType Directory -Path $evidence -Force)
+    @{globalOptions=$health.globalOptions;vvcProfile=$profile} | ConvertTo-Json -Depth 12 | Set-Content (Join-Path $evidence 'capability-snapshot.json') -Encoding UTF8
     $results=@()
     foreach($task in $tasks){
         $request=@{request=@{task=$task;suggestedName='vvc-ci.mkv'}}
@@ -110,5 +113,9 @@ Dialogue: 0,0:00:00.00,0:00:01.00,Default,,0,0,0,,VVC actual ASS
     @{status='PASS';scope='Windows hosted synthetic source, actual Bridge /api/encode, QP and bitrate; optional ASS hardsub; independent FFprobe and decode';runtimeProbe=$probe;tasks=$results;externalPlayer='NOT_TESTED'} | ConvertTo-Json -Depth 20 | Set-Content (Join-Path $repo 'vvc-native-acceptance.json') -Encoding UTF8
 }finally{
     if($bridge -and -not $bridge.HasExited){Stop-Process -Id $bridge.Id -Force -ErrorAction SilentlyContinue}
+    foreach($name in @('bridge-out.log','bridge-err.log')){
+        $path=Join-Path $work $name
+        if(Test-Path -LiteralPath $path){Copy-Item -LiteralPath $path -Destination (Join-Path $evidence $name) -ErrorAction SilentlyContinue}
+    }
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }

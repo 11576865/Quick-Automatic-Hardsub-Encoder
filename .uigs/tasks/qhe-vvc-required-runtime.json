@@ -1,7 +1,7 @@
 {
   "goal": "Close actual Windows VVC runtime acceptance gap without replacing user toolchains",
   "status": "agent_execution_complete_pending_external_validation",
-  "current_bounded_work_unit": "dedicated hash-verified isolated CI toolchain plus required QP/bitrate/ASS real Bridge output acceptance",
+  "current_bounded_work_unit": "one bounded repair of modern FFmpeg help option parsing after actual VVC runtime workflow failed",
   "completed_units": [
     "RequireRuntime fails on unsupported encoder",
     "optional hard-sub task and ASS fixture",
@@ -14,13 +14,14 @@
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "3fde4e564f009a447335e32b5394c451aa3be0e2",
+  "latest_durable_commit": "6bd8a1ace6c731f8cf65a103b0b0100266d7de31",
   "external_validation_states": {
-    "windows_required_vvc": "Pending after publication",
-    "physical_device": "Pending"
+    "windows_required_vvc": "Run 38344020498 failed at formal Bridge request: FFmpeg encoder does not support -fps_mode; optional-selector parser repair pending rerun",
+    "physical_device": "Pending",
+    "related_ci": "Other 8 workflows passed at 6bd8a1a"
   },
   "local_tests": {
-    "pass": 213,
+    "pass": 215,
     "skipped": 7,
     "failed": 0
   },
@@ -32,5 +33,11 @@
     "status": "recorded",
     "foundry_path": "inbox/observations/2026-10-13-qhe-vvc-capability-chain-and-cancellable-validation.md"
   },
-  "updated_timestamp": "2026-10-13T03:55:28.230118+00:00"
+  "updated_timestamp": "2026-10-13T04:17:00.029581+00:00",
+  "repair": {
+    "reason": "global help parser omitted base flag for -fps_mode[:<stream_spec>]",
+    "tests": "actual production regex RED->GREEN, plus dedicated .NET PowerShell fixture wired",
+    "approach": "normalize optional selector suffix; strict task argument whitelist unchanged",
+    "diagnostics": "full-help text, capability snapshot, bridge logs retained"
+  }
 }

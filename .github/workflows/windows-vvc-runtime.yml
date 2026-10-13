@@ -25,13 +25,16 @@ jobs:
       - name: Validate fixtures and PowerShell syntax
         shell: powershell
         run: |
-          node --test src/vvc-required-runtime.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs
+          node --test src/ffmpeg-help-options.test.mjs src/vvc-required-runtime.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs
           if($LASTEXITCODE -ne 0){throw 'VVC fixture tests failed.'}
-          foreach($path in @('scripts/install-ci-vvc-toolchain.ps1','scripts/check-vvc-native.ps1')){
+          foreach($path in @('scripts/install-ci-vvc-toolchain.ps1','scripts/check-vvc-native.ps1','scripts/check-ffmpeg-help-options.ps1')){
             $tokens=$null;$errors=$null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path),[ref]$tokens,[ref]$errors) | Out-Null
             if($errors.Count){throw ($errors | Out-String)}
           }
+      - name: Verify actual PowerShell help parser
+        shell: powershell
+        run: ./scripts/check-ffmpeg-help-options.ps1
       - name: Fetch hash-verified isolated libvvenc toolchain
         shell: powershell
         env:

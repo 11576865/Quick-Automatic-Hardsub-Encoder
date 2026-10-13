@@ -23,3 +23,18 @@ No product-side download or user-toolchain replacement.
 - Local suite 213 passed, 7 conditional skips, build passed, YAML syntax passed.
 - Hosted PowerShell syntax, toolchain download and actual runtime remain Pending.
 - No claim of physical device, full-film, player or visual subtitle fidelity acceptance.
+
+## First hosted runtime result and bounded repair
+
+Workflow 38344020498 downloaded and hash-verified asset 633881560
+(SHA-256 4480b1abcae8bb46146e271fe603efaa90f29671ff9013bb0aed2d64d12951c8).
+It progressed beyond the real short VVC runtime/health gate, then the first formal
+Bridge request failed: `FFmpeg encoder does not support -fps_mode`.
+The global help-option regex could not normalize optional selector suffixes such
+as `-fps_mode[:<stream_spec>]`; toolchain scoring and global capability parsing now
+share Get-FfmpegOptionNames. Strict task validators remain unchanged.
+Two Node cases exercise the actual production regex (modern suffix/legacy names
+and malformed help) RED->GREEN. Dedicated CI also runs the actual .NET helper.
+Full help, capability snapshot and bridge stdout/stderr are captured for subsequent
+evidence. Local total 215 passed/7 conditional skips, Vite and YAML syntax passed;
+PowerShell and formal QP/bitrate/ASS execution remain Pending after this repair.

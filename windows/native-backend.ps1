@@ -4,6 +4,13 @@
 $script:NativeFfmpegToolchainCache = @{}
 . (Join-Path $PSScriptRoot 'vvc-runtime.ps1')
 
+# FFmpeg help may append an optional stream selector, e.g. -fps_mode[:<stream_spec>].
+# Return base option names only; task validators still own the allowed arguments.
+function Get-FfmpegOptionNames([string]$HelpText) {
+    return @([regex]::Matches($HelpText,'(?m)^\s*(-[A-Za-z][A-Za-z0-9_:.-]*)(?:\[[^\]\r\n]+\])?(?:\s|$)') |
+        ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique)
+}
+
 function Get-FfmpegVersionInfo([string]$Path) {
     if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
     try {
@@ -95,7 +102,7 @@ function Resolve-NativeFfmpegToolchain([string]$ScriptRoot = $PSScriptRoot) {
         $multipassFullres = $false
         try {
             $help = (& $candidate -hide_banner -h full 2>&1) -join [Environment]::NewLine
-            $fpsMode = $help -match '(?m)^\s*-fps_mode(?:\[:[^\]]+\])?\s'
+            $fpsMode = (Get-FfmpegOptionNames $help) -contains '-fps_mode'
             if ($fpsMode) { $score += 20000L }
         } catch {}
         try {
@@ -484,7 +491,7 @@ function Get-NativeCapabilities([string]$Ffmpeg, [string]$Ffprobe, [string]$Scri
     }
 
     $fullHelp=(Invoke-NativeTool $Ffmpeg '-hide_banner -h full').StdOut
-    $globalOptions=@([regex]::Matches($fullHelp,'(?m)^\s*(-[A-Za-z0-9_:.-]+)(?:\s|$)') | ForEach-Object {$_.Groups[1].Value} | Select-Object -Unique)
+    $globalOptions=@(Get-FfmpegOptionNames $fullHelp)
     $detected = @()
     foreach ($profile in Get-NativeEncoderCatalog) {
         $listed = $false
