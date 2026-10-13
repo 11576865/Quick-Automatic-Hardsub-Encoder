@@ -4241,7 +4241,7 @@ function renderPlanOptions() {
     const calibration = state.qualityCalibration[codec];
     const target = Number($('qualityTarget')?.value || 0.985);
     const calibrationValid =
-      calibration &&
+      calibration && calibration.evidenceScope===currentGuidedDecisionScope() &&
       state.qualityCalibrationTarget === target &&
       calibration.meetsTarget;
 
@@ -4504,6 +4504,8 @@ async function preparePairedQualitySamplePlan() {
   const spots=sceneProbeStarts(total,seconds);
   const source=currentSourceEvidenceKey();
   const subtitleSnapshot=state.activeAssText||state.assText;
+  const renderedReference=currentGuidedDecisionScope();
+  if(!renderedReference)throw Error('ASS 渲染参考未就绪');
   const probes=[];
   const limit=calibrationTimeBudget(total);
   const riskBudget=Math.min(15,Math.max(0,(limit||0)*.20));
@@ -4514,15 +4516,17 @@ async function preparePairedQualitySamplePlan() {
   const started=performance.now();
   for(const index of order.slice(0,maxProbes)){
     const start=spots[index];if(start===undefined)continue;
-    if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot)
-      throw Error('场景预检期间输入或字幕已改变，旧证据不可使用。');
+    if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot ||
+      currentGuidedDecisionScope()!==renderedReference)
+      throw Error('场景预检期间输入、字幕或字体已改变，旧证据不可使用。');
     if((performance.now()-started)/1000+2>riskBudget)break;
     try{
       const measured=await requestNativeSample({
         sceneRiskOnly:true,start,duration:seconds,timeoutSeconds:3
       },'');
-      if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot)
-        throw Error('场景预检期间输入或字幕已改变，旧证据不可使用。');
+      if(currentSourceEvidenceKey()!==source || (state.activeAssText||state.assText)!==subtitleSnapshot ||
+        currentGuidedDecisionScope()!==renderedReference)
+        throw Error('场景预检期间输入、字幕或字体已改变，旧证据不可使用。');
       if(Number(measured?.frameCount)>0)probes.push({
         start,meanLuma:parseMeasuredNumber(measured.meanLuma),
         meanYdif:parseMeasuredNumber(measured.meanYdif),
@@ -4535,6 +4539,8 @@ async function preparePairedQualitySamplePlan() {
       break;
     }
   }
+  if(currentGuidedDecisionScope()!==renderedReference)
+    throw Error('场景探测期间 ASS 字体或渲染参考发生变化');
   const plan=selectPairedSceneWindows({
     durationSeconds:total,windowSeconds:seconds,probes,
     subtitleEvents:state.assInfo?.events||[],seekable,maxWindows:3
@@ -4544,7 +4550,7 @@ async function preparePairedQualitySamplePlan() {
     ' · 视频复杂度预检 '+plan.probedWindows+'/'+plan.candidateWindows+
     ' · '+(plan.riskAware?'场景风险辅助选择':'仅时间分层/字幕提示，非完整内容分析'));
   return {...plan,source,subtitleSnapshot,
-    decisionScope:currentGuidedDecisionScope(),windowSeconds:seconds,
+    decisionScope:renderedReference,windowSeconds:seconds,
     preflightElapsedSeconds:(performance.now()-started)/1000};
 }
 
