@@ -40,6 +40,31 @@ try {
     if(Test-Path $stderr){Get-Content -Raw $stderr|Write-Host}
     throw 'Guided bridge failed to start'
   }
+  # B11: actual paired source with ASS rendered SSIM, never Manual source SSIM.
+  $utf8=New-Object Text.UTF8Encoding($false)
+  $assPath=Join-Path $work 'reference-ass.txt'
+  [IO.File]::WriteAllText($assPath,$subtitle,$utf8)
+  $sha=(Get-FileHash -LiteralPath $assPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  $receipts=@()
+  foreach($start in @(0.0,1.0)){
+    $options=@{sampleExact=$true;guidedRenderedReference=$true;withSubtitles=$true
+      measureSsim=$true;codec='h264';encoder='libx264';preset='medium'
+      multipass='disabled';targetVideoBitrate=650000;start=$start;duration=0.8;timeoutSeconds=45}
+    $body=@{requestId=[guid]::NewGuid().ToString('N');options=$options;assText=$subtitle}|ConvertTo-Json -Depth 9
+    $actual=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/sample" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $body -TimeoutSec 90
+    $e=$actual.nativeEvidence
+    if(-not $actual.ok -or $e.method -ne 'windows-native-exact-guided-ass-vbr-v1' -or
+       $e.referenceDomain -ne 'guided-ass-rendered' -or $e.assTextSha256 -ne $sha -or
+       $e.requestedRate -ne 650000 -or $actual.ssim -le 0.8 -or
+       $actual.totalVideoBytes -le 0){throw 'Real Native ASS-rendered VBR receipt rejected.'}
+    $receipts+=,$e
+  }
+  if($receipts[0].sourceToken -ne $receipts[1].sourceToken -or
+     $receipts[0].runtimeToken -ne $receipts[1].runtimeToken -or
+     $receipts[0].fontContentSha256 -ne $receipts[1].fontContentSha256){
+    throw 'Paired Guided rendered VBR provenance drift.'
+  }
+  Write-Host 'B11 Native paired ASS VBR FFmpeg source and digest checks passed.'
   # Manual and guided jobs share the completed/export byte guard.
   $cost=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/source-budget" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 80
   if($cost.scope -ne 'full-source' -or @($cost.audioPacketBytes).Count -ne 2 -or [long]$cost.audioPacketBytes[0] -le 0){throw 'Native whole-source cost evidence is incomplete.'}
