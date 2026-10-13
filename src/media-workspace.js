@@ -2039,7 +2039,15 @@ export function mountMediaWorkspace(hooks) {
       if(!lastReport.deliveryAllowed){setTaskState('failed');status('成品超限或字节数未知，禁止交付。请增大预算、降低视频码率或调整流计划后重新执行；不会自动重编码。');return;}
       setTaskState('verified');
       syncOutputVerificationAvailability();
-      status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 尚未保存到你的文件夹。下一步：保存成品。');
+      const trimAudit=lastReport.trimCopyAudit;
+      const trimAuditText=trimAudit
+        ? ' · 裁切复制流：源预算上界 '+formatSize(trimAudit.sourcePacketBytes)+
+          '，成品实测 '+formatSize(trimAudit.outputPacketBytes)+
+          (trimAudit.status==='observed'
+            ? '（节省 '+formatSize(trimAudit.overreserveBytes)+'，不减少正式预算）'
+            : '（实测超出源预算，请复核来源流）')
+        : '';
+      status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+trimAuditText+' · 尚未保存到你的文件夹。下一步：保存成品。');
     }catch(e){
       if(isCancellationError(e)){
         setTaskState('idle');
