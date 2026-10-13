@@ -1795,7 +1795,27 @@ export function mountMediaWorkspace(hooks) {
   section.querySelector('#taskDelete').onclick=()=>{const c=configs();delete c[get('savedConfig').value];localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();};
   section.querySelector('#taskExportConfig').onclick=()=>download({version:2,settings:read()},'media-config.json');
   section.querySelector('#taskImportConfig').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>65536)throw Error('配置文件超过 64 KiB');const data=JSON.parse(await file.text());if(data.version!==2||!data.settings||typeof data.settings!=='object')throw Error('配置格式无效');applyConfig(data.settings);status('已导入配置，执行前仍会验证参数');}catch(err){status(err.message);}finally{e.target.value='';}};
-  section.querySelector('#taskReport').onclick=()=>{if(lastReport)download(lastReport,'media-task-report.json');};
+  section.querySelector('#taskReport').onclick=async()=>{
+    if(!lastReport)return;
+    const jobId=completed?.jobId;
+    if(jobId && lastReport.trimCopyAuditState==='running' && hooks.refreshCompletedAudit){
+      try{
+        const evidence=await hooks.refreshCompletedAudit(jobId);
+        if(evidence?.state==='completed' && completed?.jobId===jobId){
+          completed={...completed,outputPacketEvidence:evidence.outputPacketEvidence,
+            outputPacketAuditState:evidence.outputPacketAuditState};
+          lastReport=outputReport(activeTask||completed.task,completed,lastReport.elapsedSeconds);
+          if(artifactReview)artifactReview.report=structuredClone(lastReport);
+          if(lastReport.trimCopyAudit){
+            status('后台裁切复制流审计完成；收据已更新，正式完整源流预算未改变。');
+          }else if(lastReport.trimCopyAuditState==='unavailable'){
+            status('后台裁切复制流审计不可用；现有成品与正式预算仍有效。');
+          }
+        }
+      }catch(err){hooks.log?.('裁切审计收据刷新失败：'+err.message);}
+    }
+    download(lastReport,'media-task-report.json');
+  };
   let lastManualCodec=get('codec').value;
   let previousPixelFormat=null;
   get('codec').onchange=()=>{
