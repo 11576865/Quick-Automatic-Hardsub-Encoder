@@ -46,6 +46,32 @@ try {
   $sum=0L
   foreach($line in (& ffprobe -v error -select_streams a:0 -show_packets -show_entries packet=size -of csv=p=0 $source)){$sum += [long]$line}
   if($sum -ne [long]$cost.audioPacketBytes[0]){throw 'Native packet-byte ledger differs from independent FFprobe scan.'}
+  function Assert-GuidedCopyReceiptRejected($receipt,[string]$label,[string]$expected='Budget measurement') {
+    $req=@{codec='h264';mode='budget-rate';preset='medium';crf=23
+      targetVideoBitrate=350000;sizeBudgetPolicy='best-effort';sizeCeilingBytes=5000000
+      outputWidth=0;outputHeight=0;expectedDuration=2.0
+      audio='copy';expectedAudioTracks=2;outputFormat='matroska';outputExtension='mkv'
+      suggestedName='must-not-start.mkv'}
+    if($null -ne $receipt){$req.budgetEvidence=$receipt}
+    $body=@{request=$req;assText=$subtitle}|ConvertTo-Json -Depth 12 -Compress
+    $rejected=$false
+    try{
+      Invoke-RestMethod -Method Post -Uri "$hostUrl/api/encode" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $body -TimeoutSec 15|Out-Null
+    }catch{
+      $rejected=$true
+      $errorBody=[string]$_.ErrorDetails.Message
+      if($errorBody -notmatch $expected){throw "Unexpected $label rejection: $errorBody"}
+    }
+    if(-not $rejected){throw "Guided copied-audio task accepted $label receipt"}
+  }
+  Assert-GuidedCopyReceiptRejected $null 'missing'
+  $wrong=$cost | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  $wrong.measurementId='not-the-current-measurement'
+  Assert-GuidedCopyReceiptRejected $wrong 'stale'
+  $wrongCost=$cost | ConvertTo-Json -Depth 8 | ConvertFrom-Json
+  $wrongCost.audioPacketBytes[0]=[long]$wrongCost.audioPacketBytes[0]+1L
+  Assert-GuidedCopyReceiptRejected $wrongCost 'tampered copied packet bytes' 'Measured copied-audio packet costs'
+  Write-Host 'Guided unmeasured, stale and tampered copied-audio receipts fail closed.'
   foreach($ceiling in @(100L,500000L)){
     $task=@{version=4;operation='transcode';start=0;end=2;twoPass=$false;rateMode='size';budgetPolicy='strict-ceiling';sizeCeilingBytes=$ceiling;expectedAudioTracks=0
       outputFormat='matroska';outputExtension='mkv';videoStreams=@(0);videoRange='full';audio='none';audioRange='full';keepSubtitles=$false;budgetEvidence=$cost
@@ -109,14 +135,13 @@ try {
   Test-CancelCleanup 1
   Test-CancelCleanup 2
   function Test-PolicyRun([string]$policy,[long]$ceiling,[bool]$shouldFail,[string]$audioMode='none',[int]$audioTracks=0){
-    $body=@{
-      request=@{codec='h264';mode='budget-rate';preset='medium';crf=23
-        targetVideoBitrate=350000;sizeBudgetPolicy=$policy;sizeCeilingBytes=$ceiling
-        outputWidth=0;outputHeight=0;expectedDuration=2.0
-        audio=$audioMode;expectedAudioTracks=$audioTracks;outputFormat='matroska';outputExtension='mkv'
-        suggestedName="guided-$policy.mkv"}
-      assText=$subtitle
-    }|ConvertTo-Json -Depth 8 -Compress
+    $request=@{codec='h264';mode='budget-rate';preset='medium';crf=23
+      targetVideoBitrate=350000;sizeBudgetPolicy=$policy;sizeCeilingBytes=$ceiling
+      outputWidth=0;outputHeight=0;expectedDuration=2.0
+      audio=$audioMode;expectedAudioTracks=$audioTracks;outputFormat='matroska';outputExtension='mkv'
+      suggestedName="guided-$policy.mkv"}
+    if($audioMode -eq 'copy' -and $audioTracks -gt 0){$request.budgetEvidence=$cost}
+    $body=@{request=$request;assText=$subtitle}|ConvertTo-Json -Depth 12 -Compress
     $started=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/encode" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $body -TimeoutSec 15
     if(-not $started.ok -or -not $started.jobId){throw "$policy encode refused to start"}
     if($started.encoder -ne 'libx264' -or $started.hardware){throw "$policy must use explicit software libx264"}
