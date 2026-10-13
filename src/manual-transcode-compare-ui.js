@@ -403,6 +403,8 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     const receipt={
       version:1,kind:'manual-native-observed-time-quality-size-v1',
       measurementScope:comparison.evidenceScope,
+      decisionReferenceScope:comparison.referenceScope,
+      referenceDomain:'pure-source-sdr-no-ass',
       protocol:session.snapshot().protocol,
       selectedCoordinate:basis.value,
       selectedBytes,
