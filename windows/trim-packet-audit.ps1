@@ -65,16 +65,21 @@ foreach($line in $streamLines){
     $streamTable+=@{index=[int]$Matches[1];kind=[string]$Matches[2]}
 }
 if($streamTable.Count -gt 64 -or $streamTable.Count -eq 0){throw 'Output stream inventory unavailable or exceeds safe limit.'}
-# Independently probe only auxiliary tracks, never scale source packets by duration.
+# Independently probe each codec-packet class, never scale source packets by duration.
+# Video scanning also makes the residual identifiable as non-AVS codec packets.
 function Get-PacketTotals([string]$kind){
     return (Run-BoundedProbe ('-v error -select_streams '+$kind+' -show_packets -show_entries packet=stream_index,size -of csv=p=0 '+$quoted) 120 $true).Totals
 }
+$video=Get-PacketTotals 'v'
 $audio=Get-PacketTotals 'a'
 $subs=Get-PacketTotals 's'
 $after=Get-Item -LiteralPath $OutputFile
 if($after.Length -ne $before.Length -or $after.LastWriteTimeUtc.Ticks -ne $before.LastWriteTimeUtc.Ticks){
     throw 'Completed output changed during packet audit.'
 }
+$videoTotals=@($streamTable | Where-Object {$_.kind -eq 'video'} | ForEach-Object {
+    if($video.ContainsKey([int]$_.index)){$video[[int]$_.index]}else{$null}
+})
 $audioTotals=@($streamTable | Where-Object {$_.kind -eq 'audio'} | ForEach-Object {
     if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}
 })
@@ -84,7 +89,7 @@ $subTotals=@($streamTable | Where-Object {$_.kind -eq 'subtitle'} | ForEach-Obje
 # Use a private atomic receipt rather than interpreting a partially-written JSON file.
 $data=@{
     version=1;scope='completed-artifact'
-    audioPacketBytes=$audioTotals;subtitlePacketBytes=$subTotals
+    videoPacketBytes=$videoTotals;audioPacketBytes=$audioTotals;subtitlePacketBytes=$subTotals
     sourceLength=[long]$after.Length;sourceWriteTicks=[long]$after.LastWriteTimeUtc.Ticks
 }
 $temp=$ReceiptFile+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
