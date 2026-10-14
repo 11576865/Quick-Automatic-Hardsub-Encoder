@@ -1,0 +1,65 @@
+{
+  "goal": "QHE theoretical initial-version basic implementation sprint: integrate existing PR #104/#105 code and verify a real Windows Native end-to-end flow in ten bounded rounds by target 2026-10-18, preserving full R19/R24 scope.",
+  "status": "DESIGN_COMMITTED_AWAITING_OWNER_SPEC_REVIEW",
+  "current_bounded_work_unit": "Round 1 / architecture baseline and integration design; no product implementation yet",
+  "scope_authority": [
+    "R19 full 2026-10-12 architecture report (P0-P5, A01-A10)",
+    "R24 full 2026-10-13 positioning/decision report",
+    "docs/initial-version-report-traceability-2026-10-13.md (B01-B25)",
+    "owner-approved ten-round proposal dated 2026-10-15"
+  ],
+  "start_date": "2026-10-15",
+  "target_date": "2026-10-18",
+  "branch": "feat/qhe-theory-v1-10round-20261015",
+  "source_heads": {
+    "main": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
+    "pr104": "0feed738042745ace6c031f726a3ad93561e56e8",
+    "pr105": "815b743f7f8137c2aa7b1c6fa06722558037c2de"
+  },
+  "pr": null,
+  "spec": "docs/superpowers/specs/2026-10-15-qhe-theory-v1-10round-integration-design.md",
+  "implementation_plan": null,
+  "latest_durable_commit": "f6e0694674e32d67b3e4bab4bac61137b7110fa8",
+  "completed_units": [
+    {
+      "round": 1,
+      "status": "DESIGN_CHECKPOINT_ONLY",
+      "work": "Current main/PR base SHA audit; ten-round integration spec committed and verified; no source change, no new CI."
+    }
+  ],
+  "authorized_next_units": [
+    {
+      "name": "Owner review of saved design spec",
+      "status": "PENDING_OWNER_REVIEW"
+    },
+    {
+      "name": "Write and review exact-file implementation plan after design approval",
+      "status": "BLOCKED_BY_SPEC_REVIEW"
+    }
+  ],
+  "next_units": [
+    "Spec review and approval",
+    "Prepare exact-file, testable implementation plan",
+    "Start code integration only after plan review, keeping separate R19/R24 full-version acceptance"
+  ],
+  "external_validation_states": {
+    "current_branch_ci": "NOT_TRIGGERED_BY_DOCS_ONLY",
+    "current_branch_browser": "NOT_RUN",
+    "current_branch_windows_native": "NOT_RUN",
+    "current_branch_android": "NOT_RUN",
+    "past_pr105_ci": "PARTIAL_SUCCESS_WITH_SKIPPED_WORKFLOWS_NOT_TRANSFERRED"
+  },
+  "blockers": [
+    "User review/approval of committed architecture design needed before coding stage",
+    "PR #105 stacked on unmerged PR #104; main is behind",
+    "Web FFmpegKitNext vendor core missing from repository",
+    "Field validation needs actual physical device/user media; no assumption of presence"
+  ],
+  "acceptance_states": {
+    "basic_model": "NOT_COMPLETE",
+    "full_R19_R24_initial_version": "NOT_COMPLETE",
+    "field_device_acceptance": "PENDING"
+  },
+  "intake": "Existing UIGS Foundry Candidate upstream code reuse semantic-contract and license gate 2026-10-15; no new reusable observation from doc checkpoint",
+  "updated_timestamp": "2026-10-15"
+}
