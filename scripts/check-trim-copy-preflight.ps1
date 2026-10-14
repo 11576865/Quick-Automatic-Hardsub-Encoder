@@ -62,8 +62,14 @@ try{
    (New-Object Text.UTF8Encoding($false)))
  $badReceipt=Join-Path $root 'invalid-receipt.json'
  $worker[$worker.Count-1]=$badReceipt
- & powershell.exe @worker 2>$null
- if($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $badReceipt)){
+ $priorErrorAction=$ErrorActionPreference
+ $badExit=$null
+ try{
+  $ErrorActionPreference='Continue'
+  & powershell.exe @worker 2>$null
+  $badExit=$LASTEXITCODE
+ }finally{$ErrorActionPreference=$priorErrorAction}
+ if($badExit -eq 0 -or (Test-Path -LiteralPath $badReceipt)){
   throw 'Duplicated source stream ordinal was wrongly accepted.'
  }
  Write-Host 'B16 real isolated two-audio/subtitle trim observation passed; final mixed-mux remains unverified.'
