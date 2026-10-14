@@ -103,9 +103,28 @@ export function createMultiBranchFrontier(branches, {
       }:null;
     }).filter(Boolean);
   }
+  // Expose each independently fitted candidate only in the shared measured budget
+  // range. Presentation may show these as context, but never as new observations.
+  function sampleBranchCurves(count=64) {
+    const n=Math.max(2,Math.min(256,Math.floor(Number(count)||64)));
+    // Sample strictly inside the shared evidence domain. Endpoints can land
+    // outside an individual branch after logarithmic floating-point rounding;
+    // dropping one endpoint previously removed the entire context curve.
+    const budgets=Array.from({length:n},(_,i)=>
+      Math.exp(Math.log(min)+(Math.log(max)-Math.log(min))*(i+0.5)/n));
+    return prepared.map(({id,frontier})=>{
+      const points=budgets.map(targetBytes=>{
+        const result=frontier.evaluateTargetBytes(targetBytes);
+        return result.status==='within-evidence' && result.prediction
+          ? {targetBytes,quality:result.prediction.quality}
+          : null;
+      }).filter(Boolean);
+      return {id,points};
+    }).filter(branch=>branch.points.length===n);
+  }
   return {ok:true,kind:'multi-branch',branchIds:prepared.map(b=>b.id),
     minimumEvidenceTargetBytes:min,maximumEvidenceTargetBytes:max,
-    evidencePoints,knee:null,incumbentId,evaluateTargetBytes,sampleCurve,
+    evidencePoints,knee:null,incumbentId,evaluateTargetBytes,sampleCurve,sampleBranchCurves,
     // A multi-branch envelope is not the marginal curve of a single encoder.
     marginalQualityPerDoubling:()=>null};
 }

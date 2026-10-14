@@ -38,5 +38,17 @@ export function projectWholeFileFrontier(frontier,ledger){
   evidencePoints:(frontier.evidencePoints||[]).map(p=>({...p,targetBytes:videoBytesToTarget(p.targetBytes)})).filter(p=>p.targetBytes>=min&&p.targetBytes<=max),
   knee:frontier.knee?{...frontier.knee,targetBytes:videoBytesToTarget(frontier.knee.targetBytes)}:null,
   sampleCurve(count=64){const n=Math.max(2,Math.min(256,Math.floor(Number(count)||64)));return Array.from({length:n},(_,i)=>{const e=evaluateTargetBytes(min+(max-min)*i/(n-1));return e.status==='within-evidence'?{...e.prediction,targetBytes:e.targetBytes,videoBitrate:e.videoBitrate,branchId:e.branchId}:null;}).filter(Boolean);},
+  // Translate candidate fit coordinates from video payload into this
+  // projected whole-file budget. Do not leak a source frontier method through
+  // object spread: callers must never mix two x-axis coordinate domains.
+  sampleBranchCurves:typeof frontier.sampleBranchCurves==='function'
+    ? (count=64)=>frontier.sampleBranchCurves(count).map(branch=>({
+        id:branch.id,
+        points:branch.points.map(point=>({
+          ...point,targetBytes:videoBytesToTarget(point.targetBytes)
+        })).filter(point=>Number.isFinite(point.targetBytes)&&
+          point.targetBytes>=min&&point.targetBytes<=max)
+      })).filter(branch=>branch.points.length>=2)
+    : undefined,
   marginalQualityPerDoubling:()=>null};
 }

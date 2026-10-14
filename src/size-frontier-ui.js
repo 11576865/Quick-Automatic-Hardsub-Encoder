@@ -47,6 +47,8 @@ export function buildSizeFrontierPlot(frontier, {
   if (!frontier?.ok) return { ok: false, reason: 'invalid-frontier' };
   const curve = frontier.sampleCurve(sampleCount);
   if (!curve.length) return { ok: false, reason: 'empty-frontier' };
+  const branchSamples = typeof frontier.sampleBranchCurves === 'function'
+    ? frontier.sampleBranchCurves(sampleCount) : [];
 
   const minBytes = finite(frontier.minimumEvidenceTargetBytes);
   const maxBytes = finite(frontier.maximumEvidenceTargetBytes);
@@ -54,7 +56,10 @@ export function buildSizeFrontierPlot(frontier, {
     return { ok: false, reason: 'invalid-evidence-domain' };
   }
 
-  const qualityValues = [...curve, ...(frontier.evidencePoints || [])].flatMap(point => [
+  // Include visible comparison candidates in the same y-axis so a losing
+  // branch is not clipped to the winning upper-envelope's narrow quality range.
+  const qualityValues = [...curve, ...(frontier.evidencePoints || []),
+    ...branchSamples.flatMap(branch=>branch.points)].flatMap(point => [
     finite(point.lowerQuality, point.quality),
     finite(point.quality),
     finite(point.upperQuality, point.quality)
@@ -75,6 +80,13 @@ export function buildSizeFrontierPlot(frontier, {
   };
   const yForQuality = quality =>
     paddingY + (1 - (clamp(quality, qualityMin, qualityMax) - qualityMin) / qualitySpan) * innerHeight;
+
+  const comparisonPaths=branchSamples.map(branch=>({
+    id:branch.id,
+    path:pathFor(branch.points.map(point=>({
+      ...point,x:xForBytes(point.targetBytes),y:yForQuality(point.quality)
+    })), 'y')
+  })).filter(branch=>branch.path && !/NaN|Infinity/.test(branch.path));
 
   const points = curve.map(point => ({
     ...point,
@@ -132,6 +144,7 @@ export function buildSizeFrontierPlot(frontier, {
     minBytes,
     maxBytes,
     curvePath: pathFor(points, 'y'),
+    comparisonPaths,
     bandPath,
     points,
     evidencePoints,

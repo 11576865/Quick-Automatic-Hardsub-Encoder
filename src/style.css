@@ -6534,6 +6534,11 @@ body[data-runtime-backend="web"] .runtime-mode-banner {
   font-size: .7rem;
   line-height: 1.5;
 }
+.size-frontier-candidates {font-size:.7rem;line-height:1.5;min-width:0}
+.size-frontier-candidates summary {cursor:pointer;min-height:36px;padding:6px 0}
+.size-frontier-candidates ul {margin:4px 0 8px;padding-inline-start:20px}
+.size-frontier-candidates li {overflow-wrap:anywhere;margin-block:5px}
+.size-frontier-candidates p {margin:6px 0;color:var(--muted)}
 
 .size-frontier-chart-wrap {
   min-width: 0;
@@ -6683,6 +6688,9 @@ body.ui-phone .size-frontier-scale span:nth-child(2) {
   pointer-events:none
 }
 .curve-fit {fill:none;stroke:var(--plan);stroke-width:2.6;stroke-linecap:round;pointer-events:none}
+/* Context only: the solid upper envelope remains the single decision curve. */
+.curve-branch-ghost {fill:none;stroke:var(--muted);stroke-width:1.4;stroke-dasharray:4 5;
+  stroke-linecap:round;opacity:.68;pointer-events:stroke}
 .curve-band {fill:color-mix(in srgb,var(--plan) 18%,transparent);stroke:none;pointer-events:none}
 .curve-observation {fill:var(--surface);stroke:var(--plan);stroke-width:2.2}
 .curve-cursor {stroke:var(--plan);stroke-width:1;stroke-dasharray:3 5;opacity:.7;pointer-events:none}

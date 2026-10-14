@@ -41,3 +41,25 @@ test('full-duration encoded audio remains a fixed plan cost when video is only t
  const l=wholeFileLedger({...task,expectedVideoDuration:2,trimDuration:2,audioPlan:[{action:'aac',bitrate:8000,range:'full'}],keepAttachments:false},evidence);
  assert.equal(l.durationSeconds,2);assert.equal(l.encodedAudioBytes,8000);
 });
+
+test('projected candidate fits always use the same whole-file budget coordinate as the slider',()=>{
+ const withCandidates={
+  ...base,
+  sampleBranchCurves:()=>[
+   {id:'h264',points:[{targetBytes:1200,quality:.82},{targetBytes:2000,quality:.91}]},
+   {id:'h265',points:[{targetBytes:1200,quality:.84},{targetBytes:2000,quality:.93}]}
+  ]
+ };
+ const projected=projectWholeFileFrontier(withCandidates,wholeFileLedger(task,evidence));
+ assert.equal(projected.ok,true);
+ const curves=projected.sampleBranchCurves(2);
+ assert.deepEqual(curves.map(c=>c.id),['h264','h265']);
+ for(const branch of curves)for(const point of branch.points){
+  assert.ok(point.targetBytes>=projected.minimumEvidenceTargetBytes);
+  assert.ok(point.targetBytes<=projected.maximumEvidenceTargetBytes);
+  assert.notEqual(point.targetBytes,1200);
+  assert.notEqual(point.targetBytes,2000);
+ }
+ const projectedWithoutCandidates=projectWholeFileFrontier(base,wholeFileLedger(task,evidence));
+ assert.equal(projectedWithoutCandidates.sampleBranchCurves,undefined);
+});
