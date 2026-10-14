@@ -165,3 +165,12 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - 对真正的 `compileTask` 发现两个证据链阻断：原 Native `Get-CompletedTrimPacketEvidence` 只在 `copiedTrimReserveBytes>0` 时运行，而质量/码率 FLAC 无 `sizePlan`；原 `outputPlan.subtitles` 是对象数组，但成品对照按数字数组查找，默认 `all` 也只是符号映射。
 - 本批将 FLAC 编码轨加入 Native 成品 packet audit 触发、展开字幕/附件完整来源轨号（不改变 FFmpeg 实际 `-map`）、修正对象映射和只读报告差值。新 `scripts/check-flac-native-http-lifecycle.ps1` 连接真实 Native localhost，验证 FLAC 预演状态、同源重新计量使旧证据失效，继而运行无 `sizePlan` 的正式质量模式双 FLAC 成品并独立复核两条音轨的包字节。
 - 17 项仓库实际 JS 模块行为检查通过；`docs/b16-native-flac-finished-mux-audit-and-stream-map-2026-10-14.md` 记录精确边界。新的 Native HTTP/完成成品专项 Windows CI 和浏览器互动尚 Pending，B16 全部及完整理论初版不签收；孤立 FLAC 观测仍不得自动下调正式体积预算。
+
+
+## 2026-10-14 B16 第三阶段：已完成 FLAC 成品包收据与真实文件/Job 身份
+
+- 旧头部 `c54a8191` 的独立 Windows B16 真实 FFmpeg/Native HTTP、Test frontend 和 UIGS Coverage 已全部通过；此前同步成品 packet 和默认字幕映射合同已可通过真实平台。其它全部 Windows/Android Matrix 仍按 Draft 跳过，不算已验收。
+- 本批使同步及长片异步 Native `outputPacketEvidence` 附加 `artifactBytes`、不经 JS 浮点舍入的字符串 `artifactWriteTicks`、`artifactJobId`。短成品在测量前后及每次后续读取均核对 staged 文件长度和修改时间，旧文件被更改就撤销回执。
+- `src/auxiliary-mux-reconciliation.js` 必须核对正式作业 ID、完成成品字节数与 packet 回执身份、权威 `compileTask` 音轨输出次序/数量、完整字幕来源映射以及 FLAC / 裁切复制真实编码方法才能返回本次单作业可比较结果。任何错配返回 unavailable，不增加 `canReplaceFormalBudget` 或 `canCertifyFutureMux` 权限。
+- `scripts/check-flac-native-http-lifecycle.ps1` 在通过独立 FFprobe 后实际修改短成品并要求回执失效。`scripts/check-b16-long-async-output-identity.ps1` 新增真正 182 秒低分辨率/低帧率 Native 正式 FLAC 编码和异步完成审计，独立复扫包字节并在修改成品后要求旧审计失效；两者接入允许 Draft 的 `windows-b16-runtime.yml`，真实长时长 Windows 精确头部 CI Pending。
+- `docs/b16-completed-artifact-identity-and-long-async-runtime-2026-10-14.md` 描述输入/输出/未来预算证据界限。当前成品实际包字节是当前作业审计证据，不得当作下次 FLAC 预算的预测或交付保证；B16 和理论初版维持部分实现。
