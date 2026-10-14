@@ -80,11 +80,13 @@ test('claimed authority to replace the actual size budget is rejected',()=>{
 });
 test('actual Windows isolated worker, independent output oracle and CI are wired',async()=>{
  const {readFile}=await import('node:fs/promises');
- const [worker,oracle,workflow,budget]=await Promise.all([
+ const [worker,oracle,workflow,budget,bridge,api]=await Promise.all([
   readFile(new URL('../windows/trim-copy-preflight.ps1',import.meta.url),'utf8'),
   readFile(new URL('../scripts/check-trim-copy-preflight.ps1',import.meta.url),'utf8'),
   readFile(new URL('../.github/workflows/windows-local-smoke.yml',import.meta.url),'utf8'),
-  readFile(new URL('./media-planning.js',import.meta.url),'utf8')
+  readFile(new URL('./media-planning.js',import.meta.url),'utf8'),
+  readFile(new URL('../windows/trim-copy-preflight-bridge.ps1',import.meta.url),'utf8'),
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8')
  ]);
  assert.match(worker,/trim-packet-audit\.ps1/);
  assert.match(worker,/canReplaceFullSourceBudget=\$false/);
@@ -94,4 +96,9 @@ test('actual Windows isolated worker, independent output oracle and CI are wired
  assert.match(workflow,/check-trim-copy-preflight\.ps1/);
  assert.match(budget,/copiedTrimReserveBytes \+= total/);
  assert.match(budget,/full-source/);
+ assert.match(bridge,/function Start-IsolatedTrimPreflight\(/);
+ assert.match(bridge,/function Get-IsolatedTrimPreflightStatus\(/);
+ assert.match(bridge,/Stop-StaleTrimPreflight/);
+ assert.match(api,/Start-IsolatedTrimPreflight \$body/);
+ assert.match(api,/Get-IsolatedTrimPreflightStatus/);
 });
