@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU01_browser_acceptance_pending",
-  "current_bounded_work_unit": "WU-01 Ubuntu real x264/libass compiled CPU fixture PASS at dcecd685; source-bound new Chromium Guided→Manual DOM contract with controlled run hook submitted, exact-head CI pending. Real Windows Bridge integration remains open.",
+  "status": "incomplete_full_report_WU02_embedded_ass_feature_pending_hosted",
+  "current_bounded_work_unit": "WU-02: Windows Native embedded ASS+font source-bound import into existing preview/analysis/encode pipeline; actual Windows CI evidence pending; WU-01 Ubuntu/Chromium hosted PASS, Windows same-task Native still open.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -248,7 +248,8 @@
     "B16 FLAC cached bitstream reuse hypothesis made executable: local Linux real FFmpeg cached two FLAC audio streams and copied them unchanged into x264 video+SRT MKV with matching packet SHA256, 6 retrieved-source JS guard tests PASS; Draft Windows targeted CI added, production formal cache reuse/strict-budget remains open.",
     "2026-10-14 ROUTE_ONLY: audited fixed R19/R24 B01–B25/A01–A10 denominator and PR104→PR105 branch identity, committed route snapshot and agent re-anchoring gate, archived 18 generated followups as non-authoritative, authorized only WU-01/WU-02. No product code, merge, release or new device validation.",
     "WU-01 bounded progress: sourceKey/recompile guard + direct regressions and real FFmpeg ASS-before-scale execution oracle submitted; no WU-01 completion claim.",
-    "WU-01 continued: prior exact-head FFmpeg/libass x264 CPU fixture workflow 38547044072 PASS; submitted a real-Chromium DOM Guided→Manual executable plan test and Draft CI with controlled transport; no Windows Native parity or WU01 complete claim."
+    "WU-01 continued: prior exact-head FFmpeg/libass x264 CPU fixture workflow 38547044072 PASS; submitted a real-Chromium DOM Guided→Manual executable plan test and Draft CI with controlled transport; no Windows Native parity or WU01 complete claim.",
+    "WU-02 product ability: explicit Windows Native MKV embedded ASS track + font attachment import to existing ASS workflow; source-stamp safety, selection invalidation, bounded extraction. No Android/Web parity or verified output claim until CI."
   ],
   "next_units": [
     "WU-01 AUTHORIZED: B02/B04/B11/B12+A05/A06 Guided→Manual rendered-ASS/VBR/compileTask/Windows-Native/browser exact-head vertical acceptance. See docs/qhe-initial-version-route-reanchor-2026-10-14.md.",
@@ -284,8 +285,9 @@
     "b16_flac_cache_reuse": "6 actual-module V8 pure behavior tests PASS; Linux 3-second real FFmpeg cached FLAC to video+softsubtitle final mux ordered per-packet size/hash equality 32/21 packet verified; exact-head Windows Draft targeted run Pending; formal Native/Browser production cache injection not implemented",
     "route_checkpoint": "Documentation and durable task authority updated; this is not a code, browser, GPU, physical device or release acceptance.",
     "wu01_cpu_fixture": "PASS at dcecd685 in workflow 38547044072; 3-second FFV1 synthetic libass/x264 fixture",
-    "wu01_browser_handoff": "PENDING new exact-head Playwright/Chromium fixture with controlled transport",
-    "wu01_windows_native": "OPEN not yet integrated same-task Native Bridge validation"
+    "wu01_browser_handoff": "PASS at 02afa817 in workflow 38551049094 (controlled transport, real Chromium)",
+    "wu01_windows_native": "OPEN not yet integrated same-task Native Bridge validation",
+    "wu02_embedded_ass": "Implemented source-bound Windows Native ASS/attachment font import and UI/Native bridge wiring; exact-head real Windows FFmpeg acceptance pending."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -336,7 +338,7 @@
       "title": "Guided to Manual authoritative compiled task and real output acceptance",
       "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-01--guidedmanual-单任务正式编译与结果闭环b02b04b11b12a05a06",
       "exit": "On a pinned PR #104/#105 stack, real browser and Windows Native fixture demonstrate same source/render/audio/source-time/size, explicit VBR approval and rollback, matching compileTask FFmpeg args and verified output; separate actual PASS from pending environments.",
-      "status": "IN_PROGRESS_BROWSER_CI_PENDING_NATIVE_OPEN"
+      "status": "PARTIAL_WU01_HOSTED_PASS_WINDOWS_NATIVE_FIELD_OPEN"
     },
     {
       "id": "WU-02",
@@ -352,7 +354,7 @@
       "title": "Rich MKV source streams, embedded ASS/fonts and audio preservation fixture",
       "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-02--复杂-mkv-逐流保留与内封-ass-黄金样本b05b06b07b24a01a03",
       "exit": "Windows Native MKV with video/two audio/embedded ASS/font: independent burned frame/font evidence, copied original FLAC packets, explicitly changed second audio and verified stream attributes. Field gaps stay pending; no strict-size FLAC requirement in this slice.",
-      "status": "AUTHORIZED_NOT_STARTED"
+      "status": "IN_PROGRESS_WINDOWS_EMBEDDED_ASS_IMPORT_PENDING_REAL_NATIVE"
     }
   ],
   "historical_next_units": {

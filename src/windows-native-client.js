@@ -126,6 +126,11 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
     async readSelectedVideoInfo() {
       return JSON.stringify(await makeRequest(config, 'GET', '/api/selection/video'));
     },
+    async importEmbeddedAss(ordinal,source){
+      return makeRequest(config,'POST','/api/embedded-ass',{
+        subtitleOrdinal:ordinal,sourceName:source?.name||'',sourceSize:Number(source?.size||0)
+      });
+    },
     async measureSourceBudget() {
       return JSON.stringify(await makeRequest(config,'POST','/api/source-budget'));
     },

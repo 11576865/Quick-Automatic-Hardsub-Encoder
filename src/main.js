@@ -208,7 +208,12 @@ app.innerHTML = `
     <div class="card-heading"><span class="step-no">01</span><div><h2>准备素材</h2><p>添加输入文件</p></div></div>
     <div class="grid two">
       <div class="file-row input-video"><label id="videoLabel">视频（网页≤ 1 GB；Native 后端适合更大文件）</label><input id="video" class="file-input-control" type="file"><label id="videoWebPicker" class="file-picker-trigger" for="video">选择视频</label><button id="videoNativePickerBtn" class="native-picker-button hidden" type="button">选择视频</button><small id="videoMeta">未选择视频</small></div>
-      <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small></div>
+      <div class="file-row input-ass"><label>ASS 字幕</label><input id="ass" class="file-input-control" type="file" accept=".ass,text/plain"><label id="assWebPicker" class="file-picker-trigger" for="ass">选择 ASS 字幕</label><button id="assNativePickerBtn" class="native-picker-button hidden" type="button">选择 ASS 字幕</button><small id="assMeta">未选择</small>
+        <div id="embeddedAssImportPanel" hidden>
+          <label>容器内封 ASS <select id="embeddedAssStream"></select></label>
+          <button type="button" id="importEmbeddedAss" class="secondary">从当前 MKV 导入 ASS 与字体</button>
+          <small id="embeddedAssStatus" role="status">仅 Windows Native；需显式选择字幕轨</small>
+        </div></div>
       <div class="file-row input-font">
         <label id="fontLabel">字体（可选，可多选）</label>
         <input id="fonts" class="file-input-control" type="file" multiple accept=".ttf,.otf,.ttc,.otc">
@@ -909,6 +914,10 @@ for (const [role, config] of Object.entries(WINDOWS_NATIVE_PICKERS)) {
 
 $('video').addEventListener('change', e => {
   state.video = e.target.files?.[0] || null;
+  if(state.embeddedAssSourceIdentity){
+    state.ass=null;state.fonts=[];state.embeddedAssSourceIdentity='';
+    $('assMeta').textContent='未选择';updateFontMeta();
+  }
   state.nativeInputProbe = null;
   invalidateAnalysis({ clearVideoMetadata: true });
   renderSourceAdapterState(null);
@@ -937,6 +946,7 @@ $('video').addEventListener('change', e => {
 });
 $('ass').addEventListener('change', e => {
   state.ass = e.target.files?.[0] || null;
+  state.embeddedAssSourceIdentity='';
   invalidateAnalysis();
   $('assMeta').textContent = state.ass ? state.ass.name : '未选择';
   if ($('assWebPicker')) $('assWebPicker').textContent = state.ass ? '更换字幕' : '选择 ASS 字幕';
@@ -1873,7 +1883,12 @@ function detectNativeBackend() {
         if (role === 'video') {
           const item = files[0];
           if (item) {
-            state.video = { name: item.name, size: Number(item.size || 0), windowsNative: true };
+            if(state.embeddedAssSourceIdentity){
+              state.ass=null;state.fonts=[];state.embeddedAssSourceIdentity='';
+              $('assMeta').textContent='未选择';updateFontMeta();
+            }
+            state.video = { name: item.name, size: Number(item.size || 0),
+              lastModified:Number(item.lastModified||0), windowsNative: true };
             state.nativeInputProbe = null;
             invalidateAnalysis({ clearVideoMetadata: true });
             notifyMediaInfoChanged();
@@ -1945,6 +1960,69 @@ function detectNativeBackend() {
       }
     };
 
+
+function refreshEmbeddedAssChoices(probe){
+  const panel=$('embeddedAssImportPanel'),select=$('embeddedAssStream');
+  if(!panel||!select)return;
+  select.replaceChildren();
+  const tracks=state.nativeBackend?.backend==='windows-native'&&probe?.ok
+    ?(Array.isArray(probe.subtitleStreams)?probe.subtitleStreams:[]):[];
+  for(let i=0;i<tracks.length;i++){
+    const track=tracks[i];
+    if(String(track.codec_name||'').toLowerCase()!=='ass')continue;
+    const option=document.createElement('option');
+    option.value=String(i);
+    option.textContent='ASS #'+i+' · '+String(track.tags?.language||'und')+
+      (track.tags?.title?' · '+String(track.tags.title):'');
+    select.append(option);
+  }
+  panel.hidden=!select.options.length;
+  if(!panel.hidden)$('embeddedAssStatus').textContent=
+    '显式选择内封 ASS；字体附件在本机提取，来源变化后必须重新导入';
+}
+$('importEmbeddedAss')?.addEventListener('click',async()=>{
+  const button=$('importEmbeddedAss'),status=$('embeddedAssStatus');
+  if(state.operationBusy||!state.video||!state.nativeInputProbe?.ok)return;
+  const native=globalThis.NativeHardsub;
+  if(state.nativeBackend?.backend!=='windows-native'||
+      typeof native?.importEmbeddedAss!=='function')return;
+  const source=state.video,ordinal=Number($('embeddedAssStream').value);
+  const identity=[source.name,source.size,source.lastModified].join('|');
+  if(!Number.isInteger(ordinal)||ordinal<0)return;
+  button.disabled=true;status.textContent='正在提取内封 ASS 和字体附件…';
+  try{
+    const result=await native.importEmbeddedAss(ordinal,source);
+    if(!result?.ok||!result.ass?.base64||!result.sourceBound){
+      throw Error(result?.error||'Native 未返回来源绑定的 ASS');
+    }
+    if(identity!==[state.video?.name,state.video?.size,state.video?.lastModified].join('|')||
+       result.sourceName!==source.name||Number(result.sourceSize)!==Number(source.size)){
+      throw Error('提取时源文件已变化；丢弃旧字幕');
+    }
+    const decode=item=>{
+      const raw=atob(item.base64||'');
+      const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
+      if(Number(item.size)!==bytes.length)throw Error('提取资产长度不匹配');
+      return new File([bytes],item.name||'embedded.bin');
+    };
+    const importedAss=decode(result.ass);
+    const importedFonts=(Array.isArray(result.fonts)?result.fonts:[]).map(decode);
+    state.ass=importedAss;state.fonts=importedFonts;
+    state.embeddedAssSourceIdentity=identity;
+    invalidateAnalysis();
+    $('assMeta').textContent='内封 ASS #'+ordinal+' · '+source.name;
+    $('assMeta').className='';
+    updateFontMeta();
+    status.textContent='已导入 ASS #'+ordinal+' 与 '+importedFonts.length+' 个字体附件；请进行字幕分析及预览';
+    log('Windows Native 内封 ASS 与字体来源绑定导入：'+source.name+
+      ' · 轨 '+ordinal+' · 字体 '+importedFonts.length);
+    refreshAnalyze();
+  }catch(e){
+    status.textContent='内封字幕导入失败：'+e.message;
+    log(status.textContent);
+  }finally{button.disabled=false;}
+});
+
     globalThis.__onNativeInputProbe = payload => {
       try {
         state.nativeInputProbe = typeof payload === 'string' ? JSON.parse(payload) : payload;
@@ -1954,6 +2032,7 @@ function detectNativeBackend() {
 
       const p = state.nativeInputProbe || {};
       renderSourceAdapterState(p);
+      refreshEmbeddedAssChoices(p);
       if (p.ok) {
         state.sourceMedia = mediaFromNativeProbe(p);
         renderSourceVideoSummary();
