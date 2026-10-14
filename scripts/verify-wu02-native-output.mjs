@@ -11,7 +11,7 @@ if(!source||!output||!importPath||!requestPath||!fontPath||!work)
 const imported=JSON.parse(readFileSync(importPath,'utf8'));
 const task=JSON.parse(readFileSync(requestPath,'utf8')).request.task;
 const run=(exe,args)=>execFileSync(exe,args,{
- encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:90000,maxBuffer:16*1024*1024
+ cwd:work,encoding:'utf8',stdio:['ignore','pipe','pipe'],timeout:90000,maxBuffer:16*1024*1024
 });
 const probe=file=>JSON.parse(run('ffprobe',['-v','error','-show_streams','-show_format','-of','json',file]));
 const original=probe(source),actual=probe(output);
@@ -52,8 +52,11 @@ writeFileSync(join(fontdir,imported.fonts[0].name),fontBytes);
 const emptyAss=join(work,'empty-events.ass');
 writeFileSync(emptyAss,ass.replace(/^Dialogue:.*$/gm,''));
 const noEvents=join(work,'no-events.mkv');
+// FFmpeg filtergraph values are not ordinary Windows filenames: a D: drive
+// letter and backslashes must not be injected directly into ass=filename.
+// Execute from a controlled private workdir and use relative staged paths.
 const args=task.outputArgs.map(a=>String(a)
- .replace('__ASS__',emptyAss).replace('__FONTS__',fontdir));
+ .replace('__ASS__','empty-events.ass').replace('__FONTS__','embedded-fonts'));
 run('ffmpeg',['-hide_banner','-v','error','-nostdin','-y',
  ...taskSourceArgs(task,source),...args,'-f',task.outputFormat,noEvents]);
 const frame=file=>run('ffmpeg',[
