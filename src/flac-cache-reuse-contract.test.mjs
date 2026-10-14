@@ -45,7 +45,8 @@ test('source identity, measured ledger and finished output job cannot be substit
  for(const mutate of [x=>x.sourceKey='other',
   x=>x.cache.sourceKey='other',x=>x.plan.sourceKey='other',
   x=>x.plan.measurementId='other',x=>x.finished.jobId='other',
-  x=>x.cache.sourceSha256='bad',x=>x.cache.artifactSha256='bad',
+  x=>x.cache.sourceSha256='bad',
+  x=>x.cache.sourceSha256='d'.repeat(64),x=>x.cache.artifactSha256='bad',
   x=>x.finished.artifactWriteTicks=638960827860011111]){
   const x=fixture();mutate(x);
   assert.equal(verify(x).ok,false);
@@ -138,6 +139,11 @@ test('REAL FFmpeg caches two FLAC tracks once then copies exact ordered encoded 
    '-c:v','libx264','-preset','ultrafast','-crf','42','-pix_fmt','yuv420p',
    '-c:a','copy','-c:s','copy','-map_metadata','-1','-map_chapters','-1',
    '-f','matroska',finalPath]);
+  const finalStreams=JSON.parse(run('ffprobe',['-v','error','-show_streams',
+   '-show_entries','stream=index,codec_type,codec_name','-of','json',finalPath])).streams;
+  assert.equal(finalStreams.filter(x=>x.codec_type==='video').length,1);
+  assert.equal(finalStreams.filter(x=>x.codec_type==='subtitle').length,1);
+  assert.equal(finalStreams.filter(x=>x.codec_type==='audio'&&x.codec_name==='flac').length,2);
   const p=packets(cachePath),q=packets(finalPath);
   assert.equal(p.length,2);assert.equal(q.length,2);
   const expected=fixture(),sourceHash=digest(readFileSync(src));
