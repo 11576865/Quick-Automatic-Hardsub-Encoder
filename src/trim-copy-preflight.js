@@ -9,7 +9,8 @@ export function assessIsolatedTrimCopyPreflight({
  receipt,request,sourceStat,fullSourceEvidence
 }={}){
  if(!request||request.mode!=='isolated-trim-copy'||request.version!==1||
-    !sourceStat||!nat(sourceStat.length)||!nat(sourceStat.writeTicks)||
+    !sourceStat||!nat(sourceStat.length)||
+    typeof sourceStat.writeTicks!=='string'||!/^[0-9]{1,20}$/.test(sourceStat.writeTicks)||
     !(Number.isFinite(request.start)&&request.start>=0)||
     !(Number.isFinite(request.end)&&request.end>request.start)||
     request.end-request.start>3600||
