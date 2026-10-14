@@ -4,6 +4,9 @@ import {guidedTaskSettings} from './guided-task-handoff.js';
 import {compileGuidedCpuHandoff,commitGuidedCpuHandoff} from './guided-cpu-compiler-contract.js';
 import {buildTaskReview,renderTaskReview} from './task-review.js';
 import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
+import {buildAuxiliaryPreflightRequest} from './auxiliary-preflight-request.js';
+import {assessFlacEncodeObservation} from './flac-encode-preflight.js';
+import {assessIsolatedTrimCopyPreflight} from './trim-copy-preflight.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { vvcCapability } from './media-capabilities.js';
 import { mountAudioStreamPlan } from './audio-stream-plan-ui.js';
@@ -200,7 +203,7 @@ export function mountMediaWorkspace(hooks) {
   ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1'],['h266','H.266 / VVC · 实验']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
   ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ（通常越低越保真）','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
   ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}${select('budgetPolicy','体积交付策略',[['best-effort','目标体积 · 允许偏差'],['strict-ceiling','严格字节上限 · 超限禁止保存']])}
-  </div><p id="taskBudgetLedger" class="task-budget-ledger" role="status">复制流与附件成本未测量。</p><button type="button" id="taskMeasureBudget" class="secondary">测量源流与附件成本</button><p id="taskVvcCapability" class="note" role="status"></p><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
+  </div><p id="taskBudgetLedger" class="task-budget-ledger" role="status">复制流与附件成本未测量。</p><button type="button" id="taskMeasureBudget" class="secondary">测量源流与附件成本</button><button type="button" id="taskAuxiliaryPreflight" class="secondary">实测 FLAC / 裁切复制成本</button><p id="taskAuxiliaryPreflightStatus" role="status" class="note">可选 Windows Native 预编码观测；不改变正式体积预算，也不视为最终封装大小证明。</p><p id="taskVvcCapability" class="note" role="status"></p><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
   ${check('legacyFps','兼容旧 FFmpeg（使用 -vsync）')}
   ${input('maxrate','最大码率（bit/s）','编码器默认')}${input('bufsize','码率缓冲区（bit）','编码器默认')}
   ${select('fpsMode','帧率策略',[['auto','编码器自动'],['passthrough','保持源时间戳'],['cfr','恒定帧率 CFR'],['vfr','可变帧率 VFR']])}${input('fps','目标帧率','例如 24 或 24000/1001；留空保持')}${input('frames','输出总帧数上限','留空表示不限；设置后需关闭音频')}
@@ -278,7 +281,7 @@ export function mountMediaWorkspace(hooks) {
   const form = section.querySelector('form'), get = name => form.elements.namedItem(name);
   const budgetTools=document.createElement('section');budgetTools.className='shared-budget-tools';budgetTools.id='taskBudgetTools';budgetTools.setAttribute('aria-label','完整文件预算');
   section.querySelector('#taskPlanSummary').after(budgetTools);
-  budgetTools.append(section.querySelector('#taskBudgetLedger'),section.querySelector('#taskMeasureBudget'));
+  budgetTools.append(section.querySelector('#taskBudgetLedger'),section.querySelector('#taskMeasureBudget'),section.querySelector('#taskAuxiliaryPreflight'),section.querySelector('#taskAuxiliaryPreflightStatus'));
 
   const modeButtons = [...modeNav.querySelectorAll('[data-media-mode]')];
   const strategyButtons = [...document.querySelectorAll('[data-hardsub-strategy]')];
@@ -1795,7 +1798,7 @@ export function mountMediaWorkspace(hooks) {
     updateRate();audioStreamPlan.refresh();
     syncAudioPlaybackWarning();
   };
-  const invalidateBudgetEvidence = () => {if(budgetSourceIdentity!==hooks.videoIdentity?.()){budgetEvidence=null;section.querySelector('#taskBudgetLedger').textContent='来源已变更；复制流与附件成本未测量。';}};
+  const invalidateBudgetEvidence = () => {if(budgetSourceIdentity!==hooks.videoIdentity?.()){budgetEvidence=null;section.querySelector('#taskBudgetLedger').textContent='来源已变更；复制流与附件成本未测量。';section.querySelector('#taskAuxiliaryPreflightStatus').textContent='来源已变更：旧 FLAC / 裁切复制观测已失效。';}};
   function syncReviewSource(){
     currentPlanTask=null;const identity=hooks.videoIdentity?.()||'';
     if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
@@ -2017,6 +2020,47 @@ export function mountMediaWorkspace(hooks) {
       ledger.textContent='完整源流成本已测量。点击“验证当前方案”查看预算分项；裁切复制流按完整源流保守预留，FLAC 重编码仍未知。';
     }catch(e){budgetEvidence=null;ledger.textContent='成本仍未知：'+e.message;}
     finally{busy=false;hooks.setBusy(false);button.disabled=false;transcodeCurves.invalidate();hooks.onBudgetEvidenceChange?.();syncTaskActions();}
+  };
+  section.querySelector('#taskAuxiliaryPreflight').onclick=async()=>{
+    const statusEl=section.querySelector('#taskAuxiliaryPreflightStatus');
+    const btn=section.querySelector('#taskAuxiliaryPreflight');
+    if(busy||hooks.busy())return;
+    const sourceKey=hooks.videoIdentity?.()||'';
+    const budget=budgetSourceIdentity===sourceKey?budgetEvidence:null;
+    const selected=buildAuxiliaryPreflightRequest({
+      settings:read(),media:hooks.mediaSnapshot?.(),budgetEvidence:budget
+    });
+    if(!selected.ok){
+      statusEl.textContent='无法建立逐流预演：'+selected.reason+
+        (selected.detail?' · '+selected.detail:'')+'。请先测量完整源流并检查音轨及 IN/OUT。';
+      return;
+    }
+    if(!hooks.auxiliaryPreflight){
+      statusEl.textContent='此预演仅支持 Windows Native；当前后端不提供独立逐流预编码器。';
+      return;
+    }
+    busy=true;hooks.setBusy(true);btn.disabled=true;syncTaskActions();
+    statusEl.textContent=(selected.mode==='flac'?'FLAC':'裁切复制')+
+      ' 独立预编码观测进行中；不会修改当前方案或目标字节数。';
+    try{
+      const response=await hooks.auxiliaryPreflight(selected.request);
+      if(sourceKey!==hooks.videoIdentity?.() ||
+         budgetSourceIdentity!==sourceKey ||
+         response?.receipt?.measurementId!==budget?.measurementId)
+        throw Error('来源或完整源流计量已更换，拒收预演。');
+      const receipt=response.receipt;
+      const sourceStat={length:Number(response.sourceSize),writeTicks:String(receipt.sourceWriteTicks)};
+      const result=selected.mode==='flac'
+        ?assessFlacEncodeObservation({receipt,request:selected.request,sourceStat,fullSourceEvidence:budget})
+        :assessIsolatedTrimCopyPreflight({receipt,request:selected.request,sourceStat,fullSourceEvidence:budget});
+      if(!result.ok)throw Error(result.reason);
+      statusEl.textContent=(selected.mode==='flac'?'真实 FLAC 音频':'隔离裁切复制')+
+        ' 观察包字节 '+formatSize(result.observedBytes)+
+        ' · '+(result.tracks?.length||result.mapped?.length||0)+' 条流'+
+        (selected.partial?' · 仅覆盖其中一部分选流':'')+
+        '。此收据仅供诊断，严格体积预算仍按独立保守规则；未经最终混合封装证明不能采用此数值。';
+    }catch(e){statusEl.textContent='预演不可采用：'+e.message+'；正式体积预算保持不变。';}
+    finally{busy=false;hooks.setBusy(false);btn.disabled=false;syncTaskActions();}
   };
   section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('当前方案验证通过，可以直接开始；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};
