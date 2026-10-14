@@ -20,8 +20,15 @@ export function reconcileAuxiliaryMuxObservation({
     task.outputFormat!=='matroska')
   return fail('source-ledger-or-output-format-changed');
  if(!Number.isFinite(task.start)||!Number.isFinite(task.end)||
-    task.start!==preflight.request.start||task.end!==preflight.request.end)
+    task.start!==preflight.request.start||task.end!==preflight.request.end||
+    (completed.actualStart!=null&&completed.actualStart!==task.start))
   return fail('task-timeline-differs-from-preflight');
+ if(!preflight.sourceStat||preflight.receipt.sourceLength!==preflight.sourceStat.length||
+    preflight.receipt.sourceWriteTicks!==preflight.sourceStat.writeTicks||
+    preflight.receipt.start!==preflight.request.start||
+    preflight.receipt.end!==preflight.request.end||
+    preflight.receipt.outputFormat!=='matroska')
+  return fail('preflight-source-or-range-mismatch');
  const output=completed.outputPacketEvidence;
  const audio=Array.isArray(task.outputPlan?.audio)?task.outputPlan.audio:null;
  if(!audio||!Array.isArray(output.audioPacketBytes))
