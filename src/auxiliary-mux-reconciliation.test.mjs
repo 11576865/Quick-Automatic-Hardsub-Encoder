@@ -142,4 +142,14 @@ test('static workbench/report integration keeps preflight as observation only',a
  assert.match(ui,/reconcileAuxiliaryMuxObservation/);
  assert.match(ui,/auxiliaryParity/);
  assert.match(report,/FLAC 重编码体积成本未知/);
+ const [bridge,fixture,ci]=await Promise.all([
+  readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8'),
+  readFile(new URL('../scripts/check-flac-native-http-lifecycle.ps1',import.meta.url),'utf8'),
+  readFile(new URL('../.github/workflows/windows-b16-runtime.yml',import.meta.url),'utf8')
+ ]);
+ assert.match(bridge,/\$needsFlac=@\(\$Job.Task.audioPlan \| Where-Object/);
+ assert.match(bridge,/if\(-not \$needsFlac -and -not \$needsCopy\)/);
+ assert.match(fixture,/source-or-ledger-replaced/);
+ assert.match(fixture,/\/api\/flac-encode-preflight/);
+ assert.match(ci,/check-flac-native-http-lifecycle\.ps1/);
 });
