@@ -7,6 +7,7 @@ import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQuali
 import {buildAuxiliaryPreflightRequest} from './auxiliary-preflight-request.js';
 import {assessFlacEncodeObservation} from './flac-encode-preflight.js';
 import {assessIsolatedTrimCopyPreflight} from './trim-copy-preflight.js';
+import {reconcileAuxiliaryMuxObservation} from './auxiliary-mux-reconciliation.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
 import { vvcCapability } from './media-capabilities.js';
 import { mountAudioStreamPlan } from './audio-stream-plan-ui.js';
@@ -322,6 +323,17 @@ export function mountMediaWorkspace(hooks) {
   });
   get('quality').addEventListener('input', syncQualityRange);
   let budgetEvidence=null,budgetSourceIdentity='';
+  let latestAuxPreflight=null;
+  const buildAuditedTaskReport=(task,result,elapsed)=>{
+    const report=outputReport(task,result,elapsed);
+    if(latestAuxPreflight && result?.verified){
+      report.auxiliaryParity=reconcileAuxiliaryMuxObservation({
+        task,completed:result,preflight:latestAuxPreflight,
+        currentSourceKey:hooks.videoIdentity?.()||''
+      });
+    }
+    return report;
+  };
   let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   let currentPlanTask=null,artifactReview=null,executingSourceName='',reviewSourceIdentity=hooks.videoIdentity?.()||'';
   function syncTaskReview(){
@@ -1798,7 +1810,7 @@ export function mountMediaWorkspace(hooks) {
     updateRate();audioStreamPlan.refresh();
     syncAudioPlaybackWarning();
   };
-  const invalidateBudgetEvidence = () => {if(budgetSourceIdentity!==hooks.videoIdentity?.()){budgetEvidence=null;section.querySelector('#taskBudgetLedger').textContent='来源已变更；复制流与附件成本未测量。';section.querySelector('#taskAuxiliaryPreflightStatus').textContent='来源已变更：旧 FLAC / 裁切复制观测已失效。';}};
+  const invalidateBudgetEvidence = () => {if(budgetSourceIdentity!==hooks.videoIdentity?.()){latestAuxPreflight=null;budgetEvidence=null;section.querySelector('#taskBudgetLedger').textContent='来源已变更；复制流与附件成本未测量。';section.querySelector('#taskAuxiliaryPreflightStatus').textContent='来源已变更：旧 FLAC / 裁切复制观测已失效。';}};
   function syncReviewSource(){
     currentPlanTask=null;const identity=hooks.videoIdentity?.()||'';
     if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
@@ -1824,7 +1836,7 @@ export function mountMediaWorkspace(hooks) {
         if(evidence?.state==='completed' && completed?.jobId===jobId){
           completed={...completed,outputPacketEvidence:evidence.outputPacketEvidence,
             outputPacketAuditState:evidence.outputPacketAuditState};
-          lastReport=outputReport(activeTask||completed.task,completed,lastReport.elapsedSeconds);
+          lastReport=buildAuditedTaskReport(activeTask||completed.task,completed,lastReport.elapsedSeconds);
           if(artifactReview)artifactReview.report=structuredClone(lastReport);
           if(lastReport.trimCopyAudit){
             status('后台裁切复制流审计完成；收据已更新，正式完整源流预算未改变。');
@@ -2013,6 +2025,7 @@ export function mountMediaWorkspace(hooks) {
     busy=true;hooks.setBusy(true);button.disabled=true;syncTaskActions();
     ledger.textContent='正在扫描完整源文件，最多 80 秒；不会重编码…';
     try{
+      latestAuxPreflight=null;
       const result=await hooks.measureBudget();
       if(identity!==hooks.videoIdentity?.())throw Error('测量期间来源变更，结果已丢弃');
       if(result?.version!==1||result.scope!=='full-source')throw Error('成本测量格式无效');
@@ -2054,6 +2067,9 @@ export function mountMediaWorkspace(hooks) {
         ?assessFlacEncodeObservation({receipt,request:selected.request,sourceStat,fullSourceEvidence:budget})
         :assessIsolatedTrimCopyPreflight({receipt,request:selected.request,sourceStat,fullSourceEvidence:budget});
       if(!result.ok)throw Error(result.reason);
+      latestAuxPreflight={request:selected.request,receipt,
+        sourceKey,measurementId:budget.measurementId,
+        sourceStat,partial:selected.partial};
       statusEl.textContent=(selected.mode==='flac'?'真实 FLAC 音频':'隔离裁切复制')+
         ' 观察包字节 '+formatSize(result.observedBytes)+
         ' · '+(result.tracks?.length||result.mapped?.length||0)+' 条流'+
@@ -2109,7 +2125,7 @@ export function mountMediaWorkspace(hooks) {
       setTaskState('encoding');
       const started=performance.now();
       completed=await hooks.run(task,media,(p,message,meta)=>updateTaskProgress(p,message,meta));
-      lastReport=outputReport(task,completed,(performance.now()-started)/1000);
+      lastReport=buildAuditedTaskReport(task,completed,(performance.now()-started)/1000);
       artifactReview={source:executingSourceName,task:structuredClone(task),report:structuredClone(lastReport)};
       section.querySelector('#taskReport').disabled=false;
       section.querySelector('#taskProgress').value=1;
@@ -2179,6 +2195,7 @@ export function mountMediaWorkspace(hooks) {
     if(['audio','audioTrack','audioRange','audioBitrate'].includes(sourceName))audioStreamPlan.refresh();
     if(!new Set(['sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
     markCompletedAsPrevious(sourceName);
+    latestAuxPreflight=null;
     activeTask=null;currentPlanTask=null;
     renderContainerDecision(null);
     syncAudioPlaybackWarning();
