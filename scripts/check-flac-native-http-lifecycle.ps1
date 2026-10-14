@@ -116,6 +116,16 @@ try{
   }
  }
  Write-Host 'B16 Native actual manual FLAC quality-mode job exposes independently verified completed-mux audio packets without a sizePlan.'
+ # Adversarial post-audit drift: a completed short-file packet observation must
+ # be revoked if the staged output is mutated before a later status request.
+ [IO.File]::AppendAllText($artifact,'B16_ARTIFACT_CHANGED',
+   (New-Object Text.UTF8Encoding($false)))
+ $revoked=Invoke-RestMethod -Uri "$url/api/jobs/$($encoded.jobId)" -Headers $headers -TimeoutSec 5
+ if($revoked.state -ne 'completed' -or $null -ne $revoked.outputPacketEvidence -or
+    $revoked.outputPacketAuditState -ne 'unavailable'){
+  throw 'Completed Native mux packet evidence survived modified staged output.'
+ }
+ Write-Host 'B16 real Native short completed-artifact packet audit revoked after staged file mutation.'
 
 }finally{
  if($server){
