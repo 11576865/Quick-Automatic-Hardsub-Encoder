@@ -54,7 +54,7 @@ jobs:
           cache: npm
       - name: Run targeted model and task regressions
         run: |
-          node --test src/media-task.test.mjs src/media-planning.test.mjs src/media-stream-plan.test.mjs src/manual-transcode-comparison.test.mjs src/decision-reference-scope.test.mjs src/guided-native-vbr-verification.test.mjs src/guided-branch-adoption.test.mjs src/manual-transcode-session.test.mjs src/manual-paired-risk-plan.test.mjs src/manual-time-tradeoff.test.mjs src/manual-transcode-vbr-verification.test.mjs src/manual-transcode-adoption.test.mjs src/guided-whole-file-budget.test.mjs src/guided-cpu-compiler-contract.test.mjs src/trim-copy-audit.test.mjs src/trim-copy-preflight.test.mjs src/whole-file-budget.test.mjs src/vvc-required-runtime.test.mjs
+          node --test src/media-task.test.mjs src/media-planning.test.mjs src/media-stream-plan.test.mjs src/manual-transcode-comparison.test.mjs src/decision-reference-scope.test.mjs src/guided-native-vbr-verification.test.mjs src/guided-branch-adoption.test.mjs src/manual-transcode-session.test.mjs src/manual-paired-risk-plan.test.mjs src/manual-time-tradeoff.test.mjs src/manual-transcode-vbr-verification.test.mjs src/manual-transcode-adoption.test.mjs src/guided-whole-file-budget.test.mjs src/guided-cpu-compiler-contract.test.mjs src/trim-copy-audit.test.mjs src/trim-copy-preflight.test.mjs src/flac-encode-preflight.test.mjs src/auxiliary-preflight-request.test.mjs src/whole-file-budget.test.mjs src/vvc-required-runtime.test.mjs
       - name: Install locked frontend dependencies
         run: npm ci
       - name: Build production frontend
@@ -101,7 +101,7 @@ jobs:
       - run: node --test src/timeline-no-audio-wiring.test.mjs
       - run: node --test src/media-verification.test.mjs
       - run: node --test src/output-verification-wiring.test.mjs
-      - run: node --test src/media-task.test.mjs src/media-planning.test.mjs src/trim-copy-audit.test.mjs src/trim-copy-preflight.test.mjs src/whole-file-budget.test.mjs src/whole-file-frontier.test.mjs src/size-budget-adoption.test.mjs src/ci-delivery-fixtures.test.mjs src/task-review.test.mjs src/vvc-required-runtime.test.mjs src/ffmpeg-help-options.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs src/media-stream-plan.test.mjs
+      - run: node --test src/media-task.test.mjs src/media-planning.test.mjs src/trim-copy-audit.test.mjs src/trim-copy-preflight.test.mjs src/flac-encode-preflight.test.mjs src/auxiliary-preflight-request.test.mjs src/whole-file-budget.test.mjs src/whole-file-frontier.test.mjs src/size-budget-adoption.test.mjs src/ci-delivery-fixtures.test.mjs src/task-review.test.mjs src/vvc-required-runtime.test.mjs src/ffmpeg-help-options.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs src/media-stream-plan.test.mjs
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
       - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs src/media-stream-plan.integration.test.mjs src/whole-file-budget.integration.test.mjs src/guided-whole-file-budget.integration.test.mjs src/manual-candidate-set.integration.test.mjs
       - run: FFMPEG_INTEGRATION=1 node --test src/source-ssim.integration.test.mjs
