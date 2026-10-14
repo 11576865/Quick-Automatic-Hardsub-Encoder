@@ -1,7 +1,6 @@
 // B16: actual auxiliary-only preflight versus the *completed* mixed-media
 // artifact. An observation cannot be a predictive budget or reusable proof.
 const bytes=x=>Number.isSafeInteger(x)&&x>=0;
-const same=(x,y)=>JSON.stringify(x)===JSON.stringify(y);
 const order=x=>Number.isInteger(x)&&x>=0;
 const fail=(reason)=>({status:'unavailable',reason,comparable:false,
   canReplaceFormalBudget:false,canCertifyFutureMux:false});
@@ -77,12 +76,16 @@ export function reconcileAuxiliaryMuxObservation({
      preflightBytes:measured,finalMuxBytes:actual,deltaBytes:actual-measured});
   }
   if(!Array.isArray(output.subtitlePacketBytes))return fail('copy-subtitle-audit-unavailable');
+  // compileTask emits subtitle output-plan *objects*, not numeric IDs.
+  // Reject symbolic ['all'] mappings because there is no authoritative
+  // per-source output ordinal in that projection.
   const subtitles=task.outputPlan?.subtitles;
-  const ordinalSub=Array.isArray(subtitles)?subtitles:
-    null;
-  if(!ordinalSub)return fail('copy-subtitle-output-map-unavailable');
+  if(!Array.isArray(subtitles)||subtitles.some(x=>!x||
+     !order(x.sourceOrdinal)||x.action!=='copy'))
+   return fail('copy-subtitle-output-map-unavailable');
   for(let i=0;i<request.subtitleOrdinals.length;i++){
-   const src=request.subtitleOrdinals[i],ord=ordinalSub.indexOf(src);
+   const src=request.subtitleOrdinals[i];
+   const ord=subtitles.findIndex(x=>x.sourceOrdinal===src);
    const actual=output.subtitlePacketBytes[ord],measured=receipt.subtitlePacketBytes[i];
    if(ord<0||!bytes(actual)||!bytes(measured)||task.subtitleRange!=='trim')
     return fail('copy-subtitle-packets-unavailable');
