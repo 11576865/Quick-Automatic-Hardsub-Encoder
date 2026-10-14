@@ -107,8 +107,11 @@ export function createMultiBranchFrontier(branches, {
   // range. Presentation may show these as context, but never as new observations.
   function sampleBranchCurves(count=64) {
     const n=Math.max(2,Math.min(256,Math.floor(Number(count)||64)));
-    const budgets=Array.from({length:n},(_,i)=>i===0?min:i===n-1?max:
-      Math.exp(Math.log(min)+(Math.log(max)-Math.log(min))*i/(n-1)));
+    // Sample strictly inside the shared evidence domain. Endpoints can land
+    // outside an individual branch after logarithmic floating-point rounding;
+    // dropping one endpoint previously removed the entire context curve.
+    const budgets=Array.from({length:n},(_,i)=>
+      Math.exp(Math.log(min)+(Math.log(max)-Math.log(min))*(i+0.5)/n));
     return prepared.map(({id,frontier})=>{
       const points=budgets.map(targetBytes=>{
         const result=frontier.evaluateTargetBytes(targetBytes);

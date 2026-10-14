@@ -92,3 +92,17 @@ test('single-branch decisions do not draw ghost curves; branch names are escaped
  assert.match(svg,/&lt;unsafe&amp;&gt;/);
  assert.doesNotMatch(svg,/<unsafe&>/);
 });
+
+test('bounded candidate paths survive skewed codec evidence endpoints in Chromium fixture',()=>{
+ const curves=[
+  {id:'H264',measurementScope:'synthetic-common-reference',model:fitRateDistortionModel([[1e6,.915],[2e6,.951],[3e6,.962]].map(([sampleBitrate,ssim])=>({sampleBitrate,ssim})))},
+  {id:'HEVC',measurementScope:'synthetic-common-reference',model:fitRateDistortionModel([[1e6,.927],[2e6,.947],[3e6,.975]].map(([sampleBitrate,ssim])=>({sampleBitrate,ssim})))}
+ ];
+ const f=createMultiBranchFrontier(curves,{durationSeconds:120,audioBitrate:0,reservePercent:0});
+ assert.equal(f.ok,true);
+ const sampled=f.sampleBranchCurves(64);
+ assert.deepEqual(sampled.map(x=>x.id),['H264','HEVC']);
+ assert.ok(sampled.every(x=>x.points.length===64));
+ const svg=renderRateDistortionSvg(buildSizeFrontierPlot(f));
+ assert.equal((svg.match(/class="curve-branch-ghost"/g)||[]).length,2);
+});
