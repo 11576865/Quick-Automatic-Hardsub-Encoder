@@ -15,11 +15,14 @@ const base=()=>({
  completed:{verified:true,outputPacketEvidence:{version:1,scope:'completed-artifact',
   audioPacketBytes:[39300,27599],subtitlePacketBytes:[]}},
  preflight:{sourceKey:source,measurementId:ledger,
+  sourceStat:{length:123456,writeTicks:'638960827860000000'},
   request:{version:1,mode:'isolated-flac-encode',start:.4,end:2.4,outputFormat:'matroska',
    tracks:[{sourceOrdinal:0,range:'full',channels:null,sampleRate:null},
     {sourceOrdinal:1,range:'trim',channels:1,sampleRate:48000}]},
   receipt:{version:1,scope:'isolated-flac-encode-observation',
    measurementId:ledger,canReplaceFormalBudget:false,canCertifyFinalMux:false,
+   sourceLength:123456,sourceWriteTicks:'638960827860000000',
+   start:.4,end:2.4,outputFormat:'matroska',
    tracks:[{sourceOrdinal:0,range:'full',channels:null,sampleRate:null,packetBytes:39300},
     {sourceOrdinal:1,range:'trim',channels:1,sampleRate:48000,packetBytes:27599}]}
  },currentSourceKey:source
@@ -43,6 +46,9 @@ test('mixing another source, ledger, timeline or output container invalidates re
   x=>x.preflight.receipt.measurementId='other',
   x=>x.task.start=.5,
   x=>x.task.end=2.2,
+  x=>x.completed.actualStart=.2,
+  x=>x.preflight.receipt.sourceWriteTicks='638960827860000001',
+  x=>x.preflight.receipt.end=2.3,
   x=>x.task.outputFormat='mp4',
   x=>x.preflight=null
  ]){
@@ -93,6 +99,8 @@ test('copy source/track binding includes preserved soft subtitle and exact outpu
   audioOrdinals:[1],subtitleOrdinals:[0]};
  x.preflight.receipt={version:1,scope:'isolated-trim-copy-observation',
   measurementId:ledger,canReplaceFullSourceBudget:false,
+  sourceLength:123456,sourceWriteTicks:'638960827860000000',
+  start:.4,end:2.4,outputFormat:'matroska',
   audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
  const a=check(x);assert.equal(a.status,'exact-observed-payload-match');
  const y=base();Object.assign(y,x);
