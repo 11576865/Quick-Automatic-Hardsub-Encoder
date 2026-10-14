@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU10_native_audio_lock_real_artifact_authorized",
-  "current_bounded_work_unit": "WU10 P2/A02 actual Windows Native video transcode + source FLAC locked Copy and other AAC transcode; check output packets SHA256 vs source across full duration. Web FFmpegKitNext core absent from repository, so WU08 Web full media runtime not certified. No full P2 release.",
+  "status": "incomplete_full_report_WU10_P2_A02_real_native_locked_FLAC_packet_identity_hosted_accepted",
+  "current_bounded_work_unit": "WU10 hosted PASS at 54ca3a4: real Windows Native mixed MKV, source locked FLAC a0 Copy + AAC a1 reencode, completed job output 121709 bytes, independent 141/141 source/output FLAC packet SHA256 identical. No full A02/metadata/sync/device proof. Missing Web WASM vendor remains separate B21 blocker.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -266,15 +266,18 @@
     "Root re-anchor for WU08: P5 B21 genuine multiple-source gap selected, after seven bounded units; preserve root R19/R24 and no assumptions that WU03 same-source matrix fulfills it.",
     "WU08 B21 genuine new multiple-File source Web queue bounded hosted PASS at 2b42a49: user 2 Files -> per-source activation & probe/official compiled v4 controlled processing -> distinct handoff, rollback-safe save retry; continued batch reuse. No false filesystem saved claim. Whole B21 remains open.",
     "WU09 P3 bounded hosted PASS: common read-only source/reference+budget/measured-domain decision gate for Guided and Manual, with diagnostic-only when only video payload or unknown copy cost and no model-based auto adopt; existing VBR/atomic plan gate unchanged. Actual media cross-workflow/whole film evidence still pending.",
-    "WU10 root reanchor: closed WU09, discovered Web FFmpegKitNext package unbundled (only README); select executable Native Windows real-media packet integrity evidence for original P2 A02 must-preserve instead of repeating controlled Chromium."
+    "WU10 root reanchor: closed WU09, discovered Web FFmpegKitNext package unbundled (only README); select executable Native Windows real-media packet integrity evidence for original P2 A02 must-preserve instead of repeating controlled Chromium.",
+    "WU10 real Windows Native source-bound audio mustCopy v4 job hosted accepted: 141/141 FLAC packet SHA256 match output, AAC a:1 reencoded, 121709 output bytes; wrong-source/recode compile negative. Scoped R19 P2 and A02 proof."
   ],
   "next_units": [
-    "WU10 AUTHORIZED real Windows Native mixed audio output and locked source a:0 packet SHA256 validation; stop on genuine CI issues not silently mark PASS.",
-    "NO WU11 authorized; owner R19/R24 scope unchanged; Web vendor core missing blocks WU08 production complete media; P3 whole-film still pending."
+    "NO WU11 AUTOMATIC AUTHORIZATION. Re-anchor full R19/R24; prioritize merge/actual product gaps.",
+    "WU08 B21 real Web encode blocked: vendor ffmpeg-kit-next-web dist/index.js/lib not present; only README. Requires reproducible provisioned core and real browser outputs before acceptance.",
+    "P2/A02 source->artifact a:0 real Native only: clip/PTS/metadata/ASS/Android/Web/real movie remain open.",
+    "P3 full Native field comparisons and B25 PR #104/#105 stacked Draft merge and release remain open."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "6ea0bea2b5d2e0ae467ccd9cf5310e3982f0388c",
+  "latest_durable_commit": "54ca3a4e2f7a8fd4222d7f31bca957577b98b539",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -314,7 +317,8 @@
     "wu06_domain_projection": "Exact-head 0124946d6939f73a285dcf609a6a973924d44219: new WU06 Node real compiled v4 Hardsub/Transcode/Copy+source stream coverage and real Chromium source-bound inspector SUCCESS run 38575999722; frontend SUCCESS 38575999605; UIGS Evidence Coverage SUCCESS 38575999820. No real Native/Android/Web domain owner parity, no additional runtime authority, no ArtifactRecord field evidence.",
     "wu07_audio_lock": "Exact-head 38d4b04e8b1edfac99dc3116f4931c310b075d08: WU07 official v4 audio lock unit+production Chromium PASS run 38580653413; frontend PASS 38580653495; UIGS Coverage PASS 38580653198. Real Windows/Android/Web copy packet identity and actual file/field P2 still open.",
     "wu08_multi_source": "Exact code/test SHA 2b42a49e94ab3fbec991451807791a5b113a4892: production Playwright Chromium Web File 2-source queue, frozen preferences per file, source-specific v4 compiler and controlled execution, save failure preserved artifact/no reencode retry, clearing completed records and enqueuing next 2 files PASS run 38588049167; Test frontend PASS 38588049084; UIGS Evidence Coverage PASS 38588049025. Web WASM actual 2-file media artifacts, browser downloaded file disk writes, Native Windows/Android and multi-source ASS unverified.",
-    "wu09_shared_p3": "Exact-head 6ea0bea2b5d2e0ae467ccd9cf5310e3982f0388c: shared real Guided+Manual frontier model/unit, frontend integration and production Chromium dynamic module and UI no-Native controls CI 38592703806 SUCCESS; full frontend 38592703737 SUCCESS; UIGS coverage 38592703764 SUCCESS. Manual real Native candidate unlock and actual same-reference quality sample in field not covered; whole movie release not proven."
+    "wu09_shared_p3": "Exact-head 6ea0bea2b5d2e0ae467ccd9cf5310e3982f0388c: shared real Guided+Manual frontier model/unit, frontend integration and production Chromium dynamic module and UI no-Native controls CI 38592703806 SUCCESS; full frontend 38592703737 SUCCESS; UIGS coverage 38592703764 SUCCESS. Manual real Native candidate unlock and actual same-reference quality sample in field not covered; whole movie release not proven.",
+    "wu10_native_audio_packet_identity": "Exact tested SHA 54ca3a4e2f7a8fd4222d7f31bca957577b98b539; Windows actual Native Bridge mix FLAC Copy locked a:0 + reencoded AAC a:1 output 121709 B, 141/141 compressed source/output FLAC packet SHA256 identical: run 38597508774 SUCCESS. Frontend 38597508576 and UIGS 38597508191 SUCCESS. No trim, metadata, full AV sync, Android/Web or realistic feature-film acceptance."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -328,7 +332,7 @@
     "foundry_path": "inbox/candidates/2026-10-10-measurement-identity-must-exclude-decision-and-presentation-inputs.md",
     "foundry_commit": "c5c717caee47e3346b88e8b3afe0e755f245b579"
   },
-  "updated_timestamp": "2026-10-14",
+  "updated_timestamp": "2026-10-15",
   "local_verification": {
     "passed": 245,
     "skipped": 9,
@@ -348,9 +352,9 @@
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
     "current_authorized_index": 9,
-    "completed_authorized_units": 6,
-    "review_status": "ROOT_REPORT_REANCHORED_WU10_NATIVE_AUDIO_LOCK_REAL_ARTIFACT_AUTHORIZED",
-    "executed_authorized_units_since_reanchor": 0
+    "completed_authorized_units": 7,
+    "review_status": "WU10_P2_A02_BOUNDED_NATIVE_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEXT_UNIT",
+    "executed_authorized_units_since_reanchor": 1
   },
   "authorized_next_units": [
     {
@@ -495,7 +499,7 @@
         "B06",
         "A02"
       ],
-      "status": "AUTHORIZED_NOT_STARTED",
+      "status": "HOSTED_ACCEPTED_REAL_NATIVE_SOURCE_LOCKED_FLAC_PACKET_SHA256_MIXED_OUTPUT",
       "source": "Owner R19 §03/§16 P2; R24 §05/§11 source-track must-preserve followed through actual completed ArtifactRecord rather than controlled task compilation",
       "scope": "Generate real mixed MKV H264 + FLAC + AAC in Windows CI, compile exact official v4 locked audio original Copy and second AAC transcode, execute through actual localhost Native bridge, and compare source/output a:0 FFprobe packet payload SHA256 and track order. Wrong-source and forced transcode compile guard negative. No whole-fidelity or every multimedia source signoff.",
       "exit": "PowerShell parse and Node compile, exact-head actual Windows Native completed mixed audio output with independently extracted packet SHA256 hashes (count/values), runtime source identity, deliberate wrong-source refusal. Test frontend Uigs coverage. No claim of metadata language/trim/full sync/player or Web/Android."
