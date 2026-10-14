@@ -94,7 +94,10 @@ try{
    (Quote-Preflight $worker)+' -Ffprobe '+(Quote-Preflight $Ffprobe)+
    ' -OutputFile '+(Quote-Preflight $remux)+
    ' -ReceiptFile '+(Quote-Preflight $packetReceipt)
- [void](Run-Preflight 'powershell.exe' $workerArgs 165)
+ # Independent packet audit may spend 120 seconds on each of audio and
+ # subtitle streams plus its stream inventory. Parent deadline must exceed
+ # the combined bounded limits; the FFmpeg remux itself remains capped at 75s.
+ [void](Run-Preflight 'powershell.exe' $workerArgs 270)
  if(-not(Test-Path -LiteralPath $packetReceipt -PathType Leaf)){
   Fail 'Independent remux packet audit failed.'
  }
