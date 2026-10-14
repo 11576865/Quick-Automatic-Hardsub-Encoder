@@ -136,3 +136,7 @@ R19 §06 明确要求 `requestedIn/Out`、`actualFirstPresentation`、`copiedPac
 授权 WU-05：面向**已经完成且可独立 FFprobe 的 Windows Native Copy Trim 成品**，按需给出解码首视频帧时间戳、编码包 PTS/DTS、每条音轨的起始包时间、请求时间与 Native seek hint，并作为成品证据收据写入任务报告。对 source-to-output copiedPacketRange 哈希、真实 source first presentation、整片尾帧及 VFR/B 帧音画同步，不在本轮测试时自动宣布 Verified，而明确 `unverified`；此工作只读，不改变用户成品或压制计划。
 
 WU-05 的成功标准是新**用户可查询的产品能力**及对应独立 FFprobe/浏览器和 Windows 现场边界，不是扩大现有 B16 测试范围。完成后仍须新的目标重锚才能授权 WU-06。
+
+## 2026-10-14 WU-06：按原 R19 P1/P16 和 R24 §05 领域模型重锚
+
+源报告明确提出从旧 `task schema v4` 建立**只读** `SourceAsset → SourceStream → UserIntent → OutputPlan → ImmutableJobPlan → ArtifactRecord` 投影，检查与现有执行参数及成品的一致性后才能改变状态所有权。最新源码已有 `createOutputPlan` 与 `task-review`，但只读对照尚未串联当前源流、编译衍生意图、产物/未知证明和正式 FFmpeg 参数。授权 WU-06：从唯一编译后的任务和当前来源参数推导一份不可编辑的交付合同，在现有审阅区展开并显示未证实项。执行链、编码器选择、现有工作流和存储结构不变。只读投影通过不等于已交付 `ImmutableJobPlan` / 完整 `ArtifactRecord`，亦不得顺势重构 task schema。
