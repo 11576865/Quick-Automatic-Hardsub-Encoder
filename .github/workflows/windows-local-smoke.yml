@@ -5,6 +5,7 @@ on:
     paths:
       - 'windows/**'
       - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-trim-copy-preflight.ps1'
       - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'scripts/check-vvc-native.ps1'
       - 'scripts/check-media-frame-rate.ps1'
@@ -21,6 +22,7 @@ on:
     paths:
       - 'windows/**'
       - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-trim-copy-preflight.ps1'
       - 'scripts/check-native-cancel-lifecycle.ps1'
       - 'scripts/check-vvc-native.ps1'
       - 'scripts/check-media-frame-rate.ps1'
@@ -51,7 +53,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/trim-packet-audit.ps1','windows/guided-rendered-sample-evidence.ps1', 'scripts/check-guided-vbr-evidence.ps1', 'windows/native-backend.ps1', 'windows/vvc-runtime.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1', 'scripts/check-vvc-native.ps1','windows/media-frame-rate.ps1','scripts/check-media-frame-rate.ps1','scripts/check-stream-plan-arguments.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/trim-packet-audit.ps1', 'windows/trim-copy-preflight.ps1','scripts/check-trim-copy-preflight.ps1','windows/guided-rendered-sample-evidence.ps1', 'scripts/check-guided-vbr-evidence.ps1', 'windows/native-backend.ps1', 'windows/vvc-runtime.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1', 'scripts/check-vvc-native.ps1','windows/media-frame-rate.ps1','scripts/check-media-frame-rate.ps1','scripts/check-stream-plan-arguments.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -172,6 +174,9 @@ jobs:
             if($attempt -lt 3){Start-Sleep -Seconds ($attempt * 5)}
           }
           if(-not $ready){throw 'Cannot install FFmpeg after bounded retries; external package service failure, not an encoder regression.'}
+      - name: B16 independent real FFmpeg pre-encode trimmed auxiliary remux packet oracle
+        shell: powershell
+        run: ./scripts/check-trim-copy-preflight.ps1
       - name: Validate native Manual sample evidence receipts on real FFmpeg source
         shell: powershell
         run: ./scripts/check-manual-sample-evidence.ps1
