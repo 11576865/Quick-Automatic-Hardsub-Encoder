@@ -10,6 +10,7 @@ Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
 . (Join-Path $PSScriptRoot 'manual-sample-evidence.ps1')
 . (Join-Path $PSScriptRoot 'guided-rendered-sample-evidence.ps1')
+. (Join-Path $PSScriptRoot 'trim-copy-preflight-bridge.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
 . (Join-Path $PSScriptRoot 'compression-history.ps1')
@@ -2173,6 +2174,8 @@ function Handle-Request($Request) {
             Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($p))};return
         }
         if($Request.Method -eq 'POST' -and $path -eq '/api/source-budget'){Send-HttpJson $Request 200 (Get-SourceBudgetEvidence);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/trim-copy-preflight'){Send-HttpJson $Request 200 (Start-IsolatedTrimPreflight $body);return}
+        if($Request.Method -eq 'GET' -and $path -eq '/api/trim-copy-preflight'){Send-HttpJson $Request 200 (Get-IsolatedTrimPreflightStatus);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/probe'){Send-HttpJson $Request 200 (Get-ProbeMedia);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/import/bink2'){Send-HttpJson $Request 200 (Start-Bink2ImportJob);return}
         if($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)$'){Send-HttpJson $Request 200 (Get-Bink2ImportJobStatus $Matches[1]);return}
