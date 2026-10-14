@@ -1249,6 +1249,12 @@ function Assert-CurrentCopyBudgetEvidence($Evidence,[string]$Video) {
 }
 
 function Start-MediaTaskJob($Body) {
+    if($script:FlacPreflightJob -and (Get-FlacEncodePreflightStatus).state -eq 'running'){
+      throw 'Finish FLAC preflight before formal encoding.'
+    }
+    if($script:TrimPreflightJob -and (Get-IsolatedTrimPreflightStatus).state -eq 'running'){
+      throw 'Finish isolated copy preflight before formal encoding.'
+    }
     if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $request=$Body.request; $task=$request.task
@@ -1375,6 +1381,12 @@ function Resolve-GuidedBudgetPolicy($Request,$Profile) {
 }
 
 function Start-EncodeJob($Body) {
+    if($script:FlacPreflightJob -and (Get-FlacEncodePreflightStatus).state -eq 'running'){
+      throw 'Finish FLAC preflight before formal encoding.'
+    }
+    if($script:TrimPreflightJob -and (Get-IsolatedTrimPreflightStatus).state -eq 'running'){
+      throw 'Finish isolated copy preflight before formal encoding.'
+    }
     if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $video=Get-SelectedPath 'video'
