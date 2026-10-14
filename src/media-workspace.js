@@ -1352,11 +1352,12 @@ export function mountMediaWorkspace(hooks) {
       keyframes:timelineKeyframes,truncated:timelineKeyframesTruncated,
       evidenceCurrent:validEvidence});
     cutStrategyStatus.dataset.state=assessment.state;
-    cutStrategyStatus.textContent={
-      beginning:'源文件起点',unknown:'切点尚未知晓',
-      'predicted-aligned':'关键帧接近 IN（仅预测）',
-      'predicted-early':'可能提前 '+assessment.delta.toFixed(3)+' 秒（仅预测）'
-    }[assessment.state];
+    // Evaluate only the selected state: UNKNOWN has no numeric delta.
+    cutStrategyStatus.textContent=assessment.state==='predicted-early'
+      ? '可能提前 '+assessment.delta.toFixed(3)+' 秒（仅预测）'
+      : assessment.state==='predicted-aligned'
+        ? '关键帧接近 IN（仅预测）'
+        : assessment.state==='beginning'?'源文件起点':'切点尚未知晓';
     cutStrategyDescription.textContent=assessment.description+
       ' 本功能不会自动重编码；是否保留快速复制由你决定。';
     preferTranscodeTrim.disabled=busy||hooks.busy()||clipBatchRunning||
