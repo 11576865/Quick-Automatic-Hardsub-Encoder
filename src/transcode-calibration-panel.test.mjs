@@ -55,7 +55,8 @@ test('exact video-only calibration reads source directly for SSIM instead of wri
   const script=await readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8');
   assert.match(script,/function Get-SsimAgainstSource/);
   assert.match(script,/format=yuv420p,setpts=PTS-STARTPTS/);
-  assert.match(script,/if\(-not \[bool\]\$o\.sampleExact\)/);
+  assert.match(script,/\$exactManualEvidence=\[bool\]\$o\.sampleExact -and -not \[bool\]\$o\.withSubtitles -and \[bool\]\$o\.measureSsim/);
+  assert.match(script,/if\(\$exactManualEvidence\)\{\s*Get-SsimAgainstSource/);
   assert.match(script,/Get-SsimAgainstSource \$candidate \$video \$startText \$durationText/);
   assert.match(script,/Get-Ssim \$candidate \$reference \$work/);
 });
@@ -151,7 +152,8 @@ test('optional real Native x264/x265 comparison reuses one Manual chart and refu
  assert.match(optional,/hooks\.calibrationSample\(/);
  assert.match(optional,/createManualTranscodeSession\(/);
  assert.match(optional,/await hooks\.validate/);
- assert.match(optional,/samplePlanVersion:'manual-ui-paired-windows-2x2-v1'/);
+ assert.match(optional,/samplePlanVersion:'manual-ui-paired-risk-v2:'\+scenePlan\.fingerprint/);
+ assert.match(optional,/prepareManualPairedRiskPlan\(/);
  assert.match(optional,/manualCandidateSet\(activePolicy,geometry\)/);
  assert.match(optional,/maxTotalSamples:maxRequests/);
  assert.match(optional,/activePolicy===policy.value/);
