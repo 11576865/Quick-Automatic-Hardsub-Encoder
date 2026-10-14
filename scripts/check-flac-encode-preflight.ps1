@@ -60,6 +60,37 @@ try{
    throw ('FLAC receipt does not match independent encoded audio track '+$i)
   }
  }
+ # Compare real *finished video+FLAC+softsubtitle mux* packets to the
+ # isolated audio-only preflight. Record observed differences, no equivalence claim.
+ $subtitlePath=Join-Path $root 'soft-subtitle.srt'
+ $subtitleText='1'+[char]13+[char]10+'00:00:00,500 --> 00:00:01,500'+[char]13+[char]10+'B16 mux parity'+[char]13+[char]10
+ [IO.File]::WriteAllText($subtitlePath,$subtitleText,(New-Object Text.UTF8Encoding($false)))
+ $mixed=Join-Path $root 'final-mixed-audio-video-subtitle.mkv'
+ $muxOptions=@('-hide_banner','-nostdin','-loglevel','error','-y',
+  '-i',$source,'-ss','0.4','-t','2','-i',$source,'-i',$subtitlePath,
+  '-map','0:v:0','-map','0:a:0','-map','1:a:1','-map','2:s:0',
+  '-c:v','libx264','-preset','ultrafast',
+  '-c:a:0','flac','-c:a:1','flac','-ac:a:1','1','-ar:a:1','48000',
+  '-c:s','srt','-map_metadata','-1','-map_chapters','-1',
+  '-f','matroska',$mixed)
+ & $ffmpeg @muxOptions
+ if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $mixed -PathType Leaf)){
+  throw 'Actual mixed video, FLAC and subtitle fixture failed.'
+ }
+ $videos=@(& $ffprobe -v error -select_streams v:0 -show_packets -show_entries packet=size -of csv=p=0 $mixed)
+ $subPackets=@(& $ffprobe -v error -select_streams s:0 -show_packets -show_entries packet=size -of csv=p=0 $mixed)
+ if($videos.Count -lt 1 -or $subPackets.Count -lt 1){
+  throw 'Actual mixed mux missing video or subtitle packets.'
+ }
+ for($i=0;$i -lt 2;$i++){
+  $finalBytes=0L
+  foreach($line in @(& $ffprobe -v error -select_streams ('a:'+$i) -show_packets -show_entries packet=size -of csv=p=0 $mixed)){
+   if($line -match '^[0-9]+$'){$finalBytes += [long]$line}
+  }
+  if($finalBytes -le 0){throw ('Final mixed FLAC audio track '+$i+' has no packet evidence.')}
+  $delta=$finalBytes-[long]$receipt.tracks[$i].packetBytes
+  Write-Host ('B16 finished video+FLAC+subtitle mux track '+$i+' observed packet difference: '+$delta+' bytes (not a reusable budget certificate).')
+ }
  $bad=($req|ConvertTo-Json -Depth 9|ConvertFrom-Json)
  $bad.tracks[1].sourceOrdinal=0
  [IO.File]::WriteAllText($request,($bad|ConvertTo-Json -Depth 9 -Compress),
