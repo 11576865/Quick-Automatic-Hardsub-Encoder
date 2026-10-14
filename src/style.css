@@ -6210,8 +6210,7 @@ body.ui-phone { --mobile-gutter: 7px; }
    these state selectors must outrank those presentation rules so a hidden
    execution surface cannot be resurrected by responsive CSS. */
 body[data-media-operation="hardsub"][data-hardsub-strategy="manual"] #planCard,
-body[data-media-operation="hardsub"][data-hardsub-strategy="manual"] #encodeCard,
-body[data-media-operation="hardsub"][data-hardsub-strategy="guided"] #mediaWorkspace {
+body[data-media-operation="hardsub"][data-hardsub-strategy="manual"] #encodeCard {
   display: none !important;
 }
 
