@@ -157,3 +157,11 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - 共享 `media-workspace.js` 新增“实测 FLAC / 裁切复制成本”诊断入口。请求由 `auxiliary-preflight-request.js` 依据当前逐音轨计划及 IN/OUT 生成，只读展示包负载并且明确 partial/no-final-certificate 状态；`flac-encode-preflight.js` 与 `trim-copy-preflight.js` 均独立检查流映射与来源范围。**`media-planning.js::sizeBudget` 不变：未经最终混合任务证明的 FLAC 仍禁止进入严格体积预算，裁切复制继续完整源流保守预留。**
 - 单独的 `.github/workflows/windows-b16-runtime.yml` 能在 Draft PR 中运行 PowerShell 5.1 语法、两个 JS 测试集、真实双音轨 full/trim FLAC 和双音轨/软字幕复制的独立 FFprobe 对照，不启动全部 Windows/Android/VVC 矩阵。
 - 隔离模块测试 16/16 PASS，两个独立源码接线测试 PASS，`src/main.js` / `src/media-workspace.js` / `src/windows-native-client.js` 解析通过；本地 Linux FFmpeg 3 秒双 PCM 音轨真实 FLAC 命令得到 39300 和 27599 audio packet bytes。托管 Windows、浏览器和复杂实际音轨的实证仍 Pending。详细边界在 `docs/b16-flac-native-multistream-preencode-and-draft-windows-runtime-2026-10-14.md`。B16 和完整理论初版不能签收。
+
+
+## 2026-10-14 B16 第二阶段：真实 Windows 通过后的 Native 混合 FLAC 成品逐流审计
+
+- 已读取精确提交 `0bd2381c` 关联工作流：`Windows B16 runtime acceptance` run `38513613921`、`Test frontend`、`UIGS Evidence Coverage` 均成功。该 Windows B16 测试在实际 PowerShell 5.1 上运行 FFmpeg FLAC 双轨/裁切复制字幕而非仅做语法检查。
+- 对真正的 `compileTask` 发现两个证据链阻断：原 Native `Get-CompletedTrimPacketEvidence` 只在 `copiedTrimReserveBytes>0` 时运行，而质量/码率 FLAC 无 `sizePlan`；原 `outputPlan.subtitles` 是对象数组，但成品对照按数字数组查找，默认 `all` 也只是符号映射。
+- 本批将 FLAC 编码轨加入 Native 成品 packet audit 触发、展开字幕/附件完整来源轨号（不改变 FFmpeg 实际 `-map`）、修正对象映射和只读报告差值。新 `scripts/check-flac-native-http-lifecycle.ps1` 连接真实 Native localhost，验证 FLAC 预演状态、同源重新计量使旧证据失效，继而运行无 `sizePlan` 的正式质量模式双 FLAC 成品并独立复核两条音轨的包字节。
+- 17 项仓库实际 JS 模块行为检查通过；`docs/b16-native-flac-finished-mux-audit-and-stream-map-2026-10-14.md` 记录精确边界。新的 Native HTTP/完成成品专项 Windows CI 和浏览器互动尚 Pending，B16 全部及完整理论初版不签收；孤立 FLAC 观测仍不得自动下调正式体积预算。
