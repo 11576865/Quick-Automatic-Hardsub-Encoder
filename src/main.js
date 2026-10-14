@@ -6741,6 +6741,36 @@ mediaWorkspace=mountMediaWorkspace({
     if(!bridge?.__windowsNative||!bridge.measureSourceBudget)throw Error('当前仅 Windows Native 提供完整源流计量');
     return JSON.parse(await bridge.measureSourceBudget());
   },
+  auxiliaryPreflight: async request => {
+    const bridge=globalThis.NativeHardsub;
+    if(!bridge?.__windowsNative||!state.nativeInputProbe?.ok)
+      throw Error('逐流预编码观测仅支持已完成来源探测的 Windows Native');
+    const flac=request?.mode==='isolated-flac-encode';
+    const start=flac?bridge.startFlacEncodePreflight:bridge.startTrimCopyPreflight;
+    const poll=flac?bridge.getFlacEncodePreflightStatus:bridge.getTrimCopyPreflightStatus;
+    if(typeof start!=='function'||typeof poll!=='function')
+      throw Error('Windows Bridge 未更新为 B16 预编码计量版本');
+    const source=state.video;
+    const selected=JSON.parse(await bridge.readSelectedVideoInfo());
+    if(!selected.ok||!source||selected.size!==source.size)
+      throw Error('Windows 选中源与当前 UI 来源不一致');
+    const started=JSON.parse(await start.call(bridge,request));
+    if(!started.ok||started.state!=='running'||!started.jobId)
+      throw Error('预编码任务未能启动');
+    const deadline=Date.now()+11*60*1000;
+    while(Date.now()<deadline){
+      if(state.video!==source)throw Error('预编码进行时用户切换了来源');
+      await new Promise(resolve=>setTimeout(resolve,1200));
+      const observed=JSON.parse(await poll.call(bridge));
+      if(observed.jobId!==started.jobId&&observed.state!=='not-requested')
+        throw Error('异步回执与本次任务不一致');
+      if(observed.state==='running')continue;
+      if(observed.state!=='ready'||!observed.receipt)
+        throw Error('预编码没有形成有效收据：'+(observed.reason||observed.state));
+      return {receipt:observed.receipt,sourceSize:Number(selected.size)};
+    }
+    throw Error('独立预编码超出有界执行时间，请检查 Windows Bridge 状态');
+  },
   refreshCompletedAudit: async jobId => {
     const bridge=globalThis.NativeHardsub;
     if(!bridge?.__windowsNative || !bridge.getNativeJobStatus || !jobId)return null;
