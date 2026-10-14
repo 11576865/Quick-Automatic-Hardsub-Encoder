@@ -282,3 +282,16 @@ WU03 完结后新的任务不得自动按照追加测试队列推进；必须再
 **严格限制**：Chromium 检查没有运行 Windows Native FFmpeg、没有生成新的真实 CQ/VBR 对比样本，也没有测试复杂 ASS/音频的整片输出。已有不同工作流 Native 质量/预算证明不允许跨参考拼接成共同全球最优。`canCommit` 只是共用初步条件，不能替代既有事务性 `commitVerifiedGuidedBranch` / Manual codec 编译与采用。B04/B11/B12/B13/B14 和 P3 **局部闭环，不是整项完成**。
 
 方向状态：WU09 有界完成，WU10 须先从原始报告重锚，不得直接派生更多曲线或编码器研究。
+
+
+## 2026-10-15 WU-10 · P2/A02 原音轨 mustCopy 约束至真实 Windows Native 成品（有界验收）
+
+**产品增量**：WU-07 已让用户把来源 a:0 FLAC 指定为必须 Copy，但此前只有正式编译器和受控浏览器测试。WU-10 用同一个 source-bound `mustCopyAudioOrdinals:[0]` 合同，真实执行 Windows Native schema v4 视频转码 + FLAC 原包复制 + AAC 第二音轨重编码，再独立检验真实成品的压缩包内容。源码：`scripts/build-wu10-preserved-audio-task.mjs`、`scripts/check-wu10-native-audio-preservation.ps1` 和 `.github/workflows/windows-wu10-locked-audio-packets.yml`。
+
+**精确实测**：tested SHA `54ca3a4e2f7a8fd4222d7f31bca957577b98b539`；Windows Native CI https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38597508774 SUCCESS。一个真实 FFmpeg 生成的 3 秒 H264/FLAC/AAC MKV，官方编译器拒绝假来源身份及受保护轨转码；完成输出 MKV **121,709 B**，独立 FFprobe 读取源与输出 FLAC(a:0) 的 **141/141 个 compressed packet SHA-256 全部匹配**，第二轨 AAC 确实重编码。Frontend `38597508576`、UIGS Coverage `38597508191` 同 SHA SUCCESS。
+
+**状态严格保留**：A02/P2 只增加一个真实 Native 全长合成样本的受保护音轨 packet payload 等价证明。不能凭此证明裁切位置/PTS/DTS/音画同步、元数据 language/disposition、其他来源容器、ASS 字体、外部播放器或 Android/Web。B02/B05/B06/A02 仍是**部分实现**，不是整项完成。
+
+**独立阻断发现**：`src/engine.js` 的 Web FFmpegKitNext 核心须从 `public/vendor/ffmpeg-kit-next-web/dist/index.js` 导入，但仓库当前只有 `README.txt`，明确要求“locally built”，缺少实际 WebAssembly 包。WU-08 Web 多来源浏览器受控测试并不证明浏览器可真实编码两个媒体，须提供可重现安装/构建与浏览器实际文件验收后才可晋升 B21。该阻断保持 Pending，不自动从理论分母移除。
+
+详细记录：`docs/wu10-windows-locked-audio-packet-identity-2026-10-15.md`。WU10 结束后无自动 WU11；重新按两份原理论报告和 PR #104/#105 集成状态重锚。
