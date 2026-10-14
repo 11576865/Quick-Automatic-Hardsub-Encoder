@@ -93,9 +93,15 @@ async function main(){
   await page.locator('#taskPreferTranscodeTrim').click();
   if(await page.locator('[name="operation"]').inputValue()!=='transcode')
    throw Error('Opt-in transcoded trim did not select transcode');
-  if(await page.locator('[name="start"]').inputValue()!=='3.500'||
-     await page.locator('[name="end"]').inputValue()!=='5.500')
-    throw Error('Trim choice discarded requested IN/OUT');
+  const times=await page.evaluate(async()=>{
+    const {parseMediaTime}=await import('/src/media-time.js');
+    return {
+      start:parseMediaTime(document.querySelector('[name="start"]').value,{empty:0,label:'IN'}),
+      end:parseMediaTime(document.querySelector('[name="end"]').value,{label:'OUT'})
+    };
+  });
+  if(Math.abs(times.start-3.5)>.0005||Math.abs(times.end-5.5)>.0005)
+    throw Error('Trim choice discarded requested IN/OUT: '+JSON.stringify(times));
   if(!(await page.locator('#taskCopyStrategyPanel').isHidden()))
     throw Error('Copy-only decision panel remained open in transcode mode');
   await page.locator('#taskRun').click();
