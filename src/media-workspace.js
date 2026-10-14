@@ -151,7 +151,7 @@ export function mountMediaWorkspace(hooks) {
     <label>浏览器视频文件 <input id="taskBatchSources" type="file" multiple accept="video/*,.mkv,.mp4,.mov,.webm,.avi,.ts"></label>
     <div class="media-clip-queue-header-actions">
       <button type="button" id="taskQueueBatchSources" class="secondary">按当前设置加入所选来源</button>
-      <button type="button" id="taskClearBatchSources" class="secondary">清空未完成来源</button>
+      <button type="button" id="taskClearBatchSources" class="secondary">清空队列记录</button>
     </div>
     <ol id="taskMultiSourceList" aria-label="多来源独立输出任务"></ol>
     <p id="taskMultiSourceStatus" role="status">请先选择纯转码或 Stream Copy 设置和来源视频。</p>
@@ -415,7 +415,7 @@ export function mountMediaWorkspace(hooks) {
   const browserBatch=[],batchList=section.querySelector('#taskMultiSourceList');
   const browserBatchDone=row=>['saved','handed_off'].includes(row.state);
   const batchStatus=section.querySelector('#taskMultiSourceStatus');
-  let batchRunning=false,batchStop=false,batchCurrent=null,batchSavePending=null,batchSequence=0;
+  let batchRunning=false,batchStop=false,batchCurrent=null,batchSavePending=null;
   const browserBatchAvailable=()=>typeof hooks.activateBrowserBatchSource==='function'&&
     !!hooks.supportsBrowserSourceBatch?.();
   const syncBrowserBatch=()=>{
@@ -435,13 +435,13 @@ export function mountMediaWorkspace(hooks) {
       const action=document.createElement('button');action.type='button';action.className='secondary';
       action.dataset.browserBatchIndex=String(index);
       action.dataset.browserBatchAction=batchSavePending===entry?'retry-save':'remove';
-      action.textContent=batchSavePending===entry?'仅重试保存':'删除';
-      action.disabled=locked||!!batchSavePending&&batchSavePending!==entry||browserBatchDone(entry);
+      action.textContent=batchSavePending===entry?'仅重试保存':browserBatchDone(entry)?'移除完成记录':'删除';
+      action.disabled=locked||!!batchSavePending&&batchSavePending!==entry;
       row.append(info,action);batchList.append(row);
     });
     section.querySelector('#taskBatchSources').disabled=!available||locked||!!batchSavePending;
     section.querySelector('#taskQueueBatchSources').disabled=!available||locked||!!batchSavePending||browserBatch.length>=8;
-    section.querySelector('#taskClearBatchSources').disabled=locked||!!batchSavePending||!browserBatch.some(e=>!browserBatchDone(e));
+    section.querySelector('#taskClearBatchSources').disabled=locked||!!batchSavePending||!browserBatch.length;
     section.querySelector('#taskRunBatchSources').disabled=!available||locked||!!batchSavePending||!browserBatch.some(e=>!browserBatchDone(e));
     section.querySelector('#taskStopBatchSources').hidden=!batchRunning;
     section.querySelector('#taskStopBatchSources').disabled=!batchRunning||batchStop;
@@ -2211,7 +2211,12 @@ export function mountMediaWorkspace(hooks) {
       });
       const existing=new Set(browserBatch.map(x=>x.source.identity));
       if(items.some(x=>existing.has(x.identity)))throw Error('队列已有相同来源身份，不能混用文件对象');
-      for(const source of items)browserBatch.push({source,state:'queued',number:++batchSequence});
+      const used=new Set(browserBatch.map(row=>row.number));
+      for(const source of items){
+        const number=Array.from({length:8},(_,i)=>i+1).find(n=>!used.has(n));
+        if(!number)throw Error('队列中的输出编号已满');
+        used.add(number);browserBatch.push({source,state:'queued',number});
+      }
       section.querySelector('#taskBatchSources').value='';
       batchStatus.textContent='已加入 '+items.length+' 个用户选定文件，配置已冻结。执行时每个来源独立探测。';
     }catch(error){batchStatus.textContent='加入失败：'+error.message;}
@@ -2227,16 +2232,15 @@ export function mountMediaWorkspace(hooks) {
       if(row===batchSavePending)section.querySelector('#taskSave').click();
       return;
     }
-    if(batchSavePending||browserBatchDone(row))return;
+    if(batchSavePending)return;
     browserBatch.splice(browserBatch.indexOf(row),1);
-    batchStatus.textContent='已删除未完成来源；已保存的其它文件不变。';
+    batchStatus.textContent='已移除队列记录；已经移交浏览器的下载不受影响，文件落盘仍须自行确认。';
     syncBrowserBatch();
   });
   section.querySelector('#taskClearBatchSources').onclick=()=>{
     if(busy||hooks.busy()||batchRunning||batchSavePending)return;
-    for(let i=browserBatch.length-1;i>=0;i--)
-      if(!browserBatchDone(browserBatch[i]))browserBatch.splice(i,1);
-    batchStatus.textContent='未完成来源已清除，已保存条目保持不变。';
+    browserBatch.length=0;
+    batchStatus.textContent='队列记录已清空。此前移交给浏览器的下载不受影响，文件落盘仍须自行检查。';
     syncBrowserBatch();
   };
   const settlePendingBatchSave=saved=>{
