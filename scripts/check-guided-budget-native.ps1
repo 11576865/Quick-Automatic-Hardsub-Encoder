@@ -68,6 +68,29 @@ try {
   # Manual and guided jobs share the completed/export byte guard.
   $cost=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/source-budget" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 80
   if($cost.scope -ne 'full-source' -or @($cost.audioPacketBytes).Count -ne 2 -or [long]$cost.audioPacketBytes[0] -le 0){throw 'Native whole-source cost evidence is incomplete.'}
+  # B16 source-owned asynchronous API: an isolated remux of both audio tracks
+  # before encoding. The returned observation CANNOT replace full-source cost.
+  $request=@{request=@{
+    version=1;mode='isolated-trim-copy';start=0.4;end=1.4
+    outputFormat='matroska';audioOrdinals=@(0,1);subtitleOrdinals=@()
+  }}|ConvertTo-Json -Depth 8 -Compress
+  $startedTrim=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/trim-copy-preflight" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $request -TimeoutSec 15
+  if($startedTrim.state -ne 'running' -or -not $startedTrim.jobId){throw 'Native pre-encode observation did not launch.'}
+  $readyTrim=$null
+  for($i=0;$i -lt 150;$i++){
+    Start-Sleep -Milliseconds 200
+    $readyTrim=Invoke-RestMethod -Uri "$hostUrl/api/trim-copy-preflight" -Headers $headers -TimeoutSec 4
+    if($readyTrim.state -ne 'running'){break}
+  }
+  if($readyTrim.state -ne 'ready' -or
+     $readyTrim.receipt.scope -ne 'isolated-trim-copy-observation' -or
+     $readyTrim.receipt.observationOnly -ne $true -or
+     $readyTrim.receipt.canReplaceFullSourceBudget -ne $false -or
+     $readyTrim.receipt.measurementId -ne $cost.measurementId -or
+     @($readyTrim.receipt.audioPacketBytes).Count -ne 2){
+    throw 'Native single-flight B16 trim-copy preflight provenance/packet evidence not ready.'
+  }
+  Write-Host 'B16 Native asynchronous isolated trim-copy preflight produced source-scoped observation-only evidence.'
   $sum=0L
   foreach($line in (& ffprobe -v error -select_streams a:0 -show_packets -show_entries packet=size -of csv=p=0 $source)){$sum += [long]$line}
   if($sum -ne [long]$cost.audioPacketBytes[0]){throw 'Native packet-byte ledger differs from independent FFprobe scan.'}
