@@ -97,10 +97,16 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     start.disabled=running||hooks.busy()||disposed;
     policy.disabled=start.disabled;basis.disabled=start.disabled;
     exportCost.disabled=running||hooks.busy()||!eligible();
+    const shared=eligible()?evaluateSharedEvidenceDecision({
+      workflow:'manual',referenceScope:comparison?.referenceScope,
+      currentReferenceScope:comparison?.referenceScope,
+      frontier:currentFrontier(),targetBytes:selectedBytes,
+      budgetCoordinate:basis.value==='whole'?'whole-modeled':'video-only'
+    }):null;
     verify.hidden=!active;
-    verify.disabled=running||hooks.busy()||!eligible()||currentFrontier()?.evaluateTargetBytes(selectedBytes)?.status!=='within-evidence';
-    adopt.hidden=!hasCurrentVbr();
-    adopt.disabled=running||hooks.busy()||!hasCurrentVbr();
+    verify.disabled=running||hooks.busy()||!shared?.canVerifyCandidate;
+    adopt.hidden=!hasCurrentVbr()||!shared?.canRecommend;
+    adopt.disabled=running||hooks.busy()||!shared?.canRecommend||!hasCurrentVbr();
     stop.disabled=!running||aborted;
     back.disabled=running;
     back.hidden=!active;
