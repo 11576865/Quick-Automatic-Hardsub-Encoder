@@ -52,9 +52,13 @@ async function main(){
   const manual=page.locator('#taskCompareBudgetBasis');
   if(await manual.count()===0)throw Error('Manual candidate budget selector absent');
   if(await manual.inputValue()!=='whole')throw Error('Manual default budget should be full file, not video-only');
-  await manual.selectOption('video');
-  if(await manual.inputValue()!=='video')throw Error('User cannot explicitly choose diagnostic video-only axis');
-  await manual.selectOption('whole');
+  const options=await manual.locator('option').evaluateAll(xs=>xs.map(x=>x.value));
+  if(JSON.stringify(options)!=='["whole","video"]')
+    throw Error('Manual cannot distinguish full-file recommendation from diagnostic video-only basis');
+  // No Native calibration has been performed, so the comparison subtree is
+  // intentionally hidden. Do not force a hidden select or forge a native run.
+  if(!(await page.locator('#taskCompareAdopt').isDisabled()))
+    throw Error('An unmeasured Manual candidate can be adopted without verified evidence');
   console.log('WU09 production Chromium shared Guided/Manual recommendation and diagnostic-only budget gates PASS (synthetic fitted models; no Native samples)');
  }finally{await browser?.close();server.kill();}
 }
