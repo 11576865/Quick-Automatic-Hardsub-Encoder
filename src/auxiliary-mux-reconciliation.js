@@ -13,6 +13,16 @@ export function reconcileAuxiliaryMuxObservation({
  if(!completed?.verified||completed.outputPacketEvidence?.version!==1||
     completed.outputPacketEvidence.scope!=='completed-artifact')
   return fail('final-mixed-mux-packet-audit-unavailable');
+ const final=completed.outputPacketEvidence;
+ // These three Native-owned fields bind a packet scan to the SAME staged
+ // output/job reported as verified, not a numerically similar earlier file.
+ if(!bytes(completed.outputBytes)||completed.outputBytes===0||
+    final.artifactBytes!==completed.outputBytes||
+    typeof completed.jobId!=='string'||!completed.jobId||
+    final.artifactJobId!==completed.jobId||
+    typeof final.artifactWriteTicks!=='string'||
+    !/^[0-9]{1,20}$/.test(final.artifactWriteTicks))
+  return fail('finished-artifact-job-or-stat-mismatch');
  if(task.budgetEvidence?.version!==1||task.budgetEvidence.scope!=='full-source'||
     task.budgetEvidence.measurementId!==preflight.measurementId||
     preflight.receipt.measurementId!==preflight.measurementId||
@@ -30,7 +40,9 @@ export function reconcileAuxiliaryMuxObservation({
   return fail('preflight-source-or-range-mismatch');
  const output=completed.outputPacketEvidence;
  const audio=Array.isArray(task.outputPlan?.audio)?task.outputPlan.audio:null;
- if(!audio||!Array.isArray(output.audioPacketBytes))
+ if(!audio||!Array.isArray(output.audioPacketBytes)||
+    !audio.every((track,i)=>track?.outputOrdinal===i)&&audio.length>0||
+    output.audioPacketBytes.length!==audio.length)
   return fail('final-audio-stream-map-missing');
  const request=preflight.request,receipt=preflight.receipt,rows=[];
  if(request.mode==='isolated-flac-encode'){
