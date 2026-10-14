@@ -44,18 +44,9 @@ export class EncoderEngine {
   async stageFiles(videoFile, assFile, fontFiles = []) {
     this.assertReady();
     const previousVideo = this.sourceVideoFile;
-    const sameVideo = !!(
-      previousVideo &&
-      videoFile &&
-      (
-        previousVideo === videoFile ||
-        (
-          previousVideo.name === videoFile.name &&
-          Number(previousVideo.size || 0) === Number(videoFile.size || 0) &&
-          Number(previousVideo.lastModified || 0) === Number(videoFile.lastModified || 0)
-        )
-      )
-    );
+    // Only the exact same immutable File object can reuse mounted bytes.
+    // Name, size and lastModified are not proof of equal media content.
+    const sameVideo = !!(previousVideo && videoFile && previousVideo === videoFile);
 
     this.sourceVideoFile = videoFile;
     this.sourceAssFile = assFile;
