@@ -91,6 +91,35 @@ try{
   $delta=$finalBytes-[long]$receipt.tracks[$i].packetBytes
   Write-Host ('B16 finished video+FLAC+subtitle mux track '+$i+' observed packet difference: '+$delta+' bytes (not a reusable budget certificate).')
  }
+ # The isolated FFprobe worker must also account for an actual finished
+ # video + dual FLAC + soft subtitle Matroska artifact, not only audio previews.
+ $mixedAudit=Join-Path $root 'actual-mixed-packet-ledger.json'
+ $auditOptions=@('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
+   '-File','./windows/trim-packet-audit.ps1',
+   '-Ffprobe',$ffprobe,'-OutputFile',$mixed,'-ReceiptFile',$mixedAudit)
+ & powershell.exe @auditOptions
+ if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $mixedAudit -PathType Leaf)){
+  throw 'Independent mixed video/audio/subtitle packet worker did not complete.'
+ }
+ $packetLedger=Get-Content -LiteralPath $mixedAudit -Raw|ConvertFrom-Json
+ if(@($packetLedger.videoPacketBytes).Count -ne 1 -or
+    @($packetLedger.audioPacketBytes).Count -ne 2 -or
+    @($packetLedger.subtitlePacketBytes).Count -ne 1){
+  throw 'Actual mixed mux packet worker omitted or invented a stream.'
+ }
+ $codecBytes=0L
+ foreach($kind in @('videoPacketBytes','audioPacketBytes','subtitlePacketBytes')){
+  foreach($amount in @($packetLedger.$kind)){
+   if($null -eq $amount -or [long]$amount -le 0){
+    throw ('Actual mixed mux packet ledger incomplete: '+$kind)
+   }
+   $codecBytes += [long]$amount
+  }
+ }
+ $realBytes=[long](Get-Item -LiteralPath $mixed).Length
+ if($codecBytes -gt $realBytes){throw 'Observed codec packet bytes exceed actual completed container.'}
+ Write-Host ('B16 independently observed video/audio/subtitle payload '+$codecBytes+
+   ' bytes; mixed artifact residual '+($realBytes-$codecBytes)+' bytes includes all other data and mux overhead.')
  $bad=($req|ConvertTo-Json -Depth 9|ConvertFrom-Json)
  $bad.tracks[1].sourceOrdinal=0
  [IO.File]::WriteAllText($request,($bad|ConvertTo-Json -Depth 9 -Compress),
