@@ -9,9 +9,9 @@ param(
 $ErrorActionPreference='Stop'
 function Deny([string]$reason){throw $reason}
 function Q([string]$v){return '"'+$v.Replace('"','\"')+'"'}
-function RunBounded([string]$tool,[string]$args,[int]$maxSeconds,[string]$guardFile=''){
+function RunBounded([string]$tool,[string]$Arguments,[int]$maxSeconds,[string]$guardFile=''){
  $p=New-Object Diagnostics.Process
- $p.StartInfo.FileName=$tool;$p.StartInfo.Arguments=$args
+ $p.StartInfo.FileName=$tool;$p.StartInfo.Arguments=$Arguments
  $p.StartInfo.UseShellExecute=$false;$p.StartInfo.CreateNoWindow=$true
  $p.StartInfo.RedirectStandardOutput=$true;$p.StartInfo.RedirectStandardError=$true
  try{
