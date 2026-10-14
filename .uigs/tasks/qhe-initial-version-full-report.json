@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU05_B09_actual_completed_cut_first_timestamps_hosted_accepted",
-  "current_bounded_work_unit": "WU05 bounded Windows hosted PASS at cfed326: optional read-only actual output first decoded video PTS, first video packet PTS/DTS, every audio first packet PTS/DTS and clock-offset warning in UI/report. Real Windows B-frame Native v4 copy trim 2.400–4.800 produced output first video2.000, packet2.083/2.000, audio0.005; 58863 bytes; independent FFprobe compared output first frame. Source packet identity, actual source first-frame mapping, final end and sync NOT proven. WU01 Windows handoff and full B21 multi-source still open.",
+  "status": "incomplete_full_report_WU06_P1_read_only_domain_projection_authorized",
+  "current_bounded_work_unit": "WU06 P1: show/source-bound read-only domain projection of schema-v4 SourceAsset, per-stream action, compiler-derived UserIntent, OutputPlan and executable args; no second authority; field acceptance pending.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -257,12 +257,12 @@
     "WU04 B08 real interface ability: native copy-cut diagnosis and user-selectable reencode trimming tested with real Chromium and official v4 compiler task at 5019747 run 38562833192; WU04 scope hosted accepted, frame-accurate PTS/DTS and real VFR/B-frame full source still open.",
     "WU05 reanchored from original R19§06/R24§09 first/actual/PTS-DTS/output cut contract; explicitly limited to actual completed-asset timing receipt, no new video codec nor generic test expansion.",
     "WU05 bounded output timeline product slice submitted: read-only FFprobe first decoded output frame and packet PTS/DTS with job bytes/stamp, UI inspect/re-export JSON; explicit source packet mapping unverified.",
-    "WU05 B09/A04 product-level FIRST output timestamp observation hosted PASSED, exact-head cfed326: read-only Native FFprobe + Chrome click + report + clock-gap human review. Actual 2.0s output first video vs .005s first audio is not silently marked aligned; source time mapping and full AV sync pending."
+    "WU05 B09/A04 product-level FIRST output timestamp observation hosted PASSED, exact-head cfed326: read-only Native FFprobe + Chrome click + report + clock-gap human review. Actual 2.0s output first video vs .005s first audio is not silently marked aligned; source time mapping and full AV sync pending.",
+    "WU06 root reanchor: selected original R19 §03/§16 P1 and R24 §05 read-only domain projection. Existing task.outputPlan is partial; next unit must expose source, intent, output provenance and executable parameter trace without replacing compiler."
   ],
   "next_units": [
-    "NO WU06 AUTHORIZED. Re-read full R19/R24 requirement ledger before a new unit; avoid auto-promoting output timestamp discoveries.",
-    "Open A04/B09: actual copiedPacketRange packet SHA-256 source alignment; independent last frame/packet PTS/DTS; VFR and B-frame offset with realistic mixed MKV audio presentation/playback; first-clock gap needs full context.",
-    "Open B21: multi-source batch, WU01 same-task Windows Guided→Manual, remaining project B01–B25 / A01–A10, PR #104/#105 integration and field devices."
+    "WU06 authorized P1 domain read-only source/intent/stream/output/FFmpeg projection; implement code + exact-head evidence.",
+    "No WU07 authorized. B21 multi-source batch, complex source/field, A01–A10 and WU01 native handoff remain open; no automatic test expansion."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -335,10 +335,10 @@
     "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
-    "current_authorized_index": 4,
+    "current_authorized_index": 5,
     "completed_authorized_units": 2,
-    "review_status": "WU05_B09_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEW_UNIT",
-    "executed_authorized_units_since_reanchor": 1
+    "review_status": "ROOT_REPORT_REANCHORED_WU06_P1_READ_ONLY_PROJECTION_AUTHORIZED",
+    "executed_authorized_units_since_reanchor": 0
   },
   "authorized_next_units": [
     {
@@ -418,6 +418,19 @@
       "source": "R19 §06 pp6–7 explicit requestedIn/Out, actualFirstPresentation, copiedPacketRange, audioTimeMapping, verificationStatus; R24 §09 pp12–13 explicitly distinguishes keyframe, PTS/DTS, VFR and audio priming",
       "scope": "Windows Native completed, source-bound copy-trim job only. Read-only optional report; expose real output video decoded first PTS, packet PTS/DTS and audio first packets. No fabricated source-matched packet range, output end or universal sync correctness. No new codec or smart cut.",
       "exit": "Native localhost endpoint + production UI optional evidence receipt; first-packet PTS/DTS and actual decoded presentation from FFprobe, output identity verified, bounded failures -> unavailable; JS contract tests plus real hosted fixture and if feasible Windows bridge. Real VFR/B-frame and per-packet source identity remain separately open."
+    },
+    {
+      "id": "WU-06",
+      "requirement_ids": [
+        "B02",
+        "B20",
+        "B24"
+      ],
+      "status": "AUTHORIZED_NOT_STARTED",
+      "title": "Read-only SourceAsset/SourceStream/UserIntent/OutputPlan to executable schema-v4 delivery contract projection",
+      "source": "R19 §03 p4, §16 P1; R24 §05 p8: project old v4 compiler into read-only domain objects, do not migrate state or change executable behavior before parity",
+      "scope": "Existing schema-v4 compiler remains sole task authority. Derive read-only trace of source streams, compiler-derived user operations and stream decisions, typed OutputPlan, actual command map/filter facts and unknown verification. Present in existing task review without new config ownership or run gate.",
+      "exit": "Unit tests across all three operations incl mixed MKV, complete source plan → immutable projection, proof original task and commands unchanged; real Chromium source-bound UI acceptance; exact-head CI; no claims of full B02/ImmutableJobPlan/ArtifactRecord certification."
     }
   ],
   "historical_next_units": {
