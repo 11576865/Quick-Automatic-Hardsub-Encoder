@@ -75,18 +75,18 @@ try{
  $culture=[Globalization.CultureInfo]::InvariantCulture
  $begin=$start.ToString('0.######',$culture)
  $length=($end-$start).ToString('0.######',$culture)
- $args=@('-hide_banner','-nostdin','-loglevel','error','-y','-i',(Q $source.FullName))
- if($hasTrim){$args+=@('-ss',$begin,'-t',$length,'-i',(Q $source.FullName))}
+ $muxOptions=@('-hide_banner','-nostdin','-loglevel','error','-y','-i',(Q $source.FullName))
+ if($hasTrim){$muxOptions+=@('-ss',$begin,'-t',$length,'-i',(Q $source.FullName))}
  for($i=0;$i -lt $tracks.Count;$i++){
   $t=$tracks[$i]
-  $args+=@('-map',($(if($t.range -eq 'trim'){'1:a:'}else{'0:a:'})+[int]$t.sourceOrdinal))
-  $args+=@('-c:a:'+$i,'flac')
-  if($null -ne $t.channels){$args+=@('-ac:a:'+$i,[string]$t.channels)}
-  if($null -ne $t.sampleRate){$args+=@('-ar:a:'+$i,[string]$t.sampleRate)}
+  $muxOptions+=@('-map',($(if($t.range -eq 'trim'){'1:a:'}else{'0:a:'})+[int]$t.sourceOrdinal))
+  $muxOptions+=@('-c:a:'+$i,'flac')
+  if($null -ne $t.channels){$muxOptions+=@('-ac:a:'+$i,[string]$t.channels)}
+  if($null -ne $t.sampleRate){$muxOptions+=@('-ar:a:'+$i,[string]$t.sampleRate)}
  }
- $args+=@('-vn','-sn','-dn','-map_metadata','-1','-map_chapters','-1',
+ $muxOptions+=@('-vn','-sn','-dn','-map_metadata','-1','-map_chapters','-1',
    '-f','matroska',(Q $out))
- [void](RunBounded $Ffmpeg ($args -join ' ') 360 $out)
+ [void](RunBounded $Ffmpeg ($muxOptions -join ' ') 360 $out)
  if(-not(Test-Path -LiteralPath $out -PathType Leaf)){Deny 'FLAC remux has no output.'}
  if((Get-Item -LiteralPath $out).Length -gt 1073741824){Deny 'Isolated FLAC output exceeds bounded 1 GiB temporary limit.'}
  $worker=Join-Path $PSScriptRoot 'trim-packet-audit.ps1'
