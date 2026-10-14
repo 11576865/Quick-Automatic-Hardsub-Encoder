@@ -9,8 +9,11 @@ export function buildAuxiliaryPreflightRequest({settings,media,budgetEvidence}={
     budgetEvidence?.version!==1||budgetEvidence?.scope!=='full-source'||
     !budgetEvidence.measurementId)
   return {ok:false,reason:'missing-source-measurement'};
- const start=parseMediaTime(settings.start,{empty:0,max:duration,label:'开始时间'});
- const end=parseMediaTime(settings.end,{empty:duration,max:duration,label:'结束时间'});
+ let start,end;
+ try{
+  start=parseMediaTime(settings.start,{empty:0,max:duration,label:'开始时间'});
+  end=parseMediaTime(settings.end,{empty:duration,max:duration,label:'结束时间'});
+ }catch(error){return {ok:false,reason:'invalid-clip-window',detail:String(error.message||error)};}
  if(!(end>start))return {ok:false,reason:'invalid-clip-window'};
  let selected;
  try{selected=normalizeAudioPlan(settings.audioPlan,media,settings.audioRange||'trim');}
