@@ -1,7 +1,7 @@
 {
   "goal": "QHE theoretical initial-version basic implementation sprint: integrate existing PR #104/#105 code and verify a real Windows Native end-to-end flow in ten bounded rounds by target 2026-10-18, preserving full R19/R24 scope.",
-  "status": "DESIGN_COMMITTED_AWAITING_OWNER_SPEC_REVIEW",
-  "current_bounded_work_unit": "Round 1 / architecture baseline and integration design; no product implementation yet",
+  "status": "NON_AUTHORITATIVE_DESIGN_CHECKPOINT_REANCHORED_TO_PR105",
+  "current_bounded_work_unit": "Superseded independent planning thread. Continuing existing PR #105 and authoritative .uigs/tasks/qhe-initial-version-full-report.json at WU11.",
   "scope_authority": [
     "R19 full 2026-10-12 architecture report (P0-P5, A01-A10)",
     "R24 full 2026-10-13 positioning/decision report",
@@ -19,7 +19,7 @@
   "pr": null,
   "spec": "docs/superpowers/specs/2026-10-15-qhe-theory-v1-10round-integration-design.md",
   "implementation_plan": null,
-  "latest_durable_commit": "f6e0694674e32d67b3e4bab4bac61137b7110fa8",
+  "latest_durable_commit": "e70464999b2963902a6d496dd77bc28c4f42bd6c",
   "completed_units": [
     {
       "round": 1,
@@ -27,20 +27,10 @@
       "work": "Current main/PR base SHA audit; ten-round integration spec committed and verified; no source change, no new CI."
     }
   ],
-  "authorized_next_units": [
-    {
-      "name": "Owner review of saved design spec",
-      "status": "PENDING_OWNER_REVIEW"
-    },
-    {
-      "name": "Write and review exact-file implementation plan after design approval",
-      "status": "BLOCKED_BY_SPEC_REVIEW"
-    }
-  ],
+  "authorized_next_units": [],
   "next_units": [
-    "Spec review and approval",
-    "Prepare exact-file, testable implementation plan",
-    "Start code integration only after plan review, keeping separate R19/R24 full-version acceptance"
+    "Resume from the existing PR #105 task record at WU11; do not execute separate plan",
+    "Keep this design artifact as historical reference only"
   ],
   "external_validation_states": {
     "current_branch_ci": "NOT_TRIGGERED_BY_DOCS_ONLY",
@@ -50,10 +40,10 @@
     "past_pr105_ci": "PARTIAL_SUCCESS_WITH_SKIPPED_WORKFLOWS_NOT_TRANSFERRED"
   },
   "blockers": [
-    "User review/approval of committed architecture design needed before coding stage",
     "PR #105 stacked on unmerged PR #104; main is behind",
     "Web FFmpegKitNext vendor core missing from repository",
-    "Field validation needs actual physical device/user media; no assumption of presence"
+    "Field validation needs actual physical device/user media; no assumption of presence",
+    "Do not treat this side branch or task as product authority; see original PR #105 root task updated 2026-10-15."
   ],
   "acceptance_states": {
     "basic_model": "NOT_COMPLETE",
