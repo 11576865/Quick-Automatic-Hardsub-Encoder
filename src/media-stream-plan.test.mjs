@@ -43,6 +43,19 @@ test('explicit auxiliary selection preserves only requested subtitles and attach
  assert.ok(t.outputArgs.includes('0:t:0'));assert.equal(t.outputPlan.subtitles[0].sourceOrdinal,1);
  assert.throws(()=>build({keepSubtitles:true,subtitleStreams:'2'}));
 });
+test('all auxiliary tracks compile into explicit source/output identities while keeping optional FFmpeg maps',()=>{
+ const t=build({keepSubtitles:true,keepAttachments:true});
+ assert.deepEqual(t.outputPlan.subtitles,[
+  {sourceOrdinal:0,action:'copy'},{sourceOrdinal:1,action:'copy'}
+ ]);
+ assert.deepEqual(t.outputPlan.attachments,[
+  {sourceOrdinal:0,action:'copy'},{sourceOrdinal:1,action:'copy'}
+ ]);
+ assert.ok(t.outputArgs.includes('0:s?'));
+ assert.ok(t.outputArgs.includes('0:t?'));
+ const unknown=compileTask({...raw,keepSubtitles:true},{...media,subtitleTracks:undefined,subtitleStreams:undefined});
+ assert.deepEqual(unknown.outputPlan.subtitles,[]);
+});
 test('container and size decisions follow per-track actions rather than legacy global mode',()=>{
  assert.throws(()=>build({audio:'aac',outputContainer:'mp4',audioPlan:[{sourceOrdinal:0,action:'copy'}]}),/flac/);
  assert.doesNotThrow(()=>build({audio:'copy',outputContainer:'mp4',audioPlan:[{sourceOrdinal:0,action:'aac',bitrate:96000}]}));
