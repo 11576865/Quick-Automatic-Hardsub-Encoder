@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU08_B21_web_multisource_queue_authorized",
-  "current_bounded_work_unit": "WU08 browser multi-source queue of distinct selected media files using frozen settings -> current media probe -> authority v4 compile/validate -> sequential run/independent save. Native and multi-source ASS out of scope.",
+  "status": "incomplete_full_report_WU08_B21_browser_multisource_queue_hosted_accepted",
+  "current_bounded_work_unit": "WU08 B21 bounded production Web multi-source File queue hosted PASS: distinct File source identity; 2 files freeze separate user settings, activate/probe separately, compile official schema v4/run & independent download handoff, second save fails then retries without reencode, clear completed records and queue next sources. Real browser WebAssembly FFmpeg outputs and Windows/Android full B21 not yet verified.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -263,15 +263,17 @@
     "WU07 owner-report reanchor: R19 P2 and R24 UserIntent must-preserve original stream. Prior P1 only inferred intent; moving ONE user-approved audio stream lock into the existing v4 compiler, not a full schema migration.",
     "WU07 P2 implemented source-bound user must-copy lock in existing per-track UI, official v4 compiler rejects conflicting drop or reencode, and output review displays lock; CI pending.",
     "WU07 source-bound owner-approved must-copy audio contract implemented and Chromium hosted accepted at 38d4b04: source FLAC copy + AAC reencode allowed, locked FLAC drop/AAC/Opus prohibited by authoritative compileTask, source drift and manual reset carefully handled. Physical output packet hash not inferred.",
-    "Root re-anchor for WU08: P5 B21 genuine multiple-source gap selected, after seven bounded units; preserve root R19/R24 and no assumptions that WU03 same-source matrix fulfills it."
+    "Root re-anchor for WU08: P5 B21 genuine multiple-source gap selected, after seven bounded units; preserve root R19/R24 and no assumptions that WU03 same-source matrix fulfills it.",
+    "WU08 B21 genuine new multiple-File source Web queue bounded hosted PASS at 2b42a49: user 2 Files -> per-source activation & probe/official compiled v4 controlled processing -> distinct handoff, rollback-safe save retry; continued batch reuse. No false filesystem saved claim. Whole B21 remains open."
   ],
   "next_units": [
-    "WU08 AUTHORIZED: browser multi-source copy/transcode queue, source-specific run/save and blocking source drift; no alternative FFmpeg executor.",
-    "No WU09 automatic authorization; P3 quality/candidate decision convergence, native multi-source/ASS, cross-platform and full B21 remain open."
+    "NO WU09 AUTOMATICALLY AUTHORIZED. Revisit R19/R24 full requirement map; prioritize real-product evidence/integration and remaining P3 decision convergence rather than repeated incidental tests.",
+    "Open B21: actual WebAssembly two-input encoded output files and browser permission/disk check; Windows Native multi-file paths and Android SAF; source-specific ASS/fonts and per-stream must-preserve; multiple outputs per source inside full matrix.",
+    "Open B25: PR #104/#105 layered Draft integration to main and device playback; P3 unified Guided/Manual evidence/candidate evaluator; A01–A10 real media/device validation."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "38d4b04e8b1edfac99dc3116f4931c310b075d08",
+  "latest_durable_commit": "2b42a49e94ab3fbec991451807791a5b113a4892",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -309,7 +311,8 @@
     "windows_b16_after_wu04": "External Chocolatey feed 503 prevented FFmpeg binary availability in most recent Windows B16; not product B16 acceptance failure at media test stage.",
     "wu05_cut_timeline": "PASS exact-head cfed326a44412ba9a7f140ae4b39b526c4c3975b: Windows run 38568220073, Chromium/model run 38568219698, Test frontend 38568219578, UIGS Evidence Coverage 38568219823. Windows source H264 Bframes + AAC, formal Copy Trim IN2.4 OUT4.8, actual output decoded first video PTS2.000, video packet PTS/DTS2.083/2.000, audio first PTS0.005; output 58863 B. Large first-clock gap flagged for review; NOT sync verdict, NOT source packet hash or end-frame acceptance.",
     "wu06_domain_projection": "Exact-head 0124946d6939f73a285dcf609a6a973924d44219: new WU06 Node real compiled v4 Hardsub/Transcode/Copy+source stream coverage and real Chromium source-bound inspector SUCCESS run 38575999722; frontend SUCCESS 38575999605; UIGS Evidence Coverage SUCCESS 38575999820. No real Native/Android/Web domain owner parity, no additional runtime authority, no ArtifactRecord field evidence.",
-    "wu07_audio_lock": "Exact-head 38d4b04e8b1edfac99dc3116f4931c310b075d08: WU07 official v4 audio lock unit+production Chromium PASS run 38580653413; frontend PASS 38580653495; UIGS Coverage PASS 38580653198. Real Windows/Android/Web copy packet identity and actual file/field P2 still open."
+    "wu07_audio_lock": "Exact-head 38d4b04e8b1edfac99dc3116f4931c310b075d08: WU07 official v4 audio lock unit+production Chromium PASS run 38580653413; frontend PASS 38580653495; UIGS Coverage PASS 38580653198. Real Windows/Android/Web copy packet identity and actual file/field P2 still open.",
+    "wu08_multi_source": "Exact code/test SHA 2b42a49e94ab3fbec991451807791a5b113a4892: production Playwright Chromium Web File 2-source queue, frozen preferences per file, source-specific v4 compiler and controlled execution, save failure preserved artifact/no reencode retry, clearing completed records and enqueuing next 2 files PASS run 38588049167; Test frontend PASS 38588049084; UIGS Evidence Coverage PASS 38588049025. Web WASM actual 2-file media artifacts, browser downloaded file disk writes, Native Windows/Android and multi-source ASS unverified."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -343,9 +346,9 @@
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
     "current_authorized_index": 7,
-    "completed_authorized_units": 4,
-    "review_status": "ROOT_REPORT_REANCHORED_WU08_WEB_MULTI_SOURCE_BATCH_AUTHORIZED",
-    "executed_authorized_units_since_reanchor": 0
+    "completed_authorized_units": 5,
+    "review_status": "WU08_B21_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEXT_UNIT",
+    "executed_authorized_units_since_reanchor": 1
   },
   "authorized_next_units": [
     {
@@ -461,7 +464,7 @@
         "B02",
         "B24"
       ],
-      "status": "AUTHORIZED_NOT_STARTED",
+      "status": "HOSTED_ACCEPTED_REAL_CHROMIUM_WEB_QUEUE_CONTROLLED_ENCODE_NATIVE_AND_MEDIA_PENDING",
       "source": "R19 §16 P5 批次矩阵；R24 §22 QHE 多个独立转码/烧录/剪切任务；原 B21 追踪矩阵",
       "scope": "Browser Web backend bounded: user selects 2–8 File objects, queue freezes current copy/transcode settings per selected source, reactivates exact File object, probes real media and uses ONLY existing compileTask/validate/run/save. Fail on stale source/unsupported locked audio/budget/hardsub instead of silently changing intent; stop on error, preserve successful files and save-retry. No native backend, embedded ASS, multi-source hardsub or shared quality certificate.",
       "exit": "Unit source/queue validation, real production Chromium selection+distinct-source compiled runs+failure and save retry, frontend CI, any actual media encode evidence explicitly separate. Not full B21 Windows/Android/multi-source burn-in or release."
