@@ -30,3 +30,10 @@
 ## 未关闭的需求
 
 证明完整混合任务与预演的实际 FFmpeg seek/packet 选择契约，独立认证同一实际任务整体输出成本（不仅辅助流包负载），再决定何种 FLAC 成本可以进入严格体积预算。还需要真实长片 VFR、多字幕/附件、声道格式、异常/缓存/跨进程重启、Android/Web 计量和最终交付验收。
+
+
+## 精确 Windows 下一轮验收：编码已成功，负向测试进程管理仍需修复
+
+上一批修复提交 `a38fc79187d81f2c90d1edbb0675e6080b7391d2` 在 `Windows B16 runtime acceptance` 运行 `38513290671` 中验证了 FFprobe 输入文件参数问题已解除。其真实 Windows FLAC 工作器、独立包扫描与视频 + 双 FLAC + 一条软字幕的最终 Matroska 封装均成功；两条音轨在这一 **Windows 3 秒测试源** 中预演/成品包负载差值均为 0。Linux 与 Windows 在本案例观察一致，但无法泛化至其它媒体。
+
+该工作流仍显示 FAILURE，是因为测试脚本故意传入重复音轨索引以确认拒绝，子进程如期输出 `Invalid or repeated FLAC source stream`，而父脚本设置 `$ErrorActionPreference='Stop'`，Windows PowerShell 5.1 将重定向的 Native stderr 升级为父脚本终止异常，未能执行期望的负向断言。此处不是正式编码器失败。修复 `scripts/check-flac-encode-preflight.ps1` 和 `scripts/check-trim-copy-preflight.ps1`：由有界 `Start-Process` 独立启动负向子任务，stdout/stderr 分文件接收，等待最多 15 秒，检查非零退出码且不能产生回执；父脚本不再把预期异常误判为产品运行异常。新精确头部的 Windows 正/负向测试仍 Pending。
