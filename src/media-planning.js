@@ -1,5 +1,6 @@
 import { parseMediaTime } from './media-time.js';
 import { auditTrimCopyPayload } from './trim-copy-audit.js';
+import {summarizeCompletedMuxBytes} from './completed-mux-byte-ledger.js';
 // Size budgets are estimates, never a reason to truncate or delete a valid movie.
 export const SIZE_UNITS = { MB: 1000000, GB: 1000000000, MiB: 1048576, GiB: 1073741824 };
 export function sampleQualityTrial(task,adjustment) {
@@ -93,6 +94,8 @@ export function outputReport(task, result, elapsedSeconds) {
     ? auditTrimCopyPayload(task,result.outputPacketEvidence) : null;
   return {version:1, operation:task.operation, encoder:task.encoder || 'copy', parameters:task,
     trimCopyAudit,
+    completedMuxByteLedger:result.verified===true && result.outputPacketEvidence
+      ?summarizeCompletedMuxBytes({task,result}):null,
     trimCopyAuditState:trimCopyAudit?'ready':(result.outputPacketAuditState??null),
     outputBytes:Number.isFinite(bytes) ? bytes : null, outputDuration:duration, elapsedSeconds,
     actualStart:result.actualStart ?? task.start, targetBytes:limit ?? null,
