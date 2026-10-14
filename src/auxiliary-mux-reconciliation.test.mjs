@@ -22,6 +22,7 @@ const base=()=>({
    tracks:[{sourceOrdinal:0,range:'full',channels:null,sampleRate:null},
     {sourceOrdinal:1,range:'trim',channels:1,sampleRate:48000}]},
   receipt:{version:1,scope:'isolated-flac-encode-observation',
+   method:'ffmpeg-flac-full-input-trim-input-independent-ffprobe-v1',
    measurementId:ledger,canReplaceFormalBudget:false,canCertifyFinalMux:false,
    sourceLength:123456,sourceWriteTicks:'638960827860000000',
    start:.4,end:2.4,outputFormat:'matroska',
@@ -130,6 +131,7 @@ test('copy source/track binding includes preserved soft subtitle and exact outpu
  x.preflight.request={version:1,mode:'isolated-trim-copy',start:.4,end:2.4,
   audioOrdinals:[1],subtitleOrdinals:[0]};
  x.preflight.receipt={version:1,scope:'isolated-trim-copy-observation',
+  method:'ffmpeg-isolated-auxiliary-copy-remux-then-independent-ffprobe-v1',
   measurementId:ledger,canReplaceFullSourceBudget:false,
   sourceLength:123456,sourceWriteTicks:'638960827860000000',
   start:.4,end:2.4,outputFormat:'matroska',
@@ -157,11 +159,41 @@ test('the authoritative compileTask output-plan shape maps explicit subtitle sel
  x.preflight.request={version:1,mode:'isolated-trim-copy',
   start:.4,end:2.4,audioOrdinals:[1],subtitleOrdinals:[1]};
  x.preflight.receipt={version:1,scope:'isolated-trim-copy-observation',
+  method:'ffmpeg-isolated-auxiliary-copy-remux-then-independent-ffprobe-v1',
   measurementId:ledger,canReplaceFullSourceBudget:false,
   sourceLength:123456,sourceWriteTicks:'638960827860000000',
   start:.4,end:2.4,outputFormat:'matroska',
   audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
  assert.equal(check(x).status,'exact-observed-payload-match');
+});
+test('forged FFmpeg observation method and incomplete completed subtitle inventory are rejected',()=>{
+ const flac=base();
+ flac.preflight.receipt.method='ffprobe-extrapolated-duration';
+ assert.equal(check(flac).reason,'flac-preflight-contract-invalid');
+ const copy=base();
+ copy.task.outputPlan={audio:[{sourceOrdinal:1,action:'copy',range:'trim',outputOrdinal:0}],
+  subtitles:[{sourceOrdinal:0,action:'copy'}]};
+ copy.task.subtitleRange='trim';
+ copy.completed.outputPacketEvidence={
+  version:1,scope:'completed-artifact',
+  artifactBytes:127000,artifactWriteTicks:'638960827860011111',
+  artifactJobId:'native-b16-7',audioPacketBytes:[40000],
+  subtitlePacketBytes:[1300,1500]
+ };
+ copy.preflight.request={version:1,mode:'isolated-trim-copy',start:.4,end:2.4,
+  audioOrdinals:[1],subtitleOrdinals:[0]};
+ copy.preflight.receipt={
+  version:1,scope:'isolated-trim-copy-observation',
+  method:'ffmpeg-isolated-auxiliary-copy-remux-then-independent-ffprobe-v1',
+  measurementId:ledger,canReplaceFullSourceBudget:false,
+  sourceLength:123456,sourceWriteTicks:'638960827860000000',
+  start:.4,end:2.4,outputFormat:'matroska',
+  audioPacketBytes:[40000],subtitlePacketBytes:[1300]
+ };
+ assert.equal(check(copy).reason,'copy-subtitle-output-map-unavailable');
+ copy.completed.outputPacketEvidence.subtitlePacketBytes=[1300];
+ copy.preflight.receipt.method='duration-estimate';
+ assert.equal(check(copy).reason,'copy-preflight-contract-invalid');
 });
 test('one observed copy stream cannot authorize moving next job formal budget',()=>{
  const x=base();x.preflight.receipt.canReplaceFormalBudget=true;
