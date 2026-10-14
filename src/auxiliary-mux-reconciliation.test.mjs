@@ -91,7 +91,7 @@ test('missing, overflowed and forged negative packet data cannot match',()=>{
 test('copy source/track binding includes preserved soft subtitle and exact output ordinals',()=>{
  const x=base();
  x.task.outputPlan={audio:[{sourceOrdinal:1,action:'copy',range:'trim',outputOrdinal:0}],
-   subtitles:[0]};
+   subtitles:[{sourceOrdinal:0,action:'copy'}]};
  x.task.subtitleRange='trim';
  x.completed.outputPacketEvidence={version:1,scope:'completed-artifact',
   audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
@@ -104,7 +104,31 @@ test('copy source/track binding includes preserved soft subtitle and exact outpu
   audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
  const a=check(x);assert.equal(a.status,'exact-observed-payload-match');
  const y=base();Object.assign(y,x);
- y.task.outputPlan.subtitles=['all'];assert.equal(check(y).comparable,false);
+ y.task.outputPlan.subtitles=[{sourceOrdinal:1,action:'copy'}];assert.equal(check(y).comparable,false);
+ const z=base();z.task.outputPlan=x.task.outputPlan;z.task.outputPlan.subtitles=['all'];assert.equal(check(z).comparable,false);
+});
+test('the authoritative compileTask output-plan shape maps explicit subtitle selection only',async()=>{
+ const {compileTask}=await import('./media-task.js');
+ const media={duration:6,videoTracks:1,audioTracks:2,subtitleTracks:2,
+  videoStreams:[{index:0,codec:'h264'}],audioStreams:[{index:1,codec:'pcm_s16le'},{index:2,codec:'pcm_s16le'}]};
+ const task=compileTask({operation:'copy',videoStreams:'0',videoRange:'trim',
+  start:.4,end:2.4,outputContainer:'mkv',
+  audioPlan:[{sourceOrdinal:1,action:'copy',range:'trim'}],
+  keepSubtitles:true,subtitleStreams:'1',subtitleRange:'trim'},media);
+ assert.deepEqual(task.outputPlan.subtitles,[{sourceOrdinal:1,action:'copy'}]);
+ const x=base();
+ x.task=task;
+ x.task.budgetEvidence={version:1,scope:'full-source',measurementId:ledger};
+ x.completed.outputPacketEvidence={version:1,scope:'completed-artifact',
+  audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
+ x.preflight.request={version:1,mode:'isolated-trim-copy',
+  start:.4,end:2.4,audioOrdinals:[1],subtitleOrdinals:[1]};
+ x.preflight.receipt={version:1,scope:'isolated-trim-copy-observation',
+  measurementId:ledger,canReplaceFullSourceBudget:false,
+  sourceLength:123456,sourceWriteTicks:'638960827860000000',
+  start:.4,end:2.4,outputFormat:'matroska',
+  audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
+ assert.equal(check(x).status,'exact-observed-payload-match');
 });
 test('one observed copy stream cannot authorize moving next job formal budget',()=>{
  const x=base();x.preflight.receipt.canReplaceFormalBudget=true;
