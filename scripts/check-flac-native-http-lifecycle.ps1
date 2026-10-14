@@ -57,6 +57,58 @@ try{
   throw 'Completed FLAC receipt survived its parent source measurement replacement.'
  }
  Write-Host 'B16 Native HTTP same-file remeasurement invalidated cached FLAC proof.'
+ # Full executable Native manual task: no sizePlan, because FLAC quality mode
+ # cannot claim a predictive exact output byte cost. Nonetheless, completed
+ # mixed output must expose actual audio packet totals via FFprobe audit.
+ $task=@{
+  version=4;operation='transcode';codec='h264';encoder='libx264'
+  start=0.4;end=2.4;hasTrimRange=$true;usesTrimInput=$true
+  videoStreams=@(0);videoRange='full';expectedVideoTracks=1
+  expectedVideoDuration=3.0;expectedAudioTracks=2;expectedDuration=3.0
+  audio='copy';audioTrack='all';audioRange='trim'
+  audioPlan=@(
+   @{sourceOrdinal=0;action='flac';range='full'},
+   @{sourceOrdinal=1;action='flac';range='trim';channels=1;sampleRate=48000}
+  )
+  keepSubtitles=$false;keepAttachments=$false;rateMode='quality'
+  budgetPolicy='best-effort';outputFormat='matroska';outputExtension='mkv'
+  budgetEvidence=$second
+  outputArgs=@('-map','0:v:0','-map','0:a:0','-map','1:a:1',
+   '-c:v','libx264','-preset','ultrafast','-crf','30','-pix_fmt','yuv420p',
+   '-vf','pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0',
+   '-c:a:0','flac','-c:a:1','flac','-ac:a:1','1','-ar:a:1','48000',
+   '-map_metadata','-1','-map_chapters','-1')
+ }
+ $encodeBody=@{request=@{task=$task;expectedDuration=3.0;suggestedName='flac-mixed.mkv'}}|ConvertTo-Json -Depth 16 -Compress
+ $encoded=Invoke-RestMethod -Method Post -Uri "$url/api/encode" -Headers $headers -ContentType 'application/json' -Body $encodeBody -TimeoutSec 15
+ if(-not $encoded.ok -or -not $encoded.jobId){throw 'Manual Native FLAC mixed-output job was not created.'}
+ $done=$null
+ for($i=0;$i -lt 120;$i++){
+  Start-Sleep -Milliseconds 250
+  $done=Invoke-RestMethod -Uri "$url/api/jobs/$($encoded.jobId)" -Headers $headers -TimeoutSec 5
+  if($done.state -in @('completed','failed','cancelled')){break}
+ }
+ if($done.state -ne 'completed'){throw ('Native real FLAC mixed-task failed: '+$done.error)}
+ if($done.outputPacketAuditState -ne 'ready' -or
+    $done.outputPacketEvidence.scope -ne 'completed-artifact' -or
+    @($done.outputPacketEvidence.audioPacketBytes).Count -ne 2){
+  throw 'Completed FLAC quality-mode mixed-mux task failed to run independent audio packet audit.'
+ }
+ $stages=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ('quick-media-job-'+$encoded.jobId+'-*'))
+ if($stages.Count -ne 1){throw 'Native FLAC completed staging directory absent.'}
+ $artifact=Join-Path $stages[0].FullName 'output.mkv'
+ if(-not(Test-Path -LiteralPath $artifact)){throw 'Native FLAC mixed output absent.'}
+ for($track=0;$track -lt 2;$track++){
+  $measured=0L
+  foreach($packet in @(& ffprobe -v error -select_streams ('a:'+$track) -show_packets -show_entries packet=size -of csv=p=0 $artifact)){
+   if($packet -match '^[0-9]+$'){$measured += [long]$packet}
+  }
+  if($measured -le 0 -or [long]$done.outputPacketEvidence.audioPacketBytes[$track] -ne $measured){
+   throw ('Native mixed FLAC packet receipt diverged from independent FFprobe: audio '+$track)
+  }
+ }
+ Write-Host 'B16 Native actual manual FLAC quality-mode job exposes independently verified completed-mux audio packets without a sizePlan.'
+
 }finally{
  if($server){
   try{if(-not $server.HasExited){Stop-Process -Id $server.Id -Force}}catch{}
