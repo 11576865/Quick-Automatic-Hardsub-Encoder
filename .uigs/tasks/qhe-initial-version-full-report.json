@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU10_P2_A02_real_native_locked_FLAC_packet_identity_hosted_accepted",
-  "current_bounded_work_unit": "WU10 hosted PASS at 54ca3a4: real Windows Native mixed MKV, source locked FLAC a0 Copy + AAC a1 reencode, completed job output 121709 bytes, independent 141/141 source/output FLAC packet SHA256 identical. No full A02/metadata/sync/device proof. Missing Web WASM vendor remains separate B21 blocker.",
+  "status": "incomplete_full_report_WU11_integrated_native_path_planning",
+  "current_bounded_work_unit": "WU11 continuation / integration planning authorized: existing Guided→Manual→Windows Native output with ASS/font, source-bound P3 and protected audio; no new product code yet.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -358,6 +358,173 @@
   },
   "authorized_next_units": [
     {
+      "id": "WU11",
+      "requirement_ids": [
+        "B02",
+        "B04",
+        "B05",
+        "B07",
+        "B11",
+        "B12",
+        "B13",
+        "B24",
+        "A01",
+        "A05",
+        "A06"
+      ],
+      "title": "Integrate existing Guided→Manual decision and real Windows Native final-file path",
+      "source": "R19/R24 full initial version; docs/qhe-initial-version-route-reanchor-2026-10-14.md; explicit owner directive 2026-10-15; accumulated WU01-WU10",
+      "scope": "One source-bound, selected ASS/font + multi-track test task using existing candidate decision/adoption, compileTask v4, Native /api/encode, independent FFprobe/FFmpeg checks and completed output report; stale source/reference and forbidden stream mutation must fail closed.",
+      "reuse_existing": [
+        "guided-branch-adoption.js",
+        "guided-cpu-compiler-contract.js",
+        "guided-task-handoff.js",
+        "media-task.js",
+        "native-bridge.ps1",
+        "scripts/check-guided-budget-native.ps1",
+        "scripts/check-wu02-embedded-native.ps1",
+        "scripts/check-wu10-native-audio-preservation.ps1"
+      ],
+      "exit": "Independent output verification on pinned source+reference, fail-closed semantics, exact source/Native artifact identities, CI evidence separate from field status",
+      "status": "AUTHORIZED_FOR_DESIGN_AND_EXACT_FILE_PLAN; IMPLEMENTATION_NOT_STARTED",
+      "priority_reason": "Unbounded new B16 observability probe, fresh encoder implementations, new UI navigation shell, and any new task compiler."
+    },
+    {
+      "id": "WU12",
+      "requirement_ids": [
+        "B17",
+        "B21",
+        "B24",
+        "A08"
+      ],
+      "title": "Native actual multiple-output batch delivery reusing existing recipe and queue",
+      "source": "R19/R24 full initial version; docs/qhe-initial-version-route-reanchor-2026-10-14.md; explicit owner directive 2026-10-15; accumulated WU01-WU10",
+      "scope": "Two independent actual Windows Native outputs from existing compiled recipes, clear saved/failed/retry states and independent final-file validation; no borrowing prior-source evidence.",
+      "reuse_existing": [
+        "browser-source-batch.js",
+        "media-task.js",
+        "existing recipe queue and Native execution/save APIs"
+      ],
+      "exit": "Independent output verification on pinned source+reference, fail-closed semantics, exact source/Native artifact identities, CI evidence separate from field status",
+      "status": "AUTHORIZED_PLANNING_CANDIDATE; RECHECK_AFTER_WU11",
+      "priority_reason": "WebAssembly runtime rewrite without a compatible build, extra parallel queue architecture."
+    }
+  ],
+  "historical_next_units": {
+    "captured_from": "b22f5fae2ee49d6dd3e442781729b808c89e55e8",
+    "captured_at": "2026-10-14",
+    "status": "PROPOSED_HISTORY_NOT_EXECUTION_AUTHORITY",
+    "items": [
+      "Confirm exact-head Windows FLAC cache reuse ordered packet hash fixture; then implement source hash- and immutable-artifact-backed formal audio cache injection, PTS/timebase and actual output overhead bounds before any future strict-size FLAC admission.",
+      "B16 exact-head Windows real short/182s video packet and 1v2a1s residual verification, browser report UI acceptance; next reuse actual preencoded FLAC bitstream within formal mux only after source-time identity and execution parity gate.",
+      "B16 exact-head Windows 182-second real asynchronous completed mux audit, independent packet remeasure, staged output tamper invalidation and current browser end-to-end evidence UI; then determine if any FLAC packet reuse/strict target admission can be proved without extrapolation.",
+      "Confirm exact-head Windows B16 Native HTTP lifecycle + real quality-mode FLAC finished mixed-mux packet evidence, then broaden long/VFR/content-provenance acceptance; only prove reusable strict-size FLAC pricing via genuinely shared encoded packet artifact or stronger exact execution contract.",
+      "B16 exact-head Windows runtime must prove both FLAC and copied-trim worker execute; then complete end-to-end Native HTTP/workbench and actual mixed task packet parity for long content before considering strict budget FLAC admission.",
+      "B16 targeted Windows Draft runtime actual FLAC+trim tests, real Bridge/client UI acceptance and final-mux task-matched packet/cost certification; then safe bounded FLAC strict-budget adoption only after necessary parity, Android/Web transport and real long-form material.",
+      "B16 exact-head Windows PowerShell/FFmpeg isolated remux and source-owned async API runtime acceptance; add UI read-only observation then investigate actual final mixed-mux matched trim copy cost, FLAC full-stream measured preflight, Android/Web cost transports.",
+      "B12 exact-head Node frontend and real browser Guided->Manual form transaction/FFmpeg ASS reference-order acceptance; then Native GPU/Web/Android task capability adaptation and final-output source-scoped attestation.",
+      "B11 exact-head Node/browser and Windows Native/real NVENC source-paired ASS VBR adoption acceptance; then unified Manual/Guided task serialisation and final-output attestation across strategies.",
+      "B11 exact-head frontend and Windows Native localhost paired ASS VBR CI plus browser interaction acceptance; then implement true cross-branch Guided/Manual transaction with post-task result attestation, no shortcut for two-pass/strict ceiling.",
+      "B11 exact-head Node frontend and browser/Windows Native async ASS/font change rejection, Manual source-only reference export and model identity acceptance; then implement shared Guided ASS VBR adoption contract.",
+      "B15 exact-head Node/build and real Windows Native Manual paired scene probes + browser control acceptance; verify one source/risk set shared across all encoder/preset candidates; then add-on paired risk-refinement and ASS-render reference bridge remains Pending.",
+      "B14 exact-head fast/full frontend tests and real Windows Native UI/receipt acceptance; then add real final-job resource/time and strict capability coverage (NOT automatic whole-movie estimates)",
+      "B16 acceptance next: exact-head frontend and Windows PowerShell Native worker CI, actual >180s or >512MiB trim/receipt/strict-gate fixture and user report refresh; then precise pre-encode trim cost, FLAC recompression, Android/Web metering remain open.",
+      "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
+      "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
+      "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
+      "B03/B18/B19/B23/B25 platform/field/benchmark/integration/release"
+    ]
+  },
+  "discovered_followups_status": "ARCHIVED_IN_historical_next_units; not independently approved; compare against original B01-B25/A01-A10 before promotion",
+  "owner_accelerated_continuation_2026_10_15": {
+    "decision": "CONTINUE_EXISTING_PR105_STACK_NO_RESTART",
+    "owner_instruction": "Continue based on the implementation from recent days, with UIGS; do not build a parallel/new engine or restart the work.",
+    "target_date": "2026-10-18",
+    "target_interpretation": "Aim for a usable core theory V1 integrated candidate, without changing or shrinking R19/R24 complete initial-version scope.",
+    "execution_authority": "This existing root task plus the main QHE PR #105 stacked upon PR #104; the separate 2026-10-15 sprint design branch is a non-authoritative checkpoint.",
+    "baseline": {
+      "main": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
+      "pr104": "0feed738042745ace6c031f726a3ad93561e56e8",
+      "pr105": "815b743f7f8137c2aa7b1c6fa06722558037c2de"
+    },
+    "reused_completed_units": [
+      "WU01 guided CPU handoff and browser/actual FFmpeg limited checks",
+      "WU02 Windows embedded ASS + font + mixed audio native output",
+      "WU03 source-bound multiple-output recipes",
+      "WU04/WU05 copy-trim strategy and observed timeline receipt",
+      "WU06 read-only delivery contract",
+      "WU07 mustCopy source-bound lock",
+      "WU08 web-source independent queue (browser orchestration, not real Web core)",
+      "WU09 shared guided/manual evidence decision gate",
+      "WU10 real Windows protected FLAC 141/141 packet hashes"
+    ],
+    "authorized_next_units": [
+      {
+        "id": "WU11",
+        "name": "Integrate existing Guided→Manual decision and real Windows Native final-file path",
+        "anchors": [
+          "B02",
+          "B04",
+          "B05",
+          "B07",
+          "B11",
+          "B12",
+          "B13",
+          "B24",
+          "A01",
+          "A05",
+          "A06"
+        ],
+        "output": "One source-bound, selected ASS/font + multi-track test task using existing candidate decision/adoption, compileTask v4, Native /api/encode, independent FFprobe/FFmpeg checks and completed output report; stale source/reference and forbidden stream mutation must fail closed.",
+        "reuse": [
+          "guided-branch-adoption.js",
+          "guided-cpu-compiler-contract.js",
+          "guided-task-handoff.js",
+          "media-task.js",
+          "native-bridge.ps1",
+          "scripts/check-guided-budget-native.ps1",
+          "scripts/check-wu02-embedded-native.ps1",
+          "scripts/check-wu10-native-audio-preservation.ps1"
+        ],
+        "status": "AUTHORIZED_FOR_DESIGN_AND_EXACT_FILE_PLAN; IMPLEMENTATION_NOT_STARTED",
+        "prioritized_over": "Unbounded new B16 observability probe, fresh encoder implementations, new UI navigation shell, and any new task compiler."
+      },
+      {
+        "id": "WU12",
+        "name": "Native actual multiple-output batch delivery reusing existing recipe and queue",
+        "anchors": [
+          "B17",
+          "B21",
+          "B24",
+          "A08"
+        ],
+        "output": "Two independent actual Windows Native outputs from existing compiled recipes, clear saved/failed/retry states and independent final-file validation; no borrowing prior-source evidence.",
+        "reuse": [
+          "browser-source-batch.js",
+          "media-task.js",
+          "existing recipe queue and Native execution/save APIs"
+        ],
+        "status": "AUTHORIZED_PLANNING_CANDIDATE; RECHECK_AFTER_WU11",
+        "prioritized_over": "WebAssembly runtime rewrite without a compatible build, extra parallel queue architecture."
+      }
+    ],
+    "gated_next_step": "Review specific WU11 reuse/integration plan on this existing stack before mutating product code; keep all draft-heavy exact-SHA CI and field evidence separate.",
+    "status_boundaries": [
+      "IMPLEMENTED",
+      "HOSTED_VERIFIED",
+      "INTEGRATION_PENDING",
+      "FIELD_PENDING",
+      "UNSUPPORTED"
+    ],
+    "do_not_claim": [
+      "10-round delivery equals full original first version",
+      "draft green means complete CI",
+      "source hash parity means all timing/meta properties preserved",
+      "WASM browser task queue success implies real Web FFmpeg encoding"
+    ]
+  },
+  "previous_authorized_units_at_2026_10_15": [
+    {
       "id": "WU-01",
       "requirement_ids": [
         "B02",
@@ -504,118 +671,5 @@
       "scope": "Generate real mixed MKV H264 + FLAC + AAC in Windows CI, compile exact official v4 locked audio original Copy and second AAC transcode, execute through actual localhost Native bridge, and compare source/output a:0 FFprobe packet payload SHA256 and track order. Wrong-source and forced transcode compile guard negative. No whole-fidelity or every multimedia source signoff.",
       "exit": "PowerShell parse and Node compile, exact-head actual Windows Native completed mixed audio output with independently extracted packet SHA256 hashes (count/values), runtime source identity, deliberate wrong-source refusal. Test frontend Uigs coverage. No claim of metadata language/trim/full sync/player or Web/Android."
     }
-  ],
-  "historical_next_units": {
-    "captured_from": "b22f5fae2ee49d6dd3e442781729b808c89e55e8",
-    "captured_at": "2026-10-14",
-    "status": "PROPOSED_HISTORY_NOT_EXECUTION_AUTHORITY",
-    "items": [
-      "Confirm exact-head Windows FLAC cache reuse ordered packet hash fixture; then implement source hash- and immutable-artifact-backed formal audio cache injection, PTS/timebase and actual output overhead bounds before any future strict-size FLAC admission.",
-      "B16 exact-head Windows real short/182s video packet and 1v2a1s residual verification, browser report UI acceptance; next reuse actual preencoded FLAC bitstream within formal mux only after source-time identity and execution parity gate.",
-      "B16 exact-head Windows 182-second real asynchronous completed mux audit, independent packet remeasure, staged output tamper invalidation and current browser end-to-end evidence UI; then determine if any FLAC packet reuse/strict target admission can be proved without extrapolation.",
-      "Confirm exact-head Windows B16 Native HTTP lifecycle + real quality-mode FLAC finished mixed-mux packet evidence, then broaden long/VFR/content-provenance acceptance; only prove reusable strict-size FLAC pricing via genuinely shared encoded packet artifact or stronger exact execution contract.",
-      "B16 exact-head Windows runtime must prove both FLAC and copied-trim worker execute; then complete end-to-end Native HTTP/workbench and actual mixed task packet parity for long content before considering strict budget FLAC admission.",
-      "B16 targeted Windows Draft runtime actual FLAC+trim tests, real Bridge/client UI acceptance and final-mux task-matched packet/cost certification; then safe bounded FLAC strict-budget adoption only after necessary parity, Android/Web transport and real long-form material.",
-      "B16 exact-head Windows PowerShell/FFmpeg isolated remux and source-owned async API runtime acceptance; add UI read-only observation then investigate actual final mixed-mux matched trim copy cost, FLAC full-stream measured preflight, Android/Web cost transports.",
-      "B12 exact-head Node frontend and real browser Guided->Manual form transaction/FFmpeg ASS reference-order acceptance; then Native GPU/Web/Android task capability adaptation and final-output source-scoped attestation.",
-      "B11 exact-head Node/browser and Windows Native/real NVENC source-paired ASS VBR adoption acceptance; then unified Manual/Guided task serialisation and final-output attestation across strategies.",
-      "B11 exact-head frontend and Windows Native localhost paired ASS VBR CI plus browser interaction acceptance; then implement true cross-branch Guided/Manual transaction with post-task result attestation, no shortcut for two-pass/strict ceiling.",
-      "B11 exact-head Node frontend and browser/Windows Native async ASS/font change rejection, Manual source-only reference export and model identity acceptance; then implement shared Guided ASS VBR adoption contract.",
-      "B15 exact-head Node/build and real Windows Native Manual paired scene probes + browser control acceptance; verify one source/risk set shared across all encoder/preset candidates; then add-on paired risk-refinement and ASS-render reference bridge remains Pending.",
-      "B14 exact-head fast/full frontend tests and real Windows Native UI/receipt acceptance; then add real final-job resource/time and strict capability coverage (NOT automatic whole-movie estimates)",
-      "B16 acceptance next: exact-head frontend and Windows PowerShell Native worker CI, actual >180s or >512MiB trim/receipt/strict-gate fixture and user report refresh; then precise pre-encode trim cost, FLAC recompression, Android/Web metering remain open.",
-      "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
-      "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
-      "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
-      "B03/B18/B19/B23/B25 platform/field/benchmark/integration/release"
-    ]
-  },
-  "discovered_followups_status": "ARCHIVED_IN_historical_next_units; not independently approved; compare against original B01-B25/A01-A10 before promotion",
-  "owner_accelerated_continuation_2026_10_15": {
-    "decision": "CONTINUE_EXISTING_PR105_STACK_NO_RESTART",
-    "owner_instruction": "Continue based on the implementation from recent days, with UIGS; do not build a parallel/new engine or restart the work.",
-    "target_date": "2026-10-18",
-    "target_interpretation": "Aim for a usable core theory V1 integrated candidate, without changing or shrinking R19/R24 complete initial-version scope.",
-    "execution_authority": "This existing root task plus the main QHE PR #105 stacked upon PR #104; the separate 2026-10-15 sprint design branch is a non-authoritative checkpoint.",
-    "baseline": {
-      "main": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
-      "pr104": "0feed738042745ace6c031f726a3ad93561e56e8",
-      "pr105": "815b743f7f8137c2aa7b1c6fa06722558037c2de"
-    },
-    "reused_completed_units": [
-      "WU01 guided CPU handoff and browser/actual FFmpeg limited checks",
-      "WU02 Windows embedded ASS + font + mixed audio native output",
-      "WU03 source-bound multiple-output recipes",
-      "WU04/WU05 copy-trim strategy and observed timeline receipt",
-      "WU06 read-only delivery contract",
-      "WU07 mustCopy source-bound lock",
-      "WU08 web-source independent queue (browser orchestration, not real Web core)",
-      "WU09 shared guided/manual evidence decision gate",
-      "WU10 real Windows protected FLAC 141/141 packet hashes"
-    ],
-    "authorized_next_units": [
-      {
-        "id": "WU11",
-        "name": "Integrate existing Guided→Manual decision and real Windows Native final-file path",
-        "anchors": [
-          "B02",
-          "B04",
-          "B05",
-          "B07",
-          "B11",
-          "B12",
-          "B13",
-          "B24",
-          "A01",
-          "A05",
-          "A06"
-        ],
-        "output": "One source-bound, selected ASS/font + multi-track test task using existing candidate decision/adoption, compileTask v4, Native /api/encode, independent FFprobe/FFmpeg checks and completed output report; stale source/reference and forbidden stream mutation must fail closed.",
-        "reuse": [
-          "guided-branch-adoption.js",
-          "guided-cpu-compiler-contract.js",
-          "guided-task-handoff.js",
-          "media-task.js",
-          "native-bridge.ps1",
-          "scripts/check-guided-budget-native.ps1",
-          "scripts/check-wu02-embedded-native.ps1",
-          "scripts/check-wu10-native-audio-preservation.ps1"
-        ],
-        "status": "AUTHORIZED_FOR_DESIGN_AND_EXACT_FILE_PLAN; IMPLEMENTATION_NOT_STARTED",
-        "prioritized_over": "Unbounded new B16 observability probe, fresh encoder implementations, new UI navigation shell, and any new task compiler."
-      },
-      {
-        "id": "WU12",
-        "name": "Native actual multiple-output batch delivery reusing existing recipe and queue",
-        "anchors": [
-          "B17",
-          "B21",
-          "B24",
-          "A08"
-        ],
-        "output": "Two independent actual Windows Native outputs from existing compiled recipes, clear saved/failed/retry states and independent final-file validation; no borrowing prior-source evidence.",
-        "reuse": [
-          "browser-source-batch.js",
-          "media-task.js",
-          "existing recipe queue and Native execution/save APIs"
-        ],
-        "status": "AUTHORIZED_PLANNING_CANDIDATE; RECHECK_AFTER_WU11",
-        "prioritized_over": "WebAssembly runtime rewrite without a compatible build, extra parallel queue architecture."
-      }
-    ],
-    "gated_next_step": "Review specific WU11 reuse/integration plan on this existing stack before mutating product code; keep all draft-heavy exact-SHA CI and field evidence separate.",
-    "status_boundaries": [
-      "IMPLEMENTED",
-      "HOSTED_VERIFIED",
-      "INTEGRATION_PENDING",
-      "FIELD_PENDING",
-      "UNSUPPORTED"
-    ],
-    "do_not_claim": [
-      "10-round delivery equals full original first version",
-      "draft green means complete CI",
-      "source hash parity means all timing/meta properties preserved",
-      "WASM browser task queue success implies real Web FFmpeg encoding"
-    ]
-  }
+  ]
 }
