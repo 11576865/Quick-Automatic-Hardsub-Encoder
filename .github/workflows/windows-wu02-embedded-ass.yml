@@ -33,12 +33,19 @@ jobs:
         shell: powershell
         run: |
           $ready=$false
+          $tools=Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools'
           for($i=1;$i -le 3;$i++){
             choco install ffmpeg --yes --no-progress
-            if($LASTEXITCODE -eq 0){$ready=$true;break}
+            # Chocolatey can report exit 0 for a 503/0-of-0 package install.
+            # Require the actual binaries, not just process exit status.
+            $ffmpeg=if(Test-Path -LiteralPath $tools){
+              Get-ChildItem -LiteralPath $tools -Recurse -File -Filter ffmpeg.exe | Select-Object -First 1
+            }else{$null}
+            $ffprobe=if($ffmpeg){Join-Path $ffmpeg.DirectoryName 'ffprobe.exe'}else{''}
+            if($ffmpeg -and (Test-Path -LiteralPath $ffprobe)){$ready=$true;break}
             if($i -lt 3){Start-Sleep -Seconds ($i*5)}
           }
-          if(-not $ready){throw 'FFmpeg external package service unavailable'}
+          if(-not $ready){throw 'FFmpeg package feed unavailable or installation has no ffmpeg/ffprobe binaries'}
           # Chocolatey may install successfully without refreshing PATH in this
           # PowerShell process. Resolve the real binary directory for NEXT steps.
           $tools=Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools'
