@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU03_B21_same_source_matrix_authorized",
-  "current_bounded_work_unit": "WU-03 authorized against original R19 P5 and R24 batch/recipes: same-source multi-output matrix. WU01 Windows same-task remains open; WU02 hosted Windows PASS/user field pending. Only this slice approved.",
+  "status": "incomplete_full_report_B21_single_source_recipe_matrix_hosted_accepted",
+  "current_bounded_work_unit": "WU03 targeted implementation accepted on Draft: same-source independent Hardsub/Transcode/StreamCopy frozen recipe queue, serial run, independent verified output/save with save-only retry. Hosted Chromium controlled transport and frontend build PASS at 7cdff9; real multi-source and repeated Native/Web FFmpeg still not accepted. WU01 same-task Windows open, WU02 Windows hosted PASS.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -251,15 +251,16 @@
     "WU-01 continued: prior exact-head FFmpeg/libass x264 CPU fixture workflow 38547044072 PASS; submitted a real-Chromium DOM Guided→Manual executable plan test and Draft CI with controlled transport; no Windows Native parity or WU01 complete claim.",
     "WU-02 product ability: explicit Windows Native MKV embedded ASS track + font attachment import to existing ASS workflow; source-stamp safety, selection invalidation, bounded extraction. No Android/Web parity or verified output claim until CI.",
     "WU-02 Windows source-owned embedded ASS+font import + actual Native end-to-end real hosted CI PASS at 1148bcda run 38554433547: 251257-byte mixed MKV with 235 FLAC packets copied unchanged, AAC re-encoded and independent libass burned-event pixel difference. This is a NEW initial-version product capability, not whole A01 or field acceptance.",
-    "WU03 root reanchoring checkpoint: read original R19 P5, R24 section 22; selected B21 genuine new user capability instead of another WU01/WU02 test or B16 descendant. Prior two unit states and A01–A10 scope unchanged."
+    "WU03 root reanchoring checkpoint: read original R19 P5, R24 section 22; selected B21 genuine new user capability instead of another WU01/WU02 test or B16 descendant. Prior two unit states and A01–A10 scope unchanged.",
+    "WU03 B21 real user-facing single-source multi-output recipe panel implemented and hosted browser bounded PASS at 7cdff9; two codec variants serially executed in Chromium using controlled backend, save-only retry. NOT multi-source batch or real FFmpeg repeated runtime. Source reports unchanged."
   ],
   "next_units": [
-    "WU-03 AUTHORIZED: implement a same-source independently validated multi-output recipe matrix, preserving source/assets/plan; hardsub/transcode/copy output variants; real browser interaction and bounded existing backend checks.",
-    "REANCHOR REQUIRED before new work unit. B21 multi-source matrix and B08/09 timeline remain open, do not auto-promote."
+    "WU03 ACCEPTED BOUNDED: single-source multiple output recipes implementation. DO NOT keep extending as a default. Full B21 requires separately authorized multi-source selection/staging and real backend batch acceptance.",
+    "BEFORE WU04: re-anchor root B01–B25 and A01–A10; compare B08/B09 independent requested/actual stream timeline evidence, remaining B21 true multi-source, B25 integration and overall initial-version exit gates. Never auto-promote WU03 testing tasks."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "1148bcda33bc74f66275eaad73d125e29930b8fb",
+  "latest_durable_commit": "7cdff9dba0c12ce8c52bcd98fac43686d302b46d",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -289,7 +290,9 @@
     "wu01_cpu_fixture": "PASS at dcecd685 in workflow 38547044072; 3-second FFV1 synthetic libass/x264 fixture",
     "wu01_browser_handoff": "Real Chromium controlled transport PASS at 02afa817 (workflow 38551049094); Windows same-task bridge pending.",
     "wu01_windows_native": "OPEN not yet integrated same-task Native Bridge validation",
-    "wu02_embedded_ass": "Windows Native real hosted exact-head 1148bcda PASS, workflow 38554433547: FFV1+FLAC+AAC+ASS+TTF source, explicit ASS+font extraction, source-stamp fail-closed, x264/libass output, original FLAC 235/235 ordered packets SHA256, second AAC reencoded, distinct burned pixel, final size 251257 bytes. No user film/browser button real interaction/device completeness."
+    "wu02_embedded_ass": "Windows Native real hosted exact-head 1148bcda PASS, workflow 38554433547: FFV1+FLAC+AAC+ASS+TTF source, explicit ASS+font extraction, source-stamp fail-closed, x264/libass output, original FLAC 235/235 ordered packets SHA256, second AAC reencoded, distinct burned pixel, final size 251257 bytes. No user film/browser button real interaction/device completeness.",
+    "wu03_single_source_recipe_matrix": "PASS exact SHA 7cdff9d in dedicated hosted Chromium workflow 38558570169 + Test frontend 38558570086; two x264/x265 independent frozen recipes, stale source rejection, save failure stops before next, save-only retry without encode; controlled run/save backend, not real FFmpeg batch or multi-source.",
+    "wu03_full_multi_source": "MISSING PRODUCT IMPLEMENTATION; open B21 per R19 P5 and R24 §22"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -324,8 +327,8 @@
     "mandatory_reanchor_before_third": true,
     "current_authorized_index": 2,
     "completed_authorized_units": 1,
-    "review_status": "ROOT_SCOPE_REANCHORED_WU03_AUTHORIZED_20261014",
-    "executed_authorized_units_since_reanchor": 0
+    "review_status": "WU03_B21_BOUNDED_ACCEPTED_REANCHOR_BEFORE_NEW_UNIT",
+    "executed_authorized_units_since_reanchor": 1
   },
   "authorized_next_units": [
     {
@@ -367,11 +370,17 @@
         "B04",
         "B24"
       ],
-      "status": "AUTHORIZED_NOT_STARTED",
+      "status": "HOSTED_ACCEPTED_SINGLE_SOURCE_MULTI_OUTPUT_MULTICODEC_UI_AND_FROZEN_TASKS",
       "title": "Single-source multiple independent output recipes: Hardsub/Transcode/Stream Copy through existing compiler/run/save",
       "source": "R19 P5 batch matrix; R24 section 22 batch and recipes; QHE docs/initial-version-report-traceability-2026-10-13.md",
       "boundaries": "Do not claim multi-source batch, automatic encoder choosing, quality score or field acceptance; do not regress existing clip queue; each output separately validated and saved",
-      "exit": "Real UI can queue distinct frozen schema-v4 tasks against one source/ASS-font identity; serially execute, verify and save each separately; refuse changed source/assets; stop on failure; preserve save-only retry. Exact-head CI plus browser controlled-transport acceptance."
+      "exit": "Real UI can queue distinct frozen schema-v4 tasks against one source/ASS-font identity; serially execute, verify and save each separately; refuse changed source/assets; stop on failure; preserve save-only retry. Exact-head CI plus browser controlled-transport acceptance.",
+      "accepted_sha": "7cdff9dba0c12ce8c52bcd98fac43686d302b46d",
+      "acceptance_workflows": {
+        "draft_frontend": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38558570086",
+        "hosted_browser": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38558570169"
+      },
+      "unclosed": "Multi-source selection/staging, real Windows Native repeated tasks, real Web FFmpeg repeated tasks, physical user saves and device acceptance; B21 as a whole NOT COMPLETE"
     }
   ],
   "historical_next_units": {
