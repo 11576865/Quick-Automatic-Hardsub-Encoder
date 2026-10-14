@@ -152,6 +152,7 @@ test('the authoritative compileTask output-plan shape maps explicit subtitle sel
  x.task=task;
  x.task.budgetEvidence={version:1,scope:'full-source',measurementId:ledger};
  x.completed.outputPacketEvidence={version:1,scope:'completed-artifact',
+  artifactBytes:127000,artifactWriteTicks:'638960827860011111',artifactJobId:'native-b16-7',
   audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
  x.preflight.request={version:1,mode:'isolated-trim-copy',
   start:.4,end:2.4,audioOrdinals:[1],subtitleOrdinals:[1]};
