@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference='Stop'
 function Deny([string]$reason){throw $reason}
 function Q([string]$v){return '"'+$v.Replace('"','\"')+'"'}
-function RunBounded([string]$tool,[string]$args,[int]$maxSeconds){
+function RunBounded([string]$tool,[string]$args,[int]$maxSeconds,[string]$guardFile=''){
  $p=New-Object Diagnostics.Process
  $p.StartInfo.FileName=$tool;$p.StartInfo.Arguments=$args
  $p.StartInfo.UseShellExecute=$false;$p.StartInfo.CreateNoWindow=$true
@@ -18,7 +18,16 @@ function RunBounded([string]$tool,[string]$args,[int]$maxSeconds){
   [void]$p.Start()
   $out=$p.StandardOutput.ReadToEndAsync()
   $err=$p.StandardError.ReadToEndAsync()
-  if(-not $p.WaitForExit($maxSeconds*1000)){Deny 'FLAC preflight timeout; evidence unavailable.'}
+  $clock=[Diagnostics.Stopwatch]::StartNew()
+  while(-not $p.WaitForExit(500)){
+   if($clock.Elapsed.TotalSeconds -gt $maxSeconds){
+    Deny 'FLAC preflight timeout; evidence unavailable.'
+   }
+   if($guardFile -and (Test-Path -LiteralPath $guardFile -PathType Leaf) -and
+      (Get-Item -LiteralPath $guardFile).Length -gt 1073741824){
+    Deny 'FLAC preflight temporary media exceeds bounded 1 GiB.'
+   }
+  }
   if($p.ExitCode -ne 0){Deny ('FLAC preflight tool failed: '+$err.Result)}
   return $out.Result
  }finally{try{if(-not $p.HasExited){$p.Kill();$p.WaitForExit()}}catch{};$p.Dispose()}
@@ -77,7 +86,7 @@ try{
  }
  $args+=@('-vn','-sn','-dn','-map_metadata','-1','-map_chapters','-1',
    '-f','matroska',(Q $out))
- [void](RunBounded $Ffmpeg ($args -join ' ') 360)
+ [void](RunBounded $Ffmpeg ($args -join ' ') 360 $out)
  if(-not(Test-Path -LiteralPath $out -PathType Leaf)){Deny 'FLAC remux has no output.'}
  if((Get-Item -LiteralPath $out).Length -gt 1073741824){Deny 'Isolated FLAC output exceeds bounded 1 GiB temporary limit.'}
  $worker=Join-Path $PSScriptRoot 'trim-packet-audit.ps1'
