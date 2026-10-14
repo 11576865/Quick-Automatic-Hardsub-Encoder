@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_b12_cpu_shared_compiler_parity_code_pending_hosted_acceptance",
-  "current_bounded_work_unit": "B12 source-scoped Guided-to-Manual authoritative CPU task precompile, ASS-before-bicubic-scale filter parity, precise whole-file ledger admission and applied form recompile/rollback",
+  "status": "incomplete_full_report_b16_isolated_preencode_observation_code_pending_hosted_acceptance",
+  "current_bounded_work_unit": "B16 source-scoped bounded pre-encode isolated FFmpeg auxiliary copy remux + independent FFprobe packet worker, single-flight Native status receipt and strict never-reduce budget gate",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -140,9 +140,9 @@
       "id": "B16",
       "source": "R19 §11；R24 §18",
       "requirement": "复制流精确范围成本、重编码音频成本、附件和余量完整计量",
-      "implementation_status": "Partial: full-source conservative preflight unchanged, small completed-output trim audit verified previously; bounded constant-memory asynchronous Windows long-output post-encode audit and explicit UI report refresh implemented in draft PR #105, hosted Windows acceptance Pending.",
-      "evidence": "media-planning.js；Windows source-budget；whole-file-budget tests；trim-copy-audit.js + tests; media-planning.js::outputReport trimCopyAudit; windows/native-bridge.ps1 bounded FFprobe completion audit; main.js/media-workspace.js result+UI; whole-file-budget.integration.test.mjs Linux actual MKV and scripts/check-guided-budget-native.ps1 Windows Native two PCM trim. Frontend 7d3b784 test+integration PASS; Windows local smoke 451be21 PASS; later current SHA fb07c74 full CI pending.；windows/trim-packet-audit.ps1 + Windows Bridge Get-AsyncTrimPacketEvidence, state/result readback, main.js/media-workspace.js report refresh, trim-copy-audit.test.mjs and check-guided-budget-native.ps1 worker oracle: code submitted, exact-head Windows CI Pending",
-      "remaining": "Still no exact pre-encode range-bound copy packet cost; real long-form async Native 180s+/512MiB+ acceptance Pending, FLAC re-encode unknown, Android/Web metering, source/content adversarial identity, physical player/provider and bridge-process restart acceptance open."
+      "implementation_status": "部分实现：原完整源流保守预算继续维持；新增 Windows Native 单任务异步编码前辅助流裁切预演，以 FFmpeg 独立复制选定音频/软字幕、独立 FFprobe 逐包测量，来源 stat + Windows 测量 ID 校验，并提供仅观察权限的 JS 收据门禁。它不是最终混合封装的精确输入成本。FLAC 和 Android/Web 仍未完成。",
+      "evidence": "media-planning.js；Windows source-budget；whole-file-budget tests；trim-copy-audit.js + tests; media-planning.js::outputReport trimCopyAudit; windows/native-bridge.ps1 bounded FFprobe completion audit; main.js/media-workspace.js result+UI; whole-file-budget.integration.test.mjs Linux actual MKV and scripts/check-guided-budget-native.ps1 Windows Native two PCM trim. Frontend 7d3b784 test+integration PASS; Windows local smoke 451be21 PASS; later current SHA fb07c74 full CI pending.；windows/trim-packet-audit.ps1 + Windows Bridge Get-AsyncTrimPacketEvidence, state/result readback, main.js/media-workspace.js report refresh, trim-copy-audit.test.mjs and check-guided-budget-native.ps1 worker oracle: code submitted, exact-head Windows CI Pending；windows/trim-copy-preflight.ps1 和 trim-copy-preflight-bridge.ps1，Native POST/GET /api/trim-copy-preflight 单飞异步入口；src/trim-copy-preflight.js + 8 isolated V8 checks，scripts/check-trim-copy-preflight.ps1 两音轨+软字幕真实 FFmpeg 独立对照，check-guided-budget-native.ps1 localhost API 测试；Windows/Node exact-head CI Pending",
+      "remaining": "仍需建立能安全替代完整源流保守预留的精确实际混合任务包选择证明：输入裁切 seek/PTS、选流与最终 mux 行为联动；FLAC 全长编码成本、Android/Web 计量、长片/VFR/复杂软字幕实测、源内容哈希与桥进程重启恢复。独立 remux 预演不能视作完整 B16 验收。"
     },
     {
       "id": "B17",
@@ -237,9 +237,11 @@
     "B11 code submitted: shared reference scope contract with separate Guided ASS and Manual tokens; tags Guided R-D models, Native source-paired asynchronous samples and formal CRF plan; seven isolated JS tests PASS",
     "B11 implementation submitted: genuine ASS-rendered Windows Native single-pass VBR exact samples with staged-source/font SHA256, paired JS verifier, explicit current-parameters confirmation and offline/real Native CI tests; exact-head hosted validation Pending",
     "B11 submitted: Guided RD branch action no longer mutates selection before VBR; pending proposal identity and live frontier admission, explicit atomic commit with executable-plan comparison/rollback, NVENC actual preset evidence correction; 18 isolated JS assertions PASS.",
-    "B12 code submitted: actual shared Manual compileTask contract for Guided CPU handoff, frozen ASS render order and 4% reserve, reject inherited unrelated advanced flags, source-checked staged form and rollback; 11 real-module V8 checks passed, hosted CI pending."
+    "B12 code submitted: actual shared Manual compileTask contract for Guided CPU handoff, frozen ASS render order and 4% reserve, reject inherited unrelated advanced flags, source-checked staged form and rollback; 11 real-module V8 checks passed, hosted CI pending.",
+    "B16 code submitted: independent before-encode bounded remux of trimmed copied audio/subtitles, active-source Native async POST/GET, standalone packet oracle & source stat string precision checks; 8 V8 behavior checks, 12 wiring checks; Windows localhost/FFmpeg tests wired Pending."
   ],
   "next_units": [
+    "B16 exact-head Windows PowerShell/FFmpeg isolated remux and source-owned async API runtime acceptance; add UI read-only observation then investigate actual final mixed-mux matched trim copy cost, FLAC full-stream measured preflight, Android/Web cost transports.",
     "B12 exact-head Node frontend and real browser Guided->Manual form transaction/FFmpeg ASS reference-order acceptance; then Native GPU/Web/Android task capability adaptation and final-output source-scoped attestation.",
     "B11 exact-head Node/browser and Windows Native/real NVENC source-paired ASS VBR adoption acceptance; then unified Manual/Guided task serialisation and final-output attestation across strategies.",
     "B11 exact-head frontend and Windows Native localhost paired ASS VBR CI plus browser interaction acceptance; then implement true cross-branch Guided/Manual transaction with post-task result attestation, no shortcut for two-pass/strict ceiling.",
@@ -270,7 +272,8 @@
     "b11_guided_manual_rendered_scope": "Seven extracted isolated V8 logic checks PASS; nine source wiring/compatibility checks PASS; Node Draft-fast/full frontend and Windows Native exact-head Pending",
     "b11_guided_exact_native_vbr": "8 actual-module isolated V8 behavior checks PASS; main JS syntax and 16 exact source wiring gates PASS; exact-head Draft-fast Node and hosted Windows Native localhost FFmpeg acceptance Pending",
     "b11_guided_branch_adoption": "18 extracted actual-module V8 pure behavior tests PASS, 12 static/source wiring gates PASS and main JS parse PASS. Exact-head full Node/browser and real Windows PowerShell+FFmpeg+NVENC acceptance Pending.",
-    "b12_guided_cpu_shared_compiler": "11 actual-module V8 behavior tests PASS, reference-frame reconstructed ASS before bicubic scaling PASS, all modified JS modules parsed after stripping imports; exact-head Node/Browser/FFmpeg/Windows Native acceptance Pending"
+    "b12_guided_cpu_shared_compiler": "11 actual-module V8 behavior tests PASS, reference-frame reconstructed ASS before bicubic scaling PASS, all modified JS modules parsed after stripping imports; exact-head Node/Browser/FFmpeg/Windows Native acceptance Pending",
+    "b16_isolated_preencode_trim_copy": "8 V8 core receipt tests PASS; 12 code/CI wiring checks PASS. Full Node and Windows Native real FFmpeg tests Pending; no exact mixed-output cost certificate."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
