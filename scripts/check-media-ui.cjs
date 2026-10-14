@@ -307,7 +307,10 @@ const {spawn}=require('node:child_process');
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
   await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
   await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="guided"]').click());
-  if(await page.locator('#mediaWorkspace').isVisible())throw Error('Returning to goal-controlled hardsub left the parameter workspace visible');
+  if(!await page.locator('#mediaWorkspace').isVisible() ||
+     !await page.locator('#taskEncoding').isHidden() ||
+     !await page.locator('#planCard').isVisible())
+    throw Error('Guided hardsub must keep the shared workspace and goal plan, but hide professional encoder parameters');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
   if(!await page.locator('#taskRun').isDisabled() ||
      (await page.locator('#taskRun').getAttribute('data-input-requirement'))!=='video')
