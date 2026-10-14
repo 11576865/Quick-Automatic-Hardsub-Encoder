@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_b16_flac_cache_reuse_evidence_experimental_pending_hosted_runtime",
-  "current_bounded_work_unit": "B16 experimentally prove same encoded FLAC cached audio bitstreams copied byte-for-byte (ordered SHA256 per packet) into final video+two-audio+softsubtitle MKV, with actual Windows Draft runtime fixture; production adoption still Pending",
+  "status": "incomplete_full_report_route_reanchored_WU01_authorized",
+  "current_bounded_work_unit": "ROUTE_CHECKPOINT_COMMITTED; next work WU-01 Guided→Manual authoritative compile/render/output acceptance (B02/B04/B11/B12 A05/A06); no product code work included in route checkpoint",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -245,31 +245,16 @@
     "B16 previous real Windows focused FFmpeg run 38513613921 PASS. This batch: Native completed FLAC audit even in quality mode, explicit source subtitle and attachment all mappings, source-bound final mux parity surface, Windows HTTP/source measurement revocation and real mixed quality job fixture. 17 actual-module behavior tests PASS.",
     "B16 output identity code submitted: short and long Native actual packet observations bind artifact bytes/FILETIME/jobId; finalized compiled audio/subtitle output inventory and method admission, mutation-invalidating cached packet audits; isolated V8 pure checks PASS; hosted exact-head Windows long fixture Pending.",
     "B16 completed mixed mux codec byte attribution for real video/audio/subtitle packets, unaccounted container + attachments residual; 8 actual-module V8 behavior tests PASS, Windows video oracles wired and pending.",
-    "B16 FLAC cached bitstream reuse hypothesis made executable: local Linux real FFmpeg cached two FLAC audio streams and copied them unchanged into x264 video+SRT MKV with matching packet SHA256, 6 retrieved-source JS guard tests PASS; Draft Windows targeted CI added, production formal cache reuse/strict-budget remains open."
+    "B16 FLAC cached bitstream reuse hypothesis made executable: local Linux real FFmpeg cached two FLAC audio streams and copied them unchanged into x264 video+SRT MKV with matching packet SHA256, 6 retrieved-source JS guard tests PASS; Draft Windows targeted CI added, production formal cache reuse/strict-budget remains open.",
+    "2026-10-14 ROUTE_ONLY: audited fixed R19/R24 B01–B25/A01–A10 denominator and PR104→PR105 branch identity, committed route snapshot and agent re-anchoring gate, archived 18 generated followups as non-authoritative, authorized only WU-01/WU-02. No product code, merge, release or new device validation."
   ],
   "next_units": [
-    "Confirm exact-head Windows FLAC cache reuse ordered packet hash fixture; then implement source hash- and immutable-artifact-backed formal audio cache injection, PTS/timebase and actual output overhead bounds before any future strict-size FLAC admission.",
-    "B16 exact-head Windows real short/182s video packet and 1v2a1s residual verification, browser report UI acceptance; next reuse actual preencoded FLAC bitstream within formal mux only after source-time identity and execution parity gate.",
-    "B16 exact-head Windows 182-second real asynchronous completed mux audit, independent packet remeasure, staged output tamper invalidation and current browser end-to-end evidence UI; then determine if any FLAC packet reuse/strict target admission can be proved without extrapolation.",
-    "Confirm exact-head Windows B16 Native HTTP lifecycle + real quality-mode FLAC finished mixed-mux packet evidence, then broaden long/VFR/content-provenance acceptance; only prove reusable strict-size FLAC pricing via genuinely shared encoded packet artifact or stronger exact execution contract.",
-    "B16 exact-head Windows runtime must prove both FLAC and copied-trim worker execute; then complete end-to-end Native HTTP/workbench and actual mixed task packet parity for long content before considering strict budget FLAC admission.",
-    "B16 targeted Windows Draft runtime actual FLAC+trim tests, real Bridge/client UI acceptance and final-mux task-matched packet/cost certification; then safe bounded FLAC strict-budget adoption only after necessary parity, Android/Web transport and real long-form material.",
-    "B16 exact-head Windows PowerShell/FFmpeg isolated remux and source-owned async API runtime acceptance; add UI read-only observation then investigate actual final mixed-mux matched trim copy cost, FLAC full-stream measured preflight, Android/Web cost transports.",
-    "B12 exact-head Node frontend and real browser Guided->Manual form transaction/FFmpeg ASS reference-order acceptance; then Native GPU/Web/Android task capability adaptation and final-output source-scoped attestation.",
-    "B11 exact-head Node/browser and Windows Native/real NVENC source-paired ASS VBR adoption acceptance; then unified Manual/Guided task serialisation and final-output attestation across strategies.",
-    "B11 exact-head frontend and Windows Native localhost paired ASS VBR CI plus browser interaction acceptance; then implement true cross-branch Guided/Manual transaction with post-task result attestation, no shortcut for two-pass/strict ceiling.",
-    "B11 exact-head Node frontend and browser/Windows Native async ASS/font change rejection, Manual source-only reference export and model identity acceptance; then implement shared Guided ASS VBR adoption contract.",
-    "B15 exact-head Node/build and real Windows Native Manual paired scene probes + browser control acceptance; verify one source/risk set shared across all encoder/preset candidates; then add-on paired risk-refinement and ASS-render reference bridge remains Pending.",
-    "B14 exact-head fast/full frontend tests and real Windows Native UI/receipt acceptance; then add real final-job resource/time and strict capability coverage (NOT automatic whole-movie estimates)",
-    "B16 acceptance next: exact-head frontend and Windows PowerShell Native worker CI, actual >180s or >512MiB trim/receipt/strict-gate fixture and user report refresh; then precise pre-encode trim cost, FLAC recompression, Android/Web metering remain open.",
-    "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
-    "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
-    "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
-    "B03/B18/B19/B23/B25 platform/field/benchmark/integration/release"
+    "WU-01 AUTHORIZED: B02/B04/B11/B12+A05/A06 Guided→Manual rendered-ASS/VBR/compileTask/Windows-Native/browser exact-head vertical acceptance. See docs/qhe-initial-version-route-reanchor-2026-10-14.md.",
+    "WU-02 AUTHORIZED: B05/B06/B07/B24+A01–A03 true MKV embedded ASS/font and two audio tracks preservation + independent final output checks. Re-anchor before authorizing WU-03."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "0a14f082e146b8cbafc6a6e43efbe325fe84383b",
+  "latest_durable_commit": "cfe6be37217d577147305681dc065046323cd246",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -294,11 +279,14 @@
     "b16_native_final_mux_flac": "Prior 0bd2381c real Windows FLAC/copy FFmpeg workflow SUCCESS; new Native HTTP and completed mixed FLAC quality-mode audit submitted, 17 actual-module V8 behavior tests PASS; Windows real Native endpoint and browser UI on this exact new head Pending",
     "b16_artifact_bound_output_packet_audit": "Old head c54a819 Windows B16/Frontend/UIGS PASS; new head isolated pure JS receipt tests PASS, PowerShell 182s Native async and short mixed artifact tamper real Windows CI Pending",
     "b16_completed_byte_ledger": "Eight actual-module isolated JS behavior checks and UI/Native/worker static wiring PASS; short Native, 182-second async video FFprobe and real 1v2a1s completed Matroska packet attribution hosted Windows Pending",
-    "b16_flac_cache_reuse": "6 actual-module V8 pure behavior tests PASS; Linux 3-second real FFmpeg cached FLAC to video+softsubtitle final mux ordered per-packet size/hash equality 32/21 packet verified; exact-head Windows Draft targeted run Pending; formal Native/Browser production cache injection not implemented"
+    "b16_flac_cache_reuse": "6 actual-module V8 pure behavior tests PASS; Linux 3-second real FFmpeg cached FLAC to video+softsubtitle final mux ordered per-packet size/hash equality 32/21 packet verified; exact-head Windows Draft targeted run Pending; formal Native/Browser production cache injection not implemented",
+    "route_checkpoint": "Documentation and durable task authority updated; this is not a code, browser, GPU, physical device or release acceptance."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
-    "Physical device, provider, long-form and player acceptance lacks required environment/media evidence"
+    "Physical device, provider, long-form and player acceptance lacks required environment/media evidence",
+    "PR #104 is Draft on main and PR #105 is Draft on PR #104; no main integration acceptance.",
+    "Current exact-head cross-view Guided/Manual browser+Windows Native end-to-end output acceptance is not established."
   ],
   "traceability_document": "docs/initial-version-report-traceability-2026-10-13.md",
   "intake": {
@@ -312,5 +300,80 @@
     "skipped": 9,
     "failed": 0,
     "build": "pass"
-  }
+  },
+  "route_anchor": {
+    "id": "qhe-initial-v1-20261014",
+    "route_document": "docs/qhe-initial-version-route-reanchor-2026-10-14.md",
+    "scope_authority": "The complete supplied R19 and R24 theoretical reports remain owner-approved initial-version baseline. Optional/experimental/design language retains original force.",
+    "authoritative_ledger": "docs/initial-version-report-traceability-2026-10-13.md",
+    "audited_main_sha": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
+    "audited_pr104_sha": "0feed738042745ace6c031f726a3ad93561e56e8",
+    "audited_pr105_precheckpoint_sha": "b22f5fae2ee49d6dd3e442781729b808c89e55e8",
+    "roadmap_checkpoint_commit": "08fe6df0ccd1b4319edb1105c2ef830ea146c15d",
+    "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
+    "allowed_consecutive_units": 2,
+    "mandatory_reanchor_before_third": true,
+    "current_authorized_index": 0,
+    "completed_authorized_units": 0,
+    "review_status": "ROUTE_CHECKPOINT_COMPLETE / PRODUCT_INCOMPLETE"
+  },
+  "authorized_next_units": [
+    {
+      "id": "WU-01",
+      "requirement_ids": [
+        "B02",
+        "B04",
+        "B11",
+        "B12",
+        "A05",
+        "A06"
+      ],
+      "title": "Guided to Manual authoritative compiled task and real output acceptance",
+      "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-01--guidedmanual-单任务正式编译与结果闭环b02b04b11b12a05a06",
+      "exit": "On a pinned PR #104/#105 stack, real browser and Windows Native fixture demonstrate same source/render/audio/source-time/size, explicit VBR approval and rollback, matching compileTask FFmpeg args and verified output; separate actual PASS from pending environments.",
+      "status": "AUTHORIZED_NOT_STARTED"
+    },
+    {
+      "id": "WU-02",
+      "requirement_ids": [
+        "B05",
+        "B06",
+        "B07",
+        "B24",
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "title": "Rich MKV source streams, embedded ASS/fonts and audio preservation fixture",
+      "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-02--复杂-mkv-逐流保留与内封-ass-黄金样本b05b06b07b24a01a03",
+      "exit": "Windows Native MKV with video/two audio/embedded ASS/font: independent burned frame/font evidence, copied original FLAC packets, explicitly changed second audio and verified stream attributes. Field gaps stay pending; no strict-size FLAC requirement in this slice.",
+      "status": "AUTHORIZED_NOT_STARTED"
+    }
+  ],
+  "historical_next_units": {
+    "captured_from": "b22f5fae2ee49d6dd3e442781729b808c89e55e8",
+    "captured_at": "2026-10-14",
+    "status": "PROPOSED_HISTORY_NOT_EXECUTION_AUTHORITY",
+    "items": [
+      "Confirm exact-head Windows FLAC cache reuse ordered packet hash fixture; then implement source hash- and immutable-artifact-backed formal audio cache injection, PTS/timebase and actual output overhead bounds before any future strict-size FLAC admission.",
+      "B16 exact-head Windows real short/182s video packet and 1v2a1s residual verification, browser report UI acceptance; next reuse actual preencoded FLAC bitstream within formal mux only after source-time identity and execution parity gate.",
+      "B16 exact-head Windows 182-second real asynchronous completed mux audit, independent packet remeasure, staged output tamper invalidation and current browser end-to-end evidence UI; then determine if any FLAC packet reuse/strict target admission can be proved without extrapolation.",
+      "Confirm exact-head Windows B16 Native HTTP lifecycle + real quality-mode FLAC finished mixed-mux packet evidence, then broaden long/VFR/content-provenance acceptance; only prove reusable strict-size FLAC pricing via genuinely shared encoded packet artifact or stronger exact execution contract.",
+      "B16 exact-head Windows runtime must prove both FLAC and copied-trim worker execute; then complete end-to-end Native HTTP/workbench and actual mixed task packet parity for long content before considering strict budget FLAC admission.",
+      "B16 targeted Windows Draft runtime actual FLAC+trim tests, real Bridge/client UI acceptance and final-mux task-matched packet/cost certification; then safe bounded FLAC strict-budget adoption only after necessary parity, Android/Web transport and real long-form material.",
+      "B16 exact-head Windows PowerShell/FFmpeg isolated remux and source-owned async API runtime acceptance; add UI read-only observation then investigate actual final mixed-mux matched trim copy cost, FLAC full-stream measured preflight, Android/Web cost transports.",
+      "B12 exact-head Node frontend and real browser Guided->Manual form transaction/FFmpeg ASS reference-order acceptance; then Native GPU/Web/Android task capability adaptation and final-output source-scoped attestation.",
+      "B11 exact-head Node/browser and Windows Native/real NVENC source-paired ASS VBR adoption acceptance; then unified Manual/Guided task serialisation and final-output attestation across strategies.",
+      "B11 exact-head frontend and Windows Native localhost paired ASS VBR CI plus browser interaction acceptance; then implement true cross-branch Guided/Manual transaction with post-task result attestation, no shortcut for two-pass/strict ceiling.",
+      "B11 exact-head Node frontend and browser/Windows Native async ASS/font change rejection, Manual source-only reference export and model identity acceptance; then implement shared Guided ASS VBR adoption contract.",
+      "B15 exact-head Node/build and real Windows Native Manual paired scene probes + browser control acceptance; verify one source/risk set shared across all encoder/preset candidates; then add-on paired risk-refinement and ASS-render reference bridge remains Pending.",
+      "B14 exact-head fast/full frontend tests and real Windows Native UI/receipt acceptance; then add real final-job resource/time and strict capability coverage (NOT automatic whole-movie estimates)",
+      "B16 acceptance next: exact-head frontend and Windows PowerShell Native worker CI, actual >180s or >512MiB trim/receipt/strict-gate fixture and user report refresh; then precise pre-encode trim cost, FLAC recompression, Android/Web metering remain open.",
+      "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
+      "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
+      "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
+      "B03/B18/B19/B23/B25 platform/field/benchmark/integration/release"
+    ]
+  },
+  "discovered_followups_status": "ARCHIVED_IN_historical_next_units; not independently approved; compare against original B01-B25/A01-A10 before promotion"
 }
