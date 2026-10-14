@@ -47,6 +47,7 @@ export function reconcileAuxiliaryMuxObservation({
  const request=preflight.request,receipt=preflight.receipt,rows=[];
  if(request.mode==='isolated-flac-encode'){
   if(receipt.scope!=='isolated-flac-encode-observation'||
+     receipt.method!=='ffmpeg-flac-full-input-trim-input-independent-ffprobe-v1'||
      receipt.canReplaceFormalBudget!==false||receipt.canCertifyFinalMux!==false||
      !Array.isArray(request.tracks)||!Array.isArray(receipt.tracks)||
      request.tracks.length!==receipt.tracks.length)
@@ -70,6 +71,7 @@ export function reconcileAuxiliaryMuxObservation({
   }
  }else if(request.mode==='isolated-trim-copy'){
   if(receipt.scope!=='isolated-trim-copy-observation'||
+    receipt.method!=='ffmpeg-isolated-auxiliary-copy-remux-then-independent-ffprobe-v1'||
     receipt.canReplaceFullSourceBudget!==false||
     !Array.isArray(request.audioOrdinals)||!Array.isArray(receipt.audioPacketBytes)||
     request.audioOrdinals.length!==receipt.audioPacketBytes.length||
@@ -93,7 +95,9 @@ export function reconcileAuxiliaryMuxObservation({
   // per-source output ordinal in that projection.
   const subtitles=task.outputPlan?.subtitles;
   if(!Array.isArray(subtitles)||subtitles.some(x=>!x||
-     !order(x.sourceOrdinal)||x.action!=='copy'))
+     !order(x.sourceOrdinal)||x.action!=='copy')||
+     output.subtitlePacketBytes.length!==subtitles.length||
+     new Set(subtitles.map(x=>x.sourceOrdinal)).size!==subtitles.length)
    return fail('copy-subtitle-output-map-unavailable');
   for(let i=0;i<request.subtitleOrdinals.length;i++){
    const src=request.subtitleOrdinals[i];
