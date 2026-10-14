@@ -1,0 +1,72 @@
+name: Windows B16 runtime acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'windows/flac-encode-preflight.ps1'
+      - 'windows/flac-encode-preflight-bridge.ps1'
+      - 'windows/trim-copy-preflight.ps1'
+      - 'windows/trim-copy-preflight-bridge.ps1'
+      - 'windows/native-bridge.ps1'
+      - 'scripts/check-flac-encode-preflight.ps1'
+      - 'scripts/check-trim-copy-preflight.ps1'
+      - 'src/flac-encode-preflight.js'
+      - 'src/flac-encode-preflight.test.mjs'
+      - '.github/workflows/windows-b16-runtime.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  b16:
+    # Focused B16 fixture runs on Draft PRs as well; does not launch VVC,
+    # Android or full Windows media acceptance.
+    runs-on: windows-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate PowerShell 5.1 syntax and B16 client evidence contracts
+        shell: powershell
+        run: |
+          foreach ($path in @(
+            'windows/flac-encode-preflight.ps1',
+            'windows/flac-encode-preflight-bridge.ps1',
+            'windows/trim-copy-preflight.ps1',
+            'windows/trim-copy-preflight-bridge.ps1',
+            'windows/native-bridge.ps1',
+            'windows/trim-packet-audit.ps1',
+            'scripts/check-flac-encode-preflight.ps1',
+            'scripts/check-trim-copy-preflight.ps1'
+          )) {
+            $tokens=$null; $errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path),[ref]$tokens,[ref]$errors)|Out-Null
+            if($errors.Count -ne 0){$errors|Format-List;throw "Invalid PowerShell source: $path"}
+          }
+          if(-not (Select-String -Path 'windows/native-bridge.ps1' -Pattern 'Start-FlacEncodePreflight \$body' -Quiet)) {
+            throw 'FLAC preflight route missing'
+          }
+      - name: Check JS receipt gates
+        shell: pwsh
+        run: |
+          node --test src/flac-encode-preflight.test.mjs src/trim-copy-preflight.test.mjs
+      - name: Install FFmpeg with bounded package retries
+        shell: powershell
+        run: |
+          $ready=$false
+          for($attempt=1;$attempt -le 3;$attempt++){
+            choco install ffmpeg --yes --no-progress
+            if($LASTEXITCODE -eq 0){$ready=$true;break}
+            if($attempt -lt 3){Start-Sleep -Seconds ($attempt*5)}
+          }
+          if(-not $ready){throw 'External FFmpeg package service unavailable, not a codec regression'}
+      - name: Real full-plus-trim two-track FLAC packet oracle
+        shell: powershell
+        run: ./scripts/check-flac-encode-preflight.ps1
+      - name: Real two-audio plus subtitle isolated copy packet oracle
+        shell: powershell
+        run: ./scripts/check-trim-copy-preflight.ps1
