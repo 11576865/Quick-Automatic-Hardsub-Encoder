@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU07_audio_lock_submitted_ci_pending",
-  "current_bounded_work_unit": "WU07 source-bound must-copy audio lock implemented in same schema-v4 task and per-stream UI, fail closed on drop/codec/source mismatch; exact-head tests pending; does not independently prove copied audio packet identity.",
+  "status": "incomplete_full_report_WU07_P2_audio_must_copy_hosted_accepted",
+  "current_bounded_work_unit": "WU07 P2 source-bound owner must-copy per-audio stream is hosted accepted at 38d4b04: user locks FLAC source ordinal and retains AAC second-track reencode in same v4 task; compiled drop/transcode or source drift fails closed; real Chromium unlock/reset and source drift PASS. No real A02 bitwise output from this exact locked task; P2 whole completeness open.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -261,15 +261,17 @@
     "WU06 root reanchor: selected original R19 §03/§16 P1 and R24 §05 read-only domain projection. Existing task.outputPlan is partial; next unit must expose source, intent, output provenance and executable parameter trace without replacing compiler.",
     "WU06 hosted PASS 0124946: P1 passive compiled v4 → SourceAsset/Streams/UserIntent-inferred/OutputPlan/executable map/unknown ArtifactRecord inspect; source replacement invalidates view; no changed task args or new mutable user intent.",
     "WU07 owner-report reanchor: R19 P2 and R24 UserIntent must-preserve original stream. Prior P1 only inferred intent; moving ONE user-approved audio stream lock into the existing v4 compiler, not a full schema migration.",
-    "WU07 P2 implemented source-bound user must-copy lock in existing per-track UI, official v4 compiler rejects conflicting drop or reencode, and output review displays lock; CI pending."
+    "WU07 P2 implemented source-bound user must-copy lock in existing per-track UI, official v4 compiler rejects conflicting drop or reencode, and output review displays lock; CI pending.",
+    "WU07 source-bound owner-approved must-copy audio contract implemented and Chromium hosted accepted at 38d4b04: source FLAC copy + AAC reencode allowed, locked FLAC drop/AAC/Opus prohibited by authoritative compileTask, source drift and manual reset carefully handled. Physical output packet hash not inferred."
   ],
   "next_units": [
-    "WU07 authorized: source-bound audio must-copy lock in per-stream UI and official compiler, negative tests and Chromium; no second intent state engine.",
-    "No WU08 authorized; full P2 ASS fonts VFR/packet real film and multi-source batch still open."
+    "NO WU08 AUTHORIZED. Re-anchor to original R19/R24 B01–B25 and A01–A10 before any additional autonomous work unit, prefer unreleased substantial product capability over recursive tests.",
+    "Remaining P2/A02: actual locked-source output FLAC packet hash, multi-language metadata/disposition, stream time mapping, complex MKV real user files, Android/Web/Windows device field acceptance.",
+    "Remaining B21 multi-source batch, P3 unified Guided/Manual decision engine, WU01 Guided-to-Windows same-task handoff, B25 PR #104/#105 merge and release; all require deliberate separate authorization."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "0124946d6939f73a285dcf609a6a973924d44219",
+  "latest_durable_commit": "38d4b04e8b1edfac99dc3116f4931c310b075d08",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -307,7 +309,7 @@
     "windows_b16_after_wu04": "External Chocolatey feed 503 prevented FFmpeg binary availability in most recent Windows B16; not product B16 acceptance failure at media test stage.",
     "wu05_cut_timeline": "PASS exact-head cfed326a44412ba9a7f140ae4b39b526c4c3975b: Windows run 38568220073, Chromium/model run 38568219698, Test frontend 38568219578, UIGS Evidence Coverage 38568219823. Windows source H264 Bframes + AAC, formal Copy Trim IN2.4 OUT4.8, actual output decoded first video PTS2.000, video packet PTS/DTS2.083/2.000, audio first PTS0.005; output 58863 B. Large first-clock gap flagged for review; NOT sync verdict, NOT source packet hash or end-frame acceptance.",
     "wu06_domain_projection": "Exact-head 0124946d6939f73a285dcf609a6a973924d44219: new WU06 Node real compiled v4 Hardsub/Transcode/Copy+source stream coverage and real Chromium source-bound inspector SUCCESS run 38575999722; frontend SUCCESS 38575999605; UIGS Evidence Coverage SUCCESS 38575999820. No real Native/Android/Web domain owner parity, no additional runtime authority, no ArtifactRecord field evidence.",
-    "wu07_audio_lock": "Submitted per-audio mustCopyAudioOrdinals and audioKeepSourceIdentity bound to media.sourceIdentity and official compiler, real browser/physical output pending"
+    "wu07_audio_lock": "Exact-head 38d4b04e8b1edfac99dc3116f4931c310b075d08: WU07 official v4 audio lock unit+production Chromium PASS run 38580653413; frontend PASS 38580653495; UIGS Coverage PASS 38580653198. Real Windows/Android/Web copy packet identity and actual file/field P2 still open."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -341,9 +343,9 @@
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
     "current_authorized_index": 6,
-    "completed_authorized_units": 3,
-    "review_status": "ROOT_REPORT_REANCHORED_WU07_P2_AUDIO_PRESERVATION_LOCK_AUTHORIZED",
-    "executed_authorized_units_since_reanchor": 0
+    "completed_authorized_units": 4,
+    "review_status": "WU07_P2_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEXT_UNIT",
+    "executed_authorized_units_since_reanchor": 1
   },
   "authorized_next_units": [
     {
@@ -445,7 +447,7 @@
         "B06",
         "A02"
       ],
-      "status": "IMPLEMENTED_PENDING_CI",
+      "status": "HOSTED_ACCEPTED_COMPILER_AND_CHROMIUM_AUDIO_COPY_LOCK_PACKET_INDEPENDENT_OPEN",
       "title": "Source-bound per-audio track must-copy preservation intent enforced by authoritative compiler",
       "source": "R19 §03/§16 P2, R24 §05/§11: explicit must-preserve source streams; no silent drop/reencode; packet evidence remains separate",
       "scope": "Audio stream only bounded product slice. Add explicit user opt-in lock to existing per-stream UI and schema-v4 raw task; compiler rejects drop/transcode/mismatch source rather than rewriting user choice. Existing encoder/audio actions remain authority. No arbitrary DRM/bit-exact output claims.",
