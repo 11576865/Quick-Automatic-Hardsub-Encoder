@@ -1781,11 +1781,12 @@ function Get-AsyncTrimPacketEvidence($Job) {
         if($probe.ExitCode -ne 0){throw 'Trim audit final stream inventory failed.'}
         $streams=@(($probe.StdOut|ConvertFrom-Json).streams)
         if($streams.Count -gt 64 -or
+           @($receipt.videoPacketBytes).Count -ne @($streams | Where-Object {$_.codec_type -eq 'video'}).Count -or
            @($receipt.audioPacketBytes).Count -ne @($streams | Where-Object {$_.codec_type -eq 'audio'}).Count -or
            @($receipt.subtitlePacketBytes).Count -ne @($streams | Where-Object {$_.codec_type -eq 'subtitle'}).Count){
             throw 'Trim audit track ordinals do not match completed output.'
         }
-        foreach($bytes in @($receipt.audioPacketBytes)+@($receipt.subtitlePacketBytes)){
+        foreach($bytes in @($receipt.videoPacketBytes)+@($receipt.audioPacketBytes)+@($receipt.subtitlePacketBytes)){
             if($null -eq $bytes -or [long]$bytes -lt 0){throw 'Trim audit packet totals incomplete.'}
         }
         $Job.TrimPacketEvidence=[pscustomobject]@{
@@ -1793,6 +1794,7 @@ function Get-AsyncTrimPacketEvidence($Job) {
             artifactBytes=[long]$artifact.Length
             artifactWriteTicks=[string]$artifact.LastWriteTimeUtc.Ticks
             artifactJobId=[string]$Job.Id
+            videoPacketBytes=@($receipt.videoPacketBytes)
             audioPacketBytes=@($receipt.audioPacketBytes)
             subtitlePacketBytes=@($receipt.subtitlePacketBytes)
         }
@@ -1847,8 +1849,12 @@ function Get-CompletedTrimPacketEvidence($Job) {
         if($probe.ExitCode -ne 0){throw 'Completed trim output stream probe failed.'}
         $streams=@(($probe.StdOut|ConvertFrom-Json).streams)
         if($streams.Count -gt 64){throw 'Too many streams for bounded trim packet audit.'}
+        $video=Measure-AuxiliaryPackets $Job.Output 'v'
         $audio=Measure-AuxiliaryPackets $Job.Output 'a'
         $sub=Measure-AuxiliaryPackets $Job.Output 's'
+        $videoBytes=@($streams | Where-Object {$_.codec_type -eq 'video'} | ForEach-Object {
+            if($video.ContainsKey([int]$_.index)){$video[[int]$_.index]}else{$null}
+        })
         $audioBytes=@($streams | Where-Object {$_.codec_type -eq 'audio'} | ForEach-Object {
             if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}
         })
@@ -1865,6 +1871,7 @@ function Get-CompletedTrimPacketEvidence($Job) {
             artifactBytes=[long]$artifactAfter.Length
             artifactWriteTicks=[string]$artifactAfter.LastWriteTimeUtc.Ticks
             artifactJobId=[string]$Job.Id
+            videoPacketBytes=$videoBytes
             audioPacketBytes=$audioBytes;subtitlePacketBytes=$subtitleBytes
         }
     }catch{
