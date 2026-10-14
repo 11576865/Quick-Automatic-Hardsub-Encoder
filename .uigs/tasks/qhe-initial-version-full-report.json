@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU02_windows_hosted_accepted_WU01_native_open",
-  "current_bounded_work_unit": "WU-02 bounded Windows hosted acceptance complete: explicit source-bound MKV embedded ASS+font import into official libass/x264 task, copied 235/235 FLAC packets, re-encoded AAC second track, independently proven burned-event pixel difference. WU-01 same-task Windows Native end-to-end still open. Re-anchor before any third/new work unit.",
+  "status": "incomplete_full_report_WU03_B21_same_source_matrix_authorized",
+  "current_bounded_work_unit": "WU-03 authorized against original R19 P5 and R24 batch/recipes: same-source multi-output matrix. WU01 Windows same-task remains open; WU02 hosted Windows PASS/user field pending. Only this slice approved.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -250,11 +250,12 @@
     "WU-01 bounded progress: sourceKey/recompile guard + direct regressions and real FFmpeg ASS-before-scale execution oracle submitted; no WU-01 completion claim.",
     "WU-01 continued: prior exact-head FFmpeg/libass x264 CPU fixture workflow 38547044072 PASS; submitted a real-Chromium DOM Guided→Manual executable plan test and Draft CI with controlled transport; no Windows Native parity or WU01 complete claim.",
     "WU-02 product ability: explicit Windows Native MKV embedded ASS track + font attachment import to existing ASS workflow; source-stamp safety, selection invalidation, bounded extraction. No Android/Web parity or verified output claim until CI.",
-    "WU-02 Windows source-owned embedded ASS+font import + actual Native end-to-end real hosted CI PASS at 1148bcda run 38554433547: 251257-byte mixed MKV with 235 FLAC packets copied unchanged, AAC re-encoded and independent libass burned-event pixel difference. This is a NEW initial-version product capability, not whole A01 or field acceptance."
+    "WU-02 Windows source-owned embedded ASS+font import + actual Native end-to-end real hosted CI PASS at 1148bcda run 38554433547: 251257-byte mixed MKV with 235 FLAC packets copied unchanged, AAC re-encoded and independent libass burned-event pixel difference. This is a NEW initial-version product capability, not whole A01 or field acceptance.",
+    "WU03 root reanchoring checkpoint: read original R19 P5, R24 section 22; selected B21 genuine new user capability instead of another WU01/WU02 test or B16 descendant. Prior two unit states and A01–A10 scope unchanged."
   ],
   "next_units": [
-    "WU-01 AUTHORIZED: B02/B04/B11/B12+A05/A06 Guided→Manual rendered-ASS/VBR/compileTask/Windows-Native/browser exact-head vertical acceptance. See docs/qhe-initial-version-route-reanchor-2026-10-14.md.",
-    "WU-02 AUTHORIZED: B05/B06/B07/B24+A01–A03 true MKV embedded ASS/font and two audio tracks preservation + independent final output checks. Re-anchor before authorizing WU-03."
+    "WU-03 AUTHORIZED: implement a same-source independently validated multi-output recipe matrix, preserving source/assets/plan; hardsub/transcode/copy output variants; real browser interaction and bounded existing backend checks.",
+    "REANCHOR REQUIRED before new work unit. B21 multi-source matrix and B08/09 timeline remain open, do not auto-promote."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -321,10 +322,10 @@
     "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
-    "current_authorized_index": 0,
+    "current_authorized_index": 2,
     "completed_authorized_units": 1,
-    "review_status": "MANDATORY_ROOT_REANCHOR_BEFORE_FURTHER_AUTONOMOUS_WORK",
-    "executed_authorized_units_since_reanchor": 2
+    "review_status": "ROOT_SCOPE_REANCHORED_WU03_AUTHORIZED_20261014",
+    "executed_authorized_units_since_reanchor": 0
   },
   "authorized_next_units": [
     {
@@ -357,6 +358,20 @@
       "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-02--复杂-mkv-逐流保留与内封-ass-黄金样本b05b06b07b24a01a03",
       "exit": "Windows Native MKV with video/two audio/embedded ASS/font: independent burned frame/font evidence, copied original FLAC packets, explicitly changed second audio and verified stream attributes. Field gaps stay pending; no strict-size FLAC requirement in this slice.",
       "status": "HOSTED_ACCEPTED_FOR_SYNTHETIC_RICH_MKV_USER_FIELD_PENDING"
+    },
+    {
+      "id": "WU-03",
+      "requirement_ids": [
+        "B21",
+        "B02",
+        "B04",
+        "B24"
+      ],
+      "status": "AUTHORIZED_NOT_STARTED",
+      "title": "Single-source multiple independent output recipes: Hardsub/Transcode/Stream Copy through existing compiler/run/save",
+      "source": "R19 P5 batch matrix; R24 section 22 batch and recipes; QHE docs/initial-version-report-traceability-2026-10-13.md",
+      "boundaries": "Do not claim multi-source batch, automatic encoder choosing, quality score or field acceptance; do not regress existing clip queue; each output separately validated and saved",
+      "exit": "Real UI can queue distinct frozen schema-v4 tasks against one source/ASS-font identity; serially execute, verify and save each separately; refuse changed source/assets; stop on failure; preserve save-only retry. Exact-head CI plus browser controlled-transport acceptance."
     }
   ],
   "historical_next_units": {
