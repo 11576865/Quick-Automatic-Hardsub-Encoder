@@ -2186,6 +2186,87 @@ function Get-JobStatus([string]$JobId) {
     return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
 }
 
+
+# WU05: optional read-only FIRST-boundary output-clock evidence. Bounded
+# FFprobe sampling is NOT full source packet identity or A/V sync proof.
+function Get-CutTimelineEvidence([string]$JobId){
+  if(-not $script:Jobs.ContainsKey($JobId)){throw 'Unknown Native job id.'}
+  $j=$script:Jobs[$JobId]
+  if(-not $j.Task -or [string]$j.Task.operation -ne 'copy' -or
+     -not [bool]$j.Task.hasTrimRange){throw 'Timeline receipt is available only for copy-trim jobs.'}
+  $status=Get-JobStatus $JobId
+  if($status.state -ne 'completed'){throw 'Completed cut is required for output timeline inspection.'}
+  $before=Get-Item -LiteralPath $j.Output -ErrorAction Stop
+  if($before.Length -le 0){throw 'Completed output is empty.'}
+  $file=Quote-NativeArg $j.Output
+  $frames=Invoke-BridgeTool $script:Ffprobe (
+    '-v error -select_streams v:0 -read_intervals '+(Quote-NativeArg '%+#128')+
+    ' -show_frames -show_entries frame=best_effort_timestamp_time -of json '+$file
+  ) '' 18
+  if($frames.ExitCode -ne 0){throw 'First decoded frame probe failed.'}
+  $firstFrame=$null
+  foreach($frame in @(($frames.StdOut|ConvertFrom-Json).frames)){
+    $value=0.0
+    if([double]::TryParse([string]$frame.best_effort_timestamp_time,
+      [Globalization.NumberStyles]::Float,
+      [Globalization.CultureInfo]::InvariantCulture,[ref]$value) -and
+      -not [double]::IsNaN($value)){
+      $firstFrame=$value;break
+    }
+  }
+  if($null -eq $firstFrame){throw 'No decoded video presentation observed within first 128 packets.'}
+  $video=Invoke-BridgeTool $script:Ffprobe (
+    '-v error -select_streams v:0 -read_intervals '+(Quote-NativeArg '%+#64')+
+    ' -show_packets -show_entries packet=pts_time,dts_time -of json '+$file
+  ) '' 15
+  if($video.ExitCode -ne 0){throw 'First video packet probe failed.'}
+  $firstVideo=@(($video.StdOut|ConvertFrom-Json).packets|Where-Object{
+    $_.pts_time -ne $null -and $_.dts_time -ne $null
+  })|Select-Object -First 1
+  if(-not $firstVideo){throw 'First encoded video packet with PTS and DTS was not observed.'}
+  $streamProbe=Invoke-BridgeTool $script:Ffprobe (
+    '-v error -show_entries stream=index,codec_type -of json '+$file
+  ) '' 12
+  if($streamProbe.ExitCode -ne 0){throw 'Output stream inventory failed.'}
+  $audioStreams=@(($streamProbe.StdOut|ConvertFrom-Json).streams|Where-Object{$_.codec_type -eq 'audio'})
+  if($audioStreams.Count -gt 8){throw 'Audio timestamp report supports at most eight output audio streams.'}
+  $audio=@()
+  for($n=0;$n -lt $audioStreams.Count;$n++){
+    $packets=Invoke-BridgeTool $script:Ffprobe (
+      '-v error -select_streams a:'+$n+
+      ' -read_intervals '+(Quote-NativeArg '%+#32')+
+      ' -show_packets -show_entries packet=pts_time,dts_time -of json '+$file
+    ) '' 12
+    if($packets.ExitCode -ne 0){throw 'Output audio first-packet scan failed.'}
+    $packet=@(($packets.StdOut|ConvertFrom-Json).packets|Where-Object{
+      $_.pts_time -ne $null -and $_.dts_time -ne $null
+    })|Select-Object -First 1
+    if(-not $packet){throw 'Output audio first packet unavailable.'}
+    $audio+=@{outputOrdinal=$n;outputFirstPts=[double]::Parse([string]$packet.pts_time,
+      [Globalization.CultureInfo]::InvariantCulture);
+      outputFirstDts=[double]::Parse([string]$packet.dts_time,
+      [Globalization.CultureInfo]::InvariantCulture)}
+  }
+  $after=Get-Item -LiteralPath $j.Output -ErrorAction Stop
+  if([long]$before.Length -ne [long]$after.Length -or
+    [long]$before.LastWriteTimeUtc.Ticks -ne [long]$after.LastWriteTimeUtc.Ticks){
+    throw 'Completed artifact changed while probing its output timeline.'
+  }
+  return [pscustomobject]@{
+    ok=$true;version=1;scope='completed-artifact-first-boundary'
+    jobId=$JobId;artifactBytes=[long]$after.Length
+    artifactWriteTicks=[string]$after.LastWriteTimeUtc.Ticks
+    requestedIn=[double]$j.Task.start;requestedOut=[double]$j.Task.end
+    executionSeekIn=[double]$j.ActualStart
+    actualFirstPresentation=[double]$firstFrame
+    firstVideoPacketPts=[double]::Parse([string]$firstVideo.pts_time,[Globalization.CultureInfo]::InvariantCulture)
+    firstVideoPacketDts=[double]::Parse([string]$firstVideo.dts_time,[Globalization.CultureInfo]::InvariantCulture)
+    audioTimeMapping=@($audio)
+    copiedPacketRange=$null
+    verificationStatus='output-first-boundary-observed-source-packet-and-sync-unverified'
+  }
+}
+
 function Export-Job([string]$JobId,[string]$SuggestedName) {
     if(-not $script:Jobs.ContainsKey($JobId)){throw 'Unknown job.'}
     $j=$script:Jobs[$JobId]
@@ -2368,6 +2449,7 @@ function Handle-Request($Request) {
             $id=$Matches[1]
             Send-HttpJson $Request 200 (Cancel-EncodeJob $id);return
         }
+        if($path -match '^/api/jobs/([A-Za-z0-9]+)/cut-timeline$' -and $Request.Method -eq 'GET'){Send-HttpJson $Request 200 (Get-CutTimelineEvidence $Matches[1]);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-OutputFrame $Matches[1] $body);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/reference-frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-HardsubReferenceFrame $Matches[1] $body);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/export$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Export-Job $Matches[1] ([string]$body.suggestedName));return}

@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU05_artifact_cut_timeline_authorized",
-  "current_bounded_work_unit": "WU05 B09/A04 actual completed-artifact timeline receipt: optional read-only Windows Native FFprobe + production UI task report; source-copy packet range and total A04 sync verification deliberately remain open.",
+  "status": "incomplete_full_report_WU05_native_output_first_boundary_submitted",
+  "current_bounded_work_unit": "WU05 implemented optional actual completed-output first decoded video PTS, first video packet PTS/DTS and each audio first packet via bounded Windows Native FFprobe; read-only UI+JSON report, receipt maps only output clock; exact-head CI and real Native acceptances PENDING. Full A04 source mapping/last frame/sync open.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -255,7 +255,8 @@
     "WU03 B21 real user-facing single-source multi-output recipe panel implemented and hosted browser bounded PASS at 7cdff9; two codec variants serially executed in Chromium using controlled backend, save-only retry. NOT multi-source batch or real FFmpeg repeated runtime. Source reports unchanged.",
     "WU04 bounded implementation submitted: source-bound prediction vs unknown states and explicit user-triggered transcode trim; no silent frame-exact promise; actual A04 output verification remains open.",
     "WU04 B08 real interface ability: native copy-cut diagnosis and user-selectable reencode trimming tested with real Chromium and official v4 compiler task at 5019747 run 38562833192; WU04 scope hosted accepted, frame-accurate PTS/DTS and real VFR/B-frame full source still open.",
-    "WU05 reanchored from original R19§06/R24§09 first/actual/PTS-DTS/output cut contract; explicitly limited to actual completed-asset timing receipt, no new video codec nor generic test expansion."
+    "WU05 reanchored from original R19§06/R24§09 first/actual/PTS-DTS/output cut contract; explicitly limited to actual completed-asset timing receipt, no new video codec nor generic test expansion.",
+    "WU05 bounded output timeline product slice submitted: read-only FFprobe first decoded output frame and packet PTS/DTS with job bytes/stamp, UI inspect/re-export JSON; explicit source packet mapping unverified."
   ],
   "next_units": [
     "WU05 AUTHORIZED: actual completed-cut first presentation and packet PTS/DTS, per-audio first packet timestamps, only in explicit Native job report; accurate unknowns for source copied packet mapping and audio sync. No automatic WU06.",
@@ -298,7 +299,8 @@
     "wu03_full_multi_source": "MISSING PRODUCT IMPLEMENTATION; open B21 per R19 P5 and R24 §22",
     "wu04_cut_choice": "PASS at 501974713ad6ee3fc184b20bb1fbb2ed93fc5396, run 38562833192: source-specific keyframe advisory, invalidation after source drift, deliberate user confirmation, unchanged semantic IN/OUT and official compiled v4 reencoded-trim task. B-frame/VFR real output PTS/DTS not tested.",
     "wu02_hosted_after_wu04": "Earlier Windows WU02 product PASS run 38554433547; new exact-head reruns encountered upstream Chocolatey 503/0-of-0 FFmpeg packaging or PATH propagation. No in-scope code regression found; external CI rerun pending.",
-    "windows_b16_after_wu04": "External Chocolatey feed 503 prevented FFmpeg binary availability in most recent Windows B16; not product B16 acceptance failure at media test stage."
+    "windows_b16_after_wu04": "External Chocolatey feed 503 prevented FFmpeg binary availability in most recent Windows B16; not product B16 acceptance failure at media test stage.",
+    "wu05_cut_timeline": "Code submitted: source-owned Native optional first output boundary + per-audio first packet receipt; actual Windows Native hosted CI and browser interaction pending, no A04 full acceptance"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -409,7 +411,7 @@
         "A04",
         "B24"
       ],
-      "status": "AUTHORIZED_NOT_STARTED",
+      "status": "IN_PROGRESS_NATIVE_UI_FIRST_BOUNDARY_SUBMITTED_VALIDATION_PENDING",
       "title": "Post-artifact Stream Copy timeline receipt from actual FFprobe decoded presentation and packet timestamps",
       "source": "R19 §06 pp6–7 explicit requestedIn/Out, actualFirstPresentation, copiedPacketRange, audioTimeMapping, verificationStatus; R24 §09 pp12–13 explicitly distinguishes keyframe, PTS/DTS, VFR and audio priming",
       "scope": "Windows Native completed, source-bound copy-trim job only. Read-only optional report; expose real output video decoded first PTS, packet PTS/DTS and audio first packets. No fabricated source-matched packet range, output end or universal sync correctness. No new codec or smart cut.",

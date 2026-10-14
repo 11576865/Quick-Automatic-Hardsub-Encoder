@@ -17,6 +17,7 @@ import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-queue.js';
 import {assessCopyCutStart} from './copy-cut-feasibility.js';
+import {normalizeCompletedCutTimeline} from './cut-timeline-evidence.js';
 import {createOutputRecipe,validateOutputRecipe,outputRecipeFilename} from './output-recipe-matrix.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
@@ -268,6 +269,12 @@ export function mountMediaWorkspace(hooks) {
       <div><span>预计剩余</span><strong id="taskEta">尚未估计</strong></div>
     </div>
     <p id="taskStatus" role="status">未开始</p>
+    <section id="taskCompletedCutTimeline" class="media-copy-strategy" hidden aria-label="已完成剪切实际时间轴">
+      <strong>成品时间轴 · 实测而非关键帧预测</strong>
+      <p>Windows Native 可读取最终文件的视频解码首帧和逐音轨首包时间戳；不能证明来源包映射或整片音画同步。</p>
+      <button type="button" class="secondary" id="taskInspectCutTimeline">检查已完成成品的时间轴</button>
+      <pre id="taskCompletedCutTimelineEvidence" aria-live="polite">尚未独立检查</pre>
+    </section>
   </section>
   <section id="taskOutputVerification" class="media-output-verification" hidden aria-label="成品画质验证">
     <div class="media-output-verification-heading">
@@ -1674,6 +1681,15 @@ export function mountMediaWorkspace(hooks) {
     save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
     save.disabled=lastReport?.deliveryAllowed===false||busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
     run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave||!!recipePendingSave;
+    const timelinePanel=section.querySelector('#taskCompletedCutTimeline');
+    if(timelinePanel){
+      const canInspect=finished&&!previousResult&&
+        activeTask?.operation==='copy'&&activeTask?.hasTrimRange&&
+        !!completed?.jobId&&typeof hooks.inspectCutTimeline==='function';
+      timelinePanel.hidden=!canInspect;
+      const inspect=section.querySelector('#taskInspectCutTimeline');
+      inspect.disabled=!canInspect||busy;
+    }
     section.dataset.completedStale=previousResult?'true':'false';
     syncTaskReview();
   };
@@ -2008,6 +2024,36 @@ export function mountMediaWorkspace(hooks) {
   section.querySelector('#taskDelete').onclick=()=>{const c=configs();delete c[get('savedConfig').value];localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();};
   section.querySelector('#taskExportConfig').onclick=()=>download({version:2,settings:read()},'media-config.json');
   section.querySelector('#taskImportConfig').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>65536)throw Error('配置文件超过 64 KiB');const data=JSON.parse(await file.text());if(data.version!==2||!data.settings||typeof data.settings!=='object')throw Error('配置格式无效');applyConfig(data.settings);status('已导入配置，执行前仍会验证参数');}catch(err){status(err.message);}finally{e.target.value='';}};
+  section.querySelector('#taskInspectCutTimeline').onclick=async()=>{
+    const button=section.querySelector('#taskInspectCutTimeline');
+    const evidenceBox=section.querySelector('#taskCompletedCutTimelineEvidence');
+    if(button.disabled||busy||completedStale||!completed?.jobId||
+      activeTask?.operation!=='copy'||!activeTask?.hasTrimRange)return;
+    const job=completed.jobId,identity=hooks.videoIdentity?.()||'';
+    const oldCompleted=completed;
+    button.disabled=true;evidenceBox.textContent='正在读取已完成文件的实际时间戳…';
+    try{
+      const result=await hooks.inspectCutTimeline(job);
+      if(completed!==oldCompleted||completedStale||
+        (hooks.videoIdentity?.()||'')!==identity)throw Error('任务或来源已变化，丢弃这份时间轴收据');
+      const normalized=normalizeCompletedCutTimeline(activeTask,completed,result);
+      completed={...completed,cutTimelineEvidence:normalized};
+      lastReport=buildAuditedTaskReport(activeTask,completed,lastReport?.elapsedSeconds||0);
+      if(artifactReview)artifactReview.report=structuredClone(lastReport);
+      evidenceBox.textContent=[
+        '请求 IN / OUT：'+normalized.requestedIn.toFixed(3)+' / '+normalized.requestedOut.toFixed(3)+' s（源时间）',
+        'Native 关键帧寻址提示：'+normalized.executionSeekIn.toFixed(3)+' s（非成品证据）',
+        '成品首个解码呈现帧：'+normalized.actualFirstPresentation.toFixed(3)+' s（输出时间）',
+        '首个视频编码包 PTS / DTS：'+normalized.firstVideoPacketPts.toFixed(3)+' / '+normalized.firstVideoPacketDts.toFixed(3)+' s',
+        ...normalized.audioTimeMapping.map(a=>'成品音轨 #'+a.outputOrdinal+' 首包 PTS / DTS：'+a.outputFirstPts.toFixed(3)+' / '+a.outputFirstDts.toFixed(3)+' s'),
+        '源包区间映射与整片同步：未验证。不可将首包观测等同于帧精确。'
+      ].join('\n');
+      status('已将 FFprobe 成品首界时间轴加入任务报告；源包身份、尾界、VFR/B 帧同步仍未验收。');
+      section.querySelector('#taskReport').disabled=false;
+    }catch(err){
+      evidenceBox.textContent='成品时间轴检查不可用：'+err.message+'。原成品仍可保存。';
+    }finally{syncTaskActions();}
+  };
   section.querySelector('#taskReport').onclick=async()=>{
     if(!lastReport)return;
     const jobId=completed?.jobId;

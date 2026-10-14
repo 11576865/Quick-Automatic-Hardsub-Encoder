@@ -227,6 +227,9 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
       }
       return JSON.stringify(status);
     },
+    async getNativeCutTimeline(jobId) {
+      return JSON.stringify(await makeRequest(config,'GET','/api/jobs/'+encodeURIComponent(jobId)+'/cut-timeline'));
+    },
     cancelNativeEncode(jobId) {
       void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/cancel').catch(() => {});
     },

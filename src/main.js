@@ -6856,6 +6856,11 @@ mediaWorkspace=mountMediaWorkspace({
     }
     throw Error('独立预编码超出有界执行时间，请检查 Windows Bridge 状态');
   },
+  inspectCutTimeline: async jobId => {
+    const bridge=globalThis.NativeHardsub;
+    if(!bridge?.__windowsNative||!bridge.getNativeCutTimeline)throw Error('当前后端尚不支持独立成品剪切时间轴收据');
+    return JSON.parse(await Promise.resolve(bridge.getNativeCutTimeline(jobId)));
+  },
   refreshCompletedAudit: async jobId => {
     const bridge=globalThis.NativeHardsub;
     if(!bridge?.__windowsNative || !bridge.getNativeJobStatus || !jobId)return null;
