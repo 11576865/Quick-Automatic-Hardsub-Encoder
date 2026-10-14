@@ -296,6 +296,9 @@ export function mountMediaWorkspace(hooks) {
   let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
   const clips=[],clipList=section.querySelector('#taskClipQueueList');
   const clipPanel=section.querySelector('#taskClipQueuePanel');
+  // The phone queue must be adjacent to IN/OUT instead of below the tall
+  // waveform, preview and keyframe inspector. Keep the same live queue nodes.
+  section.querySelector('#taskWaveformPanel')?.before(clipPanel);
   const clipMessage=section.querySelector('#taskClipQueueStatus');
   let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null,clipAwaitingSave=null,clipEditingIndex=-1;
   const clipSource=()=>hooks.videoIdentity?.()||'';
