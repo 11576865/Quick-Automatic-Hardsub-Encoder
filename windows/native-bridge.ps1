@@ -1804,8 +1804,13 @@ function Get-AsyncTrimPacketEvidence($Job) {
 }
 
 function Get-CompletedTrimPacketEvidence($Job) {
-    if(-not $Job.Task -or -not $Job.Task.hasTrimRange -or
-       [long]$Job.Task.sizePlan.copiedTrimReserveBytes -le 0) {return $null}
+    if(-not $Job.Task){return $null}
+    # Actual mixed-mux packet evidence is needed for FLAC even in quality
+    # mode, where there is no sizePlan and no copied-trim reserve.
+    $needsFlac=@($Job.Task.audioPlan | Where-Object {$_.action -eq 'flac'}).Count -gt 0
+    $needsCopy=([bool]$Job.Task.hasTrimRange -and
+       [long]$Job.Task.sizePlan.copiedTrimReserveBytes -gt 0)
+    if(-not $needsFlac -and -not $needsCopy){return $null}
     if($Job.TrimPacketAuditFinished){return $Job.TrimPacketEvidence}
     # Keep the existing synchronous short-output path. Large files do not block
     # /api/jobs; use a separately owned, bounded scan with independent receipt.
