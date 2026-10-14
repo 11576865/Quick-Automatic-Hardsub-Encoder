@@ -10,10 +10,10 @@ param(
 $ErrorActionPreference='Stop'
 function Fail([string]$text){throw $text}
 function Quote-Preflight([string]$s){return '"'+$s.Replace('"','\"')+'"'}
-function Run-Preflight([string]$exe,[string]$args,[int]$seconds){
+function Run-Preflight([string]$exe,[string]$Arguments,[int]$seconds){
  $p=New-Object Diagnostics.Process
  $p.StartInfo.FileName=$exe
- $p.StartInfo.Arguments=$args
+ $p.StartInfo.Arguments=$Arguments
  $p.StartInfo.UseShellExecute=$false
  $p.StartInfo.CreateNoWindow=$true
  $p.StartInfo.RedirectStandardOutput=$true
