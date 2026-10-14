@@ -1975,7 +1975,9 @@ export function mountMediaWorkspace(hooks) {
         (applied.detail?' · '+applied.detail:''));
       hardsubStrategy='manual';
       localStorage.setItem('hardsub-control-strategy-v1',hardsubStrategy);
-      activeTask=null;currentPlanTask=applied.task;transcodeCurves.invalidate();
+      // Handoff previews and compiles the proposed task, but only prepare() +
+      // hooks.validate() may mark the current plan as independently checked.
+      activeTask=null;currentPlanTask=null;transcodeCurves.invalidate();
       syncHardsubStrategyChrome();syncTaskReview();renderPlanSummary(applied.task);
       status('CPU 交接已通过共同任务编译与实际表单复核；保留原目标体积、逐流成本和双遍/严格策略。需要重新验证编码结果，ASS / VBR 短样证据不转移。');
       section.scrollIntoView?.({block:'start'});
