@@ -62,13 +62,19 @@ try{
    (New-Object Text.UTF8Encoding($false)))
  $badReceipt=Join-Path $root 'invalid-receipt.json'
  $worker[$worker.Count-1]=$badReceipt
- $priorErrorAction=$ErrorActionPreference
- $badExit=$null
+ # An expected child validation error must not become a parent
+ # PowerShell 5.1 terminating NativeCommandError under Stop preference.
+ $negativeOptions=($worker|ForEach-Object {'"'+([string]$_).Replace('"','\\"')+'"'}) -join ' '
+ $negative=Start-Process -FilePath 'powershell.exe' -ArgumentList $negativeOptions -NoNewWindow -PassThru `
+  -RedirectStandardOutput (Join-Path $root 'negative-stdout.log') `
+  -RedirectStandardError (Join-Path $root 'negative-stderr.log')
  try{
-  $ErrorActionPreference='Continue'
-  & powershell.exe @worker 2>$null
-  $badExit=$LASTEXITCODE
- }finally{$ErrorActionPreference=$priorErrorAction}
+  if(-not $negative.WaitForExit(15000)){
+   $negative.Kill();$negative.WaitForExit()
+   throw 'Negative fixture child did not finish in bounded time.'
+  }
+  $badExit=$negative.ExitCode
+ }finally{$negative.Dispose()}
  if($badExit -eq 0 -or (Test-Path -LiteralPath $badReceipt)){
   throw 'Duplicated source stream ordinal was wrongly accepted.'
  }
