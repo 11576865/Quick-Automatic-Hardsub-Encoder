@@ -1,18 +1,30 @@
 # Source-owned, single-flight background B16 isolated auxiliary remux.
 # Loaded by native-bridge.ps1 AFTER its file ownership helpers are defined.
 $script:TrimPreflightJob=$null
+function Stop-StaleTrimPreflight($Job) {
+ if($Job.State -eq 'running'){
+  try{
+   $p=$Job.Started.Process
+   if(-not $p.HasExited){$p.Kill();$p.WaitForExit()}
+   $p.Dispose()
+  }catch{}
+  try{Remove-Item -LiteralPath $Job.Work -Recurse -Force -ErrorAction SilentlyContinue}catch{}
+ }
+ $Job.Receipt=$null
+ $Job.State='unavailable'
+}
 function Get-IsolatedTrimPreflightStatus {
  $job=$script:TrimPreflightJob
  if(-not $job){return @{ok=$true;state='not-requested'}}
  $file=Get-SelectedPath 'video'
  if(-not $file -or -not(Test-Path -LiteralPath $file -PathType Leaf)){
-  $job.State='unavailable';$job.Receipt=$null
-  return @{ok=$true;state='unavailable',reason='source-not-selected'}
+  Stop-StaleTrimPreflight $job
+  return @{ok=$true;state='unavailable';reason='source-not-selected'}
  }
  $item=Get-Item -LiteralPath $file
  if($file -ne $job.Source -or $item.Length -ne $job.Length -or
     [string]$item.LastWriteTimeUtc.Ticks -ne [string]$job.Ticks){
-  $job.State='unavailable';$job.Receipt=$null
+  Stop-StaleTrimPreflight $job
   return @{ok=$true;state='unavailable';reason='source-changed'}
  }
  if($job.State -in @('ready','unavailable')){
@@ -33,10 +45,10 @@ function Get-IsolatedTrimPreflightStatus {
      [double]$receipt.start -ne [double]$job.Start -or
      [double]$receipt.end -ne [double]$job.End -or
      [string]$receipt.outputFormat -ne [string]$job.Format -or
-     (@($receipt.audioOrdinals)|ConvertTo-Json -Compress) -ne
-       (@($job.AudioOrdinals)|ConvertTo-Json -Compress) -or
-     (@($receipt.subtitleOrdinals)|ConvertTo-Json -Compress) -ne
-       (@($job.SubtitleOrdinals)|ConvertTo-Json -Compress)){
+     (ConvertTo-Json -InputObject @($receipt.audioOrdinals) -Compress) -ne
+       (ConvertTo-Json -InputObject @($job.AudioOrdinals) -Compress) -or
+     (ConvertTo-Json -InputObject @($receipt.subtitleOrdinals) -Compress) -ne
+       (ConvertTo-Json -InputObject @($job.SubtitleOrdinals) -Compress)){
    throw 'Worker receipt does not match Native-owned source and request.'
   }
   if(@($receipt.audioPacketBytes).Count -ne @($job.AudioOrdinals).Count -or
