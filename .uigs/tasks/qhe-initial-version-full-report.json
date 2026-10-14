@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU07_P2_audio_must_copy_hosted_accepted",
-  "current_bounded_work_unit": "WU07 P2 source-bound owner must-copy per-audio stream is hosted accepted at 38d4b04: user locks FLAC source ordinal and retains AAC second-track reencode in same v4 task; compiled drop/transcode or source drift fails closed; real Chromium unlock/reset and source drift PASS. No real A02 bitwise output from this exact locked task; P2 whole completeness open.",
+  "status": "incomplete_full_report_WU08_B21_web_multisource_queue_authorized",
+  "current_bounded_work_unit": "WU08 browser multi-source queue of distinct selected media files using frozen settings -> current media probe -> authority v4 compile/validate -> sequential run/independent save. Native and multi-source ASS out of scope.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -262,12 +262,12 @@
     "WU06 hosted PASS 0124946: P1 passive compiled v4 → SourceAsset/Streams/UserIntent-inferred/OutputPlan/executable map/unknown ArtifactRecord inspect; source replacement invalidates view; no changed task args or new mutable user intent.",
     "WU07 owner-report reanchor: R19 P2 and R24 UserIntent must-preserve original stream. Prior P1 only inferred intent; moving ONE user-approved audio stream lock into the existing v4 compiler, not a full schema migration.",
     "WU07 P2 implemented source-bound user must-copy lock in existing per-track UI, official v4 compiler rejects conflicting drop or reencode, and output review displays lock; CI pending.",
-    "WU07 source-bound owner-approved must-copy audio contract implemented and Chromium hosted accepted at 38d4b04: source FLAC copy + AAC reencode allowed, locked FLAC drop/AAC/Opus prohibited by authoritative compileTask, source drift and manual reset carefully handled. Physical output packet hash not inferred."
+    "WU07 source-bound owner-approved must-copy audio contract implemented and Chromium hosted accepted at 38d4b04: source FLAC copy + AAC reencode allowed, locked FLAC drop/AAC/Opus prohibited by authoritative compileTask, source drift and manual reset carefully handled. Physical output packet hash not inferred.",
+    "Root re-anchor for WU08: P5 B21 genuine multiple-source gap selected, after seven bounded units; preserve root R19/R24 and no assumptions that WU03 same-source matrix fulfills it."
   ],
   "next_units": [
-    "NO WU08 AUTHORIZED. Re-anchor to original R19/R24 B01–B25 and A01–A10 before any additional autonomous work unit, prefer unreleased substantial product capability over recursive tests.",
-    "Remaining P2/A02: actual locked-source output FLAC packet hash, multi-language metadata/disposition, stream time mapping, complex MKV real user files, Android/Web/Windows device field acceptance.",
-    "Remaining B21 multi-source batch, P3 unified Guided/Manual decision engine, WU01 Guided-to-Windows same-task handoff, B25 PR #104/#105 merge and release; all require deliberate separate authorization."
+    "WU08 AUTHORIZED: browser multi-source copy/transcode queue, source-specific run/save and blocking source drift; no alternative FFmpeg executor.",
+    "No WU09 automatic authorization; P3 quality/candidate decision convergence, native multi-source/ASS, cross-platform and full B21 remain open."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -342,10 +342,10 @@
     "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
-    "current_authorized_index": 6,
+    "current_authorized_index": 7,
     "completed_authorized_units": 4,
-    "review_status": "WU07_P2_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEXT_UNIT",
-    "executed_authorized_units_since_reanchor": 1
+    "review_status": "ROOT_REPORT_REANCHORED_WU08_WEB_MULTI_SOURCE_BATCH_AUTHORIZED",
+    "executed_authorized_units_since_reanchor": 0
   },
   "authorized_next_units": [
     {
@@ -452,6 +452,19 @@
       "source": "R19 §03/§16 P2, R24 §05/§11: explicit must-preserve source streams; no silent drop/reencode; packet evidence remains separate",
       "scope": "Audio stream only bounded product slice. Add explicit user opt-in lock to existing per-stream UI and schema-v4 raw task; compiler rejects drop/transcode/mismatch source rather than rewriting user choice. Existing encoder/audio actions remain authority. No arbitrary DRM/bit-exact output claims.",
       "exit": "v4 compileTask copy/mixed/drop negative/foreign source tests, Chromium toggle and locked conflict, actual source lock shown in review, existing frontend CI; cross-platform actual packets and multi-source UI remain future work"
+    },
+    {
+      "id": "WU-08",
+      "title": "B21 web multiple user-selected source files with separately compiled transcode/copy outputs",
+      "requirement_ids": [
+        "B21",
+        "B02",
+        "B24"
+      ],
+      "status": "AUTHORIZED_NOT_STARTED",
+      "source": "R19 §16 P5 批次矩阵；R24 §22 QHE 多个独立转码/烧录/剪切任务；原 B21 追踪矩阵",
+      "scope": "Browser Web backend bounded: user selects 2–8 File objects, queue freezes current copy/transcode settings per selected source, reactivates exact File object, probes real media and uses ONLY existing compileTask/validate/run/save. Fail on stale source/unsupported locked audio/budget/hardsub instead of silently changing intent; stop on error, preserve successful files and save-retry. No native backend, embedded ASS, multi-source hardsub or shared quality certificate.",
+      "exit": "Unit source/queue validation, real production Chromium selection+distinct-source compiled runs+failure and save retry, frontend CI, any actual media encode evidence explicitly separate. Not full B21 Windows/Android/multi-source burn-in or release."
     }
   ],
   "historical_next_units": {
