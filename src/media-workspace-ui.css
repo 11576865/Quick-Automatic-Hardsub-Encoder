@@ -1851,3 +1851,20 @@ body.media-frame-lightbox-open {
 .task-review-details>summary>strong{display:block;font-size:.8rem;line-height:1.6;font-weight:400;color:var(--muted);margin-top:4px}
 .task-review-details>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .task-review-details>.task-object-review{margin:0;padding:0 10px 10px}
+
+
+/* B08/A04: copy-cut uncertainty is decision-facing, never an exactness badge. */
+.media-copy-strategy {
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-2);
+}
+.media-copy-strategy-title { display:flex; flex-wrap:wrap; gap:8px 14px; justify-content:space-between; }
+.media-copy-strategy-title strong { font-size:.86rem; }
+.media-copy-strategy-title span { font-weight:650; font-size:.78rem; }
+.media-copy-strategy-title [data-state="predicted-early"],
+.media-copy-strategy-title [data-state="unknown"] { color:var(--warning,#d9a441); }
+.media-copy-strategy p { margin:9px 0; font-size:.85rem; line-height:1.5; }
+.media-copy-strategy small { display:block; margin-top:8px; opacity:.85; line-height:1.5; }

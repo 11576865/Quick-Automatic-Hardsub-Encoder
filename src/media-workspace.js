@@ -16,6 +16,7 @@ import { mountTranscodeCurves } from './transcode-calibration-panel.js';
 import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-queue.js';
+import {assessCopyCutStart} from './copy-cut-feasibility.js';
 import {createOutputRecipe,validateOutputRecipe,outputRecipeFilename} from './output-recipe-matrix.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
@@ -77,7 +78,13 @@ export function mountMediaWorkspace(hooks) {
       <span>实际无损起点 <strong id="taskActualStartTime">—</strong></span>
       <span id="taskKeyframeDelta">分析关键帧后显示偏移</span>
     </div>
-    <section id="taskFramePreviewPanel" class="media-frame-preview-panel" hidden aria-label="时间轴画面预览">
+    <section id="taskCopyStrategyPanel" class="media-copy-strategy" hidden aria-label="快速复制切点可行性">
+    <div class="media-copy-strategy-title"><strong>剪切策略 · 快速复制（关键帧约束）</strong><span id="taskCopyStrategyStatus" role="status">待检查</span></div>
+    <p id="taskCopyStrategyDescription">复制编码包不等于任意帧精确；成品时间戳和音画同步仍须独立验证。</p>
+    <button id="taskPreferTranscodeTrim" type="button" class="secondary">改用重编码剪切（需要复核编码设置）</button>
+    <small>只有明确点击并确认才会更换模式。重编码也不代表已验证帧精确。</small>
+  </section>
+  <section id="taskFramePreviewPanel" class="media-frame-preview-panel" hidden aria-label="时间轴画面预览">
       <div class="media-frame-preview-heading">
         <div><strong>画面预览</strong><span id="taskFramePreviewStatus">移动时间轴光标后显示源视频画面</span></div>
         <span id="taskFramePreviewTime">—</span>
@@ -601,6 +608,7 @@ export function mountMediaWorkspace(hooks) {
   };
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
+  let timelineSourceKey='',timelineVideoOrdinal=-1;
   let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='',timelineFrameGeneration=0;
   const timelineFrameCache=new Map();
   const timelineFramePending=new Map();
@@ -701,6 +709,10 @@ export function mountMediaWorkspace(hooks) {
   const requestedStartTime=section.querySelector('#taskRequestedStartTime');
   const actualStartTime=section.querySelector('#taskActualStartTime');
   const keyframeDelta=section.querySelector('#taskKeyframeDelta');
+  const cutStrategyPanel=section.querySelector('#taskCopyStrategyPanel');
+  const cutStrategyStatus=section.querySelector('#taskCopyStrategyStatus');
+  const cutStrategyDescription=section.querySelector('#taskCopyStrategyDescription');
+  const preferTranscodeTrim=section.querySelector('#taskPreferTranscodeTrim');
   const keyframePrev=section.querySelector('#taskKeyframePrev');
   const keyframeNext=section.querySelector('#taskKeyframeNext');
   const keyframeSnapStart=section.querySelector('#taskKeyframeSnapStart');
@@ -785,6 +797,7 @@ export function mountMediaWorkspace(hooks) {
     waveformRuler.replaceChildren(frag);
   }
   const previousKeyframe = value => {
+    if(timelineSourceKey!==(hooks.videoIdentity?.()||'')||timelineVideoOrdinal!==primaryVideoStream())return null;
     const time=clampWaveformTime(value);
     if(timelineKeyframesTruncated&&timelineKeyframes.length&&time>timelineKeyframes.at(-1)+.000001)return null;
     let previous=null;
@@ -1325,6 +1338,38 @@ export function mountMediaWorkspace(hooks) {
     }
     keyframeLane.replaceChildren(frag);
   }
+  function syncCopyStrategy(){
+    const copy=get('operation').value==='copy'&&get('videoRange').value==='trim';
+    cutStrategyPanel.hidden=!copy;
+    if(!copy)return;
+    let start=0;
+    try{start=parseMediaTime(get('start').value,{empty:0,label:'请求 IN'});}
+    catch{cutStrategyStatus.textContent='切点输入无效';cutStrategyStatus.dataset.state='unknown';return;}
+    const identity=hooks.videoIdentity?.()||'';
+    const validEvidence=!!identity&&identity===timelineSourceKey&&
+      timelineVideoOrdinal===primaryVideoStream()&&waveformDuration>0;
+    const assessment=assessCopyCutStart({requestedIn:start,
+      keyframes:timelineKeyframes,truncated:timelineKeyframesTruncated,
+      evidenceCurrent:validEvidence});
+    cutStrategyStatus.dataset.state=assessment.state;
+    cutStrategyStatus.textContent={
+      beginning:'源文件起点',unknown:'切点尚未知晓',
+      'predicted-aligned':'关键帧接近 IN（仅预测）',
+      'predicted-early':'可能提前 '+assessment.delta.toFixed(3)+' 秒（仅预测）'
+    }[assessment.state];
+    cutStrategyDescription.textContent=assessment.description+
+      ' 本功能不会自动重编码；是否保留快速复制由你决定。';
+    preferTranscodeTrim.disabled=busy||hooks.busy()||clipBatchRunning||
+      recipeBatchRunning||!identity||!hooks.mediaSnapshot?.();
+  }
+  preferTranscodeTrim.onclick=()=>{
+    if(cutStrategyPanel.hidden||busy||hooks.busy()||clipBatchRunning||recipeBatchRunning)return;
+    if(!window.confirm('切换到视频重编码剪切？将保持当前 IN/OUT，并使用当前转码编码器及质量设置。输出不再是 Stream Copy；仍需独立验证成品时间轴。'))return;
+    get('operation').value='transcode';
+    get('videoRange').value='trim';
+    get('operation').dispatchEvent(new Event('change',{bubbles:true}));
+    status('已按你的确认改用重编码剪切。IN/OUT 保留；请核对编码器、质量、音轨和输出方案，再开始任务。');
+  };
   function syncCopyBoundaryPreview(start){
     const copy=get('operation').value==='copy';
     copyBoundaryInfo.hidden=!copy||!(waveformDuration>0);
@@ -1353,6 +1398,7 @@ export function mountMediaWorkspace(hooks) {
     scheduleBoundaryFramePreview(start,actual);
   }
   function syncWaveformMarkers(){
+    syncCopyStrategy();
     if(!(waveformDuration>0))return;
     const start=readBoundary('start',0);
     const end=Math.max(start,readBoundary('end',waveformDuration));
@@ -1460,12 +1506,15 @@ export function mountMediaWorkspace(hooks) {
     boundaryFrameInspector.hidden=true;
     const copy=get('operation').value==='copy';
     const videoTrim=copy&&get('videoRange').value==='trim';
+    const requestedSourceKey=hooks.videoIdentity?.()||'';
+    const requestedVideoOrdinal=primaryVideoStream();
     waveformStatus.textContent=videoTrim?'正在分析时间范围、波形与主选视频关键帧…':'正在分析时间范围与音频波形…';
     try{
       const audioValue=String(get('audioTrack')?.value||'all');
       const audioTrack=audioValue==='all'?0:Math.max(0,Number(audioValue)||0);
       const result=await hooks.waveform({audioTrack,videoStream:primaryVideoStream(),width:2400,height:160,includeKeyframes:videoTrim,maxKeyframes:12000,allowNoWaveform:true});
       if(!(Number(result?.duration)>0))throw Error('时间轴结果缺少有效时长');
+      if(requestedSourceKey!==(hooks.videoIdentity?.()||'')||requestedVideoOrdinal!==primaryVideoStream())throw Error('来源或视频流在时间轴分析期间改变；丢弃旧关键帧');
       if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
       waveformUrl=result.url||null;
       waveformDuration=Number(result.duration);
@@ -1473,6 +1522,8 @@ export function mountMediaWorkspace(hooks) {
         ? result.keyframes.map(Number).filter(Number.isFinite).filter(value=>value>=0&&value<=waveformDuration).sort((a,b)=>a-b)
         : [];
       timelineKeyframesTruncated=!!result.keyframesTruncated;
+      timelineSourceKey=requestedSourceKey;
+      timelineVideoOrdinal=requestedVideoOrdinal;
       if(waveformUrl){
         waveformImage.src=waveformUrl;
         waveformImage.hidden=false;
@@ -1887,6 +1938,7 @@ export function mountMediaWorkspace(hooks) {
     section.querySelector('#taskEncoding').disabled=copy;
     document.querySelectorAll('.input-ass,.input-font').forEach(el=>el.classList.toggle('hidden',get('operation').value!=='hardsub'));
     syncClipQueue();
+    syncCopyStrategy();
     section.querySelector('#taskModeHint').textContent=copy
       ? (get('videoRange').value==='trim'
         ? '无损剪切：IN 可能提前对齐关键帧；音频可独立处理。'
@@ -1944,7 +1996,7 @@ export function mountMediaWorkspace(hooks) {
     if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
     syncTaskReview();
   }
-  const mediaInfoListener = () => { syncReviewSource();invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); syncRecipeMatrix(); hooks.onBudgetEvidenceChange?.(); };
+  const mediaInfoListener = () => { syncReviewSource();invalidateBudgetEvidence();syncCopyStrategy();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); syncRecipeMatrix(); hooks.onBudgetEvidenceChange?.(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();

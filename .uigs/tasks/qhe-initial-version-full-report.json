@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU04_copy_cut_choice_authorized",
-  "current_bounded_work_unit": "WU04 B08/A04: explicit copy keyframe feasibility versus opt-in transcode trim, source-bound waveform evidence; no video frame-exact promise; WU03 synthetic Chromium hosted PASS; multi-source B21 still absent.",
+  "status": "incomplete_full_report_WU04_copy_cut_choice_submitted_pending_hosted",
+  "current_bounded_work_unit": "WU04: real copy-cut decision UI based on source+video-stream-bound keyframe evidence and user-approved switch to transcoded trim submitted; model/Chromium CI pending; A04 actual packet/PTS/DTS and VFR/B-frame whole-file acceptance remain open.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -252,7 +252,8 @@
     "WU-02 product ability: explicit Windows Native MKV embedded ASS track + font attachment import to existing ASS workflow; source-stamp safety, selection invalidation, bounded extraction. No Android/Web parity or verified output claim until CI.",
     "WU-02 Windows source-owned embedded ASS+font import + actual Native end-to-end real hosted CI PASS at 1148bcda run 38554433547: 251257-byte mixed MKV with 235 FLAC packets copied unchanged, AAC re-encoded and independent libass burned-event pixel difference. This is a NEW initial-version product capability, not whole A01 or field acceptance.",
     "WU03 root reanchoring checkpoint: read original R19 P5, R24 section 22; selected B21 genuine new user capability instead of another WU01/WU02 test or B16 descendant. Prior two unit states and A01–A10 scope unchanged.",
-    "WU03 B21 real user-facing single-source multi-output recipe panel implemented and hosted browser bounded PASS at 7cdff9; two codec variants serially executed in Chromium using controlled backend, save-only retry. NOT multi-source batch or real FFmpeg repeated runtime. Source reports unchanged."
+    "WU03 B21 real user-facing single-source multi-output recipe panel implemented and hosted browser bounded PASS at 7cdff9; two codec variants serially executed in Chromium using controlled backend, save-only retry. NOT multi-source batch or real FFmpeg repeated runtime. Source reports unchanged.",
+    "WU04 bounded implementation submitted: source-bound prediction vs unknown states and explicit user-triggered transcode trim; no silent frame-exact promise; actual A04 output verification remains open."
   ],
   "next_units": [
     "WU04 authorized against R19 §06, R24 §09: explicit copy-cut feasibility, source-bound timeline, human-chosen reencode alternative. No automatic mode switching or exact-frame claims.",
@@ -292,7 +293,8 @@
     "wu01_windows_native": "OPEN not yet integrated same-task Native Bridge validation",
     "wu02_embedded_ass": "Windows Native real hosted exact-head 1148bcda PASS, workflow 38554433547: FFV1+FLAC+AAC+ASS+TTF source, explicit ASS+font extraction, source-stamp fail-closed, x264/libass output, original FLAC 235/235 ordered packets SHA256, second AAC reencoded, distinct burned pixel, final size 251257 bytes. No user film/browser button real interaction/device completeness.",
     "wu03_single_source_recipe_matrix": "PASS exact SHA 7cdff9d in dedicated hosted Chromium workflow 38558570169 + Test frontend 38558570086; two x264/x265 independent frozen recipes, stale source rejection, save failure stops before next, save-only retry without encode; controlled run/save backend, not real FFmpeg batch or multi-source.",
-    "wu03_full_multi_source": "MISSING PRODUCT IMPLEMENTATION; open B21 per R19 P5 and R24 §22"
+    "wu03_full_multi_source": "MISSING PRODUCT IMPLEMENTATION; open B21 per R19 P5 and R24 §22",
+    "wu04_cut_choice": "PENDING exact-head model+Chromium decision UI; no time packet signoff"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -394,7 +396,7 @@
       "source": "R19 §06 pp6–7; R24 §09 pp12–13: quick copy vs precision cut, requested/actual boundary and VFR/B-frame constraints",
       "scope": "Production workspace displays source-bound predicted prior-keyframe displacement or unknown; user may explicitly change copy to transcode trim with current encoder settings, never automatically. No claim of frame accuracy without packet/PTS verification.",
       "exit": "Unit model tests, Chromium real interaction on imported source+keyframes, no stale source/keyframe evidence, exact-head frontend CI; output timing/packet A04 continues FIELD/VERIFICATION PENDING",
-      "status": "AUTHORIZED_NOT_STARTED"
+      "status": "IN_PROGRESS_SOURCE_BOUND_UI_SUBMITTED_CI_PENDING"
     }
   ],
   "historical_next_units": {
