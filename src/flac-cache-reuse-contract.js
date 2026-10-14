@@ -11,7 +11,8 @@ export function verifyFlacCachedPacketReuse({cache,finished,plan,sourceKey}={}){
  if(!cache||cache.version!==1||cache.kind!=='encoded-flac-cache-v1'||
     !finished||finished.version!==1||finished.kind!=='completed-mixed-mux-v1'||
     !plan||plan.version!==1||plan.method!=='cached-flac-packets-copy-v1'||
-    !sourceKey||cache.sourceKey!==sourceKey||plan.sourceKey!==sourceKey||
+    !sha(sourceKey)||cache.sourceSha256!==sourceKey||
+    cache.sourceKey!==sourceKey||plan.sourceKey!==sourceKey||
     !cache.measurementId||cache.measurementId!==plan.measurementId||
     !sha(cache.sourceSha256)||!sha(cache.artifactSha256)||
     !sha(finished.artifactSha256)||!tick(cache.artifactWriteTicks)||
