@@ -115,7 +115,7 @@ try{
  $data=@{
   version=1;scope='isolated-trim-copy-observation'
   observationOnly=$true;canReplaceFullSourceBudget=$false
-  sourceLength=$originalSize;sourceWriteTicks=$originalTicks
+  sourceLength=$originalSize;sourceWriteTicks=([string]$originalTicks)
   start=$start;end=$end;outputFormat=[string]$r.outputFormat
   audioOrdinals=@($audioOrdinals|ForEach-Object {[int]$_})
   subtitleOrdinals=@($subOrdinals|ForEach-Object {[int]$_})
