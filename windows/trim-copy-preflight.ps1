@@ -76,13 +76,13 @@ try{
  $culture=[Globalization.CultureInfo]::InvariantCulture
  $from=$start.ToString('0.######',$culture)
  $duration=($end-$start).ToString('0.######',$culture)
- $args=@('-hide_banner','-nostdin','-loglevel','error','-y',
+ $muxOptions=@('-hide_banner','-nostdin','-loglevel','error','-y',
    '-ss',$from,'-t',$duration,'-i',(Quote-Preflight $source.FullName))
- foreach($ordinal in $audioOrdinals){$args+=@('-map',('0:a:'+[int]$ordinal))}
- foreach($ordinal in $subOrdinals){$args+=@('-map',('0:s:'+[int]$ordinal))}
- $args+=@('-c','copy','-map_metadata','-1','-map_chapters','-1',
+ foreach($ordinal in $audioOrdinals){$muxOptions+=@('-map',('0:a:'+[int]$ordinal))}
+ foreach($ordinal in $subOrdinals){$muxOptions+=@('-map',('0:s:'+[int]$ordinal))}
+ $muxOptions+=@('-c','copy','-map_metadata','-1','-map_chapters','-1',
    '-f',[string]$r.outputFormat,(Quote-Preflight $remux))
- [void](Run-Preflight $Ffmpeg (($args|ForEach-Object {if($_ -like '"*"'){$_}else{[string]$_}})-join ' ') 75)
+ [void](Run-Preflight $Ffmpeg (($muxOptions|ForEach-Object {if($_ -like '"*"'){$_}else{[string]$_}})-join ' ') 75)
  if(-not(Test-Path -LiteralPath $remux -PathType Leaf)){
   Fail 'Isolated copy remux produced no file.'
  }
