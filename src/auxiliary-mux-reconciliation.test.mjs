@@ -207,9 +207,10 @@ test('static workbench/report integration keeps preflight as observation only',a
  assert.match(ui,/reconcileAuxiliaryMuxObservation/);
  assert.match(ui,/auxiliaryParity/);
  assert.match(report,/FLAC 重编码体积成本未知/);
- const [bridge,fixture,ci]=await Promise.all([
+ const [bridge,fixture,longFixture,ci]=await Promise.all([
   readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8'),
   readFile(new URL('../scripts/check-flac-native-http-lifecycle.ps1',import.meta.url),'utf8'),
+  readFile(new URL('../scripts/check-b16-long-async-output-identity.ps1',import.meta.url),'utf8'),
   readFile(new URL('../.github/workflows/windows-b16-runtime.yml',import.meta.url),'utf8')
  ]);
  assert.match(bridge,/\$needsFlac=@\(\$Job.Task.audioPlan \| Where-Object/);
@@ -224,4 +225,8 @@ test('static workbench/report integration keeps preflight as observation only',a
  assert.match(bridge,/Completed audio packet audit artifact has changed/);
  assert.match(fixture,/artifactJobId/);
  assert.match(fixture,/Completed Native mux packet evidence survived modified staged output/);
+ assert.match(longFixture,/expectedVideoDuration=182\.0/);
+ assert.match(longFixture,/actual 182-second Native FFprobe async/);
+ assert.match(longFixture,/survived staged artifact modification/);
+ assert.match(ci,/check-b16-long-async-output-identity\.ps1/);
 });
