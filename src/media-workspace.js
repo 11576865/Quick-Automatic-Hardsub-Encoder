@@ -2316,7 +2316,7 @@ export function mountMediaWorkspace(hooks) {
       setTaskState('saved');
       settlePendingClipSave(true);
       settlePendingRecipeSave(true);
-      status(result?.kind='browser-download'?'已交给浏览器保存。':'成品已保存。');
+      status(result?.kind==='browser-download'?'已交给浏览器保存。':'成品已保存。');
     }catch(e){
       setTaskState('save_failed');
       settlePendingClipSave(false);
