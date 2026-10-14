@@ -53,7 +53,7 @@ jobs:
       - name: Check JS receipt gates
         shell: pwsh
         run: |
-          node --test src/flac-encode-preflight.test.mjs src/trim-copy-preflight.test.mjs
+          node --test src/flac-encode-preflight.test.mjs src/trim-copy-preflight.test.mjs src/auxiliary-mux-reconciliation.test.mjs
       - name: Install FFmpeg with bounded package retries
         shell: powershell
         run: |
