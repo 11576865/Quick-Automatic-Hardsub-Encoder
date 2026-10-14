@@ -1,0 +1,46 @@
+name: QHE WU05 completed cut timeline acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/cut-timeline-evidence.js'
+      - 'src/cut-timeline-evidence.test.mjs'
+      - 'src/media-workspace.js'
+      - 'src/media-planning.js'
+      - 'src/main.js'
+      - 'src/windows-native-client.js'
+      - 'windows/native-bridge.ps1'
+      - 'scripts/check-wu05-browser.cjs'
+      - '.github/workflows/qhe-wu05-cut-timeline.yml'
+  workflow_dispatch:
+jobs:
+  model-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Check source-owned completed-output PTS DTS contract
+        run: node --test src/cut-timeline-evidence.test.mjs
+      - name: Setup Chromium
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Click read-only artifact timeline and inspect exported report
+        run: node scripts/check-wu05-browser.cjs
+  native-syntax:
+    runs-on: windows-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PowerShell 5.1 Native Bridge grammar without external FFmpeg
+        shell: powershell
+        run: |
+          $tokens=$null;$errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'windows/native-bridge.ps1'),[ref]$tokens,[ref]$errors)|Out-Null
+          if($errors.Count){$errors|Format-List;throw 'Native Bridge invalid PowerShell grammar'}

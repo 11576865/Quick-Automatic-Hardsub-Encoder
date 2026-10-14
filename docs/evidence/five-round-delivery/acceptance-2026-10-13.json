@@ -1,0 +1,123 @@
+{
+  "schema": "qhe-five-round-delivery-acceptance/1",
+  "tested_head": "95fc86dee63585493818f9c452b69649dd68fc1c",
+  "observed_at": "2026-10-13T03:43:40.440605+00:00",
+  "workflows": {
+    "frontend": {
+      "run_id": 38342175981,
+      "conclusion": "success"
+    },
+    "windows_smoke": {
+      "run_id": 38342175973,
+      "conclusion": "success"
+    },
+    "android_emulator": {
+      "run_id": 38342175961,
+      "conclusion": "success"
+    },
+    "android_compile": {
+      "run_id": 38342176046,
+      "conclusion": "success"
+    },
+    "windows_stream_plan": {
+      "run_id": 38342175957,
+      "conclusion": "success"
+    },
+    "windows_paired_codec": {
+      "run_id": 38342175960,
+      "conclusion": "success"
+    },
+    "device_fixture": {
+      "run_id": 38342175964,
+      "conclusion": "success"
+    },
+    "uigs": {
+      "run_id": 38342175974,
+      "conclusion": "success"
+    }
+  },
+  "vvc_runtime": {
+    "structuredTaskTests": "PASS",
+    "status": "UNSUPPORTED",
+    "reason": "libvvenc not included"
+  },
+  "android_outputs": {
+    "schema": "quick-hardsub-device-acceptance-result/1",
+    "source": "stream-plan-v4-source.mkv",
+    "outputDir": "/home/runner/work/_temp/stream-plan-v4-android-emulator-outputs",
+    "passed": 8,
+    "total": 8,
+    "results": [
+      {
+        "id": "V4D-01",
+        "file": "V4D-01-v1-transcode.mkv",
+        "ok": true
+      },
+      {
+        "id": "V4D-02",
+        "file": "V4D-02-both-transcode.mkv",
+        "ok": true
+      },
+      {
+        "id": "V4D-03",
+        "file": "V4D-03-both-hardsub.mkv",
+        "ok": true
+      },
+      {
+        "id": "V4D-04",
+        "file": "V4D-04-remux-transcode.mp4",
+        "ok": true
+      },
+      {
+        "id": "V4D-05",
+        "file": "V4D-05-video-trim-audio-full.mkv",
+        "ok": true
+      },
+      {
+        "id": "V4D-06",
+        "file": "V4D-06-video-full-audio-trim.mkv",
+        "ok": true
+      },
+      {
+        "id": "V4D-07",
+        "file": "V4D-07-video-copy-audio-aac.mkv",
+        "ok": true
+      },
+      {
+        "id": "V4D-08",
+        "file": "V4D-08-assets-and-softsubs.mkv",
+        "ok": true
+      }
+    ]
+  },
+  "artifact_ids": {
+    "frontend": 11787053015,
+    "vvc": 11786973192,
+    "android": 11787875629
+  },
+  "visual_review": [
+    {
+      "file": "media-workspace-studio-v3-transcode-desktop.png",
+      "sha256": "319f602c7b88467474d2233cd2000636e58a8bf4f450939718a0b1a74915daef",
+      "scope": "Actual full production UI for desktop and VVC phone; task-review fixture uses simulated backend and lacks full app stylesheet."
+    },
+    {
+      "file": "media-workspace-vvc-mobile.png",
+      "sha256": "4b84c47ddb8716b9fb94eed4463bd1efd2eb45305d8389f6cb442dd0d4e6b7c7",
+      "scope": "Actual full production UI for desktop and VVC phone; task-review fixture uses simulated backend and lacks full app stylesheet."
+    },
+    {
+      "file": "media-workspace-task-review-mobile.png",
+      "sha256": "ba44ebd5d570d7356a41a4d4eb6a2e575b7037e664da384d747b0f9df30642b7",
+      "scope": "Actual full production UI for desktop and VVC phone; task-review fixture uses simulated backend and lacks full app stylesheet."
+    }
+  ],
+  "limits": [
+    "Windows VVC actual runtime not tested: libvvenc absent in CI",
+    "physical GPU/Windows/Android/SAF/provider dialogs/long-form/player compatibility Pending",
+    "source-cost measurement Windows-only; trimmed copied payload and FLAC re-encode costs unknown",
+    "guided hard-sub retains prior interface",
+    "long vertical manual editor and duplicated overview content remain UI refinement debt",
+    "no main merge or deployment"
+  ]
+}

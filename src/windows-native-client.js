@@ -126,6 +126,26 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
     async readSelectedVideoInfo() {
       return JSON.stringify(await makeRequest(config, 'GET', '/api/selection/video'));
     },
+    async importEmbeddedAss(ordinal,source){
+      return makeRequest(config,'POST','/api/embedded-ass',{
+        subtitleOrdinal:ordinal,sourceName:source?.name||'',sourceSize:Number(source?.size||0)
+      });
+    },
+    async measureSourceBudget() {
+      return JSON.stringify(await makeRequest(config,'POST','/api/source-budget'));
+    },
+    async startTrimCopyPreflight(request) {
+      return JSON.stringify(await makeRequest(config,'POST','/api/trim-copy-preflight',{request}));
+    },
+    async getTrimCopyPreflightStatus() {
+      return JSON.stringify(await makeRequest(config,'GET','/api/trim-copy-preflight'));
+    },
+    async startFlacEncodePreflight(request) {
+      return JSON.stringify(await makeRequest(config,'POST','/api/flac-encode-preflight',{request}));
+    },
+    async getFlacEncodePreflightStatus() {
+      return JSON.stringify(await makeRequest(config,'GET','/api/flac-encode-preflight'));
+    },
     probeSelectedVideo() {
       const generation = ++inputProbeGeneration;
       void makeRequest(config, 'POST', '/api/probe')
@@ -206,6 +226,9 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
         } catch {}
       }
       return JSON.stringify(status);
+    },
+    async getNativeCutTimeline(jobId) {
+      return JSON.stringify(await makeRequest(config,'GET','/api/jobs/'+encodeURIComponent(jobId)+'/cut-timeline'));
     },
     cancelNativeEncode(jobId) {
       void makeRequest(config, 'POST', '/api/jobs/' + encodeURIComponent(jobId) + '/cancel').catch(() => {});

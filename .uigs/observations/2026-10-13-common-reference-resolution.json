@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "project": "Quick-Automatic-Hardsub-Encoder",
+  "observation": "Cross-resolution quality evidence requires a common source canvas, receipt-bound output/reference geometry and the same scaler in formal adoption. A shared SSIM value alone cannot attest matching geometry.",
+  "local_verification": "234 pass,9 conditional skips;7 actual FFmpeg integrations;build pass",
+  "external_validation": "Pending Windows and browser",
+  "limits": "Synthetic local samples; short-window metrics are not whole-file perceptual quality"
+}

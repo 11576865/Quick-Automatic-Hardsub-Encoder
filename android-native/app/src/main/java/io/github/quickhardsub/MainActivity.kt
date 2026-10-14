@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = NativeJobStore.outputMime(this@MainActivity, jobId)
             putExtra(Intent.EXTRA_TITLE, suggestedName)
-            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
         try {

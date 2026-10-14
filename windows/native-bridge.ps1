@@ -8,9 +8,14 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 . (Join-Path $PSScriptRoot 'native-backend.ps1')
+. (Join-Path $PSScriptRoot 'manual-sample-evidence.ps1')
+. (Join-Path $PSScriptRoot 'guided-rendered-sample-evidence.ps1')
+. (Join-Path $PSScriptRoot 'trim-copy-preflight-bridge.ps1')
+. (Join-Path $PSScriptRoot 'flac-encode-preflight-bridge.ps1')
 . (Join-Path $PSScriptRoot 'output-safety.ps1')
 . (Join-Path $PSScriptRoot 'media-task.ps1')
 . (Join-Path $PSScriptRoot 'compression-history.ps1')
+. (Join-Path $PSScriptRoot 'media-frame-rate.ps1')
 . (Join-Path $PSScriptRoot 'bink-import.ps1')
 
 $ErrorActionPreference = 'Stop'
@@ -28,6 +33,7 @@ Write-BridgeLog 'Starting local backend and detecting FFmpeg / GPU capabilities.
 $script:AllowedOrigin = 'https://11576865.github.io'
 $script:Token = if($Token){$Token}else{[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '[^A-Za-z0-9]', ''}
 $script:Selections = @{ video=@(); ass=@(); fonts=@() }
+$script:EmbeddedAssImport=$null
 if($InitialVideo){
     if(-not (Test-Path -LiteralPath $InitialVideo -PathType Leaf)){throw 'InitialVideo does not exist.'}
     $script:Selections.video=@((Resolve-Path -LiteralPath $InitialVideo).Path)
@@ -103,6 +109,7 @@ function New-BridgeWorkDir([string]$Prefix) {
 
 function Stage-BridgeAssets([string]$WorkDir, [string]$AssText) {
     if ([string]::IsNullOrWhiteSpace($AssText)) { throw 'ASS subtitle text is empty.' }
+    Assert-BridgeEmbeddedSource
     $utf8 = New-Object Text.UTF8Encoding($false)
     [IO.File]::WriteAllText((Join-Path $WorkDir 'subtitle.ass'), $AssText, $utf8)
     $fontDir = Join-Path $WorkDir 'fonts'
@@ -115,6 +122,123 @@ function Stage-BridgeAssets([string]$WorkDir, [string]$AssText) {
         $n++
         Copy-Item -LiteralPath $font -Destination (Join-Path $fontDir ("font$n$ext")) -Force
     }
+}
+
+
+# WU-02 explicit MKV ASS+font import; staged assets are source-bound.
+function Clear-BridgeEmbeddedAss {
+  $old=$script:EmbeddedAssImport
+  if(-not $old){return}
+  if(@($script:Selections.ass).Count -and $script:Selections.ass[0] -eq $old.AssPath){$script:Selections.ass=@()}
+  if(@($script:Selections.fonts).Count -and @($script:Selections.fonts)[0] -in @($old.FontPaths)){$script:Selections.fonts=@()}
+  $script:EmbeddedAssImport=$null
+  if($old.Work -and (Test-Path -LiteralPath $old.Work)){
+    Remove-Item -LiteralPath $old.Work -Force -Recurse -ErrorAction SilentlyContinue
+  }
+}
+function Assert-BridgeEmbeddedSource {
+  $info=$script:EmbeddedAssImport
+  if(-not $info){return}
+  $now=Get-SelectedPath 'video'
+  if(-not $now -or $now -ne $info.SourcePath){throw 'Embedded ASS source changed; import again.'}
+  $stat=Get-Item -LiteralPath $now -ErrorAction Stop
+  if([long]$stat.Length -ne $info.Bytes -or
+     [long]$stat.LastWriteTimeUtc.Ticks -ne $info.WriteTicks){
+    throw 'Embedded ASS source was modified; import again.'
+  }
+}
+function Import-BridgeEmbeddedAss($Body) {
+  if($null -eq $Body -or $null -eq $Body.subtitleOrdinal -or
+     ([string]$Body.subtitleOrdinal) -notmatch '^[0-9]+$'){
+    throw 'Explicit embedded ASS ordinal is required.'
+  }
+  $n=[int]$Body.subtitleOrdinal
+  $video=Get-SelectedPath 'video'
+  if(-not $video -or $video -ne (Get-OriginalVideoPath)){
+    throw 'Embedded ASS import requires selected original source.'
+  }
+  $before=Get-Item -LiteralPath $video -ErrorAction Stop
+  if($Body.sourceName -ne $before.Name -or [long]$Body.sourceSize -ne [long]$before.Length){
+    throw 'Embedded ASS import requested for another source.'
+  }
+  $probe=Get-ProbeMedia
+  $subs=@($probe.subtitleStreams)
+  if($n -lt 0 -or $n -ge $subs.Count){throw 'Embedded subtitle ordinal is invalid.'}
+  if([string]$subs[$n].codec_name -ne 'ass'){throw 'Selected embedded subtitle is not ASS.'}
+  if(-not $probe.inputDecodeSmoke){throw 'Source cannot be decoded.'}
+  $work=New-BridgeWorkDir 'quick-embedded-ass-'
+  $assPath=Join-Path $work 'selected.ass'
+  $fontPaths=New-Object 'System.Collections.Generic.List[string]'
+  $fonts=New-Object 'System.Collections.Generic.List[object]'
+  try {
+    $args='-hide_banner -nostdin -loglevel error -y -i '+(Quote-NativeArg $video)+
+      ' -map 0:s:'+$n+' -c:s ass -f ass '+(Quote-NativeArg $assPath)
+    $extracted=Invoke-BridgeTool $script:Ffmpeg $args $work 40
+    if($extracted.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $assPath)){
+      throw ('Failed to extract embedded ASS. '+$extracted.StdErr)
+    }
+    $item=Get-Item -LiteralPath $assPath
+    if($item.Length -le 0 -or $item.Length -gt 8MB){throw 'ASS size exceeds allowed 8 MB.'}
+    $assText=[IO.File]::ReadAllText($assPath,[Text.Encoding]::UTF8)
+    if($assText -notmatch '(?im)^\[Events\]\s*$'){throw 'Embedded ASS has no Events section.'}
+    $total=0L
+    $attachments=@($probe.attachmentStreams)
+    for($i=0;$i -lt $attachments.Count;$i++){
+      $attachment=$attachments[$i]
+      $type=[string]$attachment.codec_name
+      $filename=[string]$attachment.tags.filename
+      $ext=[IO.Path]::GetExtension($filename).ToLowerInvariant()
+      if($ext -notin @('.ttf','.otf','.ttc','.otc')){
+        $ext=if($type -in @('ttf','otf','ttc','otc')){'.'+$type}else{''}
+      }
+      if(-not $ext){continue}
+      if($fonts.Count -ge 24){throw 'More than 24 fonts; import was refused.'}
+      $safeName='font-'+$i+$ext
+      $target=Join-Path $work $safeName
+      $dump='-hide_banner -nostdin -loglevel error -y -dump_attachment:t:'+$i+
+        ' '+(Quote-NativeArg $safeName)+' -i '+(Quote-NativeArg $video)+
+        ' -map 0:v:0 -frames:v 1 -f null NUL'
+      $result=Invoke-BridgeTool $script:Ffmpeg $dump $work 40
+      if($result.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $target)){
+        throw ('Embedded font attachment '+$i+' could not be extracted. '+$result.StdErr)
+      }
+      $font=Get-Item -LiteralPath $target
+      if($font.Length -le 0 -or $font.Length -gt 16MB){throw 'Unsafe embedded font size.'}
+      $total+=[long]$font.Length
+      if($total -gt 32MB){throw 'Combined embedded fonts exceed 32 MB.'}
+      $fontPaths.Add($target)
+      $fonts.Add([pscustomobject]@{
+        name=$safeName;size=[long]$font.Length
+        base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($target))
+      })
+    }
+    $after=Get-Item -LiteralPath $video
+    if($after.Length -ne $before.Length -or
+       $after.LastWriteTimeUtc.Ticks -ne $before.LastWriteTimeUtc.Ticks -or
+       $video -ne (Get-SelectedPath 'video')){
+      throw 'Source changed during import.'
+    }
+    Clear-BridgeEmbeddedAss
+    $script:Selections.ass=@($assPath)
+    $script:Selections.fonts=@($fontPaths.ToArray())
+    $script:EmbeddedAssImport=[pscustomobject]@{
+      Work=$work;AssPath=$assPath;FontPaths=@($fontPaths.ToArray())
+      SourcePath=$video;Bytes=[long]$after.Length
+      WriteTicks=[long]$after.LastWriteTimeUtc.Ticks
+    }
+    return [pscustomobject]@{
+      ok=$true;subtitleOrdinal=$n;sourceName=$after.Name;sourceSize=[long]$after.Length
+      sourceBound=$true;fontMode='embedded'
+      ass=[pscustomobject]@{
+        name=('embedded-ass-'+$n+'.ass');size=[long]$item.Length
+        base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($assPath))
+      }
+      fonts=@($fonts.ToArray());fontCount=$fonts.Count
+    }
+  }catch{
+    Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    throw
+  }
 }
 
 function Get-OriginalVideoPath {
@@ -416,11 +540,12 @@ function Show-BridgePicker([string]$Role) {
         $picked = @(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts;*.bik;*.bk2|Bink video|*.bik;*.bk2|All files|*.*')
         if ($picked.Count) {
             Clear-Bink2ImportStaging
+            Clear-BridgeEmbeddedAss
             $script:Selections.video = @($picked[0])
         }
     } elseif ($Role -eq 'ass') {
         $picked = @(Show-NativeOpenFileDialog 'ASS subtitles|*.ass|All files|*.*')
-        if ($picked.Count) { $script:Selections.ass = @($picked[0]) }
+        if ($picked.Count) { Clear-BridgeEmbeddedAss; $script:Selections.ass = @($picked[0]) }
     } elseif ($Role -eq 'fonts') {
         $picked = @(Show-NativeOpenFileDialog 'Font files|*.ttf;*.otf;*.ttc;*.otc|All files|*.*' $true)
         if ($picked.Count) { $script:Selections.fonts = @($picked) }
@@ -440,6 +565,7 @@ function Show-BridgePicker([string]$Role) {
         $item = Get-Item -LiteralPath $path
         $names += $item.Name
         $entry = [ordered]@{ name=$item.Name; size=$item.Length }
+        if($Role -eq 'video'){$entry.lastModified=([DateTimeOffset]$item.LastWriteTimeUtc).ToUnixTimeMilliseconds()}
         if ($Role -in @('ass','fonts')) {
             if ($item.Length -gt 32MB) { throw "$Role file exceeds 32 MB bridge safety limit." }
             $entry.base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($path))
@@ -517,6 +643,19 @@ function Get-PreferredEncoder([string]$Codec) {
 function Get-BridgeEncoderArgs($Profile, $Options) {
     if (-not $Profile) { throw 'No available encoder for this codec.' }
     $targetRate = [long]($Options.targetVideoBitrate)
+    if ([bool]$Options.sampleExact -and [bool]$Options.guidedRenderedReference) {
+        # Match the CURRENT production Guided VBR encoder args exactly. In
+        # particular hardware Guided uses p7+tune+maxrate/bufsize, unlike the
+        # no-subtitle Manual exact VBR profile. Never substitute that profile.
+        if($targetRate -le 0){throw 'Guided exact sample needs positive VBR bitrate.'}
+        if($Profile.Hardware){
+            $tune=if($Profile.Tune){$Profile.Tune}else{'hq'}
+            return "-c:v $($Profile.Encoder) -preset p7 -tune $tune -rc vbr -b:v $targetRate -maxrate $targetRate -bufsize $($targetRate * 2)"
+        }
+        $preset=[string]$Options.preset
+        if(-not $preset){$preset=[string]$Profile.SoftwarePreset}
+        return "-c:v $($Profile.Encoder) -preset $preset -b:v $targetRate"
+    }
     if ([bool]$Options.sampleExact) {
         # Exact samples may verify either the measured CQ mode or the
         # final bitrate/VBR mode, with the same selected encoder and preset.
@@ -647,6 +786,7 @@ function Get-ProbeMedia {
             ordinal=$i; index=if($null -ne $stream.index){[int]$stream.index}else{$i}
             codec=[string]$stream.codec_name
             bitRate=if($adapterApplied){0L}elseif($stream.bit_rate){[long]$stream.bit_rate}else{0L}
+            language=[string]$stream.tags.language;title=[string]$stream.tags.title
             channels=if($stream.channels){[int]$stream.channels}else{0}
             sampleRate=if($stream.sample_rate){[int]$stream.sample_rate}else{0}
         }
@@ -672,6 +812,10 @@ function Get-ProbeMedia {
         pixelFormat=[string]$v.pixelFormat; bitDepth=[int]$v.bitDepth
         colorTransfer=[string]$v.colorTransfer; colorPrimaries=[string]$v.colorPrimaries
         colorSpace=[string]$v.colorSpace; hdr=[bool]$v.hdr; unsafeColorPipeline=[bool]$v.unsafeColorPipeline
+        subtitleTracks=@($json.streams | Where-Object {$_.codec_type -eq 'subtitle'}).Count
+        subtitleStreams=@($json.streams | Where-Object {$_.codec_type -eq 'subtitle'})
+        attachmentTracks=@($json.streams | Where-Object {$_.codec_type -eq 'attachment'}).Count
+        attachmentStreams=@($json.streams | Where-Object {$_.codec_type -eq 'attachment'})
         audioTracks=$audios.Count; audioStreams=$audioFacts
         audioCodec=if($audios.Count){[string]$audios[0].codec_name}else{''}
         audioCodecs=@($audios | ForEach-Object { [string]$_.codec_name }); audioBitRate=$audioRate
@@ -683,6 +827,54 @@ function Get-ProbeMedia {
         sourceOriginalName=$sourceItem.Name
         sourceOriginalSize=$sourceItem.Length
         sourceOriginalKind=if($adapter.isBink2){'bink2'}else{'native'}
+    }
+}
+
+# Stream packets with constant memory; stop on deadline/packet count instead of
+# retaining millions of JSON packet objects. Evidence describes full-source only.
+function Measure-AuxiliaryPackets([string]$Video,[string]$Kind) {
+    $p=New-Object Diagnostics.Process
+    $p.StartInfo.FileName=$script:Ffprobe
+    $p.StartInfo.Arguments='-v error -select_streams '+$Kind+' -show_packets -show_entries packet=stream_index,size -of csv=p=0 '+(Quote-NativeArg $Video)
+    $p.StartInfo.UseShellExecute=$false;$p.StartInfo.CreateNoWindow=$true
+    $p.StartInfo.RedirectStandardOutput=$true;$p.StartInfo.RedirectStandardError=$true
+    $clock=[Diagnostics.Stopwatch]::StartNew();$totals=@{};$count=0
+    try{
+        [void]$p.Start();$stderr=$p.StandardError.ReadToEndAsync()
+        while($true){
+            $lineTask=$p.StandardOutput.ReadLineAsync()
+            while(-not $lineTask.Wait(100)){if($clock.Elapsed.TotalSeconds -gt 30){throw 'Source cost scan timed out; costs remain unknown.'}}
+            if($clock.Elapsed.TotalSeconds -gt 30){throw 'Source cost scan timed out; costs remain unknown.'}
+            $line=$lineTask.Result;if($null -eq $line){break}
+            if(++$count -gt 2000000){throw 'Source packet scan exceeds bounded work limit.'}
+            if($line -notmatch '^(\d+),(\d+)(?:,.*)?$'){throw 'Malformed packet cost; costs remain unknown.'}
+            $index=[int]$Matches[1];$bytes=[long]$Matches[2]
+            if(-not $totals.ContainsKey($index)){$totals[$index]=0L}
+            $totals[$index]+=$bytes
+        }
+        if(-not $p.WaitForExit(1000) -or $p.ExitCode -ne 0){throw 'Source packet scan failed.'}
+        return $totals
+    }finally{try{if(-not $p.HasExited){$p.Kill();$p.WaitForExit()}}catch{};$p.Dispose()}
+}
+function Get-SourceBudgetEvidence {
+    $video=Get-SelectedPath 'video';if(-not $video){throw 'No video selected.'}
+    foreach($j in $script:Jobs.Values){if($j.State -in @('encoding','validating')){throw 'Cannot scan costs while a job is active.'}}
+    $before=Get-Item -LiteralPath $video
+    $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_streams -show_entries stream=index,codec_type,extradata_size -of json '+(Quote-NativeArg $video)) '' 10
+    if($probe.ExitCode -ne 0){throw 'Source stream scan failed.'}
+    $streams=@(($probe.StdOut | ConvertFrom-Json).streams)
+    if($streams.Count -gt 64){throw 'Source stream count exceeds measurement limit.'}
+    $audio=Measure-AuxiliaryPackets $video 'a';$sub=Measure-AuxiliaryPackets $video 's'
+    $after=Get-Item -LiteralPath $video
+    if($after.Length -ne $before.Length -or $after.LastWriteTimeUtc.Ticks -ne $before.LastWriteTimeUtc.Ticks){throw 'Source changed while measuring; costs remain unknown.'}
+    $audioCosts=@($streams | Where-Object {$_.codec_type -eq 'audio'} | ForEach-Object {if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}})
+    $script:BudgetMeasurement=[pscustomobject]@{Id=[guid]::NewGuid().ToString('N');Path=$video;Length=$after.Length;WriteTicks=$after.LastWriteTimeUtc.Ticks;AudioPacketBytes=$audioCosts}
+    return [pscustomobject]@{
+        measurementId=$script:BudgetMeasurement.Id
+        version=1;scope='full-source'
+        audioPacketBytes=$audioCosts
+        subtitlePacketBytes=@($streams | Where-Object {$_.codec_type -eq 'subtitle'} | ForEach-Object {if($sub.ContainsKey([int]$_.index)){$sub[[int]$_.index]}else{$null}})
+        attachmentBytes=@($streams | Where-Object {$_.codec_type -eq 'attachment'} | ForEach-Object {if($null -ne $_.extradata_size){[long]$_.extradata_size}else{$null}})
     }
 }
 
@@ -932,13 +1124,14 @@ function Get-Ssim([string]$Candidate,[string]$Reference,[string]$Work,[int]$Refe
     return $null
 }
 
-function Get-SsimAgainstSource([string]$Candidate,[string]$Source,[string]$Start,[string]$Duration,[string]$Work) {
+function Get-SsimAgainstSource([string]$Candidate,[string]$Source,[string]$Start,[string]$Duration,[string]$Work,[int]$ReferenceWidth=0,[int]$ReferenceHeight=0) {
     # Only for the validated, filter-free video-transcode calibration path.
     # Decode the source directly: no multi-GB FFV1 reference written to disk.
     # Independent seek windows reset PTS before same-frame SSIM comparison.
+    $up=if($ReferenceWidth -gt 0){'scale='+$ReferenceWidth+':'+$ReferenceHeight+':flags=bicubic,'}else{''}
     $cmd='-hide_banner -nostdin -loglevel info -i '+(Quote-NativeArg $Candidate)+
       ' -ss '+$Start+' -t '+$Duration+' -i '+(Quote-NativeArg $Source)+
-      ' -filter_complex "[0:v]setpts=PTS-STARTPTS[encoded];[1:v]format=yuv420p,setpts=PTS-STARTPTS[reference];[encoded][reference]ssim" -an -sn -f null NUL'
+      ' -filter_complex "[0:v]'+$up+'setpts=PTS-STARTPTS[encoded];[1:v]format=yuv420p,setpts=PTS-STARTPTS[reference];[encoded][reference]ssim" -an -sn -f null NUL'
     $r=Invoke-BridgeTool $script:Ffmpeg $cmd $Work
     if($r.ExitCode -ne 0){throw 'Source-backed SSIM failed: '+$r.StdErr.Trim()}
     $match=[regex]::Match(($r.StdErr+[Environment]::NewLine+$r.StdOut),'All:(?<v>[0-9.]+)')
@@ -1045,11 +1238,24 @@ function Invoke-Sample($Body) {
     $duration=[double]$o.duration
     if($duration -le 0 -or $duration -gt 8){throw 'Sample duration must be between 0 and 8 seconds.'}
     $start=[Math]::Max(0,[double]$o.start)
+    $exactManualEvidence=[bool]$o.sampleExact -and -not [bool]$o.withSubtitles -and [bool]$o.measureSsim
+    $exactGuidedEvidence=[bool]$o.sampleExact -and [bool]$o.guidedRenderedReference -and
+        [bool]$o.withSubtitles -and [bool]$o.measureSsim -and [long]$o.targetVideoBitrate -gt 0
+    if([bool]$o.sampleExact -and
+       (([bool]$o.withSubtitles -and -not $exactGuidedEvidence) -or
+        ([bool]$o.guidedRenderedReference -and -not $exactGuidedEvidence))){
+        throw 'Exact Guided and Manual sample reference modes cannot be mixed.'
+    }
+    $snapshotBefore=if($exactManualEvidence -or $exactGuidedEvidence){
+        $version=Get-FfmpegVersionInfo $script:Ffmpeg
+        New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$version.Text)
+    }else{$null}
     $work=New-BridgeWorkDir 'quick-hardsub-sample-'
     $sampleId=[guid]::NewGuid().ToString('N')
     try{
         $withSubs=[bool]$o.withSubtitles
         if($withSubs){Stage-BridgeAssets $work ([string]$Body.assText)}
+        $assetBefore=if($exactGuidedEvidence){Get-GuidedRenderedAssetStamp $work}else{$null}
         $reference=Join-Path $work 'reference.mkv'
         $candidate=Join-Path $work 'sample.mkv'
         $startText=$start.ToString('0.###',[Globalization.CultureInfo]::InvariantCulture)
@@ -1058,9 +1264,11 @@ function Invoke-Sample($Body) {
         $outH=[int]$o.outputHeight
         $refW=[int]$o.referenceWidth
         $refH=[int]$o.referenceHeight
+        $common=$exactManualEvidence -and [bool]$o.commonReference
         $scaled=$outW -gt 0 -or $outH -gt 0
+        if([bool]$o.commonReference -and (-not $common -or -not $scaled)){throw 'Common reference requires exact measured manual geometry.'}
         if($scaled){
-            if(-not $withSubs -or [bool]$o.sampleExact){throw 'Resolution trials require subtitle-rendered common reference mode.'}
+            if(-not $common -and (-not $withSubs -or ([bool]$o.sampleExact -and -not $exactGuidedEvidence))){throw 'Resolution trials require subtitle-rendered common reference mode.'}
             if($outW -lt 2 -or $outH -lt 2 -or $outW -gt 16384 -or $outH -gt 16384 -or
                 ($outW % 2) -or ($outH % 2) -or
                 $refW -lt $outW -or $refH -lt $outH -or
@@ -1068,14 +1276,20 @@ function Invoke-Sample($Body) {
                 throw 'Invalid common-reference candidate resolution.'
             }
         }
+        if($common){
+            $sourceGeometry=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=width,height -of json '+(Quote-NativeArg $video))
+            if($sourceGeometry.ExitCode -ne 0){throw 'Cannot verify common source reference geometry.'}
+            $sourceStream=@(($sourceGeometry.StdOut | ConvertFrom-Json).streams)[0]
+            if([int]$sourceStream.width -ne $refW -or [int]$sourceStream.height -ne $refH){throw 'Common reference geometry differs from source.'}
+        }
         $referenceFilter=if($withSubs){' -vf "ass=subtitle.ass:fontsdir=fonts"'}else{''}
         $vf=if($withSubs){
             $filter='ass=subtitle.ass:fontsdir=fonts'
             if($scaled){$filter+=',scale='+$outW+':'+$outH+':flags=bicubic'}
             ' -vf "'+$filter+'"'
-        }else{''}
-        if(-not [bool]$o.sampleExact){
-            # Legacy hard-sub samples require the subtitle-rendered FFV1
+        }elseif($common){' -vf "scale='+$outW+':'+$outH+':flags=bicubic"'}else{''}
+        if(-not [bool]$o.sampleExact -or $exactGuidedEvidence){
+            # Guided exact VBR samples also require the subtitle-rendered FFV1
             # reference; exact filter-free transcoding measures from source.
             $rr=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -loglevel error -y -ss '+$startText+' -t '+$durationText+' -i '+(Quote-NativeArg $video)+' -an -sn'+$referenceFilter+' -c:v ffv1 '+(Quote-NativeArg $reference)) $work
             if($rr.ExitCode -ne 0){throw ($rr.StdErr.Trim())}
@@ -1088,16 +1302,33 @@ function Invoke-Sample($Body) {
         if($run.ExitCode -ne 0 -or -not(Test-Path $candidate)){throw ($run.StdErr.Trim())}
         $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $candidate))
         $measured=if($probe.ExitCode -eq 0){[double]::Parse($probe.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$duration}
+        if($common){
+            $outputGeometry=Invoke-BridgeTool $script:Ffprobe ('-v error -select_streams v:0 -show_entries stream=width,height -of json '+(Quote-NativeArg $candidate))
+            if($outputGeometry.ExitCode -ne 0){throw 'Cannot verify measured output geometry.'}
+            $actualStream=@(($outputGeometry.StdOut | ConvertFrom-Json).streams)[0]
+            if([int]$actualStream.width -ne $outW -or [int]$actualStream.height -ne $outH){throw 'Measured output geometry differs from requested candidate.'}
+        }
         $packets=Get-PacketStats $candidate
         $ssim=if([bool]$o.measureSsim){
-            if([bool]$o.sampleExact){
-                Get-SsimAgainstSource $candidate $video $startText $durationText $work
+            if($exactManualEvidence){
+                Get-SsimAgainstSource $candidate $video $startText $durationText $work $(if($common){$refW}else{0}) $(if($common){$refH}else{0})
             }else{
                 if($scaled){Get-Ssim $candidate $reference $work $refW $refH}
                 else{Get-Ssim $candidate $reference $work}
             }
         }else{$null}
         $sampleBytes=(Get-Item $candidate).Length
+        if($exactGuidedEvidence -and ($null -eq $ssim -or [double]$ssim -lt 0 -or [double]$ssim -gt 1)){
+            throw 'Guided rendered-reference SSIM not available.'
+        }
+        $nativeEvidence=if($exactManualEvidence){
+            $snapshotAfter=New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$snapshotBefore.runtimeVersion)
+            New-ManualNativeSampleReceipt $snapshotBefore $snapshotAfter $o ([string]$profile.Encoder) $measured
+        }elseif($exactGuidedEvidence){
+            $snapshotAfter=New-ManualNativeSampleSnapshot $video $script:Ffmpeg ([string]$snapshotBefore.runtimeVersion)
+            $assetAfter=Get-GuidedRenderedAssetStamp $work
+            New-GuidedExactVbrReceipt $snapshotBefore $snapshotAfter $o ([string]$profile.Encoder) $(if($profile.Hardware){'p7'}elseif([string]$o.preset){[string]$o.preset}else{[string]$profile.SoftwarePreset}) $measured $assetBefore $assetAfter
+        }else{$null}
         if([bool]$o.retainSample){
             $keep=Join-Path ([IO.Path]::GetTempPath()) ("quick-hardsub-sample-$sampleId.mkv")
             Copy-Item -LiteralPath $candidate -Destination $keep -Force
@@ -1109,17 +1340,51 @@ function Invoke-Sample($Body) {
             elapsedSeconds=$sw.Elapsed.TotalSeconds;duration=$measured
             encodeSpeed=($measured/[Math]::Max(.001,$sw.Elapsed.TotalSeconds))
             totalVideoBytes=$packets.bytes;packetCount=$packets.count;ssim=$ssim;sampleBytes=$sampleBytes
+            nativeEvidence=$nativeEvidence
         }
     }finally{Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue}
 }
 
+function Assert-CurrentCopyBudgetEvidence($Evidence,[string]$Video) {
+    $measured=$script:BudgetMeasurement
+    $item=Get-Item -LiteralPath $Video
+    if(-not $Evidence -or -not $measured -or
+       [string]$Evidence.measurementId -ne [string]$measured.Id -or
+       $Video -ne $measured.Path -or
+       $item.Length -ne $measured.Length -or
+       $item.LastWriteTimeUtc.Ticks -ne $measured.WriteTicks) {
+        throw 'Budget measurement does not match current source; measure again.'
+    }
+    # The token is not permission for the UI to rewrite the measured packet
+    # bytes. Bind the claimed copy cost to the Windows-local observation too.
+    $expected=@($measured.AudioPacketBytes)
+    $actual=@($Evidence.audioPacketBytes)
+    if($actual.Count -ne $expected.Count) {
+        throw 'Measured copied-audio packet costs differ from current source evidence.'
+    }
+    for($i=0;$i -lt $expected.Count;$i++) {
+        if([string]$actual[$i] -ne [string]$expected[$i]) {
+            throw 'Measured copied-audio packet costs differ from current source evidence.'
+        }
+    }
+}
+
 function Start-MediaTaskJob($Body) {
+    if($script:FlacPreflightJob -and (Get-FlacEncodePreflightStatus).state -eq 'running'){
+      throw 'Finish FLAC preflight before formal encoding.'
+    }
+    if($script:TrimPreflightJob -and (Get-IsolatedTrimPreflightStatus).state -eq 'running'){
+      throw 'Finish isolated copy preflight before formal encoding.'
+    }
     if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $request=$Body.request; $task=$request.task
     $outputArgs=Get-MediaTaskArgs $task
     $video=Get-SelectedPath 'video'
     if(-not $video){throw 'No video selected.'}
+    if($task.budgetEvidence){
+        Assert-CurrentCopyBudgetEvidence $task.budgetEvidence $video
+    }
     $probe=Get-ProbeMedia
     if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
     if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
@@ -1138,10 +1403,18 @@ function Start-MediaTaskJob($Body) {
     if($encoder -ne 'copy'){
         $profile=@($script:Capabilities.Encoders | Where-Object { $_.Key -eq $encoder -and $_.Available }) | Select-Object -First 1
         if(-not $profile){throw 'Selected encoder is unavailable; no automatic substitution.'}
+        if($encoder -eq 'libvvenc' -and $profile.RuntimeValidation -ne 'encode-mkv-decode-v1'){throw 'VVC runtime chain was not validated.'}
         if($profile.PixelFormats.Count -and $outputArgs -contains '-pix_fmt' -and $profile.PixelFormats -notcontains $outputArgs[[Array]::IndexOf($outputArgs,'-pix_fmt')+1]){throw 'Selected pixel format is unsupported.'}
-        foreach($flag in @('-fps_mode','-vsync','-multipass','-rc-lookahead','-spatial-aq','-temporal-aq','-aq-strength','-cq','-crf','-preset','-tune')){if($outputArgs -contains $flag -and $profile.Options -notcontains $flag -and $script:Capabilities.GlobalOptions -notcontains $flag){throw "FFmpeg encoder does not support $flag"}}
+        foreach($flag in @('-fps_mode','-vsync','-multipass','-rc-lookahead','-spatial-aq','-temporal-aq','-aq-strength','-cq','-crf','-qp','-preset','-tune')){if($outputArgs -contains $flag -and $profile.Options -notcontains $flag -and $script:Capabilities.GlobalOptions -notcontains $flag){throw "FFmpeg encoder does not support $flag"}}
     }
-    if($task.audio -in @('aac','libopus')){$audioHelp=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -h encoder='+$task.audio);if($audioHelp.StdOut -notmatch ('(?m)^Encoder '+[regex]::Escape([string]$task.audio)+'\s')){throw 'Selected audio encoder is unavailable.'}}
+    $audioEncoders=@()
+    for($i=0;$i -lt $outputArgs.Count;$i++){if($outputArgs[$i] -match '^-c:a(?::[0-9]+)?$'){$audioEncoders+=$outputArgs[$i+1]}}
+    foreach($name in @($audioEncoders | Select-Object -Unique)){
+        if($name -eq 'copy'){continue}
+        $audioHelp=Invoke-BridgeTool $script:Ffmpeg ('-hide_banner -h encoder='+$name)
+        if($audioHelp.StdOut -notmatch ('(?m)^Encoder '+[regex]::Escape([string]$name)+'\s')){throw 'Selected audio encoder is unavailable.'}
+    }
+
     $actualStart=[double]$task.start
     if($task.operation -eq 'copy' -and [string]$task.videoRange -ne 'full' -and $actualStart -gt 0){
         $stop=($actualStart+1).ToString('0.######',[Globalization.CultureInfo]::InvariantCulture)
@@ -1188,14 +1461,16 @@ function Start-MediaTaskJob($Body) {
     $trimDuration=[Math]::Max(0.0,[double]$task.end-$actualStart)
     $sourceDuration=[double]$probe.duration
     $videoDuration=if([int]$task.version -ge 4 -and [string]$task.videoRange -eq 'full'){$sourceDuration}else{$trimDuration}
-    $audioDuration=if([int]$task.expectedAudioTracks -le 0){0.0}elseif([int]$task.version -ge 4 -and [string]$task.audioRange -eq 'full'){$sourceDuration}else{$trimDuration}
+    $audioDuration=if([int]$task.expectedAudioTracks -le 0){0.0}elseif($task.audioPlan){if(@($task.audioPlan | Where-Object {$_.action -ne 'drop' -and $_.range -eq 'full'}).Count){$sourceDuration}else{$trimDuration}}elseif([int]$task.version -ge 4 -and [string]$task.audioRange -eq 'full'){$sourceDuration}else{$trimDuration}
     $subtitleDuration=if(-not [bool]$task.keepSubtitles){0.0}elseif([int]$task.version -ge 4 -and [string]$task.subtitleRange -eq 'full'){$sourceDuration}else{$trimDuration}
     $duration=[Math]::Max($videoDuration,[Math]::Max($audioDuration,$subtitleDuration))
     $job=[pscustomobject]@{
         Id=$jobId;Work=$work;Output=(Join-Path $work $outputFile);Progress=(Join-Path $work 'progress.txt');Started=$started
         Duration=$duration;ExpectedVideoDuration=$videoDuration;ExpectedAudioDuration=$audioDuration;Encoder=$encoder;Hardware=$encoder.EndsWith('_nvenc');ActualStart=$actualStart;Task=$task;Request=$request;Source=$video;SourceProbe=$probe;Phase=if($task.twoPass){1}else{2};SecondArgs=$secondArgs
         OutputExtension=$outputExtension;OutputFormat=$outputFormat;SuggestedName=[string]$request.suggestedName;State='encoding';Finalized=$false;Error='';Cancelled=$false
-        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey=''
+        StrictBudget=([string]$task.budgetPolicy -eq 'strict-ceiling');BudgetCeiling=[long]$task.sizeCeilingBytes;StrictVerifiedHash='';StrictVerifiedWriteTicks=0L;BudgetRejected=$false
+        StartedAt=(Get-Date);HistoryRecorded=$false;EncodeSeconds=0.0;TimedProcessKey='';VvcValidating=$false
+        TrimPacketAuditFinished=$false;TrimPacketEvidence=$null;TrimPacketAuditState='not-requested';TrimPacketAuditStarted=$null;TrimPacketAuditReceipt='';TrimPacketAuditExpectedLength=0L;TrimPacketAuditExpectedTicks=0L
     }
     $script:Jobs[$jobId]=$job
     return [pscustomobject]@{ok=$true;jobId=$jobId;suggestedName=$job.SuggestedName;actualStart=$actualStart;encoder=$encoder}
@@ -1227,6 +1502,12 @@ function Resolve-GuidedBudgetPolicy($Request,$Profile) {
 }
 
 function Start-EncodeJob($Body) {
+    if($script:FlacPreflightJob -and (Get-FlacEncodePreflightStatus).state -eq 'running'){
+      throw 'Finish FLAC preflight before formal encoding.'
+    }
+    if($script:TrimPreflightJob -and (Get-IsolatedTrimPreflightStatus).state -eq 'running'){
+      throw 'Finish isolated copy preflight before formal encoding.'
+    }
     if (Test-Bink2ImportBusy) { throw 'Bink 2 import is still running.' }
     foreach($existing in $script:Jobs.Values){if($existing.State -eq 'encoding' -and -not $existing.Started.Process.HasExited){throw 'A Native job is already running.'}}
     $video=Get-SelectedPath 'video'
@@ -1236,6 +1517,16 @@ function Start-EncodeJob($Body) {
     $probe=Get-ProbeMedia
     if($probe.sourceAdapterRequired){throw 'Bink 2 must be imported through RAD Video Tools before FFmpeg can process it.'}
     if(-not $probe.inputDecodeSmoke){throw ('Selected video metadata is readable, but FFmpeg cannot decode the video stream. '+$probe.inputDecodeError)}
+    # The client-reported track count cannot waive the receipt requirement.
+    # Check the *probed Native source*, which also owns the packet observation.
+    if([string]$request.mode -eq 'budget-rate' -and [string]$request.audio -eq 'copy') {
+        if([int]$request.expectedAudioTracks -ne [int]$probe.audioTracks) {
+            throw 'Guided copied-audio track count differs from current Native source.'
+        }
+        if([int]$probe.audioTracks -gt 0) {
+            Assert-CurrentCopyBudgetEvidence $request.budgetEvidence $video
+        }
+    }
     $outputFormat=if([string]$request.outputFormat){[string]$request.outputFormat}else{'matroska'}
     $outputExtension=if([string]$request.outputExtension){[string]$request.outputExtension}else{'mkv'}
     if($outputFormat -notin @('matroska','mp4')){throw 'Unsupported output container format.'}
@@ -1360,7 +1651,7 @@ function Ensure-CompletedJobHistory($Job) {
         $targetVideoBitrate=if($request -and $request.targetVideoBitrate){[long]$request.targetVideoBitrate}elseif($task -and $task.rateMode -ne 'quality'){[long]$task.bitrate}else{0L}
         $width=if($request -and $request.sourceWidth){[int]$request.sourceWidth}elseif($source){[int]$source.width}else{0}
         $height=if($request -and $request.sourceHeight){[int]$request.sourceHeight}elseif($source){[int]$source.height}else{0}
-        $fps=if($request -and $request.sourceFps){[double]$request.sourceFps}elseif($source){[double]$source.fps}else{0.0}
+        $fps=if($request -and $request.sourceFps){Convert-MediaFrameRate $request.sourceFps}elseif($source){Convert-MediaFrameRate $source.fps}else{0.0}
         $sourceCodec=if($request -and $request.sourceCodec){[string]$request.sourceCodec}elseif($source){[string]$source.videoCodec}else{''}
         $sourcePixelFormat=if($request -and $request.sourcePixelFormat){[string]$request.sourcePixelFormat}elseif($source){[string]$source.pixelFormat}else{''}
         $sourceVideoBitrate=if($request -and $request.sourceVideoBitrate){[long]$request.sourceVideoBitrate}elseif($source){[long]$source.videoBitRate}else{0L}
@@ -1406,7 +1697,7 @@ function Ensure-CompletedJobHistory($Job) {
 function Clear-IncompleteJobStaging($Job) {
     # Call only after process exit/disposal. Completed staging belongs to the
     # pending save operation and must survive cancellation retries.
-    if($Job.State -notin @('failed','cancelled')){return}
+    if($Job.State -notin @('failed','cancelled') -or $Job.BudgetRejected){return}
     try {
         if($Job.Work -and (Test-Path -LiteralPath $Job.Work)){
             Remove-Item -LiteralPath $Job.Work -Recurse -Force -ErrorAction Stop
@@ -1496,7 +1787,7 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
     # The completed state is only valid while its private staged *container*
     # stays within the user's explicit ceiling. An earlier successful check
     # cannot authorize a later, modified output or an export copy.
-    if(-not $Job.StrictBudget -or $Job.Task){return $true}
+    if(-not $Job.StrictBudget){return $true}
     $limit=[long]$Job.BudgetCeiling
     $actual=0L
     if(Test-Path -LiteralPath $Job.Output -PathType Leaf){
@@ -1535,6 +1826,7 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
             return $false
         }
     }
+    if($Job.Task -and $actual -gt $limit -and $limit -gt 0){$Job.BudgetRejected=$true}
     $Job.State='failed'
     $Job.Error=if($actual -gt $limit){
         'Strict container byte ceiling exceeded: actual '+$actual+
@@ -1542,10 +1834,192 @@ function Test-GuidedStrictBudget($Job,[bool]$CaptureEvidence=$false) {
     }else{
         'Strict container byte verification failed: staged output missing, empty or invalid ceiling.'
     }
-    Remove-Item -LiteralPath $Job.Output -Force -ErrorAction SilentlyContinue
-    Clear-IncompleteJobStaging $Job
+    if(-not $Job.Task){Remove-Item -LiteralPath $Job.Output -Force -ErrorAction SilentlyContinue;Clear-IncompleteJobStaging $Job}
     Write-BridgeLog ('Strict size guard rejected job '+$Job.Id+': '+$Job.Error) 'WARN'
     return $false
+}
+
+# Long-duration post-output packet measurement runs in its own bounded worker.
+# Status reads only launch/poll it; the output remains saveable independently.
+function Get-AsyncTrimPacketEvidence($Job) {
+    if($Job.TrimPacketAuditFinished){
+        # Even after the worker has exited, never reuse an observed receipt for
+        # a staged file whose ordinary stat identity has since changed.
+        if($null -ne $Job.TrimPacketEvidence){
+            try{
+                $current=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+                if([long]$current.Length -ne [long]$Job.TrimPacketAuditExpectedLength -or
+                   [long]$current.LastWriteTimeUtc.Ticks -ne [long]$Job.TrimPacketAuditExpectedTicks){
+                    $Job.TrimPacketEvidence=$null
+                    $Job.TrimPacketAuditState='unavailable'
+                }
+            }catch{
+                $Job.TrimPacketEvidence=$null
+                $Job.TrimPacketAuditState='unavailable'
+            }
+        }
+        return $Job.TrimPacketEvidence
+    }
+    if(-not $Job.TrimPacketAuditStarted){
+        try{
+            $worker=Join-Path $PSScriptRoot 'trim-packet-audit.ps1'
+            if(-not(Test-Path -LiteralPath $worker -PathType Leaf)){throw 'Long trim audit worker is missing.'}
+            $snapshot=Get-Item -LiteralPath $Job.Output
+            $Job.TrimPacketAuditExpectedLength=[long]$snapshot.Length
+            $Job.TrimPacketAuditExpectedTicks=[long]$snapshot.LastWriteTimeUtc.Ticks
+            $Job.TrimPacketAuditReceipt=Join-Path $Job.Work 'trim-packet-audit.json'
+            $args='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File '+(Quote-NativeArg $worker)+
+                ' -Ffprobe '+(Quote-NativeArg $script:Ffprobe)+
+                ' -OutputFile '+(Quote-NativeArg $Job.Output)+
+                ' -ReceiptFile '+(Quote-NativeArg $Job.TrimPacketAuditReceipt)
+            $Job.TrimPacketAuditStarted=Start-BridgeTool 'powershell.exe' $args $Job.Work
+            $Job.TrimPacketAuditState='running'
+        }catch{
+            $Job.TrimPacketAuditFinished=$true
+            $Job.TrimPacketAuditState='unavailable'
+            Write-BridgeLog ('Long trim audit launch unavailable: '+$_.Exception.Message) 'WARN'
+        }
+        return $null
+    }
+    $proc=$Job.TrimPacketAuditStarted.Process
+    if(-not $proc.HasExited){return $null}
+    $exitCode=$proc.ExitCode
+    try{
+        $Job.TrimPacketAuditFinished=$true
+        $Job.TrimPacketAuditState='unavailable'
+        if($exitCode -ne 0){throw 'Bounded FFprobe trim audit worker failed.'}
+        if(-not(Test-Path -LiteralPath $Job.TrimPacketAuditReceipt -PathType Leaf)){throw 'Trim audit receipt missing.'}
+        $receipt=Get-Content -Raw -LiteralPath $Job.TrimPacketAuditReceipt | ConvertFrom-Json
+        $artifact=Get-Item -LiteralPath $Job.Output
+        if($receipt.version -ne 1 -or $receipt.scope -ne 'completed-artifact' -or
+           [long]$receipt.sourceLength -ne [long]$artifact.Length -or
+           [long]$receipt.sourceWriteTicks -ne [long]$artifact.LastWriteTimeUtc.Ticks -or
+           [long]$receipt.sourceLength -ne [long]$Job.TrimPacketAuditExpectedLength -or
+           [long]$receipt.sourceWriteTicks -ne [long]$Job.TrimPacketAuditExpectedTicks){
+            throw 'Trim audit output identity changed.'
+        }
+        $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries stream=codec_type -of json '+(Quote-NativeArg $Job.Output)) '' 10
+        if($probe.ExitCode -ne 0){throw 'Trim audit final stream inventory failed.'}
+        $streams=@(($probe.StdOut|ConvertFrom-Json).streams)
+        if($streams.Count -gt 64 -or
+           @($receipt.videoPacketBytes).Count -ne @($streams | Where-Object {$_.codec_type -eq 'video'}).Count -or
+           @($receipt.audioPacketBytes).Count -ne @($streams | Where-Object {$_.codec_type -eq 'audio'}).Count -or
+           @($receipt.subtitlePacketBytes).Count -ne @($streams | Where-Object {$_.codec_type -eq 'subtitle'}).Count){
+            throw 'Trim audit track ordinals do not match completed output.'
+        }
+        foreach($bytes in @($receipt.videoPacketBytes)+@($receipt.audioPacketBytes)+@($receipt.subtitlePacketBytes)){
+            if($null -eq $bytes -or [long]$bytes -lt 0){throw 'Trim audit packet totals incomplete.'}
+        }
+        $Job.TrimPacketEvidence=[pscustomobject]@{
+            version=1;scope='completed-artifact'
+            artifactBytes=[long]$artifact.Length
+            artifactWriteTicks=[string]$artifact.LastWriteTimeUtc.Ticks
+            artifactJobId=[string]$Job.Id
+            videoPacketBytes=@($receipt.videoPacketBytes)
+            audioPacketBytes=@($receipt.audioPacketBytes)
+            subtitlePacketBytes=@($receipt.subtitlePacketBytes)
+        }
+        $Job.TrimPacketAuditState='ready'
+    }catch{
+        $Job.TrimPacketEvidence=$null
+        Write-BridgeLog ('Long trim audit unavailable for '+$Job.Id+': '+$_.Exception.Message) 'WARN'
+    }finally{
+        $proc.Dispose()
+    }
+    return $Job.TrimPacketEvidence
+}
+
+function Get-CompletedTrimPacketEvidence($Job) {
+    if(-not $Job.Task){return $null}
+    # Actual mixed-mux packet evidence is needed for FLAC even in quality
+    # mode, where there is no sizePlan and no copied-trim reserve.
+    $needsFlac=@($Job.Task.audioPlan | Where-Object {$_.action -eq 'flac'}).Count -gt 0
+    $needsCopy=([bool]$Job.Task.hasTrimRange -and
+       [long]$Job.Task.sizePlan.copiedTrimReserveBytes -gt 0)
+    if(-not $needsFlac -and -not $needsCopy){return $null}
+    if($Job.TrimPacketAuditFinished){
+        # Short-output observations are cached as well. Their source artifact
+        # must still have the original file stat before any status exposes it.
+        if($Job.TrimPacketEvidence){
+            try{
+                $current=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+                if([long]$current.Length -ne [long]$Job.TrimPacketEvidence.artifactBytes -or
+                   [string]$current.LastWriteTimeUtc.Ticks -ne [string]$Job.TrimPacketEvidence.artifactWriteTicks){
+                    throw 'Completed audio packet audit artifact has changed.'
+                }
+            }catch{
+                $Job.TrimPacketEvidence=$null
+                $Job.TrimPacketAuditState='unavailable'
+            }
+        }
+        return $Job.TrimPacketEvidence
+    }
+    # Keep the existing synchronous short-output path. Large files do not block
+    # /api/jobs; use a separately owned, bounded scan with independent receipt.
+    if([double]$Job.ExpectedVideoDuration -gt 180 -or
+       (Get-Item -LiteralPath $Job.Output).Length -gt 536870912) {
+        return Get-AsyncTrimPacketEvidence $Job
+    }
+    $Job.TrimPacketAuditFinished=$true
+    try{
+        $artifactBefore=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+        # One bounded read of the actual staged artifact, never a prediction
+        # based on cut duration. A failed audit cannot invalidate an otherwise
+        # valid completed encode or relax its strict byte ceiling.
+        $probe=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries stream=index,codec_type -of json '+(Quote-NativeArg $Job.Output)) '' 10
+        if($probe.ExitCode -ne 0){throw 'Completed trim output stream probe failed.'}
+        $streams=@(($probe.StdOut|ConvertFrom-Json).streams)
+        if($streams.Count -gt 64){throw 'Too many streams for bounded trim packet audit.'}
+        $video=Measure-AuxiliaryPackets $Job.Output 'v'
+        $audio=Measure-AuxiliaryPackets $Job.Output 'a'
+        $sub=Measure-AuxiliaryPackets $Job.Output 's'
+        $videoBytes=@($streams | Where-Object {$_.codec_type -eq 'video'} | ForEach-Object {
+            if($video.ContainsKey([int]$_.index)){$video[[int]$_.index]}else{$null}
+        })
+        $audioBytes=@($streams | Where-Object {$_.codec_type -eq 'audio'} | ForEach-Object {
+            if($audio.ContainsKey([int]$_.index)){$audio[[int]$_.index]}else{$null}
+        })
+        $subtitleBytes=@($streams | Where-Object {$_.codec_type -eq 'subtitle'} | ForEach-Object {
+            if($sub.ContainsKey([int]$_.index)){$sub[[int]$_.index]}else{$null}
+        })
+        $artifactAfter=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+        if([long]$artifactAfter.Length -ne [long]$artifactBefore.Length -or
+           [string]$artifactAfter.LastWriteTimeUtc.Ticks -ne [string]$artifactBefore.LastWriteTimeUtc.Ticks){
+            throw 'Completed output file changed during short packet audit.'
+        }
+        $Job.TrimPacketEvidence=[pscustomobject]@{
+            version=1;scope='completed-artifact'
+            artifactBytes=[long]$artifactAfter.Length
+            artifactWriteTicks=[string]$artifactAfter.LastWriteTimeUtc.Ticks
+            artifactJobId=[string]$Job.Id
+            videoPacketBytes=$videoBytes
+            audioPacketBytes=$audioBytes;subtitlePacketBytes=$subtitleBytes
+        }
+    }catch{
+        Write-BridgeLog ('Trimmed output packet cost audit unavailable for '+$Job.Id+': '+$_.Exception.Message) 'WARN'
+        $Job.TrimPacketEvidence=$null
+    }
+    $Job.TrimPacketAuditState=if($null -ne $Job.TrimPacketEvidence){'ready'}else{'unavailable'}
+    return $Job.TrimPacketEvidence
+}
+
+function Get-GuidedCompletedBudgetProjection($Job,[long]$ActualBytes) {
+    if($Job.Task -or -not $Job.Request -or [string]$Job.Request.mode -ne 'budget-rate'){return $null}
+    $request=$Job.Request
+    $planned=0L
+    $limit=0L
+    if(-not [long]::TryParse([string]$request.plannedWholeFileBytes,[ref]$planned) -or $planned -le 0){return $null}
+    if(-not [long]::TryParse([string]$request.sizeCeilingBytes,[ref]$limit) -or $limit -le 0){return $null}
+    $policy=[string]$Job.SizeBudgetPolicy
+    if($policy -notin @('best-effort','two-pass','strict-ceiling')){return $null}
+    # Completion and strict output checks run before this receipt is emitted.
+    $verified=($policy -eq 'strict-ceiling' -and [bool]$Job.StrictBudget -and
+        $Job.BudgetCeiling -eq $limit -and $ActualBytes -le $limit)
+    return [pscustomobject]@{
+        plannedBytes=$planned;budgetBytes=$limit;policy=$policy
+        costBasis=[string]$request.budgetCostBasis
+        withinBudget=($ActualBytes -le $limit);strictVerified=$verified
+    }
 }
 
 function Get-JobStatus([string]$JobId) {
@@ -1573,10 +2047,25 @@ function Get-JobStatus([string]$JobId) {
             $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
             $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
         }
-        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+        $actualBytes=(Get-Item -LiteralPath $j.Output).Length
+        $budgetProjection=Get-GuidedCompletedBudgetProjection $j $actualBytes
+        $outputPacketEvidence=Get-CompletedTrimPacketEvidence $j
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputPacketEvidence=$outputPacketEvidence;outputPacketAuditState=$j.TrimPacketAuditState;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     if($j.State -eq 'failed'){Clear-IncompleteJobStaging $j;return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}}
+
+    # Decode validation is a second owned process. Keep the internal encoding
+    # lock until it exits, while reporting validating to the UI. Status never
+    # waits for the decoder, so the serial Bridge can still handle cancellation.
+    if($j.VvcValidating){
+        $snapshot=Get-VvcValidationSnapshot $j
+        if(-not $snapshot.terminal){return $snapshot}
+        $j.State=$snapshot.state;$j.Error=$snapshot.error;$j.VvcValidating=$false
+        $j.Started.Process.Dispose()
+        Clear-IncompleteJobStaging $j
+        return Get-JobStatus $JobId
+    }
 
     $p=$j.Started.Process
     if(-not $p.HasExited){
@@ -1652,6 +2141,7 @@ function Get-JobStatus([string]$JobId) {
                         $expectedVideos=if($null -ne $j.Task.expectedVideoTracks){[int]$j.Task.expectedVideoTracks}else{1}
                         if($videos.Count -ne $expectedVideos -or $audios.Count -ne [int]$j.Task.expectedAudioTracks -or $duration -le 0 -or [Math]::Abs($duration-$j.Duration) -gt 2){throw 'Output stream count/duration validation failed.'}
                         foreach($outVideo in $videos){Test-MediaOutput $j.Task $outVideo}
+                        Test-PlannedAudioOutput $j.Task $audios $j.SourceProbe.audioStreams
                         $scan=Invoke-BridgeTool $script:Ffmpeg ('-v error -i '+(Quote-NativeArg $j.Output)+' -map 0:v -map 0:a? -c copy -f null -')
                         if($scan.ExitCode -ne 0){throw 'Output packet scan failed.'}
                     }catch{$j.State='failed';$j.Error=$_.Exception.Message}
@@ -1665,6 +2155,13 @@ function Get-JobStatus([string]$JobId) {
             [void](Test-GuidedStrictBudget $j $true)
         }
         $p.Dispose()
+        if($j.State -eq 'completed' -and $j.Encoder -eq 'libvvenc'){
+            try{
+                $j.Started=Start-BridgeTool $script:Ffmpeg ('-nostdin -v error -xerror -i '+(Quote-NativeArg $j.Output)+' -map 0:v -f null -') $j.Work
+                $j.State='encoding';$j.VvcValidating=$true
+                return Get-JobStatus $JobId
+            }catch{$j.State='failed';$j.Error='VVC validation launch failed: '+$_.Exception.Message}
+        }
         Clear-IncompleteJobStaging $j
         if($j.State -eq 'completed'){Ensure-CompletedJobHistory $j}
         if($j.State -eq 'completed'){Write-BridgeLog ("Job "+$JobId+" completed · "+$j.Encoder)}
@@ -1680,10 +2177,94 @@ function Get-JobStatus([string]$JobId) {
             $dur=Invoke-BridgeTool $script:Ffprobe ('-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 '+(Quote-NativeArg $j.Output))
             $outputDuration=if($dur.ExitCode -eq 0){[double]::Parse($dur.StdOut.Trim(),[Globalization.CultureInfo]::InvariantCulture)}else{$j.Duration}
         }
-        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=(Get-Item $j.Output).Length;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
+        $actualBytes=(Get-Item -LiteralPath $j.Output).Length
+        $budgetProjection=Get-GuidedCompletedBudgetProjection $j $actualBytes
+        $outputPacketEvidence=Get-CompletedTrimPacketEvidence $j
+        return [pscustomobject]@{ok=$true;state='completed';progress=1;outputBytes=$actualBytes;budgetProjection=$budgetProjection;outputPacketEvidence=$outputPacketEvidence;outputPacketAuditState=$j.TrimPacketAuditState;outputDuration=$outputDuration;actualStart=$j.ActualStart;durationDelta=($outputDuration-$j.Duration);videoDecodeSeconds=0;suggestedName=$j.SuggestedName;encoder=$j.Encoder;hardware=$j.Hardware}
     }
     if($j.State -eq 'cancelled'){return [pscustomobject]@{ok=$true;state='cancelled';progress=0}}
     return [pscustomobject]@{ok=$true;state='failed';progress=0;error=$j.Error;message=$j.Error}
+}
+
+
+# WU05: optional read-only FIRST-boundary output-clock evidence. Bounded
+# FFprobe sampling is NOT full source packet identity or A/V sync proof.
+function Get-CutTimelineEvidence([string]$JobId){
+  if(-not $script:Jobs.ContainsKey($JobId)){throw 'Unknown Native job id.'}
+  $j=$script:Jobs[$JobId]
+  if(-not $j.Task -or [string]$j.Task.operation -ne 'copy' -or
+     -not [bool]$j.Task.hasTrimRange){throw 'Timeline receipt is available only for copy-trim jobs.'}
+  $status=Get-JobStatus $JobId
+  if($status.state -ne 'completed'){throw 'Completed cut is required for output timeline inspection.'}
+  $before=Get-Item -LiteralPath $j.Output -ErrorAction Stop
+  if($before.Length -le 0){throw 'Completed output is empty.'}
+  $file=Quote-NativeArg $j.Output
+  $frames=Invoke-BridgeTool $script:Ffprobe (
+    '-v error -select_streams v:0 -read_intervals '+(Quote-NativeArg '%+#128')+
+    ' -show_frames -show_entries frame=best_effort_timestamp_time -of json '+$file
+  ) '' 18
+  if($frames.ExitCode -ne 0){throw 'First decoded frame probe failed.'}
+  $firstFrame=$null
+  foreach($frame in @(($frames.StdOut|ConvertFrom-Json).frames)){
+    $value=0.0
+    if([double]::TryParse([string]$frame.best_effort_timestamp_time,
+      [Globalization.NumberStyles]::Float,
+      [Globalization.CultureInfo]::InvariantCulture,[ref]$value) -and
+      -not [double]::IsNaN($value)){
+      $firstFrame=$value;break
+    }
+  }
+  if($null -eq $firstFrame){throw 'No decoded video presentation observed within first 128 packets.'}
+  $video=Invoke-BridgeTool $script:Ffprobe (
+    '-v error -select_streams v:0 -read_intervals '+(Quote-NativeArg '%+#64')+
+    ' -show_packets -show_entries packet=pts_time,dts_time -of json '+$file
+  ) '' 15
+  if($video.ExitCode -ne 0){throw 'First video packet probe failed.'}
+  $firstVideo=@(($video.StdOut|ConvertFrom-Json).packets|Where-Object{
+    $_.pts_time -ne $null -and $_.dts_time -ne $null
+  })|Select-Object -First 1
+  if(-not $firstVideo){throw 'First encoded video packet with PTS and DTS was not observed.'}
+  $streamProbe=Invoke-BridgeTool $script:Ffprobe (
+    '-v error -show_entries stream=index,codec_type -of json '+$file
+  ) '' 12
+  if($streamProbe.ExitCode -ne 0){throw 'Output stream inventory failed.'}
+  $audioStreams=@(($streamProbe.StdOut|ConvertFrom-Json).streams|Where-Object{$_.codec_type -eq 'audio'})
+  if($audioStreams.Count -gt 8){throw 'Audio timestamp report supports at most eight output audio streams.'}
+  $audio=@()
+  for($n=0;$n -lt $audioStreams.Count;$n++){
+    $packets=Invoke-BridgeTool $script:Ffprobe (
+      '-v error -select_streams a:'+$n+
+      ' -read_intervals '+(Quote-NativeArg '%+#32')+
+      ' -show_packets -show_entries packet=pts_time,dts_time -of json '+$file
+    ) '' 12
+    if($packets.ExitCode -ne 0){throw 'Output audio first-packet scan failed.'}
+    $packet=@(($packets.StdOut|ConvertFrom-Json).packets|Where-Object{
+      $_.pts_time -ne $null -and $_.dts_time -ne $null
+    })|Select-Object -First 1
+    if(-not $packet){throw 'Output audio first packet unavailable.'}
+    $audio+=@{outputOrdinal=$n;outputFirstPts=[double]::Parse([string]$packet.pts_time,
+      [Globalization.CultureInfo]::InvariantCulture);
+      outputFirstDts=[double]::Parse([string]$packet.dts_time,
+      [Globalization.CultureInfo]::InvariantCulture)}
+  }
+  $after=Get-Item -LiteralPath $j.Output -ErrorAction Stop
+  if([long]$before.Length -ne [long]$after.Length -or
+    [long]$before.LastWriteTimeUtc.Ticks -ne [long]$after.LastWriteTimeUtc.Ticks){
+    throw 'Completed artifact changed while probing its output timeline.'
+  }
+  return [pscustomobject]@{
+    ok=$true;version=1;scope='completed-artifact-first-boundary'
+    jobId=$JobId;artifactBytes=[long]$after.Length
+    artifactWriteTicks=[string]$after.LastWriteTimeUtc.Ticks
+    requestedIn=[double]$j.Task.start;requestedOut=[double]$j.Task.end
+    executionSeekIn=[double]$j.ActualStart
+    actualFirstPresentation=[double]$firstFrame
+    firstVideoPacketPts=[double]::Parse([string]$firstVideo.pts_time,[Globalization.CultureInfo]::InvariantCulture)
+    firstVideoPacketDts=[double]::Parse([string]$firstVideo.dts_time,[Globalization.CultureInfo]::InvariantCulture)
+    audioTimeMapping=@($audio)
+    copiedPacketRange=$null
+    verificationStatus='output-first-boundary-observed-source-packet-and-sync-unverified'
+  }
 }
 
 function Export-Job([string]$JobId,[string]$SuggestedName) {
@@ -1847,7 +2428,13 @@ function Handle-Request($Request) {
             $p=Get-SelectedPath 'ass';if(-not $p){throw 'No ASS selected.'};$item=Get-Item -LiteralPath $p
             Send-HttpJson $Request 200 @{ok=$true;name=$item.Name;size=$item.Length;base64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($p))};return
         }
+        if($Request.Method -eq 'POST' -and $path -eq '/api/source-budget'){Send-HttpJson $Request 200 (Get-SourceBudgetEvidence);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/trim-copy-preflight'){Send-HttpJson $Request 200 (Start-IsolatedTrimPreflight $body);return}
+        if($Request.Method -eq 'GET' -and $path -eq '/api/trim-copy-preflight'){Send-HttpJson $Request 200 (Get-IsolatedTrimPreflightStatus);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/flac-encode-preflight'){Send-HttpJson $Request 200 (Start-FlacEncodePreflight $body);return}
+        if($Request.Method -eq 'GET' -and $path -eq '/api/flac-encode-preflight'){Send-HttpJson $Request 200 (Get-FlacEncodePreflightStatus);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/probe'){Send-HttpJson $Request 200 (Get-ProbeMedia);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/embedded-ass'){Send-HttpJson $Request 200 (Import-BridgeEmbeddedAss $body);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/import/bink2'){Send-HttpJson $Request 200 (Start-Bink2ImportJob);return}
         if($Request.Method -eq 'GET' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)$'){Send-HttpJson $Request 200 (Get-Bink2ImportJobStatus $Matches[1]);return}
         if($Request.Method -eq 'POST' -and $path -match '^/api/import-jobs/([A-Za-z0-9]+)/cancel$'){Send-HttpJson $Request 200 (Cancel-Bink2ImportJob $Matches[1]);return}
@@ -1862,6 +2449,7 @@ function Handle-Request($Request) {
             $id=$Matches[1]
             Send-HttpJson $Request 200 (Cancel-EncodeJob $id);return
         }
+        if($path -match '^/api/jobs/([A-Za-z0-9]+)/cut-timeline$' -and $Request.Method -eq 'GET'){Send-HttpJson $Request 200 (Get-CutTimelineEvidence $Matches[1]);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-OutputFrame $Matches[1] $body);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/reference-frame$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Invoke-HardsubReferenceFrame $Matches[1] $body);return}
         if($path -match '^/api/jobs/([A-Za-z0-9]+)/export$' -and $Request.Method -eq 'POST'){Send-HttpJson $Request 200 (Export-Job $Matches[1] ([string]$body.suggestedName));return}

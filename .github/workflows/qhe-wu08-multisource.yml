@@ -1,0 +1,31 @@
+name: QHE WU08 Web multiple source queue acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/browser-source-batch.js'
+      - 'src/browser-source-batch.test.mjs'
+      - 'src/media-workspace.js'
+      - 'src/main.js'
+      - 'scripts/check-wu08-multisource-browser.cjs'
+      - '.github/workflows/qhe-wu08-multisource.yml'
+  workflow_dispatch:
+jobs:
+  web-multi-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Test source-object identity and frozen user intent
+        run: node --test src/browser-source-batch.test.mjs
+      - name: Install Chromium and actual frontend
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Test two actual user-selected sources using production workbench
+        run: node scripts/check-wu08-multisource-browser.cjs

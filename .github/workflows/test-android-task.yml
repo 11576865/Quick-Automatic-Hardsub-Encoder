@@ -1,6 +1,7 @@
 name: Compile Android media tasks
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths: ['android-native/**', '.github/workflows/test-android-task.yml']
   push:
     branches: [main]
@@ -8,8 +9,13 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   compile:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

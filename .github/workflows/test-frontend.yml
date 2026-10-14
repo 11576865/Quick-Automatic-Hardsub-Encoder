@@ -1,6 +1,8 @@
 name: Test frontend
 on:
+  workflow_dispatch:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'src/**'
       - 'index.html'
@@ -12,6 +14,9 @@ on:
       - 'scripts/check-media-ui.cjs'
       - 'scripts/check-curve-design.cjs'
       - 'scripts/check-calibration-lifecycle.cjs'
+      - 'scripts/check-vvc-ui.cjs'
+      - 'scripts/check-audio-plan-ui.cjs'
+      - 'scripts/check-whole-budget-ui.cjs'
       - '.uigs/**'
   push:
     branches: [main]
@@ -26,9 +31,38 @@ on:
       - 'scripts/check-media-ui.cjs'
       - 'scripts/check-curve-design.cjs'
       - 'scripts/check-calibration-lifecycle.cjs'
+      - 'scripts/check-vvc-ui.cjs'
+      - 'scripts/check-audio-plan-ui.cjs'
+      - 'scripts/check-whole-budget-ui.cjs'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  draft-fast:
+    # Draft PRs get actionable code feedback without rebuilding media toolchains,
+    # launching emulators or installing a browser for every implementation commit.
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Run targeted model and task regressions
+        run: |
+          node --test src/media-task.test.mjs src/media-planning.test.mjs src/media-stream-plan.test.mjs src/manual-transcode-comparison.test.mjs src/decision-reference-scope.test.mjs src/guided-native-vbr-verification.test.mjs src/guided-branch-adoption.test.mjs src/manual-transcode-session.test.mjs src/manual-paired-risk-plan.test.mjs src/manual-time-tradeoff.test.mjs src/manual-transcode-vbr-verification.test.mjs src/manual-transcode-adoption.test.mjs src/guided-whole-file-budget.test.mjs src/guided-cpu-compiler-contract.test.mjs src/trim-copy-audit.test.mjs src/trim-copy-preflight.test.mjs src/flac-encode-preflight.test.mjs src/auxiliary-preflight-request.test.mjs src/auxiliary-mux-reconciliation.test.mjs src/completed-mux-byte-ledger.test.mjs src/flac-cache-reuse-contract.test.mjs src/whole-file-budget.test.mjs src/vvc-required-runtime.test.mjs
+      - name: Check shared Guided and Manual execution surface contracts
+        run: node --test src/media-workspace-ui.test.mjs src/shared-task-presentation.test.mjs
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Build production frontend
+        run: npm run build
   frontend:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,14 +77,20 @@ jobs:
       - run: node --test src/compression-evidence.test.mjs
       - run: node --test src/rate-distortion-model.test.mjs
       - run: node --test src/compression-decision.test.mjs
+      - run: node --test src/manual-transcode-comparison.test.mjs
+      - run: node --test src/decision-reference-scope.test.mjs src/guided-native-vbr-verification.test.mjs src/guided-branch-adoption.test.mjs
+      - run: node --test src/manual-transcode-session.test.mjs src/manual-candidate-set.test.mjs src/manual-time-tradeoff.test.mjs
+      - run: node --test src/manual-transcode-vbr-verification.test.mjs
+      - run: node --test src/manual-transcode-adoption.test.mjs
       - run: node --test src/compression-resolutions.test.mjs
       - run: node --test src/scene-risk-selection.test.mjs
+      - run: node --test src/manual-paired-risk-plan.test.mjs
       - run: node --test src/calibration-refinement.test.mjs
-      - run: node --test src/guided-size-policy.test.mjs
+      - run: node --test src/guided-size-policy.test.mjs src/guided-task-handoff.test.mjs src/guided-cpu-compiler-contract.test.mjs src/guided-whole-file-budget.test.mjs src/guided-budget-ui-wiring.test.mjs src/shared-task-presentation.test.mjs
       - run: node --test src/size-frontier-ui.test.mjs
       - run: node --test src/curve-chart-svg.test.mjs
       - run: node --test src/transcode-curves.test.mjs src/transcode-calibration-panel.test.mjs
-      - run: node --test src/native-job-monitor.test.mjs
+      - run: node --test src/native-job-monitor.test.mjs src/native-guided-budget-recovery.test.mjs
       - run: node src/ui-shell.test.mjs
       - run: node --test src/studio-v2.test.mjs
       - run: node --test src/studio-v3.test.mjs
@@ -63,9 +103,9 @@ jobs:
       - run: node --test src/timeline-no-audio-wiring.test.mjs
       - run: node --test src/media-verification.test.mjs
       - run: node --test src/output-verification-wiring.test.mjs
-      - run: node --test src/media-task.test.mjs src/media-planning.test.mjs
+      - run: node --test src/media-task.test.mjs src/media-planning.test.mjs src/trim-copy-audit.test.mjs src/trim-copy-preflight.test.mjs src/flac-encode-preflight.test.mjs src/auxiliary-preflight-request.test.mjs src/auxiliary-mux-reconciliation.test.mjs src/completed-mux-byte-ledger.test.mjs src/flac-cache-reuse-contract.test.mjs src/whole-file-budget.test.mjs src/whole-file-frontier.test.mjs src/size-budget-adoption.test.mjs src/ci-delivery-fixtures.test.mjs src/task-review.test.mjs src/vvc-required-runtime.test.mjs src/ffmpeg-help-options.test.mjs src/vvc-task.test.mjs src/vvc-capability.test.mjs src/media-stream-plan.test.mjs
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
-      - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs
+      - run: FFMPEG_INTEGRATION=1 node --test src/media-task.integration.test.mjs src/media-stream-plan.integration.test.mjs src/whole-file-budget.integration.test.mjs src/guided-whole-file-budget.integration.test.mjs src/manual-candidate-set.integration.test.mjs
       - run: FFMPEG_INTEGRATION=1 node --test src/source-ssim.integration.test.mjs
       - run: FFMPEG_INTEGRATION=1 node --test src/av1-alac-acceptance.integration.test.mjs
       - run: npm ci

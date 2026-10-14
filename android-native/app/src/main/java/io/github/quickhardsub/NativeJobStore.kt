@@ -58,6 +58,24 @@ object NativeJobStore {
     fun outputFile(context: Context, jobId: String): File =
         File(jobDir(context, jobId), "output." + outputExtension(context, jobId))
 
+    // Read the persisted contract again at export; frontend state cannot relax it.
+    fun strictBudgetCeiling(task: JSONObject?): Long {
+        val policy = task?.optString("budgetPolicy", "best-effort") ?: "best-effort"
+        require(policy in setOf("best-effort", "strict-ceiling")) { "Unknown manual budget policy" }
+        if (policy != "strict-ceiling") return 0L
+        val config = requireNotNull(task) { "Strict task missing" }
+        val ceiling = config.opt("sizeCeilingBytes")?.toString()?.toLongOrNull()
+            ?: throw IllegalArgumentException("Invalid strict whole-container ceiling")
+        require(config.optString("rateMode") == "size" && config.optString("operation") != "copy" && ceiling in 1..10_000_000_000_000L) { "Strict budget requires size mode and a positive whole-container byte ceiling" }
+        return ceiling
+    }
+
+    fun requireBudgetBytes(bytes: Long, ceiling: Long) {
+        require(bytes > 0 && (ceiling == 0L || bytes <= ceiling)) {
+            "Strict container byte ceiling exceeded or output missing: actual $bytes bytes, limit $ceiling bytes. Increase budget, reduce video rate or change stream plan; no automatic retry."
+        }
+    }
+
     fun writeJsonAtomic(file: File, json: JSONObject) {
         file.parentFile?.mkdirs()
         val tmp = File(file.parentFile, file.name + ".tmp")

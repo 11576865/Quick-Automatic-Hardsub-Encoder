@@ -1,8 +1,11 @@
+import {wholeFileLedger,projectWholeFileFrontier} from './whole-file-frontier.js';
+import {SIZE_UNITS} from './media-planning.js';
 import { compileTask } from './media-task.js';
 import { exploreQuality, calibrationSampleStarts, createMeasuredSizeFrontier, CALIBRATION_PROFILES, summarizeCalibrationEvidence, parseMeasuredQuality, parseMeasuredNumber } from './transcode-curves.js';
 import { buildSizeFrontierPlot, targetBytesAtEvidenceFraction, evidenceFractionForTargetBytes } from './size-frontier-ui.js';
 import { renderRateDistortionSvg, plotFractionAtX, plotXFromClientX } from './curve-chart-svg.js';
 import { calibrationTimeBudget } from './compression-decision.js';
+import { mountManualTranscodeComparison } from './manual-transcode-compare-ui.js';
 
 // One measured size-quality curve for manual video-only transcode. This is intentionally
 // separate from subtitle calibration: sample identity must match the manual
@@ -29,7 +32,7 @@ export function mountTranscodeCurves(section, hooks) {
     '<button type="button" id="taskAdoptCurveRate" class="secondary" disabled>采用所选码率（需先验证）</button>',
     '<details class="media-curve-observations"><summary id="taskMeasuredQualitySummary">实测 CQ/CRF 参数（可采用）</summary>',
     '<div id="taskMeasuredQualityPoints" class="media-curve-points"></div></details></div></div>',
-    '<p class="note">SSIM 和局部效率拐点只是样本证据，不等于视觉无损或七小时整片质量保证。选择码率采用 VBR，不代表能复现 CQ 模式下的相同 SSIM。源音频复制时，图中估计体积不包含音频。</p>'
+    '<p class="note">SSIM 和局部效率拐点只是样本证据，不等于视觉无损或七小时整片质量保证。选择码率采用 VBR，不代表能复现 CQ 模式下的相同 SSIM。图中成品目标包含已测复制流、附件、计划音频和封装余量；未知成本阻断预算推荐，实际成品仍须核验。</p>'
   ].join('');
   section.querySelector('#taskEncoding').before(panel);
   const get = id => panel.querySelector('#' + id);
@@ -38,7 +41,8 @@ export function mountTranscodeCurves(section, hooks) {
   const targetControl = get('taskExploreTarget'), profileControl = get('taskCurveProfile'), stop = get('taskStopCurve');
   let points = [], frontier = null, selectedBytes = null, running = false, cancelRequested = false, disposed = false, sourceKey = '';
   let evidenceMedia = null, evidenceTask = null, verifiedSelection = null;
-  let fullDuration = 0, sourceDuration = 0, calculatedAudioRate = 0, audioUncertain = false;
+  let fullDuration = 0, sourceDuration = 0, budgetError = null, lastGoalKey = null;
+  let compareController = null;
   // Measurements depend on the video encode and sample positions, not on the
   // user's SSIM acceptance threshold or on the final audio size budget.
   const evidenceIsCurrent = () => !!sourceKey &&
@@ -50,22 +54,23 @@ export function mountTranscodeCurves(section, hooks) {
   const label = text => { get('taskCurveStatus').textContent = text; };
   const measuredVideoSize = bytes => (bytes / 1e9).toFixed(2) + ' GB';
   const useQuality = q => {
-    if (running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid()) return;
+    if (compareController?.active || running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid()) return;
     hooks.applyQuality(q);
     label('已采用实际测试过的 CQ/CRF ' + q + '。改变参数后应再次检查输出。');
   };
-  const audioPlan = (raw, task) => {
-    const tracks = Number(task.expectedAudioTracks || 0);
-    if (raw.audio === 'none' || tracks === 0) return { rate: 0, uncertain: false };
-    if (raw.audio === 'copy') return { rate: 0, uncertain: true };
-    // Account for audio kept full when the video timeline is trimmed.
-    const videoSeconds = Number(task.expectedVideoDuration || 0);
-    const audioSeconds = Number(task.expectedAudioDuration || 0);
-    if (!(videoSeconds > 0) || !(audioSeconds >= 0)) return { rate: 0, uncertain: true };
-    return { rate: Number(raw.audioBitrate || 128000) * tracks * audioSeconds/videoSeconds, uncertain: false };
-  };
+  const budgetToken=()=>JSON.stringify(hooks.budgetEvidence?.()||null);
+  const budgetForSelection=()=>({targetBytes:Math.round(selectedBytes),reservePercent:Number(hooks.settings().sizeReserve??4),budgetPolicy:hooks.settings().budgetPolicy||'best-effort'});
+  const goalKey=raw=>JSON.stringify([raw.rateMode,raw.targetSize,raw.sizeUnit]);
   const render = () => {
-    btn.disabled = running;
+    const multi=!!compareController?.active;
+    panel.dataset.compareActive=multi?'true':'false';
+    const fitLegend=panel.querySelector('.media-curve-legend .legend-fit');
+    const pointsLegend=panel.querySelector('.media-curve-legend .legend-observed');
+    const kneeLegend=panel.querySelector('.media-curve-legend .legend-knee');
+    if(fitLegend)fitLegend.textContent=multi?'候选择优上包络':'保序拟合';
+    if(pointsLegend)pointsLegend.textContent=multi?'候选实测':'原始观测';
+    if(kneeLegend)kneeLegend.hidden=multi;
+    btn.disabled = hooks.settings().codec==='h266' || running || !!compareController?.active || !!compareController?.running;
     stop.disabled = !running || cancelRequested;
     btn.textContent = running ? '正在实测…' : '开始实测';
     get('taskMeasuredQualitySummary').textContent =
@@ -82,19 +87,27 @@ export function mountTranscodeCurves(section, hooks) {
         (point.meetsTarget ? ' · 达标' : ' · 未达标');
       const adopt = document.createElement('button');
       adopt.type='button';adopt.className='secondary';adopt.textContent='采用此质量值';
-      adopt.disabled = running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid();
+      adopt.disabled = !!compareController?.active || running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid();
       adopt.addEventListener('click', () => useQuality(point.qualitySetting));
       row.append(details,adopt);rows.append(row);
     }
 
+    if (compareController?.active) {
+      get('taskAdoptCurveRate').disabled = true;
+      get('taskVerifyCurveRate').disabled = true;
+      compareController.showResult();
+      return;
+    }
+    chartResetForSingle();
     if (!frontier?.ok || !evidenceIsCurrent()) {
       efficiency.replaceChildren();
-      readout.textContent = '至少需要两个不同码率的有效测量点。';
+      readout.textContent = budgetError?'完整预算不可用：'+budgetError:'至少需要两个不同码率的有效测量点。';
       get('taskAdoptCurveRate').disabled = true;
       get('taskVerifyCurveRate').disabled = true;
       return;
     }
     if (!(selectedBytes > 0)) selectedBytes = frontier.knee?.targetBytes || frontier.minimumEvidenceTargetBytes;
+    selectedBytes=Math.round(selectedBytes);
     const plotted = buildSizeFrontierPlot(frontier, { selectedTargetBytes: selectedBytes });
     if (!plotted.ok) {
       efficiency.replaceChildren();
@@ -113,41 +126,47 @@ export function mountTranscodeCurves(section, hooks) {
     const dispersion = summarizeCalibrationEvidence(points);
     readout.textContent = dot ?
       '选择 ' + (dot.videoBitrate/1e6).toFixed(2) + ' Mbps · ' +
-      (audioUncertain ? '仅视频预算约 ' : '音视频预算约 ') + measuredVideoSize(selectedBytes) +
+      '成品目标体积约 ' + measuredVideoSize(selectedBytes) +
       ' · 已测点插值 SSIM ' + dot.quality.toFixed(5) +
       '（跨位置观察范围 ' + dot.lowerQuality.toFixed(5) + '–' + dot.upperQuality.toFixed(5) + '）' +
       (dispersion ? ' · 最近一次 CQ 的样本码率范围 ' +
         (dispersion.minBitrate/1e6).toFixed(1) + '–' + (dispersion.maxBitrate/1e6).toFixed(1) + ' Mbps' : '') +
       (dispersion?.widelyDivergent ? ' · 样本波动大，整片体积与画质预测风险较高' : '') :
-      '请选择已测量的体积范围';
+      '当前成品目标不在实测预算范围，拒绝外推：'+plotted.selectedStatus;
+    if(dot){const b=frontier.evaluateTargetBytes(selectedBytes).budget;readout.textContent+=' · 固定流/附件 '+(b.fixedPayloadBytes/1e6).toFixed(3)+' MB · 编码音频 '+(b.encodedAudioBytes/1e6).toFixed(3)+' MB · 封装余量 '+(b.containerReserveBytes/1e6).toFixed(3)+' MB';}
     const target=parseMeasuredQuality(targetControl.value);
     const bitrate=dot?Math.round(dot.videoBitrate):null;
     const verified=!!dot && !!verifiedSelection &&
       verifiedSelection.sourceKey===sourceKey && verifiedSelection.bitrate===bitrate &&
-      verifiedSelection.target===target;
+      verifiedSelection.target===target && verifiedSelection.targetBytes===selectedBytes && verifiedSelection.budgetToken===budgetToken() && JSON.stringify(verifiedSelection.expectedSettings)===JSON.stringify(hooks.settings());
     get('taskVerifyCurveRate').disabled = !dot || running || hooks.busy() ||
       !evidenceIsCurrent() || !targetIsValid();
     get('taskAdoptCurveRate').disabled = !verified || running || hooks.busy() ||
       !evidenceIsCurrent() || !targetIsValid();
     get('taskAdoptCurveRate').textContent=verified
-      ? '采用所选码率（短样已验证）' : '采用所选码率（需先验证）';
+      ? '采用完整体积方案（短样已验证）' : '采用完整体积方案（需先验证）';
   };
 
+  const chartResetForSingle = () => {
+    efficiency.setAttribute('aria-label','选择实测范围内的目标视频码率');
+    if(!frontier?.ok || !evidenceIsCurrent()){
+      efficiency.removeAttribute('aria-valuenow');
+      efficiency.setAttribute('aria-valuetext','尚无当前编码器的有效实测曲线');
+    }
+  };
   const updateEvidence = (newPoints, raw, task, { preserveSelection = false } = {}) => {
     points = newPoints;
-    const audio = audioPlan(raw,task);
-    calculatedAudioRate = audio.rate;
-    audioUncertain = audio.uncertain;
-    frontier = createMeasuredSizeFrontier(points, {
-      durationSeconds: fullDuration,
-      audioBitrate: calculatedAudioRate,
-      reservePercent: 4
-    });
-    if (!preserveSelection) selectedBytes = null;
+    budgetError=null;
+    const video=createMeasuredSizeFrontier(points,{durationSeconds:fullDuration,audioBitrate:0,reservePercent:0});
+    try{frontier=video.ok?projectWholeFileFrontier(video,wholeFileLedger(task,hooks.budgetEvidence?.())):video;}catch(e){budgetError=e.message;frontier=null;}
+    if(!preserveSelection)selectedBytes=null;
+    if(raw.rateMode==='size'&&(!preserveSelection||lastGoalKey!==goalKey(raw)))selectedBytes=Number(raw.targetSize)*SIZE_UNITS[raw.sizeUnit||'MB'];
+    lastGoalKey=goalKey(raw);
     verifiedSelection = null;
     render();
   };
   const pointerSelect = event => {
+    if (compareController?.active) {compareController.selectPointer(event);return;}
     if (!frontier?.ok || running || !evidenceIsCurrent()) return;
     const plotted = buildSizeFrontierPlot(frontier);
     if (!plotted.ok) return;
@@ -162,6 +181,7 @@ export function mountTranscodeCurves(section, hooks) {
   efficiency.addEventListener('pointerdown',pointerSelect);
   efficiency.addEventListener('pointermove',event=>{if(event.buttons===1)pointerSelect(event);});
   efficiency.addEventListener('keydown',event=>{
+    if (compareController?.active) {compareController.selectKeyboard(event);return;}
     if (!frontier?.ok || running || !evidenceIsCurrent()) return;
     const existing = evidenceFractionForTargetBytes(frontier,selectedBytes) ?? 0.5;
     let next=existing;
@@ -182,9 +202,14 @@ export function mountTranscodeCurves(section, hooks) {
       verifiedSelection.sourceKey!==sourceKey ||
       verifiedSelection.target!==parseMeasuredQuality(targetControl.value) ||
       verifiedSelection.bitrate!==Math.round(evaluation.videoBitrate))return;
-    hooks.applyBitrate(Math.round(evaluation.videoBitrate));
+    const certificate=verifiedSelection;
+    if(certificate.targetBytes!==Math.round(selectedBytes)||certificate.budgetToken!==budgetToken()||JSON.stringify(certificate.expectedSettings)!==JSON.stringify(hooks.settings()))return;
+    const result=hooks.applySizeBudget?.({budget:{...budgetForSelection(),bitrate:Math.round(evaluation.videoBitrate)},expectedSettings:certificate.expectedSettings,expectedSourceIdentity:certificate.sourceIdentity,media:evidenceMedia});
+    if(!result?.ok){label('未采用完整体积方案：'+(result?.detail||result?.reason||'missing-budget-hook'));return;}
+    verifiedSelection=null;
     label('已采用 '+(evaluation.videoBitrate/1e6).toFixed(2)+
-      ' Mbps 的目标平均码率；同配置 VBR 短样质量已达标，正式整片仍需体积/画质验证。');
+      ' Mbps 的完整体积方案；保留目标体积与交付策略，正式整片仍需体积/画质验证。');
+    render();
   });
   // CQ interpolation is never accepted as a VBR measurement. Execute the
   // selected encoder and preset in bitrate mode on the same sample positions.
@@ -193,7 +218,7 @@ export function mountTranscodeCurves(section, hooks) {
     if(disposed || running || hooks.busy() || !evidenceIsCurrent() || !targetIsValid() ||
       choice?.status!=='within-evidence'||!evidenceTask||!evidenceMedia)return;
     const bitrate=Math.round(choice.videoBitrate),raw=hooks.settings(),task=evidenceTask;
-    const runKey=calibrationKey(raw,{});
+    const runKey=calibrationKey(raw,{}),chosenTarget=Math.round(selectedBytes),chosenBudgetToken=budgetToken();
     const profile=CALIBRATION_PROFILES[profileControl.value];
     const from=task.videoRange==='full'?0:Number(task.start);
     const to=task.videoRange==='full'?Number(evidenceMedia.duration):Number(task.end);
@@ -203,8 +228,13 @@ export function mountTranscodeCurves(section, hooks) {
     render();hooks.setBusy(true);
     const current=()=>!cancelRequested && !disposed && evidenceIsCurrent() &&
       runKey===calibrationKey(hooks.settings(),{}) &&
-      Math.round(frontier?.evaluateTargetBytes(selectedBytes)?.videoBitrate||0)===bitrate;
+      Math.round(frontier?.evaluateTargetBytes(selectedBytes)?.videoBitrate||0)===bitrate && Math.round(selectedBytes)===chosenTarget && budgetToken()===chosenBudgetToken;
     try{
+      const budget=budgetForSelection();
+      const formal=compileTask({...raw,rateMode:'size',targetSize:budget.targetBytes/1e6,sizeUnit:'MB',sizeReserve:budget.reservePercent,budgetPolicy:budget.budgetPolicy,twoPass:false},{...evidenceMedia,budgetEvidence:hooks.budgetEvidence?.()});
+      if(formal.bitrate!==bitrate)throw Error('预算投影与正式执行码率不一致');
+      await hooks.validate?.(formal);
+      if(!current())throw Error('验证期间预算或来源变更');
       const observations=[];
       for(const start of starts){
         if(!current())throw Error('验证配置已变化，旧结果不可使用');
@@ -229,7 +259,7 @@ export function mountTranscodeCurves(section, hooks) {
         label('VBR 短样质量未达标：最低 SSIM '+min.toFixed(5)+
           ' < 目标 '+target.toFixed(5)+'；CQ 插值不能保证 VBR 质量。');
       }else{
-        verifiedSelection={sourceKey,bitrate,target};
+        verifiedSelection={sourceKey,bitrate,target,targetBytes:chosenTarget,budgetToken:chosenBudgetToken,expectedSettings:JSON.parse(JSON.stringify(raw)),sourceIdentity:hooks.sourceIdentity()};
         label('VBR 短样达标：最低 SSIM '+min.toFixed(5)+
           ' · 实际平均 '+(observed/1e6).toFixed(2)+
           ' Mbps。允许采用此码率；整片质量与大小仍需验证。');
@@ -252,13 +282,14 @@ export function mountTranscodeCurves(section, hooks) {
   // observations can be re-evaluated under a different decision or audio budget.
   const calibrationKey=(raw,media) => JSON.stringify([
     measurementKey(raw,media), raw.audio,raw.audioBitrate,raw.audioTrack,raw.audioRange,
-    targetControl.value
+    targetControl.value,JSON.stringify(raw),budgetToken()
   ]);
   const clearEvidence=()=>{
     points=[];frontier=null;selectedBytes=null;sourceKey='';sourceDuration=0;
-    evidenceMedia=null;evidenceTask=null;verifiedSelection=null;
+    evidenceMedia=null;evidenceTask=null;verifiedSelection=null;budgetError=null;lastGoalKey=null;
   };
   const invalidate=()=>{
+    compareController?.invalidate();
     if (running) {
       cancelRequested=true;
       clearEvidence();
@@ -274,7 +305,7 @@ export function mountTranscodeCurves(section, hooks) {
         return;
       }
       try {
-        const task=compileTask({...raw,rateMode:'quality',twoPass:false},evidenceMedia);
+        const task=compileTask({...raw,rateMode:'quality',budgetPolicy:'best-effort',twoPass:false},evidenceMedia);
         if(Number(task.expectedVideoDuration)!==fullDuration)
           throw Error('视频输出时长发生变化');
         const target=parseMeasuredQuality(targetControl.value);
@@ -302,7 +333,7 @@ export function mountTranscodeCurves(section, hooks) {
     render();
   });
   btn.addEventListener('click',async()=>{
-    if (disposed || running || hooks.busy())return;
+    if (disposed || running || compareController?.active || hooks.busy())return;
     clearEvidence();
     running=true;cancelRequested=false;render();hooks.setBusy(true);
     try {
@@ -318,10 +349,11 @@ export function mountTranscodeCurves(section, hooks) {
         }
       };
       if(raw.operation!=='transcode')throw Error('请切换至纯视频转码模式');
+      if(raw.codec==='h266')throw Error('H.266 QP 尚未纳入当前 CRF/CQ 校准协议；请使用手动短片试压');
       if(!hooks.isWindows())throw Error('当前曲线需要 Windows Native；其他端尚未验证样本编码器一致性');
       const media=await hooks.prepare('transcode');
       assertRunCurrent();
-      const task=compileTask({...raw,rateMode:'quality',twoPass:false},media);
+      const task=compileTask({...raw,rateMode:'quality',budgetPolicy:'best-effort',twoPass:false},media);
       await hooks.validate?.(task);
       assertRunCurrent();
       if(task.expectedVideoTracks!==1 || task.videoStreams[0]!==0)throw Error('曲线当前只支持主视频流 v:0');
@@ -340,6 +372,7 @@ export function mountTranscodeCurves(section, hooks) {
       if(!profile)throw Error('未知校准采样方案');
       const starts=calibrationSampleStarts(from,to,profile.seconds,profile.count);
       if(!starts.length)throw Error('所选片段不足 '+profile.seconds+' 秒');
+      wholeFileLedger(task,hooks.budgetEvidence?.());
       fullDuration=Number(task.expectedVideoDuration);
       sourceDuration=Number(media.duration);
       const target=Number(targetControl.value);
@@ -413,9 +446,21 @@ export function mountTranscodeCurves(section, hooks) {
       running=false;hooks.setBusy(false);if(!disposed)render();
     }
   });
-  const refresh=()=>{panel.hidden=hooks.settings().operation!=='transcode';};
+  compareController=mountManualTranscodeComparison({
+    panel,hooks,chart:efficiency,readout,getSourceKey:measurementKey,
+    getTargetSsim:()=>parseMeasuredQuality(targetControl.value),
+    onRenderSingle:()=>render()
+  });
+  const refresh=()=>{
+    panel.hidden=hooks.settings().operation!=='transcode'||hooks.settings().codec==='h266';
+    if(hooks.settings().codec==='h266'){
+      btn.disabled=true;
+      label('H.266 QP 尚未纳入当前曲线校准；可使用手动短片试压和正式任务。');
+    }else render();
+    if(panel.hidden&&compareController?.active)compareController.invalidate();
+  };
   refresh();render();
   return {panel,refresh,invalidate,dispose:()=>{
-    disposed=true;cancelRequested=true;clearEvidence();panel.remove();
+    disposed=true;cancelRequested=true;compareController?.dispose();clearEvidence();panel.remove();
   }};
 }

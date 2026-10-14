@@ -1,0 +1,75 @@
+name: Windows Manual paired codec acceptance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'windows/native-bridge.ps1'
+      - 'windows/manual-sample-evidence.ps1'
+      - 'windows/native-backend.ps1'
+      - 'src/manual-transcode-comparison.js'
+      - 'src/rate-distortion-model.js'
+      - 'src/compression-decision.js'
+      - 'src/size-frontier-ui.js'
+      - 'scripts/check-manual-native-paired.ps1'
+      - 'scripts/build-manual-rich-native-fixture.mjs'
+      - 'scripts/verify-manual-native-paired.mjs'
+      - 'scripts/verify-manual-resolution-native.mjs'
+      - 'scripts/build-manual-adopted-native-request.mjs'
+      - 'scripts/verify-manual-adopted-native-output.mjs'
+      - 'src/manual-transcode-adoption.js'
+      - 'src/manual-transcode-vbr-verification.js'
+      - 'src/media-task.js'
+      - '.github/workflows/windows-manual-paired-codec.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-paired:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install FFmpeg and FFprobe
+        shell: powershell
+        run: |
+          $ready=$false
+          for($attempt=1;$attempt -le 3;$attempt++){
+            choco install ffmpeg --yes --no-progress
+            if($LASTEXITCODE -eq 0){$ready=$true;break}
+            Write-Warning "FFmpeg Chocolatey installation attempt $attempt failed (upstream package feed may be unavailable)."
+            if($attempt -lt 3){Start-Sleep -Seconds ($attempt * 5)}
+          }
+          if(-not $ready){throw 'Cannot install FFmpeg after bounded retries; external package service failure, not an encoder regression.'}
+      - name: Verify FFmpeg backend and required CPU encoders
+        shell: powershell
+        run: |
+          $ffmpeg=(Get-Command ffmpeg.exe -ErrorAction Stop).Source
+          $ffprobe=(Get-Command ffprobe.exe -ErrorAction Stop).Source
+          if(-not (Test-Path -LiteralPath $ffmpeg) -or -not (Test-Path -LiteralPath $ffprobe)){
+            throw 'FFmpeg/FFprobe toolchain was not installed'
+          }
+          $encoders=(& ffmpeg -hide_banner -encoders 2>&1) -join "`n"
+          foreach($required in @('libx264','libx265','ffv1')){
+            if($encoders -notmatch ('\b'+[regex]::Escape($required)+'\b')){
+              throw "Required encoder missing from hosted runner: $required"
+            }
+          }
+      - name: Run actual localhost Bridge paired x264/x265 source SSIM
+        shell: powershell
+        run: ./scripts/check-manual-native-paired.ps1
+      - name: Publish CI-synthetic full output and independent acceptance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-native-full-output-evidence
+          path: native-full-output-evidence/
+          if-no-files-found: ignore
+          retention-days: 14

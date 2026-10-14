@@ -1,0 +1,41 @@
+{
+  "goal": "Close whole-file budget gaps while preserving source ownership and actual artifact ceiling",
+  "status": "verified_checkpoint_pending_external_validation",
+  "current_bounded_work_unit": "conservative full-source reservation for trimmed copied auxiliary streams",
+  "completed_units": [
+    "Trimmed copy audio/subtitle retains measured whole-source packet payload in fixed ledger",
+    "copiedTrimReserveBytes discloses conservative allocation in ledger and checked plan",
+    "Pure budget/model RED to GREEN; real FFmpeg trimmed FLAC copy/SRT/attachment encode and full decode verified"
+  ],
+  "next_units": [
+    "Read hosted browser/Windows regression once available",
+    "Exact range-specific copied payload measurement and FLAC re-encode budgeting remain separate work",
+    "Continue guided/manual shared task representation and general codec/resolution/preset decision gaps"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "4549acf57e13514c5bcbfe66612b1c3d847fa76e",
+  "external_validation_states": {
+    "browser": "Pending hosted; local Chromium executable absent",
+    "windows": "Pending new generation",
+    "physical_devices": "Pending"
+  },
+  "local_tests": {
+    "passed": 218,
+    "skipped": 7,
+    "failed": 0,
+    "real_ffmpeg_passed": 5,
+    "build": "pass"
+  },
+  "blockers": [
+    "Whole-source reservations may exhaust small clip budget; no exact interval scan",
+    "Source-cost measurement remains Windows-only",
+    "FLAC re-encoding cost and physical-device acceptance remain unverified"
+  ],
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/observations/2026-10-13-qhe-trimmed-copy-full-source-reservation.md",
+    "foundry_commit": "4bffaf9946e1b429d2c3f25cdb251aa933313167"
+  },
+  "updated_timestamp": "2026-10-13T05:57:36.349621+00:00"
+}

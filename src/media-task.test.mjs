@@ -200,6 +200,20 @@ test('web staging reuses an already mounted source for media-only work',async()=
   assert.equal(fallbackLoads,0);
 });
 
+test('web staging does not borrow a previous File when metadata matches but identity differs',async()=>{
+  const engine=new EncoderEngine();
+  const mounted=[];
+  engine.ready=true;
+  engine.api={mount:async(path,{files})=>{mounted.push(files[0]);},writeFile:async()=>{},FFmpegKitConfig:{setFontDirectoryList:async()=>{}}};
+  const first={name:'episode.mkv',size:123,lastModified:42};
+  const second={name:'episode.mkv',size:123,lastModified:42};
+  assert.notStrictEqual(first,second);
+  await engine.stageFiles(first,null,[]);
+  await engine.stageFiles(second,null,[]);
+  assert.deepEqual(mounted,[first,second],'different File objects require their own mounted bytes');
+  assert.strictEqual(engine.sourceVideoFile,second);
+});
+
 test('timeline keyframe scan returns ordered bounded keyframes and reports truncation',async()=>{
   const engine=new EncoderEngine();
   engine.ready=true;
@@ -232,4 +246,20 @@ test('timeline frame preview seeks exact requested time and scales bounded outpu
   assert.equal(result.width,640);
   assert.match(result.url,/^blob:/);
   URL.revokeObjectURL(result.url);
+});
+
+test('untrimmed transcode/copy never inserts output seek zero that may drop AAC priming',()=>{
+  const transcode=build({start:0,end:'',videoRange:'full',audio:'copy',audioRange:'full',
+    outputContainer:'mkv'});
+  assert.equal(transcode.hasTrimRange,false);
+  assert.equal(transcode.outputArgs.includes('-ss'),false);
+  assert.deepEqual(transcode.outputArgs.slice(0,2),['-map','0:v:0']);
+
+  const streamCopy=build({operation:'copy',start:0,end:'',
+    videoRange:'full',audioRange:'full',outputContainer:'mkv'});
+  assert.equal(streamCopy.outputArgs.includes('-ss'),false);
+
+  const trimmed=build({start:1,end:3,videoRange:'trim',audioRange:'full'});
+  assert.equal(trimmed.hasTrimRange,true);
+  assert.deepEqual(trimmed.outputArgs.slice(0,2),['-ss','0']);
 });

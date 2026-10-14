@@ -1,0 +1,44 @@
+{
+  "goal": "Close actual Windows VVC runtime acceptance gap without replacing user toolchains",
+  "status": "hosted_runtime_validation_complete_field_validation_pending",
+  "current_bounded_work_unit": "accept actual VVC receipt and persist provenance",
+  "completed_units": [
+    "RequireRuntime fails on unsupported encoder",
+    "optional hard-sub task and ASS fixture",
+    "independent probe/decode and generated artifact evidence",
+    "official asset digest verification and provenance",
+    "dedicated Windows workflow",
+    "Three actual VVC Bridge tasks passed independent probe and full decode, workflow 38345727802; downloaded evidence digest and output byte sizes verified"
+  ],
+  "next_units": [
+    "physical-device and long-form validation; product-wide remaining scope and integration decision separate"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "7a67d9e93a2440ace2cde8a7755a16fbd2cc27c0",
+  "external_validation_states": {
+    "windows_required_vvc": "PASS: QP transcode, bitrate transcode, ASS hardsub; run 38345727802, artifact 11788845480",
+    "physical_device": "Pending",
+    "related_ci": "9/9 workflows success at 7a67d9e"
+  },
+  "local_tests": {
+    "pass": 215,
+    "skipped": 7,
+    "failed": 0
+  },
+  "build": "pass",
+  "blockers": [
+    "Physical devices, long-form, external players and subtitle perceptual fidelity remain Pending"
+  ],
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/observations/2026-10-13-qhe-vvc-capability-chain-and-cancellable-validation.md"
+  },
+  "updated_timestamp": "2026-10-13T05:48:00Z",
+  "repair": {
+    "reason": "global help parser omitted base flag for -fps_mode[:<stream_spec>]",
+    "tests": "actual production regex RED->GREEN, plus dedicated .NET PowerShell fixture wired",
+    "approach": "normalize optional selector suffix; strict task argument whitelist unchanged",
+    "diagnostics": "full-help text, capability snapshot, bridge logs retained"
+  }
+}

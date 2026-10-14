@@ -172,3 +172,19 @@ test('three media operations use dedicated workspace presentation', async () => 
   assert.match(css, /\.media-workspace \.task-grid select:disabled/);
   assert.equal((css.match(/\{/g) || []).length, (css.match(/\}/g) || []).length);
 });
+
+test('Guided new tasks retain one visible shared execution surface across legacy CSS gates', async () => {
+  const [style, presentation, workspace] = await Promise.all([
+    readFile(new URL('./style.css', import.meta.url), 'utf8'),
+    readFile(new URL('./shared-task-presentation.js', import.meta.url), 'utf8'),
+    readFile(new URL('./media-workspace.js', import.meta.url), 'utf8'),
+  ]);
+  // The shared task workspace itself owns the source-readiness suppression.
+  // Legacy CSS must not suppress it merely because Guided is selected.
+  assert.doesNotMatch(style,
+    /body\[data-media-operation="hardsub"\]\[data-hardsub-strategy="guided"\]\s+#mediaWorkspace\s*\{/);
+  assert.match(style, /\.hardsub-strategy-suppressed\s*\{\s*display:\s*none\s*!important;/);
+  assert.match(presentation, /hideLegacyExecution:!\(guided&&legacyJob\)/);
+  assert.match(workspace,
+    /section\.classList\.toggle\('hardsub-strategy-suppressed',view\.workspaceSuppressed\)/);
+});

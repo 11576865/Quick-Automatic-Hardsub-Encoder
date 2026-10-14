@@ -1,10 +1,12 @@
 import { sizeBudget } from './media-planning.js';
 import { audioCopyPlaybackWarning, resolveOutputContainer } from './media-container.js';
 import { parseMediaTime } from './media-time.js';
+import { normalizeAudioPlan, auxiliarySelection, appendPlannedAudioArgs, createOutputPlan } from './media-stream-plan.js';
+import {normalizeMustCopyAudio} from './audio-preservation-lock.js';
 
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
 export const TASK_VERSION = 4;
-export const SOFTWARE = { h264: 'libx264', h265: 'libx265', av1: 'libsvtav1' };
+export const SOFTWARE = { h264: 'libx264', h265: 'libx265', av1: 'libsvtav1', h266: 'libvvenc' };
 
 function streamCount(media, key, fallback = 0) {
   const explicit = Number(media?.[key]);
@@ -37,6 +39,7 @@ function rangePolicy(value, label) {
 }
 
 function appendAudioEncodingArgs(args, t, number) {
+  if(t.audioPlan){appendPlannedAudioArgs(args,t.audioPlan);return;}
   if (t.audio === 'none') return;
   args.push('-c:a', t.audio);
   if (['aac','libopus'].includes(t.audio)) {
@@ -65,7 +68,7 @@ function applyExpectedDurations(t, media, outputFps = null) {
     );
   }
   t.expectedAudioDuration = t.expectedAudioTracks > 0
-    ? (t.audioRange === 'full' ? sourceDuration : trimDuration)
+    ? (t.audioPlan ? Math.max(...t.audioPlan.filter(a=>a.action!=='drop').map(a=>a.range==='full'?sourceDuration:trimDuration)) : t.audioRange === 'full' ? sourceDuration : trimDuration)
     : 0;
   t.expectedSubtitleDuration = t.keepSubtitles
     ? (t.subtitleRange === 'full' ? sourceDuration : trimDuration)
@@ -80,6 +83,10 @@ function applyExpectedDurations(t, media, outputFps = null) {
 
 export function compileTask(raw, media) {
   const t = { ...raw, version: TASK_VERSION };
+  // Measurements belong to the active source snapshot, never an imported config.
+  t.budgetEvidence = media.budgetEvidence;
+  t.budgetPolicy = raw.budgetPolicy || 'best-effort';
+  if (!['best-effort','strict-ceiling'].includes(t.budgetPolicy)) throw Error('未知体积交付策略');
   if (!['hardsub', 'transcode', 'copy'].includes(t.operation)) throw Error('未知任务模式');
 
   const number = (key, fallback, min, max, integer = false) => {
@@ -106,9 +113,14 @@ export function compileTask(raw, media) {
   if (!['copy', 'aac', 'libopus', 'none'].includes(t.audio)) throw Error('未知音频策略');
   t.audioTrack = t.audioTrack || 'all';
   const audioTracks = streamCount(media, 'audioTracks', 0);
-  if (t.audioTrack !== 'all' && !/^\d+$/.test(t.audioTrack)) throw Error('音轨索引无效');
-  if (t.audioTrack !== 'all' && Number(t.audioTrack) >= audioTracks) throw Error('音轨索引不存在');
+  t.audioPlan=normalizeAudioPlan(raw.audioPlan,media,t.audioRange);
+  if (!t.audioPlan && t.audioTrack !== 'all' && !/^\d+$/.test(t.audioTrack)) throw Error('音轨索引无效');
+  if (!t.audioPlan && t.audioTrack !== 'all' && Number(t.audioTrack) >= audioTracks) throw Error('音轨索引不存在');
   t.expectedAudioTracks = t.audio === 'none' ? 0 : t.audioTrack === 'all' ? audioTracks : 1;
+  if(t.audioPlan)t.expectedAudioTracks=t.audioPlan.filter(a=>a.action!=='drop').length;
+  t.mustCopyAudioOrdinals=normalizeMustCopyAudio(raw,media,t);
+  t.subtitleSelection=t.keepSubtitles?auxiliarySelection(raw.subtitleStreams,media.subtitleTracks??media.subtitleStreams?.length,'字幕'):null;
+  t.attachmentSelection=t.keepAttachments?auxiliarySelection(raw.attachmentStreams,media.attachmentTracks??media.attachmentStreams?.length,'附件'):null;
 
   t.compatibilityWarnings = Array.isArray(t.compatibilityWarnings) ? t.compatibilityWarnings : [];
   const audioCopyWarning = audioCopyPlaybackWarning(t, media);
@@ -116,7 +128,7 @@ export function compileTask(raw, media) {
 
   const trimNeeded = !!(t.hasTrimRange && (
     t.videoRange === 'trim' ||
-    (t.expectedAudioTracks > 0 && t.audioRange === 'trim') ||
+    (t.expectedAudioTracks > 0 && (t.audioPlan?t.audioPlan.some(a=>a.action!=='drop'&&a.range==='trim'):t.audioRange === 'trim')) ||
     (t.keepSubtitles && t.subtitleRange === 'trim')
   ));
   t.usesTrimInput = trimNeeded;
@@ -142,33 +154,46 @@ export function compileTask(raw, media) {
   const durationForBudget = t.expectedVideoDuration;
 
   if (t.rateMode === 'size') {
-    if (t.expectedAudioTracks > 0 && Math.abs(t.expectedAudioDuration - t.expectedVideoDuration) > 1e-6) {
-      throw Error('目标体积模式暂不支持视频与音频使用不同时间范围；请改用质量/码率模式或统一时间策略');
-    }
+    if (t.frames) throw Error('目标体积模式暂不支持输出总帧数上限');
     t.sizePlan = sizeBudget(t, durationForBudget, t.expectedAudioTracks);
     t.bitrate = t.sizePlan.videoRate;
+    t.sizeCeilingBytes = t.budgetPolicy === 'strict-ceiling' ? t.sizePlan.targetBytes : 0;
   }
 
-  t.estimatedAudioRate = t.audio === 'none' || t.expectedAudioTracks === 0
+  if (t.budgetPolicy === 'strict-ceiling' && t.rateMode !== 'size') throw Error('严格体积上限要求目标体积模式');
+
+  t.estimatedAudioRate = t.audioPlan ? (t.audioPlan.some(a=>['copy','flac'].includes(a.action))?null:t.audioPlan.reduce((sum,a)=>sum+(a.bitrate||0),0)) : t.audio === 'none' || t.expectedAudioTracks === 0
     ? 0
     : t.audio === 'copy'
       ? null
       : Number(t.audioBitrate || 128000) * t.expectedAudioTracks;
 
-  const args = ['-ss','0'];
+  // An output-side -ss 0 is a seek, not a harmless no-op for some FFmpeg
+  // versions: it can discard negative-PTS AAC priming packets even when the
+  // user requested a full untrimmed Stream Copy. Only trim-range tasks need
+  // this timeline-rebase behavior; preserve complete source packets otherwise.
+  const args = t.hasTrimRange ? ['-ss','0'] : [];
   const videoInput = inputFor(t.videoRange);
   for (const ordinal of t.videoStreams) args.push('-map', `${videoInput}:v:${ordinal}`);
-  if (t.audio !== 'none') {
+  if(t.audioPlan){
+    for(const track of t.audioPlan)if(track.action!=='drop')args.push('-map',`${inputFor(track.range)}:a:${track.sourceOrdinal}`);
+  }else if (t.audio !== 'none') {
     const audioInput = inputFor(t.audioRange);
     args.push('-map', t.audioTrack === 'all' ? `${audioInput}:a?` : `${audioInput}:a:${t.audioTrack}`);
   }
   if (t.keepSubtitles) {
     const subtitleInput = inputFor(t.subtitleRange);
-    args.push('-map', `${subtitleInput}:s?`, '-c:s', 'copy');
+    if(t.subtitleSelection)for(const index of t.subtitleSelection)args.push('-map',`${subtitleInput}:s:${index}`);
+    else args.push('-map', `${subtitleInput}:s?`);
+    args.push('-c:s','copy');
   } else {
     args.push('-sn');
   }
-  if (t.keepAttachments) args.push('-map', '0:t?', '-c:t', 'copy');
+  if (t.keepAttachments){
+    if(t.attachmentSelection)for(const index of t.attachmentSelection)args.push('-map',`0:t:${index}`);
+    else args.push('-map','0:t?');
+    args.push('-c:t','copy');
+  }
   args.push('-map_metadata', t.keepMetadata ? '0' : '-1', '-map_chapters', t.keepChapters ? '0' : '-1');
 
   const finalizeContainer = () => {
@@ -180,6 +205,7 @@ export function compileTask(raw, media) {
     t.outputMime = resolved.mime;
     t.sourceContainer = resolved.source;
     t.containerReason = resolved.reason;
+    t.outputPlan=createOutputPlan(t,media);
   };
 
   if (t.operation === 'copy') {
@@ -208,13 +234,22 @@ export function compileTask(raw, media) {
   }
 
   const nvenc = t.encoder.endsWith('_nvenc');
+  const vvc = t.encoder === 'libvvenc';
+  if (vvc) {
+    if (t.pixelFormat !== 'yuv420p10le') throw Error('H.266 / libvvenc 要求 yuv420p10le；请显式选择 10-bit 4:2:0');
+    if (t.fpsMode === 'vfr' || t.fpsMode === 'passthrough') throw Error('H.266 当前仅支持自动或 CFR 帧率策略');
+    for (const key of ['codecParams','profile','level','tune','bf','refs','gop','bufsize','maxrate']) {
+      if (t[key] !== '' && t[key] != null) throw Error('H.266 当前不支持高级参数 ' + key + '；请清空此项');
+    }
+    t.compatibilityWarnings.push('H.266 / VVC 为实验输出：需要 Windows libvvenc 编码、MKV 封装和解码实测通过；外部播放器兼容性未验证。10-bit 编码输入不代表 HDR 支持。');
+  }
   const presets = ['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
-  if (!(nvenc ? /^p[1-7]$/.test(t.preset) : t.codec === 'av1' ? /^(?:[0-9]|1[0-3])$/.test(t.preset) : presets.includes(t.preset))) {
+  if (!(vvc ? ['faster','fast','medium','slow','slower'].includes(t.preset) : nvenc ? /^p[1-7]$/.test(t.preset) : t.codec === 'av1' ? /^(?:[0-9]|1[0-3])$/.test(t.preset) : presets.includes(t.preset))) {
     throw Error('preset 与编码器不兼容');
   }
 
   const quality = t.rateMode === 'quality'
-    ? number('quality', t.codec === 'av1' ? 32 : 23, 0, (nvenc || t.codec !== 'av1') ? 51 : 63)
+    ? number('quality', (vvc || t.codec === 'av1') ? 32 : 23, 0, (vvc || t.codec === 'av1' && !nvenc) ? 63 : 51, vvc)
     : 23;
   t.quality = quality;
   args.push('-c:v', t.encoder, '-preset', t.preset);
@@ -225,7 +260,7 @@ export function compileTask(raw, media) {
     t.bitrate = number('bitrate', 4000000, 1, 2000000000, true);
     args.push('-b:v', String(t.bitrate));
   } else {
-    args.push(nvenc ? '-cq' : '-crf', String(quality));
+    args.push(vvc ? '-qp' : nvenc ? '-cq' : '-crf', String(quality));
     if (nvenc) args.push('-b:v','0');
   }
 
@@ -304,6 +339,20 @@ export function compileTask(raw, media) {
   }
 
   const filters = [];
+  const assOrder=t.subtitleRenderOrder||'after-scale';
+  if(!['after-scale','before-scale'].includes(assOrder))
+    throw Error('ASS 字幕渲染顺序无效');
+  // Native Guided paints ASS at source resolution and then bicubic-scales.
+  // Preserve the existing Manual default (scale before ASS) except when an
+  // explicit Guided-to-Manual handoff freezes the alternate order.
+  const shiftedAss=t.operation==='hardsub'&&t.hasTrimRange&&
+    t.videoRange==='trim'&&t.start>0;
+  const addAss=()=>{
+    if(shiftedAss)filters.push(`setpts=PTS+${t.start}/TB`);
+    filters.push('ass=__ASS__:fontsdir=__FONTS__');
+    if(shiftedAss)filters.push(`setpts=PTS-${t.start}/TB`);
+  };
+  if(t.operation==='hardsub'&&assOrder==='before-scale')addAss();
   if (t.crop) {
     if (!/^\d+:\d+:\d+:\d+$/.test(t.crop)) throw Error('裁切格式为 宽:高:x:y');
     filters.push('crop=' + t.crop);
@@ -327,12 +376,7 @@ export function compileTask(raw, media) {
   if (t.deband) filters.push('deband');
   if (t.sharpen) filters.push('unsharp');
 
-  if (t.operation === 'hardsub') {
-    const shifted = t.hasTrimRange && t.videoRange === 'trim' && t.start > 0;
-    if (shifted) filters.push(`setpts=PTS+${t.start}/TB`);
-    filters.push('ass=__ASS__:fontsdir=__FONTS__');
-    if (shifted) filters.push(`setpts=PTS-${t.start}/TB`);
-  }
+  if(t.operation==='hardsub'&&assOrder==='after-scale')addAss();
 
   filters.push('pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0');
   args.push('-vf', filters.join(','));
@@ -353,12 +397,14 @@ export function compileTask(raw, media) {
   if (t.frames) {
     t.frames = number('frames', 0, 1, 100000000, true);
     args.push('-frames:v', String(t.frames));
-    if (t.audio !== 'none') throw Error('限制输出帧数时请关闭音频，避免音视频长度歧义');
+    if (t.expectedAudioTracks>0) throw Error('限制输出帧数时请关闭音频，避免音视频长度歧义');
   }
 
   applyExpectedDurations(t, media, outputFps);
 
-  if (t.rateMode !== 'quality' && t.estimatedAudioRate != null) {
+  if (t.sizePlan) {
+    t.estimatedBytes = t.sizePlan.estimatedBytes;
+  } else if (t.rateMode !== 'quality' && t.estimatedAudioRate != null) {
     const videoBytes = Number(t.bitrate) * t.expectedVideoTracks * t.expectedVideoDuration / 8;
     const audioBytes = Number(t.estimatedAudioRate) * t.expectedAudioDuration / 8;
     t.estimatedBytes = videoBytes + audioBytes;
@@ -417,7 +463,7 @@ export function firstPassArgs(args) {
       continue;
     }
     const value = args[++i];
-    if (['-c:a','-b:a','-ac','-ar','-c:s','-c:t','-map_metadata','-map_chapters'].includes(flag)) continue;
+    if (/^-(?:c|b|ac|ar):a:\d+$/.test(flag)||['-c:a','-b:a','-ac','-ar','-c:s','-c:t','-map_metadata','-map_chapters'].includes(flag)) continue;
     if (flag === '-map' && !/^\d+:v:/.test(value)) continue;
     out.push(flag, value);
   }
