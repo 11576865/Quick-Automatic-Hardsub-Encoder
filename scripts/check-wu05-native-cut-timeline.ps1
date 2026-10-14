@@ -35,8 +35,10 @@ try{
   [IO.File]::WriteAllText($probeFile,($probe|ConvertTo-Json -Depth 15),[Text.UTF8Encoding]::new($false))
   & node './scripts/build-wu05-native-task.mjs' $probeFile $taskFile
   if($LASTEXITCODE -ne 0){throw 'Copy trim formal compiler failed'}
-  $request=Get-Content -Raw -LiteralPath $taskFile|ConvertFrom-Json
-  $run=Invoke-RestMethod -Method Post -Uri "$base/api/encode" -Headers $headers -ContentType 'application/json' -Body ($request|ConvertTo-Json -Depth 16 -Compress) -TimeoutSec 35
+  # Preserve exact UTF-8 bytes emitted by Node; Windows PowerShell 5.1
+  # Get-Content's ANSI default corrupts Chinese compatibility warnings.
+  $payload=[IO.File]::ReadAllBytes($taskFile)
+  $run=Invoke-RestMethod -Method Post -Uri "$base/api/encode" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $payload -TimeoutSec 35
   if(-not $run.ok -or -not $run.jobId){throw 'Native copy trim task did not start'}
   $status=$null
   for($i=0;$i -lt 180;$i++){
