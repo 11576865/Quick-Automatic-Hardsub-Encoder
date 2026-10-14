@@ -1799,7 +1799,7 @@ body.media-frame-lightbox-open {
 .media-clip-queue-header>div{display:grid;gap:3px;}
 .media-clip-queue-header strong{font-size:.85rem;color:#dfebf3;}
 .media-clip-queue-header span{font-size:.73rem;color:#9cafbd;}
-.media-clip-queue button{min-height:42px;}
+.media-clip-queue button{min-height:44px;}
 .media-clip-queue ol{margin:0;padding:0;display:grid;gap:5px;list-style:none;}
 .media-clip-queue li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:center;padding:8px 9px;border:1px solid rgba(151,183,205,.13);border-radius:7px;background:#0f1922;}
 .media-clip-queue li div{min-width:0;display:flex;flex-wrap:wrap;gap:5px 10px;align-items:baseline;}

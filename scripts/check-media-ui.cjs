@@ -797,7 +797,32 @@ const {spawn}=require('node:child_process');
      (await page.locator('#taskAddClip').textContent()).trim()!=='加入片段'||
      !(await page.locator('#taskClipQueueList li').last().textContent()).includes('2:15'))
     throw Error('Cancelled clip edit modified the existing queue');
+  const queueFlow=await page.evaluate(()=>{
+    const r=id=>document.querySelector(id).getBoundingClientRect();
+    return {inputEnd:r('[name=end]').bottom,queue:r('#taskClipQueuePanel').top,
+      queueBottom:r('#taskClipQueuePanel').bottom,timeline:r('#taskWaveformPanel').top};
+  });
+  if(queueFlow.queue<queueFlow.inputEnd-1||queueFlow.queueBottom>queueFlow.timeline+1)
+    throw Error('Clip queue is not located between IN/OUT and the optional timeline: '+JSON.stringify(queueFlow));
   await page.screenshot({path:'media-workspace-copy-segment-queue-390.png',fullPage:true});
+  await page.setViewportSize({width:320,height:720});
+  await page.evaluate(()=>{document.documentElement.style.fontSize='24px';});
+  const queuePhone=await page.evaluate(()=>{
+    const r=id=>document.querySelector(id).getBoundingClientRect();
+    const buttons=[...document.querySelectorAll('#taskClipQueuePanel button')].filter(el=>
+      getComputedStyle(el).display!=='none'&&el.getBoundingClientRect().width>0);
+    return {overflow:document.documentElement.scrollWidth>innerWidth,
+      endBottom:r('[name=end]').bottom,queueTop:r('#taskClipQueuePanel').top,
+      queueBottom:r('#taskClipQueuePanel').bottom,timelineTop:r('#taskWaveformPanel').top,
+      tinyButtons:buttons.filter(el=>el.getBoundingClientRect().height<44).map(el=>el.id||el.textContent.trim())};
+  });
+  if(queuePhone.overflow||queuePhone.tinyButtons.length||
+     queuePhone.queueTop<queuePhone.endBottom-1||
+     queuePhone.queueBottom>queuePhone.timelineTop+1)
+    throw Error('320px 150%-root-font queue has overflow, small hit targets or wrong order: '+JSON.stringify(queuePhone));
+  await page.screenshot({path:'media-workspace-copy-segment-queue-320-large-text.png',fullPage:true});
+  await page.evaluate(()=>{document.documentElement.style.fontSize='';});
+  await page.setViewportSize({width:390,height:720});
   await page.evaluate(()=>{window.clipBatchMockActive=true;window.clipExportRequests=[];});
   const previousRuns=await page.evaluate(()=>window.taskRuns.length);
   await page.click('#taskExportClips');

@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "qhe-focused-ui-2026-10-11",
   "goal": "Build QHE's actual runnable interface around proven professional media-workbench patterns instead of accumulating same-weight cards; keep every codec, file, preview, verification and native task boundary.",
-  "status": "Stream Copy multi-segment queue plus in-place unsaved clip editing merged, latest-head CI green and Chromium queue visual reviewed / physical Native dialog Pending",
-  "current_bounded_work_unit": "PR #101 merged: queued unsaved ranges edit in-place, explicit cancel, completed ranges only reused as new clips; Playwright verified updated compiled range, cancellation and Native save-retry invariants.",
+  "status": "Studio v3/Stream Copy queue through PR #101 merged; next bounded queue placement/accessibility fix submitted, latest-head external CI Pending",
+  "current_bounded_work_unit": "PR #102 open: screenshot-led copy queue placement next to IN/OUT, 44px queue controls and 320px 150%-root-font real browser assertions. Feature tests remain intact; latest-head CI and screenshots Pending.",
   "completed_units": [
     {
       "summary": "Remove orphan preview modal/mobile tutorial CSS",
@@ -119,28 +119,32 @@
       "windows_smoke_run": 38159643480,
       "uigs_run": 38159643511,
       "visual_artifact_id": 11709509544
+    },
+    {
+      "summary": "PR #99 multi-segment Stream Copy merged and accepted, PR #100 save-only retry and PR #101 in-place range edit also merged with green exact-head CI",
+      "merge_base": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38"
     }
   ],
   "next_units": [
-    "Validate physical Windows Native and Android SAF multi-clip save/cancel/retry dialogs with real files",
-    "Check actual keyframe-aligned cut boundaries on device",
-    "Keep GPU/HDR/VFR/long-form field tests under QHE #77"
+    "Review latest-head browser screenshot and CI once",
+    "If green and geometry acceptable, merge narrow PR",
+    "Physical Android OS text/accessibility/save dialog remains FIELD-PENDING"
   ],
-  "branch": "main",
-  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/101",
-  "latest_durable_commit": "7dd5e12791a5dc27b2706c68f663da1b7abe988a",
+  "branch": "fix/qhe-copy-queue-phone-near-trim-input-20261012",
+  "pull_request_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/102",
+  "latest_durable_commit": "3df7c7cccba494ace858a31f4d97847d9e350111",
   "external_validation": {
-    "frontend": "passed PR #101 exact head dbfad1bc; run 38159643466",
-    "playwright": "passed in-place edit 0:00–2:04, cancellation retains 2:10–2:15, immutable completed re-use, queue/Native save handoff and retry; run 38159643466",
-    "windows_smoke": "passed exact PR #101 source head; run 38159643480 (CI, not physical native dialogs)",
-    "uigs": "passed exact PR #101 source head; run 38159643511",
+    "frontend": "Pending new queue placement/head browser CI",
+    "playwright": "Pending 390px/320px 150% root-font queue order and touch targets",
+    "windows_smoke": "Pending new UI-only follow-up head; CI includes media-workspace.js path",
+    "uigs": "Pending new follow-up head",
     "android_device": "not-run",
-    "production_visual_review": "reviewed actual Chromium 390px queue screenshot from PR #101 media-workspace-screenshots artifact 11709509544; no visible horizontal overflow"
+    "production_visual_review": "Reviewed actual PR #101 390px screenshot: queue at ~1700px below waveform/visual comparisons, requiring extended scroll; new placement screenshots Pending"
   },
   "blockers": [
-    "Physical Windows Native and Android SAF batch save dialogs not field-tested",
-    "Android actual touch/font/accessibility device acceptance pending",
-    "Windows GPU/HDR/VFR long-form QHE #77 remains FIELD-PENDING"
+    "UI-only queue placement CI and browser acceptance Pending",
+    "Physical Windows Native/Android SAF batch save-dialog acceptance Pending",
+    "GPU/HDR/VFR long-form #77 FIELD-PENDING"
   ],
   "updated_at": "2026-10-12"
 }

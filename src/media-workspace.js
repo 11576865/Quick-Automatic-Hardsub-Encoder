@@ -407,6 +407,8 @@ export function mountMediaWorkspace(hooks) {
   }
   const clips=[],clipList=section.querySelector('#taskClipQueueList');
   const clipPanel=section.querySelector('#taskClipQueuePanel');
+  // Preserve #102: keep the live clip queue near trim IN/OUT rather than after preview.
+  section.querySelector('#taskWaveformPanel')?.before(clipPanel);
   const clipMessage=section.querySelector('#taskClipQueueStatus');
   let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null,clipAwaitingSave=null,clipEditingIndex=-1;
   const recipes=[],recipeList=section.querySelector('#taskRecipeMatrixList');
