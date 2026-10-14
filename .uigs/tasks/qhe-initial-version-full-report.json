@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU08_B21_browser_multisource_queue_hosted_accepted",
-  "current_bounded_work_unit": "WU08 B21 bounded production Web multi-source File queue hosted PASS: distinct File source identity; 2 files freeze separate user settings, activate/probe separately, compile official schema v4/run & independent download handoff, second save fails then retries without reencode, clear completed records and queue next sources. Real browser WebAssembly FFmpeg outputs and Windows/Android full B21 not yet verified.",
+  "status": "incomplete_full_report_WU09_P3_shared_gate_authorized",
+  "current_bounded_work_unit": "WU09 root R19 P3/R24 §§13–18: shared evidence scope, budget coordinate and measured-range gate for diagnosis vs recommendation vs adoption; independent native VBR receipts still required and whole P3 remains open.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -267,9 +267,8 @@
     "WU08 B21 genuine new multiple-File source Web queue bounded hosted PASS at 2b42a49: user 2 Files -> per-source activation & probe/official compiled v4 controlled processing -> distinct handoff, rollback-safe save retry; continued batch reuse. No false filesystem saved claim. Whole B21 remains open."
   ],
   "next_units": [
-    "NO WU09 AUTOMATICALLY AUTHORIZED. Revisit R19/R24 full requirement map; prioritize real-product evidence/integration and remaining P3 decision convergence rather than repeated incidental tests.",
-    "Open B21: actual WebAssembly two-input encoded output files and browser permission/disk check; Windows Native multi-file paths and Android SAF; source-specific ASS/fonts and per-stream must-preserve; multiple outputs per source inside full matrix.",
-    "Open B25: PR #104/#105 layered Draft integration to main and device playback; P3 unified Guided/Manual evidence/candidate evaluator; A01–A10 real media/device validation."
+    "WU09 authorized: implement shared read-only Guided/Manual decision gating using existing curves, with no automatic codec switching.",
+    "No WU10 authorized; P3 paired comparison/whole-file and actual media/device acceptance remain separate."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -345,10 +344,10 @@
     "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
-    "current_authorized_index": 7,
+    "current_authorized_index": 8,
     "completed_authorized_units": 5,
-    "review_status": "WU08_B21_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEXT_UNIT",
-    "executed_authorized_units_since_reanchor": 1
+    "review_status": "ROOT_REPORT_REANCHORED_WU09_P3_SHARED_DECISION_GATE_AUTHORIZED",
+    "executed_authorized_units_since_reanchor": 0
   },
   "authorized_next_units": [
     {
@@ -468,6 +467,21 @@
       "source": "R19 §16 P5 批次矩阵；R24 §22 QHE 多个独立转码/烧录/剪切任务；原 B21 追踪矩阵",
       "scope": "Browser Web backend bounded: user selects 2–8 File objects, queue freezes current copy/transcode settings per selected source, reactivates exact File object, probes real media and uses ONLY existing compileTask/validate/run/save. Fail on stale source/unsupported locked audio/budget/hardsub instead of silently changing intent; stop on error, preserve successful files and save-retry. No native backend, embedded ASS, multi-source hardsub or shared quality certificate.",
       "exit": "Unit source/queue validation, real production Chromium selection+distinct-source compiled runs+failure and save retry, frontend CI, any actual media encode evidence explicitly separate. Not full B21 Windows/Android/multi-source burn-in or release."
+    },
+    {
+      "id": "WU-09",
+      "title": "Shared P3 Guided/Manual evidence-to-recommendation-to-verified-adoption decision gate",
+      "requirement_ids": [
+        "B04",
+        "B11",
+        "B12",
+        "B13",
+        "B14"
+      ],
+      "status": "AUTHORIZED_NOT_STARTED",
+      "source": "R19 §16 P3 / §08–11 and R19 Supplement B; R24 §13–18 distinguish diagnosis, recommendation, commitment and prohibit cross-reference metric mixing",
+      "scope": "Pure shared read-only gate for workflow-specific reference scope, budget coordinate, measurement range and formal VBR verification; use existing frontiers & UI. No automatic encoder switch, separate execution authority, repeated sampling or predicted whole-film certification.",
+      "exit": "Real Guided+Manual caller integration, cross-reference mismatch and mismatched whole-file/video coordinate/strict policy tests, existing verified adoption guard remains; exact-head frontend+Chromium proof; no P3 all-workflows/Native end-to-end claim."
     }
   ],
   "historical_next_units": {
