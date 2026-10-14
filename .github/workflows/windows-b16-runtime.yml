@@ -9,6 +9,9 @@ on:
       - 'windows/trim-copy-preflight-bridge.ps1'
       - 'windows/native-bridge.ps1'
       - 'scripts/check-flac-encode-preflight.ps1'
+      - 'scripts/check-flac-native-http-lifecycle.ps1'
+      - 'src/auxiliary-mux-reconciliation.js'
+      - 'src/auxiliary-mux-reconciliation.test.mjs'
       - 'scripts/check-trim-copy-preflight.ps1'
       - 'src/flac-encode-preflight.js'
       - 'src/flac-encode-preflight.test.mjs'
@@ -41,6 +44,7 @@ jobs:
             'windows/native-bridge.ps1',
             'windows/trim-packet-audit.ps1',
             'scripts/check-flac-encode-preflight.ps1',
+            'scripts/check-flac-native-http-lifecycle.ps1',
             'scripts/check-trim-copy-preflight.ps1'
           )) {
             $tokens=$null; $errors=$null
@@ -70,3 +74,6 @@ jobs:
       - name: Real two-audio plus subtitle isolated copy packet oracle
         shell: powershell
         run: ./scripts/check-trim-copy-preflight.ps1
+      - name: Native HTTP FLAC preview and source-ledger invalidation
+        shell: powershell
+        run: ./scripts/check-flac-native-http-lifecycle.ps1
