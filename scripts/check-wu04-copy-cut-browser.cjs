@@ -105,7 +105,22 @@ async function main(){
   if(!(await page.locator('#taskCopyStrategyPanel').isHidden()))
     throw Error('Copy-only decision panel remained open in transcode mode');
   await page.locator('#taskRun').click();
-  await page.waitForFunction(()=>window.cutRuns.length===1);
+  await page.waitForFunction(()=>{
+    return window.cutRuns.length===1||
+      /处理失败|编码器|不支持|剪切失败/.test(document.querySelector('#taskStatus')?.textContent||'');
+  },null,{timeout:9000});
+  if(await page.evaluate(()=>window.cutRuns.length)!==1){
+    const diagnostics=await page.evaluate(()=>({
+      taskStatus:document.querySelector('#taskStatus')?.textContent,
+      formMode:document.querySelector('[name="operation"]')?.value,
+      start:document.querySelector('[name="start"]')?.value,
+      end:document.querySelector('[name="end"]')?.value,
+      encoder:document.querySelector('[name="encoder"]')?.value,
+      bitrate:document.querySelector('[name="bitrate"]')?.value,
+      taskStage:document.querySelector('#taskStage')?.textContent
+    }));
+    throw Error('Official compiler refused the opted-in trim: '+JSON.stringify(diagnostics));
+  }
   const task=await page.evaluate(()=>window.cutRuns[0]);
   if(task.operation!=='transcode'||task.encoder==='copy'||
      task.videoRange!=='trim'||task.start!==3.5||task.end!==5.5)
