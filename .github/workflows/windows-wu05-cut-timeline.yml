@@ -1,0 +1,48 @@
+name: Windows WU05 actual B-frame cut timeline
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'windows/native-bridge.ps1'
+      - 'scripts/build-wu05-native-task.mjs'
+      - 'scripts/check-wu05-native-cut-timeline.ps1'
+      - '.github/workflows/windows-wu05-cut-timeline.yml'
+  workflow_dispatch:
+jobs:
+  real-native-timeline:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parse Native and test PowerShell grammar
+        shell: powershell
+        run: |
+          foreach($file in @('windows/native-bridge.ps1','scripts/check-wu05-native-cut-timeline.ps1')){
+            $tokens=$null;$errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors)|Out-Null
+            if($errors.Count){$errors|Format-List;throw "PowerShell syntax error in $file"}
+          }
+      - name: Install and discover actual FFmpeg and FFprobe
+        shell: powershell
+        run: |
+          $ready=$false
+          for($i=0;$i -lt 3;$i++){
+            choco install ffmpeg --yes --no-progress
+            $installed=if(Test-Path "$env:ChocolateyInstall\lib\ffmpeg\tools"){
+              Get-ChildItem "$env:ChocolateyInstall\lib\ffmpeg\tools" -Recurse -File -Filter ffmpeg.exe | Select-Object -First 1
+            }else{$null}
+            if($installed -and (Test-Path (Join-Path $installed.DirectoryName 'ffprobe.exe'))){
+              Add-Content -LiteralPath $env:GITHUB_PATH -Value $installed.DirectoryName
+              $ready=$true;break
+            }
+            if($i -lt 2){Start-Sleep -Seconds (5*($i+1))}
+          }
+          if(-not $ready){throw 'External Chocolatey FFmpeg source unavailable; no media assertions executed'}
+      - name: Actual source to Native Copy Trim to output PTS DTS
+        shell: powershell
+        run: |
+          Get-Command ffmpeg,ffprobe -ErrorAction Stop | Select-Object -ExpandProperty Source
+          ./scripts/check-wu05-native-cut-timeline.ps1
