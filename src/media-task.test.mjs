@@ -200,6 +200,20 @@ test('web staging reuses an already mounted source for media-only work',async()=
   assert.equal(fallbackLoads,0);
 });
 
+test('web staging does not borrow a previous File when metadata matches but identity differs',async()=>{
+  const engine=new EncoderEngine();
+  const mounted=[];
+  engine.ready=true;
+  engine.api={mount:async(path,{files})=>{mounted.push(files[0]);},writeFile:async()=>{},FFmpegKitConfig:{setFontDirectoryList:async()=>{}}};
+  const first={name:'episode.mkv',size:123,lastModified:42};
+  const second={name:'episode.mkv',size:123,lastModified:42};
+  assert.notStrictEqual(first,second);
+  await engine.stageFiles(first,null,[]);
+  await engine.stageFiles(second,null,[]);
+  assert.deepEqual(mounted,[first,second],'different File objects require their own mounted bytes');
+  assert.strictEqual(engine.sourceVideoFile,second);
+});
+
 test('timeline keyframe scan returns ordered bounded keyframes and reports truncation',async()=>{
   const engine=new EncoderEngine();
   engine.ready=true;
