@@ -25,6 +25,12 @@ export function normalizeCompletedCutTimeline(task,completed,receipt){
    sourceFirstPts:null,sourceMappingVerified:false
   };
  });
+ const initialClockOffsets=audio.map(a=>({
+  outputOrdinal:a.outputOrdinal,
+  videoMinusAudioSeconds:Number((receipt.actualFirstPresentation-a.outputFirstPts).toFixed(6))
+ }));
+ const startClockReviewRequired=initialClockOffsets.some(a=>
+   Math.abs(a.videoMinusAudioSeconds)>0.5);
  return {
   version:1,scope:'completed-artifact-first-boundary',jobId:receipt.jobId,
   artifactBytes:receipt.artifactBytes,artifactWriteTicks:String(receipt.artifactWriteTicks||''),
@@ -34,7 +40,7 @@ export function normalizeCompletedCutTimeline(task,completed,receipt){
   presentationClock:'output-video-decoded-frame-PTS-seconds',
   firstVideoPacketPts:receipt.firstVideoPacketPts,
   firstVideoPacketDts:receipt.firstVideoPacketDts,
-  audioTimeMapping:audio,copiedPacketRange:null,
+  audioTimeMapping:audio,initialClockOffsets,startClockReviewRequired,copiedPacketRange:null,
   verificationStatus:'output-first-boundary-observed-source-packet-and-sync-unverified',
   note:'观察值来自本次已完成成品的 FFprobe，时间为输出时钟。关键帧 seek hint 不等于源首个实际呈现帧；源包映射、尾帧、VFR/B帧整段同步尚未验收。'
  };

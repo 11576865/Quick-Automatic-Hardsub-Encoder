@@ -2046,6 +2046,9 @@ export function mountMediaWorkspace(hooks) {
         '成品首个解码呈现帧：'+normalized.actualFirstPresentation.toFixed(3)+' s（输出时间）',
         '首个视频编码包 PTS / DTS：'+normalized.firstVideoPacketPts.toFixed(3)+' / '+normalized.firstVideoPacketDts.toFixed(3)+' s',
         ...normalized.audioTimeMapping.map(a=>'成品音轨 #'+a.outputOrdinal+' 首包 PTS / DTS：'+a.outputFirstPts.toFixed(3)+' / '+a.outputFirstDts.toFixed(3)+' s'),
+        ...(normalized.startClockReviewRequired?[
+          '注意：首视频呈现帧与至少一条音轨首包时间差超过 0.5 s。须检查播放器及完整时间轴；首包差异本身不能证明音画失同步。'
+        ]:[]),
         '源包区间映射与整片同步：未验证。不可将首包观测等同于帧精确。'
       ].join('\n');
       status('已将 FFprobe 成品首界时间轴加入任务报告；源包身份、尾界、VFR/B 帧同步仍未验收。');

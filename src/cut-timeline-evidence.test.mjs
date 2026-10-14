@@ -16,6 +16,8 @@ test('B09 observes output-clock first frame but never promotes it to source alig
  assert.equal(r.firstVideoPacketPts,.08);assert.equal(r.firstVideoPacketDts,0);
  assert.equal(r.audioTimeMapping[0].outputFirstPts,-.021);
  assert.equal(r.audioTimeMapping[0].sourceMappingVerified,false);
+ assert.equal(r.startClockReviewRequired,false);
+ assert.equal(r.initialClockOffsets[0].videoMinusAudioSeconds,.061);
  assert.equal(r.copiedPacketRange,null);
  assert.match(r.verificationStatus,/unverified/);
 });
@@ -30,4 +32,15 @@ test('null audio time cannot fabricate an observed timestamp or source mapping',
   ...receipt(),audioTimeMapping:[{outputOrdinal:0,outputFirstPts:null,outputFirstDts:0}]
  }),/Incomplete/);
  assert.throws(()=>normalizeCompletedCutTimeline({operation:'transcode',hasTrimRange:true},completed,receipt()),/Stream Copy/);
+});
+
+test('first-video and first-audio clock offset is a review warning, not proof of audio desync',()=>{
+ const r=receipt();
+ r.actualFirstPresentation=2;
+ r.audioTimeMapping[0].outputFirstPts=.005;
+ r.audioTimeMapping[0].outputFirstDts=.005;
+ const evidence=normalizeCompletedCutTimeline(task,completed,r);
+ assert.equal(evidence.startClockReviewRequired,true);
+ assert.equal(evidence.initialClockOffsets[0].videoMinusAudioSeconds,1.995);
+ assert.match(evidence.verificationStatus,/unverified/);
 });
