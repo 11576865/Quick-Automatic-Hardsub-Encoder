@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_route_reanchored_WU01_authorized",
-  "current_bounded_work_unit": "ROUTE_CHECKPOINT_COMMITTED; next work WU-01 Guided→Manual authoritative compile/render/output acceptance (B02/B04/B11/B12 A05/A06); no product code work included in route checkpoint",
+  "status": "incomplete_full_report_WU01_source_bound_ffmpeg_pending",
+  "current_bounded_work_unit": "WU-01 source-bound compiled CPU transaction guarded, focused FFmpeg x264/libass output test submitted; exact-head CI pending, Chromium and Windows Native still unverified",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -246,7 +246,8 @@
     "B16 output identity code submitted: short and long Native actual packet observations bind artifact bytes/FILETIME/jobId; finalized compiled audio/subtitle output inventory and method admission, mutation-invalidating cached packet audits; isolated V8 pure checks PASS; hosted exact-head Windows long fixture Pending.",
     "B16 completed mixed mux codec byte attribution for real video/audio/subtitle packets, unaccounted container + attachments residual; 8 actual-module V8 behavior tests PASS, Windows video oracles wired and pending.",
     "B16 FLAC cached bitstream reuse hypothesis made executable: local Linux real FFmpeg cached two FLAC audio streams and copied them unchanged into x264 video+SRT MKV with matching packet SHA256, 6 retrieved-source JS guard tests PASS; Draft Windows targeted CI added, production formal cache reuse/strict-budget remains open.",
-    "2026-10-14 ROUTE_ONLY: audited fixed R19/R24 B01–B25/A01–A10 denominator and PR104→PR105 branch identity, committed route snapshot and agent re-anchoring gate, archived 18 generated followups as non-authoritative, authorized only WU-01/WU-02. No product code, merge, release or new device validation."
+    "2026-10-14 ROUTE_ONLY: audited fixed R19/R24 B01–B25/A01–A10 denominator and PR104→PR105 branch identity, committed route snapshot and agent re-anchoring gate, archived 18 generated followups as non-authoritative, authorized only WU-01/WU-02. No product code, merge, release or new device validation.",
+    "WU-01 bounded progress: sourceKey/recompile guard + direct regressions and real FFmpeg ASS-before-scale execution oracle submitted; no WU-01 completion claim."
   ],
   "next_units": [
     "WU-01 AUTHORIZED: B02/B04/B11/B12+A05/A06 Guided→Manual rendered-ASS/VBR/compileTask/Windows-Native/browser exact-head vertical acceptance. See docs/qhe-initial-version-route-reanchor-2026-10-14.md.",
@@ -280,7 +281,8 @@
     "b16_artifact_bound_output_packet_audit": "Old head c54a819 Windows B16/Frontend/UIGS PASS; new head isolated pure JS receipt tests PASS, PowerShell 182s Native async and short mixed artifact tamper real Windows CI Pending",
     "b16_completed_byte_ledger": "Eight actual-module isolated JS behavior checks and UI/Native/worker static wiring PASS; short Native, 182-second async video FFprobe and real 1v2a1s completed Matroska packet attribution hosted Windows Pending",
     "b16_flac_cache_reuse": "6 actual-module V8 pure behavior tests PASS; Linux 3-second real FFmpeg cached FLAC to video+softsubtitle final mux ordered per-packet size/hash equality 32/21 packet verified; exact-head Windows Draft targeted run Pending; formal Native/Browser production cache injection not implemented",
-    "route_checkpoint": "Documentation and durable task authority updated; this is not a code, browser, GPU, physical device or release acceptance."
+    "route_checkpoint": "Documentation and durable task authority updated; this is not a code, browser, GPU, physical device or release acceptance.",
+    "wu01_cpu_fixture": "Pending exact-head Ubuntu libass FFmpeg; browser and Windows Native full handoff still open"
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -331,7 +333,7 @@
       "title": "Guided to Manual authoritative compiled task and real output acceptance",
       "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-01--guidedmanual-单任务正式编译与结果闭环b02b04b11b12a05a06",
       "exit": "On a pinned PR #104/#105 stack, real browser and Windows Native fixture demonstrate same source/render/audio/source-time/size, explicit VBR approval and rollback, matching compileTask FFmpeg args and verified output; separate actual PASS from pending environments.",
-      "status": "AUTHORIZED_NOT_STARTED"
+      "status": "IN_PROGRESS_SOURCE_BOUND_FFMPEG_PENDING"
     },
     {
       "id": "WU-02",

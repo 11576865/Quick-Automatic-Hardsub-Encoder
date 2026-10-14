@@ -150,3 +150,27 @@ test('actual Guided UI handler obtains current source evidence and never transfe
  assert.match(workspace,/hardsubStrategy='manual'/);
  assert.match(workspace,/name="subtitleRenderOrder" value="after-scale"/);
 });
+
+test('a contract compiled for the old source is never adopted for a new source',()=>{
+ const f=fixture();
+ f.source('new-source');
+ f.props.expectedSourceIdentity='new-source';
+ const r=commitGuidedCpuHandoff(f.props);
+ assert.equal(r.ok,false);
+ assert.equal(r.reason,'invalid-or-stale-guided-cpu-handoff');
+ assert.equal(f.count(),0);
+});
+test('source change during authoritative recompile cannot commit success',()=>{
+ const f=fixture();
+ const originalRead=f.props.read;
+ let calls=0;
+ f.props.read=()=>{
+   calls++;
+   if(calls===2)f.source('changed-mid-transaction');
+   return originalRead();
+ };
+ const r=commitGuidedCpuHandoff(f.props);
+ assert.equal(r.ok,false);
+ assert.match(r.detail,/source-changed-during-recompile/);
+ assert.equal(f.count(),2);
+});

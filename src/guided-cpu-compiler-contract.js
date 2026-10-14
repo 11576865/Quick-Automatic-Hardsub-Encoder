@@ -40,7 +40,8 @@ export function commitGuidedCpuHandoff({
  contract,read,apply,media,evidence=null,
  sourceIdentity,expectedSourceIdentity
 }={}){
- if(!contract?.ok||typeof read!=='function'||typeof apply!=='function'||
+ if(!contract?.ok||contract.sourceKey!==expectedSourceIdentity||
+    typeof read!=='function'||typeof apply!=='function'||
     typeof sourceIdentity!=='function'||!expectedSourceIdentity||
     sourceIdentity()!==expectedSourceIdentity||!media)
   return fail('invalid-or-stale-guided-cpu-handoff');
@@ -54,6 +55,8 @@ export function commitGuidedCpuHandoff({
   if(sourceIdentity()!==expectedSourceIdentity)
     throw Error('source-changed-during-handoff');
   const current=compileTask(read(),{...media,budgetEvidence:evidence||undefined});
+  if(sourceIdentity()!==expectedSourceIdentity)
+    throw Error('source-changed-during-recompile');
   const projection=executableProjection(current);
   if(JSON.stringify(projection)!==JSON.stringify(contract.execution))
     throw Error('applied-formal-task-diverged');
