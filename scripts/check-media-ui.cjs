@@ -224,7 +224,7 @@ const {spawn}=require('node:child_process');
   await viewportPage.screenshot({path:'media-workspace-studio-intake-320.png',fullPage:true});
   await viewportPage.evaluate(()=>{
     document.body.dataset.mobileStage='produce';
-    document.querySelector('[data-hardsub-strategy="guided"]')?.click();
+    document.querySelector('button[data-hardsub-strategy="guided"]')?.click();
     ['subtitleCard','planCard','encodeCard'].forEach(id=>document.getElementById(id)?.classList.remove('hidden'));
   });
   if(!await viewportPage.locator('#sharedMediaOutputMount').isVisible())
@@ -295,7 +295,7 @@ const {spawn}=require('node:child_process');
   await page.selectOption('[name=audio]','copy');
   if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Guided copied-audio warning does not return after selecting copy');
   await page.screenshot({path:'media-workspace-hardsub-goal-desktop.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
+  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace');
   if(await page.locator('.media-workflow-notes').evaluate(el=>el.open))
     throw Error('Verbose task architecture is expanded in the default manual editor');
@@ -306,7 +306,7 @@ const {spawn}=require('node:child_process');
 
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
   await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
+  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="guided"]').click());
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Returning to goal-controlled hardsub left the parameter workspace visible');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
   if(!await page.locator('#taskRun').isDisabled() ||
@@ -386,7 +386,7 @@ const {spawn}=require('node:child_process');
   await page.screenshot({path:'media-workspace-mobile.png',fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile horizontal overflow: '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})).filter(el=>el.right>innerWidth+1).slice(0,12))));
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
-  await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('[data-hardsub-strategy="guided"]').click();});
+  await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('button[data-hardsub-strategy="guided"]').click();});
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub lost the shared task workspace on mobile');
   if(await page.locator('#taskEncoding').isVisible())throw Error('Guided hardsub exposes precision parameters on mobile');
   if(await page.locator('#encodeCard').isVisible())throw Error('Guided hardsub exposes a second legacy executor without a recovered job');
@@ -395,7 +395,7 @@ const {spawn}=require('node:child_process');
   if(phonePlanTabs.length!==3||phonePlanTabs.some(t=>!t.visible||t.left<-1||t.right>390.5||t.width<80))
     throw Error('Phone guided strategy hides or clips one of three goal choices: '+JSON.stringify(phonePlanTabs));
   await page.screenshot({path:'media-workspace-hardsub-goal-mobile.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
+  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible()){
     const gateState=await page.evaluate(()=>Object.fromEntries(['planCard','encodeCard','mediaWorkspace'].map(id=>{

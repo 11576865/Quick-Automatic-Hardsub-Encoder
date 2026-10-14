@@ -66,11 +66,11 @@ module.exports=async(browser,baseUrl)=>{
   assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeHandoff,'handoff must not encode');
   await page.click('#taskInspect');
   assert.equal(await page.locator('#taskObjectReview').getAttribute('data-plan-checked'),'true');
-  await page.locator('[data-hardsub-strategy="manual"]').click();
+  await page.locator('button[data-hardsub-strategy="manual"]').click();
   await page.evaluate(()=>{window.budgetTest.set('preset','fast');window.budgetTest.set('audioPlan',JSON.stringify([{sourceOrdinal:0,action:'aac',bitrate:64000,channels:1}]));});
   await page.evaluate(()=>document.querySelector('#taskReviewDetails').open=false);
   const beforeViewSwitch=await page.locator('#mediaTaskForm').evaluate(form=>JSON.stringify([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.value]).sort((a,b)=>a[0].localeCompare(b[0]))));
-  await page.locator('[data-hardsub-strategy="guided"]').click();
+  await page.locator('button[data-hardsub-strategy="guided"]').click();
   assert.equal(await page.locator('#mediaTaskForm').evaluate(form=>JSON.stringify([...form.elements].filter(e=>e.name).map(e=>[e.name,e.type==='checkbox'?e.checked:e.value]).sort((a,b)=>a[0].localeCompare(b[0])))),beforeViewSwitch,'switching views must preserve authoritative values');
   assert.equal(await page.locator('#mediaTaskForm').count(),1);
   assert.equal(await page.locator('#taskReviewDetails').evaluate(el=>el.open),false,'view switch preserves disclosure');
@@ -87,11 +87,11 @@ module.exports=async(browser,baseUrl)=>{
   assert.match(await page.locator('#taskStatus').textContent(),/保存失败/);
   assert.match(await page.locator('[data-review-overview]').textContent(),/保存失败，可重试/);
   assert.equal(await page.locator('#taskReviewDetails').evaluate(el=>el.open),false);
-  await page.locator('[data-hardsub-strategy="manual"]').click();
+  await page.locator('button[data-hardsub-strategy="manual"]').click();
   await page.evaluate(()=>window.budgetTest.saveFailure=false);
   await page.click('#taskSave');
   assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeRetry,'save retry after changing view must not re-encode');
-  await page.locator('[data-hardsub-strategy="guided"]').click();
+  await page.locator('button[data-hardsub-strategy="guided"]').click();
   await page.evaluate(()=>{window.budgetTest.deferRun=true;void window.budgetTest.workspace.runCurrent();});
   await page.waitForFunction(()=>!!window.budgetTest.rejectRun);
   await page.click('#taskCancel');
