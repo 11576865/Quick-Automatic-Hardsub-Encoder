@@ -1,4 +1,5 @@
 import {wholeFileLedger,projectWholeFileFrontier} from './whole-file-frontier.js';
+import {evaluateSharedEvidenceDecision} from './shared-evidence-decision.js';
 import {SIZE_UNITS} from './media-planning.js';
 import {manualCandidateSet} from './manual-candidate-set.js';
 // Optional Manual pure-transcode two-codec comparison. One shared chart,
@@ -153,6 +154,12 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     if(!plotted.ok){chart.replaceChildren();costRows.replaceChildren();readout.textContent='无法在共同实测体积范围绘制曲线。';return true;}
     chart.innerHTML=renderRateDistortionSvg(plotted);
     const evalResult=f.evaluateTargetBytes(selectedBytes);
+    const decision=evaluateSharedEvidenceDecision({
+      workflow:'manual',referenceScope:comparison?.referenceScope,
+      currentReferenceScope:comparison?.referenceScope,
+      frontier:f,targetBytes:selectedBytes,
+      budgetCoordinate:basis.value==='whole'?'whole-modeled':'video-only'
+    });
     if(evalResult.status!=='within-evidence'){costRows.replaceChildren();readout.textContent='当前目标不在共同实测预算范围：'+evalResult.status+'；不会外推推荐或替换目标。';verify.disabled=true;adopt.hidden=true;adopt.disabled=true;return true;}
     chart.setAttribute('role','slider');
     chart.setAttribute('aria-label',basis.value==='whole'?'同一成品目标体积下选择多编码器估算对比位置':'同一视频预算下选择多编码器估算对比位置');
@@ -166,7 +173,7 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
       verifiedVbr.requestedVideoBitrate===Math.round(evalResult.videoBitrate) &&
       verifiedVbr.targetSsim===getTargetSsim?.() && verifiedVbr.budgetContext===budgetContext();
     readout.textContent=budgetText+' · 择优上包络 SSIM '+Number(evalResult.prediction?.quality??0).toFixed(5)+
-      ' · 当前建议 '+String(evalResult.branchId||'未知').toUpperCase()+
+      ' · '+(decision.canRecommend?'当前建议 ':'视频预算仅诊断领先 ')+String(evalResult.branchId||'未知').toUpperCase()+
       (currentVbr ? ' · VBR 短样已通过（最低 SSIM '+
         verifiedVbr.minimumSsim.toFixed(5)+'；正式方案未改变）。':
         '。仅限同源短样的拟合；未执行目标码率验证，未验证实际成品体积。');
@@ -228,9 +235,9 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     }
     if(details.hidden)details.open=true;
     details.hidden=false;
-    verify.disabled=running||hooks.busy();
-    adopt.hidden=!hasCurrentVbr();
-    adopt.disabled=running||hooks.busy()||!hasCurrentVbr();
+    verify.disabled=running||hooks.busy()||!decision.canVerifyCandidate;
+    adopt.hidden=!hasCurrentVbr()||!decision.canRecommend;
+    adopt.disabled=running||hooks.busy()||!decision.canRecommend||!hasCurrentVbr();
     return true;
   }
   const selectPointer=event=>{
@@ -284,6 +291,16 @@ export function mountManualTranscodeComparison({panel,hooks,chart,readout,
     if(running||hooks.busy()||!eligible())return;
     const frontier=currentFrontier();
     const evaluation=frontier.evaluateTargetBytes(selectedBytes);
+    const decision=evaluateSharedEvidenceDecision({
+      workflow:'manual',referenceScope:comparison?.referenceScope,
+      currentReferenceScope:comparison?.referenceScope,
+      frontier,targetBytes:selectedBytes,
+      budgetCoordinate:basis.value==='whole'?'whole-modeled':'video-only'
+    });
+    if(!decision.canVerifyCandidate){
+      message('此候选仅能诊断：'+decision.reason+'；请切回完整文件预算再验证。');
+      return;
+    }
     if(evaluation?.status!=='within-evidence')return;
     const selected=sessionCandidates.find(c=>c.id===evaluation.branchId);
     const plannedBitrate=Math.round(evaluation.videoBitrate);

@@ -28,6 +28,7 @@ import { planPairedRefinement, appendMatchedSceneObservation } from './calibrati
 import { resolveGuidedSizePolicy } from './guided-size-policy.js';
 import { guidedWholeFileProjection, assessGuidedWholeFileBudget } from './guided-whole-file-budget.js';
 import {guidedAssDecisionScope} from './decision-reference-scope.js';
+import {evaluateSharedEvidenceDecision} from './shared-evidence-decision.js';
 import {verifyGuidedNativeVbr} from './guided-native-vbr-verification.js';
 import {createGuidedBranchProposal,currentGuidedBranchProposal,commitVerifiedGuidedBranch} from './guided-branch-adoption.js';
 import { completedGuidedNativeBudget, formatCompletedGuidedNativeBudget } from './native-guided-budget-recovery.js';
@@ -1282,6 +1283,14 @@ function renderSizeFrontier() {
   svg.setAttribute('aria-valuenow', String(Math.round(ariaBytes)));
   svg.setAttribute('aria-valuetext', formatBytes(ariaBytes));
 
+  const decision=frontier.kind==='multi-branch'&&directBytes>0
+    ?evaluateSharedEvidenceDecision({
+      workflow:'guided',
+      referenceScope:currentGuidedDecisionScope(),
+      currentReferenceScope:currentGuidedDecisionScope(),
+      frontier,targetBytes:directBytes,
+      budgetCoordinate:frontier.guidedCostBasis==='estimated-copy'?'whole-estimated':'whole-modeled'
+    }):null;
   if (directBytes > 0 && plot.selected) {
     const marginal = frontier.kind==='multi-branch' ? null :
       model.marginalQualityPerDoubling(plot.selected.videoBitrate);
@@ -1298,11 +1307,11 @@ function renderSizeFrontier() {
         ? ' · 每翻倍视频码率约 +' + Number(marginal).toFixed(4) + ' SSIM'
         : '')+
       (frontier.kind==='multi-branch'
-        ? ' · 建议 '+escapeHtml(String(plot.selected.branchId||'').toUpperCase())+
+        ? ' · '+(decision?.canRecommend?'候选推荐 ':'仅诊断拟合领先 ')+escapeHtml(String(plot.selected.branchId||'').toUpperCase())+
           (plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source') &&
             plot.selected.branchId!==state.selectedCodec?'（未采用，执行方案不变）':'（已选择）')
         : '');
-    if(branchAction && frontier.kind==='multi-branch' && plot.selected.branchId &&
+    if(branchAction && decision?.canRecommend && frontier.kind==='multi-branch' && plot.selected.branchId &&
       plot.selected.branchId!==state.selectedCodec &&
       plot.selected.branchId!==state.selectedCodec+'@'+(state.guidedOutputSize?.id||'source')){
       branchAction.dataset.codec=plot.selected.branchId;
@@ -1603,8 +1612,19 @@ $('adoptSizeFrontierBranchBtn').addEventListener('click',()=>{
   const frontier=currentSizeFrontier();
   const bytes=Number(state.sizeBudgetTargetBytes||0);
   const evaluation=frontier?.evaluateTargetBytes(bytes);
-  if(state.operationBusy||state.qualityCalibrationBusy||frontier?.kind!=='multi-branch'||
-     evaluation?.status!=='within-evidence'||!evaluation.branchId)return;
+  const decision=evaluateSharedEvidenceDecision({
+    workflow:'guided',referenceScope:currentGuidedDecisionScope(),
+    currentReferenceScope:currentGuidedDecisionScope(),
+    frontier,targetBytes:bytes,
+    budgetCoordinate:frontier?.guidedCostBasis==='estimated-copy'?'whole-estimated':'whole-modeled'
+  });
+  if(state.operationBusy||state.qualityCalibrationBusy||
+     !decision.canRecommend||frontier?.kind!=='multi-branch'||
+     evaluation?.status!=='within-evidence'||!evaluation.branchId){
+    if(decision.phase==='diagnosis-only')
+      log('仅短样诊断：缺少复制音轨的完整文件实测成本，不生成编码器采用提案');
+    return;
+  }
   const record=state.resolutionRateDistortionModels[evaluation.branchId];
   const codec=record?.codec||evaluation.branchId;
   const outputSize=record?.outputWidth>0
