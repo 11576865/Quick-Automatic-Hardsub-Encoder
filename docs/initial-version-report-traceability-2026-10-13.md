@@ -140,3 +140,11 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - 交接之后实际重读 Manual 表单再调用 `compileTask`，执行计划不同则恢复先前参数并输出失败状态；执行字段一致才转换为 Manual 控制策略。Native GPU/Web/Android 的一致性并未被假定。
 - `src/guided-cpu-compiler-contract.test.mjs` 使用仓库真实编译器、时长、音轨及预算函数执行 11 个隔离 JavaScript 用例，全部通过；Draft-fast/全量前端 CI 与真实浏览器/FFmpeg 动画字幕/滤镜顺序仍待验收。文档 `docs/b12-guided-manual-shared-cpu-compiler-parity-2026-10-14.md`。
 - B04/B11/B12 均保持部分实现，完整 B01–B25/A01–A10 理论初版分母和重型 CI 退出条件不变。
+
+
+## 2026-10-14 B16 编码前裁切复制流独立预演（非最终精确成本）
+
+- 新增 `windows/trim-copy-preflight.ps1`，以 FFmpeg 对指定源中选择的音轨/软字幕做有界隔离裁切复制，使用现有 `trim-packet-audit.ps1` 独立逐包统计预演文件，按来源文件长度和精确十进制 FILETIME 字符串检查异步测量期间来源是否变更。
+- `windows/trim-copy-preflight-bridge.ps1` 提供 Native localhost `POST/GET /api/trim-copy-preflight`：需要既有完整源流测量 ID，始终固定当前所选源，单飞异步启动与查询；来源变化取消原工作。JS `trim-copy-preflight.js` 只认可映射、起止范围、容器和来源均匹配的预演数据，并且永久保留 `observationOnly` / `canReplaceFullSourceBudget:false`，**不得**将独立辅助流预演误称完整视频混合封装的精确成本或降低现行原源流上界。
+- `src/trim-copy-preflight.test.mjs` 8 项隔离 JS 校验通过；Windows Native smoke 新增含双音轨、软字幕的真实 FFmpeg 独立测量对照、错误映射拒绝以及 localhost 异步接口测试；线上实际 Windows/Node 验收 Pending。
+- 此阶段只是下一步精确成本预测的可观测基础。真正完整任务裁切 seek/PTS、多路视频及附件交错、最终 mux 包选择、FLAC 重新编码成本以及 Android/Web 计量均未闭合。详见 `docs/b16-isolated-trim-copy-preencode-2026-10-14.md`。B16 和完整初版均未签收。
