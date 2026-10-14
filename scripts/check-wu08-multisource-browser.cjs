@@ -111,6 +111,20 @@ async function main(){
   const saved=await page.evaluate(()=>window.batchSaves);
   if(saved.length!==3||saved[0].source!=='source-a.mkv'||saved[2].source!=='source-b.mkv')
     throw Error('Incorrect independent source save provenance');
+  // Completing eight outputs must not dead-end further batches in the
+  // current session. Clear only UI records, never invalidate download handoff.
+  await page.locator('#taskClearBatchSources').click();
+  if(await page.locator('#taskMultiSourceList li').count()!==0)
+    throw Error('Completed queue records cannot be cleared to start another batch');
+  await selector.setInputFiles([
+    {name:'source-c.mkv',mimeType:'video/x-matroska',buffer:Buffer.from('c-source-file')},
+    {name:'source-d.mkv',mimeType:'video/x-matroska',buffer:Buffer.from('d-source-file')}
+  ]);
+  await page.locator('#taskQueueBatchSources').click();
+  if(await page.locator('#taskMultiSourceList li').count()!==2)
+    throw Error('New source batch could not be queued after removing old download records');
+  if(await page.evaluate(()=>window.batchRuns.length)!==2)
+    throw Error('Clearing records unexpectedly restarted old source encodes');
   console.log('WU08 Chromium selected 2 user Files -> distinct official compiled tasks -> independent save and no-reencode retry PASS (controlled backend)');
  }finally{await browser?.close();server.kill();}
 }
