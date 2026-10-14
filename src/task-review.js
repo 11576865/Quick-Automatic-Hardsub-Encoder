@@ -63,7 +63,7 @@ export function renderTaskReview(root,model){
  if(domain){
    const rows=[];
    rows.push('SourceAsset · '+(domain.sourceAsset.sourceName||'未命名来源')+
-     ' · '+(domain.sourceAsset.identity?'已绑定来源身份':'来源身份未绑定'));
+     ' · '+(domain.sourceAsset.identity?('来源身份 '+domain.sourceAsset.identity):'来源身份未绑定'));
    rows.push('UserIntent · '+domain.userIntent.operation+
      ' · '+domain.userIntent.codecAction+' · '+domain.userIntent.container+
      '（从正式任务推导，并非另一个可编辑意图源）');
