@@ -1790,6 +1790,9 @@ function Get-AsyncTrimPacketEvidence($Job) {
         }
         $Job.TrimPacketEvidence=[pscustomobject]@{
             version=1;scope='completed-artifact'
+            artifactBytes=[long]$artifact.Length
+            artifactWriteTicks=[string]$artifact.LastWriteTimeUtc.Ticks
+            artifactJobId=[string]$Job.Id
             audioPacketBytes=@($receipt.audioPacketBytes)
             subtitlePacketBytes=@($receipt.subtitlePacketBytes)
         }
@@ -1811,7 +1814,23 @@ function Get-CompletedTrimPacketEvidence($Job) {
     $needsCopy=([bool]$Job.Task.hasTrimRange -and
        [long]$Job.Task.sizePlan.copiedTrimReserveBytes -gt 0)
     if(-not $needsFlac -and -not $needsCopy){return $null}
-    if($Job.TrimPacketAuditFinished){return $Job.TrimPacketEvidence}
+    if($Job.TrimPacketAuditFinished){
+        # Short-output observations are cached as well. Their source artifact
+        # must still have the original file stat before any status exposes it.
+        if($Job.TrimPacketEvidence){
+            try{
+                $current=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+                if([long]$current.Length -ne [long]$Job.TrimPacketEvidence.artifactBytes -or
+                   [string]$current.LastWriteTimeUtc.Ticks -ne [string]$Job.TrimPacketEvidence.artifactWriteTicks){
+                    throw 'Completed audio packet audit artifact has changed.'
+                }
+            }catch{
+                $Job.TrimPacketEvidence=$null
+                $Job.TrimPacketAuditState='unavailable'
+            }
+        }
+        return $Job.TrimPacketEvidence
+    }
     # Keep the existing synchronous short-output path. Large files do not block
     # /api/jobs; use a separately owned, bounded scan with independent receipt.
     if([double]$Job.ExpectedVideoDuration -gt 180 -or
@@ -1820,6 +1839,7 @@ function Get-CompletedTrimPacketEvidence($Job) {
     }
     $Job.TrimPacketAuditFinished=$true
     try{
+        $artifactBefore=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
         # One bounded read of the actual staged artifact, never a prediction
         # based on cut duration. A failed audit cannot invalidate an otherwise
         # valid completed encode or relax its strict byte ceiling.
@@ -1835,8 +1855,16 @@ function Get-CompletedTrimPacketEvidence($Job) {
         $subtitleBytes=@($streams | Where-Object {$_.codec_type -eq 'subtitle'} | ForEach-Object {
             if($sub.ContainsKey([int]$_.index)){$sub[[int]$_.index]}else{$null}
         })
+        $artifactAfter=Get-Item -LiteralPath $Job.Output -ErrorAction Stop
+        if([long]$artifactAfter.Length -ne [long]$artifactBefore.Length -or
+           [string]$artifactAfter.LastWriteTimeUtc.Ticks -ne [string]$artifactBefore.LastWriteTimeUtc.Ticks){
+            throw 'Completed output file changed during short packet audit.'
+        }
         $Job.TrimPacketEvidence=[pscustomobject]@{
             version=1;scope='completed-artifact'
+            artifactBytes=[long]$artifactAfter.Length
+            artifactWriteTicks=[string]$artifactAfter.LastWriteTimeUtc.Ticks
+            artifactJobId=[string]$Job.Id
             audioPacketBytes=$audioBytes;subtitlePacketBytes=$subtitleBytes
         }
     }catch{
