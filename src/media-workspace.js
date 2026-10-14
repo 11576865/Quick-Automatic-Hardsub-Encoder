@@ -385,7 +385,7 @@ export function mountMediaWorkspace(hooks) {
   let currentPlanTask=null,artifactReview=null,executingSourceName='',reviewSourceIdentity=hooks.videoIdentity?.()||'';
   function syncTaskReview(){
     const media=hooks.mediaSnapshot?.()||null;
-    const model=buildTaskReview({media,hasSource:!!hooks.videoIdentity?.(),task:currentPlanTask,artifact:artifactReview,stale:completedStale,state:section.dataset.taskState});
+    const model=buildTaskReview({media,hasSource:!!hooks.videoIdentity?.(),sourceIdentity:hooks.videoIdentity?.()||'',task:currentPlanTask,artifact:artifactReview,stale:completedStale,state:section.dataset.taskState});
     renderTaskReview(section.querySelector('#taskObjectReview'),model);
     section.querySelector('#taskReviewSourceName').textContent=hooks.sourceName?.()||'';
   }
