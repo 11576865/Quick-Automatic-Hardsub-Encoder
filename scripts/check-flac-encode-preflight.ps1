@@ -97,8 +97,20 @@ try{
     (New-Object Text.UTF8Encoding($false)))
  $badReceipt=Join-Path $root 'invalid-flac-receipt.json'
  $worker[$worker.Count-1]=$badReceipt
- & powershell.exe @worker 2>$null
- if($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $badReceipt)){
+ # An expected child validation error must not become a parent
+ # PowerShell 5.1 terminating NativeCommandError under Stop preference.
+ $negativeOptions=($worker|ForEach-Object {'"'+([string]$_).Replace('"','\\"')+'"'}) -join ' '
+ $negative=Start-Process -FilePath 'powershell.exe' -ArgumentList $negativeOptions -NoNewWindow -PassThru `
+  -RedirectStandardOutput (Join-Path $root 'negative-stdout.log') `
+  -RedirectStandardError (Join-Path $root 'negative-stderr.log')
+ try{
+  if(-not $negative.WaitForExit(15000)){
+   $negative.Kill();$negative.WaitForExit()
+   throw 'Negative fixture child did not finish in bounded time.'
+  }
+  $badExit=$negative.ExitCode
+ }finally{$negative.Dispose()}
+ if($badExit -eq 0 -or (Test-Path -LiteralPath $badReceipt)){
   throw 'Duplicate FLAC source ordinal wrongly accepted.'
  }
  Write-Host 'B16 actual two-track full+trim FLAC encode packet observation passed; final video mux remains unverified.'
