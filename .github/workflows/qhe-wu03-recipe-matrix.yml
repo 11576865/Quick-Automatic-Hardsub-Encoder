@@ -1,0 +1,31 @@
+name: QHE WU03 multi-output recipe matrix acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/output-recipe-matrix.js'
+      - 'src/output-recipe-matrix.test.mjs'
+      - 'src/media-workspace.js'
+      - 'src/main.js'
+      - 'scripts/check-wu03-recipe-matrix-browser.cjs'
+      - '.github/workflows/qhe-wu03-recipe-matrix.yml'
+  workflow_dispatch:
+jobs:
+  real-browser-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Check frozen recipe model
+        run: node --test src/output-recipe-matrix.test.mjs
+      - name: Install Chromium and frontend
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Exercise production recipe matrix DOM and execution hooks
+        run: node scripts/check-wu03-recipe-matrix-browser.cjs
