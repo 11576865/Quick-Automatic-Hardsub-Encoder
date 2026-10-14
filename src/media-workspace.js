@@ -334,6 +334,15 @@ export function mountMediaWorkspace(hooks) {
     }
     return report;
   };
+  const completedByteLedgerMessage=report=>{
+    const ledger=report?.completedMuxByteLedger;
+    if(!ledger||ledger.status!=='completed-mux-byte-ledger')return '';
+    return ' · 成品包账本：视频 '+formatSize(ledger.videoPacketBytes)+
+      '，音频 '+formatSize(ledger.audioPacketBytes)+
+      '，字幕 '+formatSize(ledger.subtitlePacketBytes)+
+      '，其他数据与封装 '+formatSize(ledger.otherAndMuxBytes)+
+      '（不等于纯封装开销，不可外推下次预算）';
+  };
   const auxiliaryParityMessage=report=>{
     const pair=report?.auxiliaryParity;
     if(!pair)return '';
@@ -1848,9 +1857,9 @@ export function mountMediaWorkspace(hooks) {
           lastReport=buildAuditedTaskReport(activeTask||completed.task,completed,lastReport.elapsedSeconds);
           if(artifactReview)artifactReview.report=structuredClone(lastReport);
           if(lastReport.auxiliaryParity?.comparable){
-            status('后台逐流成品审计完成'+auxiliaryParityMessage(lastReport)+'。');
+            status('后台逐流成品审计完成'+auxiliaryParityMessage(lastReport)+completedByteLedgerMessage(lastReport)+'。');
           }else if(lastReport.trimCopyAudit){
-            status('后台裁切复制流审计完成；收据已更新，正式完整源流预算未改变。');
+            status('后台裁切复制流审计完成'+completedByteLedgerMessage(lastReport)+'；正式完整源流预算未改变。');
           }else if(lastReport.trimCopyAuditState==='unavailable'){
             status('后台裁切复制流审计不可用；现有成品与正式预算仍有效。');
           }
@@ -2159,7 +2168,7 @@ export function mountMediaWorkspace(hooks) {
           : lastReport.trimCopyAuditState==='unavailable'
             ? ' · 裁切复制流审计不可用；完整源流预算仍保留'
             : '';
-      status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+trimAuditText+auxiliaryParityMessage(lastReport)+' · 尚未保存到你的文件夹。下一步：保存成品。');
+      status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+trimAuditText+auxiliaryParityMessage(lastReport)+completedByteLedgerMessage(lastReport)+' · 尚未保存到你的文件夹。下一步：保存成品。');
     }catch(e){
       if(isCancellationError(e)){
         setTaskState('idle');
