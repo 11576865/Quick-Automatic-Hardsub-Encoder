@@ -174,3 +174,12 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - `src/auxiliary-mux-reconciliation.js` 必须核对正式作业 ID、完成成品字节数与 packet 回执身份、权威 `compileTask` 音轨输出次序/数量、完整字幕来源映射以及 FLAC / 裁切复制真实编码方法才能返回本次单作业可比较结果。任何错配返回 unavailable，不增加 `canReplaceFormalBudget` 或 `canCertifyFutureMux` 权限。
 - `scripts/check-flac-native-http-lifecycle.ps1` 在通过独立 FFprobe 后实际修改短成品并要求回执失效。`scripts/check-b16-long-async-output-identity.ps1` 新增真正 182 秒低分辨率/低帧率 Native 正式 FLAC 编码和异步完成审计，独立复扫包字节并在修改成品后要求旧审计失效；两者接入允许 Draft 的 `windows-b16-runtime.yml`，真实长时长 Windows 精确头部 CI Pending。
 - `docs/b16-completed-artifact-identity-and-long-async-runtime-2026-10-14.md` 描述输入/输出/未来预算证据界限。当前成品实际包字节是当前作业审计证据，不得当作下次 FLAC 预算的预测或交付保证；B16 和理论初版维持部分实现。
+
+
+## 2026-10-14 B16 completed-mux 视频/音频/字幕实际包字节账本
+
+- 已验证完成品的 Windows Native `outputPacketEvidence` 增加视频 packet total。短输出走原 30 秒 bounded FFprobe 同步扫描；182 秒以上或大于 512 MiB 输出走现有异步 worker，各视频/音频/字幕扫描有明确 120 秒及行数限制。
+- 新 `src/completed-mux-byte-ledger.js` 按真实作业 ID、artifact bytes、NTFS ticks 以及 `outputPlan` 预期流数量核对每类 packet payload，计算 `otherAndMuxBytes = artifactBytes - videoPacketBytes - audioPacketBytes - subtitlePacketBytes`。其中包含附件、metadata、codec extradata、索引及容器头，**不是纯容器开销**。
+- `outputReport.completedMuxByteLedger` 与共享工作台短/长任务报告显示该次实际成本，不允许作用于未来预测：`canPredictFutureBytes:false`、`canAuthorizeStrictBudget:false`。
+- 新 8 项隔离行为测试 PASS，Draft fast/full 与 Windows B16 专项 CI 接线。Windows 真实短 Native、182s 异步 Native 以及 1v+2a+1s Matroska 独立 FFprobe 交叉验收已加入脚本，新精确提交的 Windows PASS Pending。
+- B16 仍需严谨的 FLAC 已编码音轨复用路径和形式化预算成本准入，且需长篇/VFR/复杂 ASS、Android/Web 与成品交付端验收。未降低 B01–B25 / A01–A10 完整理论模型分母。
