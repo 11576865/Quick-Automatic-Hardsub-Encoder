@@ -15,6 +15,8 @@ on:
       - 'src/auxiliary-mux-reconciliation.test.mjs'
       - 'src/completed-mux-byte-ledger.js'
       - 'src/completed-mux-byte-ledger.test.mjs'
+      - 'src/flac-cache-reuse-contract.js'
+      - 'src/flac-cache-reuse-contract.test.mjs'
       - 'windows/trim-packet-audit.ps1'
       - 'scripts/check-trim-copy-preflight.ps1'
       - 'src/flac-encode-preflight.js'
@@ -62,7 +64,7 @@ jobs:
       - name: Check JS receipt gates
         shell: pwsh
         run: |
-          node --test src/flac-encode-preflight.test.mjs src/trim-copy-preflight.test.mjs src/auxiliary-mux-reconciliation.test.mjs src/completed-mux-byte-ledger.test.mjs
+          node --test src/flac-encode-preflight.test.mjs src/trim-copy-preflight.test.mjs src/auxiliary-mux-reconciliation.test.mjs src/completed-mux-byte-ledger.test.mjs src/flac-cache-reuse-contract.test.mjs
       - name: Install FFmpeg with bounded package retries
         shell: powershell
         run: |
@@ -79,6 +81,12 @@ jobs:
       - name: Real two-audio plus subtitle isolated copy packet oracle
         shell: powershell
         run: ./scripts/check-trim-copy-preflight.ps1
+      - name: Real encoded FLAC packet cache reused unchanged in completed video and softsubtitle mux
+        shell: pwsh
+        timeout-minutes: 3
+        run: |
+          $env:QHE_B16_REAL_PACKET_FIXTURE='1'
+          node --test src/flac-cache-reuse-contract.test.mjs
       - name: Native HTTP FLAC preview and source-ledger invalidation
         shell: powershell
         run: ./scripts/check-flac-native-http-lifecycle.ps1
