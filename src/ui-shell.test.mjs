@@ -519,7 +519,8 @@ test('guided size budget compares compatible measured codec curves with explicit
  assert.match(main,/id="adoptSizeFrontierBranchBtn"/);
  assert.match(main,/createMultiBranchFrontier\(/);
  assert.match(main,/state\.sizeEnvelopeEnabled=compareForSize/);
- assert.match(main,/selectCodec\(recommendation\.branchId\)/);
+ assert.match(main,/createGuidedBranchProposal\(/);
+ assert.match(main,/commitVerifiedGuidedBranch\(/);
  assert.match(main,/calibrationShouldContinue\(/);
 });
 
@@ -544,7 +545,8 @@ test('guided multi-resolution calibration keeps output scale, SSIM reference and
  assert.match(main,/resolutionRateDistortionModels/);
  assert.match(main,/referenceWidth:outputSize\?\.width/);
  assert.match(main,/outputWidth:plan\.outputWidth\|\|0/);
- assert.match(main,/state\.guidedOutputSize=resolution\.outputWidth>0/);
+ assert.match(main,/state\.guidedOutputSize=selection\.outputSize\?\{\.\.\.selection\.outputSize\}:null/);
+ assert.match(main,/preview:p=>buildEncodePlan\(p\.codec,p\.outputSize\)/);
  assert.match(bridge,/scale='\+\$ReferenceWidth\+':'\+\$ReferenceHeight/);
  assert.match(bridge,/Guided output resolution differs from adopted calibration branch/);
  assert.match(bridge,/scale='\+\$outW\+':'\+\$outH\+':flags=bicubic/);
@@ -576,7 +578,8 @@ test('budgeted paired refinement is attached after codec and resolution comparis
  assert.match(main,/originalFingerprint:plan\.previousFingerprint/);
  assert.match(main,/if\(!check\.ok \|\| check\.evaluateTargetBytes\(targetBytes\)\.status/);
  assert.match(main,/配对追加测量未发布/);
- assert.match(main,/sourceScope:sourceEvidenceKey\(state\.media/);
+ assert.match(main,/sourceScope:samplePlan\.decisionScope/);
+ assert.match(main,/const sourceScope=currentGuidedDecisionScope\(\)/);
 });
 
 test('guided sample ingress refuses missing or falsified elapsed timing evidence',async()=>{
