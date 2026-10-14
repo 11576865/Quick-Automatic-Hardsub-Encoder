@@ -10,7 +10,7 @@ export function buildTaskReview({media=null,hasSource=false,sourceIdentity='',ta
  const rows=[];const plan=task?.outputPlan;
  if(plan){
   for(const [key,label] of [['video','视频'],['audio','音频'],['subtitles','字幕'],['attachments','附件']]){
-   for(const row of plan[key]||[])rows.push(label+' '+(row.sourceOrdinal==='all'?'全部':'#'+row.sourceOrdinal)+' → '+(actions[row.action]||row.action)+(row.range?' · '+(row.range==='full'?'完整':'IN/OUT'):''));
+   for(const row of plan[key]||[])rows.push(label+' '+(row.sourceOrdinal==='all'?'全部':'#'+row.sourceOrdinal)+' → '+(actions[row.action]||row.action)+(row.mustCopy?' · 必须 Copy 保留锁':'')+(row.range?' · '+(row.range==='full'?'完整':'IN/OUT'):''));
    if(['subtitles','attachments'].includes(key)&&!plan[key]?.length)rows.push(label+' → 不保留');
   }
   for(const row of plan.droppedAudio||[])rows.push('音频 #'+row.sourceOrdinal+' → 不输出');

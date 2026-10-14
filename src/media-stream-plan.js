@@ -70,7 +70,7 @@ export function createOutputPlan(task,media){
   const describe=(track,outputOrdinal)=>({...track,outputOrdinal,sourceIndex:facts[track.sourceOrdinal]?.index??null,
     sourceCodec:facts[track.sourceOrdinal]?.codec||facts[track.sourceOrdinal]?.codec_name||null});
   return Object.freeze({version:1,video:task.videoStreams.map(sourceOrdinal=>({sourceOrdinal,action:task.operation==='copy'?'copy':'encode'})),
-    audio:kept.map(describe),droppedAudio:Array.from({length:Number(media.audioTracks||0)},(_,sourceOrdinal)=>sourceOrdinal)
+    audio:kept.map((entry,outputOrdinal)=>({...describe(entry,outputOrdinal),mustCopy:(task.mustCopyAudioOrdinals||[]).includes(entry.sourceOrdinal)})),droppedAudio:Array.from({length:Number(media.audioTracks||0)},(_,sourceOrdinal)=>sourceOrdinal)
       .filter(n=>!kept.some(t=>t.sourceOrdinal===n)).map(sourceOrdinal=>({sourceOrdinal,action:'drop'})),
     // FFmpeg's 0:s? / 0:t? mapping is stable source order. Expand "all"
     // into verified per-source ordinals in the *reporting* projection only.

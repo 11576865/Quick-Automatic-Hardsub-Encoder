@@ -2105,7 +2105,7 @@ export function mountMediaWorkspace(hooks) {
   const platformTimer=setInterval(()=>{syncHardsubStrategyChrome();const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
   const prepare=async()=>{
     const raw=read(),media=await hooks.prepare(raw.operation);
-    const task=compileTask({...raw,budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined});
+    const task=compileTask({...raw,budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,sourceIdentity:hooks.videoIdentity?.()||'',budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined});
     await hooks.validate?.(task);
     currentPlanTask=task;
     renderContainerDecision(task);

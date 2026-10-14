@@ -2,6 +2,7 @@ import { sizeBudget } from './media-planning.js';
 import { audioCopyPlaybackWarning, resolveOutputContainer } from './media-container.js';
 import { parseMediaTime } from './media-time.js';
 import { normalizeAudioPlan, auxiliarySelection, appendPlannedAudioArgs, createOutputPlan } from './media-stream-plan.js';
+import {normalizeMustCopyAudio} from './audio-preservation-lock.js';
 
 // Shared, versioned task compiler. Paths are supplied only by the owning backend.
 export const TASK_VERSION = 4;
@@ -117,6 +118,7 @@ export function compileTask(raw, media) {
   if (!t.audioPlan && t.audioTrack !== 'all' && Number(t.audioTrack) >= audioTracks) throw Error('音轨索引不存在');
   t.expectedAudioTracks = t.audio === 'none' ? 0 : t.audioTrack === 'all' ? audioTracks : 1;
   if(t.audioPlan)t.expectedAudioTracks=t.audioPlan.filter(a=>a.action!=='drop').length;
+  t.mustCopyAudioOrdinals=normalizeMustCopyAudio(raw,media,t);
   t.subtitleSelection=t.keepSubtitles?auxiliarySelection(raw.subtitleStreams,media.subtitleTracks??media.subtitleStreams?.length,'字幕'):null;
   t.attachmentSelection=t.keepAttachments?auxiliarySelection(raw.attachmentStreams,media.attachmentTracks??media.attachmentStreams?.length,'附件'):null;
 
