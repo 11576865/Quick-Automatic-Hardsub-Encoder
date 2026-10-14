@@ -129,6 +129,18 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
     async measureSourceBudget() {
       return JSON.stringify(await makeRequest(config,'POST','/api/source-budget'));
     },
+    async startTrimCopyPreflight(request) {
+      return JSON.stringify(await makeRequest(config,'POST','/api/trim-copy-preflight',{request}));
+    },
+    async getTrimCopyPreflightStatus() {
+      return JSON.stringify(await makeRequest(config,'GET','/api/trim-copy-preflight'));
+    },
+    async startFlacEncodePreflight(request) {
+      return JSON.stringify(await makeRequest(config,'POST','/api/flac-encode-preflight',{request}));
+    },
+    async getFlacEncodePreflightStatus() {
+      return JSON.stringify(await makeRequest(config,'GET','/api/flac-encode-preflight'));
+    },
     probeSelectedVideo() {
       const generation = ++inputProbeGeneration;
       void makeRequest(config, 'POST', '/api/probe')
