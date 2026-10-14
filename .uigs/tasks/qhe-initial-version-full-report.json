@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU06_P1_read_only_domain_projection_authorized",
-  "current_bounded_work_unit": "WU06 P1: show/source-bound read-only domain projection of schema-v4 SourceAsset, per-stream action, compiler-derived UserIntent, OutputPlan and executable args; no second authority; field acceptance pending.",
+  "status": "incomplete_full_report_WU06_P1_compiled_domain_projection_hosted_accepted",
+  "current_bounded_work_unit": "WU06 R19 P1 bounded read-only SourceAsset/SourceStream/compiled-derived UserIntent/OutputPlan/executable-arg projection hosted PASS at 0124946: V4 hardsub/transcode/copy model + production Chromium live inspector, task unchanged, source drift hides stale contract. This is not separately owned intent, full ImmutableJobPlan, actual ArtifactRecord nor cross-device film acceptance.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -258,15 +258,17 @@
     "WU05 reanchored from original R19§06/R24§09 first/actual/PTS-DTS/output cut contract; explicitly limited to actual completed-asset timing receipt, no new video codec nor generic test expansion.",
     "WU05 bounded output timeline product slice submitted: read-only FFprobe first decoded output frame and packet PTS/DTS with job bytes/stamp, UI inspect/re-export JSON; explicit source packet mapping unverified.",
     "WU05 B09/A04 product-level FIRST output timestamp observation hosted PASSED, exact-head cfed326: read-only Native FFprobe + Chrome click + report + clock-gap human review. Actual 2.0s output first video vs .005s first audio is not silently marked aligned; source time mapping and full AV sync pending.",
-    "WU06 root reanchor: selected original R19 §03/§16 P1 and R24 §05 read-only domain projection. Existing task.outputPlan is partial; next unit must expose source, intent, output provenance and executable parameter trace without replacing compiler."
+    "WU06 root reanchor: selected original R19 §03/§16 P1 and R24 §05 read-only domain projection. Existing task.outputPlan is partial; next unit must expose source, intent, output provenance and executable parameter trace without replacing compiler.",
+    "WU06 hosted PASS 0124946: P1 passive compiled v4 → SourceAsset/Streams/UserIntent-inferred/OutputPlan/executable map/unknown ArtifactRecord inspect; source replacement invalidates view; no changed task args or new mutable user intent."
   ],
   "next_units": [
-    "WU06 authorized P1 domain read-only source/intent/stream/output/FFmpeg projection; implement code + exact-head evidence.",
-    "No WU07 authorized. B21 multi-source batch, complex source/field, A01–A10 and WU01 native handoff remain open; no automatic test expansion."
+    "NO WU07 AUTHORIZED: compare B01–B25/A01–A10 against original R19/R24; choose substantive unimplemented ability, not recursive inspector instrumentation.",
+    "Open R19 P1 full stage: independently owned explicit must-preserve UserIntent (only after evidence), immutable backend execution job identity, real ArtifactRecord verification across Windows/Android/Web, no speculative migration.",
+    "Open B21 multiple sources batch, B09 packet mapping/full AV sync, WU01 guided-to-Windows same-task, P2/P3 true ASS and manual codec decision parity and field playback, PR #104/#105 integration."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "cfed326a44412ba9a7f140ae4b39b526c4c3975b",
+  "latest_durable_commit": "0124946d6939f73a285dcf609a6a973924d44219",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -302,7 +304,8 @@
     "wu04_cut_choice": "PASS at 501974713ad6ee3fc184b20bb1fbb2ed93fc5396, run 38562833192: source-specific keyframe advisory, invalidation after source drift, deliberate user confirmation, unchanged semantic IN/OUT and official compiled v4 reencoded-trim task. B-frame/VFR real output PTS/DTS not tested.",
     "wu02_hosted_after_wu04": "Earlier Windows WU02 product PASS run 38554433547; new exact-head reruns encountered upstream Chocolatey 503/0-of-0 FFmpeg packaging or PATH propagation. No in-scope code regression found; external CI rerun pending.",
     "windows_b16_after_wu04": "External Chocolatey feed 503 prevented FFmpeg binary availability in most recent Windows B16; not product B16 acceptance failure at media test stage.",
-    "wu05_cut_timeline": "PASS exact-head cfed326a44412ba9a7f140ae4b39b526c4c3975b: Windows run 38568220073, Chromium/model run 38568219698, Test frontend 38568219578, UIGS Evidence Coverage 38568219823. Windows source H264 Bframes + AAC, formal Copy Trim IN2.4 OUT4.8, actual output decoded first video PTS2.000, video packet PTS/DTS2.083/2.000, audio first PTS0.005; output 58863 B. Large first-clock gap flagged for review; NOT sync verdict, NOT source packet hash or end-frame acceptance."
+    "wu05_cut_timeline": "PASS exact-head cfed326a44412ba9a7f140ae4b39b526c4c3975b: Windows run 38568220073, Chromium/model run 38568219698, Test frontend 38568219578, UIGS Evidence Coverage 38568219823. Windows source H264 Bframes + AAC, formal Copy Trim IN2.4 OUT4.8, actual output decoded first video PTS2.000, video packet PTS/DTS2.083/2.000, audio first PTS0.005; output 58863 B. Large first-clock gap flagged for review; NOT sync verdict, NOT source packet hash or end-frame acceptance.",
+    "wu06_domain_projection": "Exact-head 0124946d6939f73a285dcf609a6a973924d44219: new WU06 Node real compiled v4 Hardsub/Transcode/Copy+source stream coverage and real Chromium source-bound inspector SUCCESS run 38575999722; frontend SUCCESS 38575999605; UIGS Evidence Coverage SUCCESS 38575999820. No real Native/Android/Web domain owner parity, no additional runtime authority, no ArtifactRecord field evidence."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -336,9 +339,9 @@
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
     "current_authorized_index": 5,
-    "completed_authorized_units": 2,
-    "review_status": "ROOT_REPORT_REANCHORED_WU06_P1_READ_ONLY_PROJECTION_AUTHORIZED",
-    "executed_authorized_units_since_reanchor": 0
+    "completed_authorized_units": 3,
+    "review_status": "WU06_P1_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEW_UNIT",
+    "executed_authorized_units_since_reanchor": 1
   },
   "authorized_next_units": [
     {
@@ -426,7 +429,7 @@
         "B20",
         "B24"
       ],
-      "status": "AUTHORIZED_NOT_STARTED",
+      "status": "HOSTED_ACCEPTED_READ_ONLY_P1_PROJECTION_DOES_NOT_CLOSE_FULL_B02",
       "title": "Read-only SourceAsset/SourceStream/UserIntent/OutputPlan to executable schema-v4 delivery contract projection",
       "source": "R19 §03 p4, §16 P1; R24 §05 p8: project old v4 compiler into read-only domain objects, do not migrate state or change executable behavior before parity",
       "scope": "Existing schema-v4 compiler remains sole task authority. Derive read-only trace of source streams, compiler-derived user operations and stream decisions, typed OutputPlan, actual command map/filter facts and unknown verification. Present in existing task review without new config ownership or run gate.",

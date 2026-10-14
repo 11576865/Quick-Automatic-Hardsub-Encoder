@@ -234,3 +234,15 @@ WU03 完结后新的任务不得自动按照追加测试队列推进；必须再
 相关 WU-05 报告：`docs/wu05-copy-output-timeline-receipt-2026-10-14.md`。严格遵循“验证的精确提交”原则，文档后续提交不替代这些实测 SHA。
 
 防偏航：WU-05 结束后无自动 WU-06，重新以完整 B01–B25/A01–A10 对照确定新的产品能力优先级。
+
+## 2026-10-14 WU-06 · R19 §03/P1 与 R24 §05 的只读交付合同投影（B02/B20/B24）
+
+**理论原文方向**：来源（SourceAsset/SourceStream）→ 用户意图（UserIntent）→ 逐流输出计划（OutputPlan）→ 冻结执行计划（ImmutableJobPlan）→ 成品证明（ArtifactRecord）。报告的 P1 要求先以现有 `schema v4` 为唯一权威，建立只读投影，不得提前引入会修改 FFmpeg 的第二状态体系。
+
+**新增产品能力**：现有任务审阅区可展开 SourceAsset 名称和当前稳定来源身份、每条源视频/音频/字幕/字体附件的 codec 与保留/删除/编码动作、由**已编译任务推导**的用户操作、逐流输出策略、真实 `-map` 与 `-c:v`/libass 执行参数。投影明确标注并不等于独立批准的 UserIntent，也不凭空生成 ArtifactRecord；明显编译映射矛盾仅提示复核，不能修改权威任务。换源后旧编译投影隐藏。
+
+**精确验收**：代码提交 `0124946d6939f73a285dcf609a6a973924d44219`。`src/delivery-contract-projection.test.mjs` 编译真实 schema v4 三工作流并断言混合 MKV 视频+FLAC/AAC+ASS+TTF 各流动作、深冻结**投影**而不冻结原任务/不改 FFmpeg 参数，以及映射异议仅只读提示；真实 Chromium 点击正式工作台“验证当前方案”→ 展开逐流/命令审阅 → 切换 Stream Copy → 来源变更后旧视图失效。WU06 专项 https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38575999722 SUCCESS；Frontend `38575999605` 和 UIGS Coverage `38575999820` SUCCESS。
+
+**严格剩余**：现有视图上的 `UserIntent` 是从真实 v4 任务推断的展示，不是独立持久化的 must-preserve / may-transform / user-approved 对象；`ImmutableJobPlan` 仅展示旧执行参数，并未额外实现后端不可变合同；`ArtifactRecord` 状态明确为未由本投影取得证明。尚缺来源跨后端稳定身份、复杂真实用户文件/目标播放器，以及 P1 逐一文件实测等价签收。因此 B02/P1 仅新的有界能力通过，整体未完成。
+
+下一轮重新从 R19/R24 比较实质产品缺口，不默认围绕 WU06 增加测试或迁移状态所有权。
