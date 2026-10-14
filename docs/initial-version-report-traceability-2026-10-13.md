@@ -211,3 +211,14 @@ R19 P5 的「批次矩阵」与 R24 §22「多个独立转码/烧录/剪切任�
 **限定证据**：提交 `7cdff9d`，`Test frontend` 38558570086 PASS、真实 Chromium 控件与受控后端 38558570169 PASS（x264/x265 两个冻结方案、错源拒绝、保存失败保留和重试）。这不是 Windows Native / Web FFmpeg 两条真实产物的批次验收。**完整 B21 多来源输入及跨来源计划/现场验收仍为缺实现/缺证据**，不得视为总目标完成。详见 `docs/qhe-wu03-single-source-multi-output-matrix-2026-10-14.md`。
 
 WU03 完结后新的任务不得自动按照追加测试队列推进；必须再次比较 R19/R24 的其余 B01–B25/A01–A10 未关闭要求。
+## 2026-10-14 WU-04 · 无损剪切的关键帧可行性与用户主动转码选择（B08/B09、A04）
+
+**新产品能力**：正式工作台的 Stream Copy IN/OUT 模式现明确提示它不承诺帧精确；在当前来源、当前视频流与未失效关键帧分析相符时，给出“接近关键帧”或“可能提前 X 秒”的**预测值**，否则显示“未知”。选择其他来源/视频流后旧预测不再有效。用户可明确点击并再次确认改为重编码剪切，保留语义 IN/OUT、沿用当前编码参数；不能以旧的 Copy 方案假装输出帧精确或静默重编码。
+
+**精确提交与通过证据**：QHE `501974713ad6ee3fc184b20bb1fbb2ed93fc5396` 的 `QHE WU04 copy-cut user decision acceptance` — https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38562833192 SUCCESS。实际 Chromium 中检验从 UNKNOWN → 估计提前 1.500 秒 → 换源 UNKNOWN、确认/取消、IN/OUT 等值、原正式 `compileTask` 产生 transcode trim 任务。`Test frontend` 与 UIGS Evidence Coverage 同提交 SUCCESS。
+
+**执行状态区分**：新增的是剪切策略选择和信息真实性，不是任意位置 Smart Cut。`actualFirstPresentation`、`copiedPacketRange`、`audioTimeMapping`、`verificationStatus` 这些报告要求及 VFR/B 帧非零 PTS/DTS、音画同步和来源包哈希仍待真实文件独立验收。A04 不能标已完成。B21 单来源多输出产品切片已有 Chromium PASS，但真正多来源任务矩阵未完成。
+
+**回归/外部环境**：这次迭代发现“未知切点”的空偏差被状态映射表达式提前格式化，错误进入 IN/OUT 表单有效性；已经修复并通过上述浏览器验收。Windows WU02 与 B16 的新一轮 CI 部分红灯归因 Chocolatey 503、FFmpeg 未安装或 PATH 未传播，未进入产品视频测试；历史 Windows WU02 成功 run 38554433547 仍有效。后续 CI 已加强可执行文件检查，但当前最新验证必须独立读取，不得提前称 PASS。
+
+**方向门禁**：WU-04 有界产品切片完成，没有自动授权 WU-05。后续需重新按完整理论报告差距选下一条主线，保留初版范围和不合并 Draft 的身份边界。
