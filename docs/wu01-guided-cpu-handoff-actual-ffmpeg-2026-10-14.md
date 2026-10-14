@@ -14,3 +14,11 @@ Authority: B02/B04/B11/B12 and A05/A06; route snapshot: docs/qhe-initial-version
 The completed hosted CI status has not yet been read. This does not verify actual Chromium button interactions, production Windows Native HTTP execution from the same imported form, GPU parity, long-form SSIM, strict arbitrary-byte target, fonts on a user's machine, playback compatibility or release. WU-01 stays open until separately verified.
 
 This bounded work does not expand the initial-version specification and does not resume B16.
+
+
+## Next bounded slice — real browser UI transaction, 2026-10-14
+
+- Prior exact-head dcecd685: Test frontend, WU01 FFmpeg/libass x264, Windows B16 and UIGS Coverage workflow SUCCESS.
+- New scripts/check-wu01-browser.cjs uses actual Playwright Chromium and production mountMediaWorkspace with a controlled 3-second source/media probe and Guided snapshot. It tests a real click with no source (rejects/no form change), a subsequent valid click (Manual form codec, preset, size reserve, renderer order, geometry, audio and container), and the actual taskRun event reaching an executable compileTask outputArgs; fake legacy VBR certificate must not be borrowed.
+- Backend run/save of the browser fixture is deliberately controlled, **not** Windows Native FFmpeg or actual file validation. Windows Native same-task end-to-end remains a separate WU01 exit condition.
+- The workflow's browser job runs on Draft and remains exact-head external validation pending until a successful Actions result is observed.

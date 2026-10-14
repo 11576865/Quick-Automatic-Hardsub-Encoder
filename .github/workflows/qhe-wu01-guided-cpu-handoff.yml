@@ -6,6 +6,7 @@ on:
       - 'src/guided-cpu-compiler-contract.js'
       - 'src/guided-cpu-compiler-contract.test.mjs'
       - 'src/guided-cpu-compiler-contract.integration.test.mjs'
+      - 'scripts/check-wu01-browser.cjs'
       - 'src/media-task.js'
       - 'src/media-verification.js'
       - '.github/workflows/qhe-wu01-guided-cpu-handoff.yml'
@@ -29,3 +30,20 @@ jobs:
         env:
           QHE_WU01_REAL_FFMPEG: '1'
         run: node --test src/guided-cpu-compiler-contract.test.mjs src/guided-cpu-compiler-contract.integration.test.mjs
+
+  real-browser-handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install frontend and Chromium
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Exercise actual Guided to Manual DOM and compiled execution request
+        run: node scripts/check-wu01-browser.cjs
