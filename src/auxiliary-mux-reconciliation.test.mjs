@@ -217,4 +217,11 @@ test('static workbench/report integration keeps preflight as observation only',a
  assert.match(fixture,/source-or-ledger-replaced/);
  assert.match(fixture,/\/api\/flac-encode-preflight/);
  assert.match(ci,/check-flac-native-http-lifecycle\.ps1/);
+ assert.match(bridge,/artifactBytes=\[long\]\$artifactAfter.Length/);
+ assert.match(bridge,/artifactWriteTicks=\[string\]\$artifact.LastWriteTimeUtc.Ticks/);
+ assert.match(bridge,/artifactJobId=\[string\]\$Job.Id/);
+ assert.match(bridge,/Completed output file changed during short packet audit/);
+ assert.match(bridge,/Completed audio packet audit artifact has changed/);
+ assert.match(fixture,/artifactJobId/);
+ assert.match(fixture,/Completed Native mux packet evidence survived modified staged output/);
 });
