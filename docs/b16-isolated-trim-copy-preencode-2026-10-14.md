@@ -15,7 +15,7 @@ This work introduces a separate, source-owned **isolated copy remux observation 
 - `windows/trim-copy-preflight.ps1`: bounded PowerShell 5.1 worker. Inputs: explicit JSON request, selected source, source-relative trim interval, selected audio/subtitle source ordinals and target Matroska/MP4 muxer. FFmpeg creates a **private isolated auxiliary-only remux**, not the final video. Existing `trim-packet-audit.ps1` independently probes its packet costs. Source stat size+ticks are checked after execution, worker receipts are atomic JSON and private intermediate media is deleted.
 - `windows/trim-copy-preflight-bridge.ps1`: exposes **single-flight asynchronous Native Bridge** endpoints `POST /api/trim-copy-preflight` and `GET /api/trim-copy-preflight`. POST accepts only the **selected** Windows source, requires a current existing full-source measurement, checks source ownership and bounds, and launches the isolated PowerShell worker. GET immediately reports `running`, `ready` or `unavailable` and returns a receipt only when origin/source stat and measurement ID still match. Changing the selected file cancels the old preflight.
 - `src/trim-copy-preflight.js`: validates receipt versus the exact selected trim range, stream ordinals, source stat (FILETIME ticks serialized as **strings** to avoid JavaScript numeric precision loss), output muxer and authoritative full-source packet ledger. Reports the isolated observed bytes and delta separately. It cannot grant a smaller formal full-source budget, a final file size certificate or actual mux output equivalence.
-- `src/trim-copy-preflight.test.mjs`: eight pure behavior tests including forged/mismatched receipt and over-reserve observations, plus source wiring. Fast and full Node frontend jobs include this test.
+- `src/trim-copy-preflight.test.mjs`: nine isolated behavior/wiring tests including forged/mismatched receipt and over-reserve observations, plus source wiring. Fast and full Node frontend jobs include this test.
 - `scripts/check-trim-copy-preflight.ps1`: actual Windows FFmpeg synthetic two-audio + soft-subtitle MKV, actual remux worker, independent FFmpeg+FFprobe per-stream packet-byte oracle and duplicate-ordinal refusal; wired after FFmpeg setup in `.github/workflows/windows-local-smoke.yml`. Existing Windows Guided localhost test now starts/polls this Native endpoint against the currently selected source and measurement ID.
 
 ## Explicit trust and performance limits
@@ -28,4 +28,11 @@ This work introduces a separate, source-owned **isolated copy remux observation 
 
 ## Evidence / next gate
 
-Isolated source-equivalent JavaScript receipt tests 8/8 PASS; 12 static Native/CI/source-accounting wiring checks PASS. Full hosted Node and real Windows PowerShell/FFmpeg tests await exact-head execution, as do browser/physical-user files. Do not mark B16 complete or infer final-file SSIM, exact size guarantee, or device acceptance.
+Isolated source-equivalent JavaScript receipt tests 9/9 PASS; 12 static Native/CI/source-accounting wiring checks PASS. Full hosted Node and real Windows PowerShell/FFmpeg tests await exact-head execution, as do browser/physical-user files. Do not mark B16 complete or infer final-file SSIM, exact size guarantee, or device acceptance.
+
+### Late pre-submit hardening
+
+- The bridge refuses worker receipts whose **method** is not the declared isolated FFmpeg remux/independent FFprobe method; missing, negative and overflowing packet-byte fields are rejected.
+- The source's whole-file measurement ID must still be current on **every status read**, including reads after a prior `ready` response. Re-measuring the same stat-stable media invalidates cached preflight observations.
+- A source switch cancels an in-flight preflight. The independent audio and subtitle FFprobe scans are individually bounded; the parent worker deadline has been corrected to cover both sequential scans (270 seconds), while the private remux retains a 75-second timeout.
+- Source-level tests now protect unique Native helper declarations (no duplicated PowerShell functions) and the method/measurement guards. Windows host parser, actual FFmpeg execution and real browser integration remain **Pending**.
