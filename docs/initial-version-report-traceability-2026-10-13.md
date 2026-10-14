@@ -192,3 +192,14 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - `src/flac-cache-reuse-contract.js` 以源内容 SHA256、缓存/成品文件 SHA256、来源测量 ID、作业 ID、NTFS FILETIME 文本、完整音轨源/缓存/输出映射、full/trim、声道/采样率、逐包有序 SHA256、实际 packet 数/总字节和视频/软字幕存在性，拒绝错源/错流/换码器/换区间/溢出/伪造的复用。
 - 六项实际 GitHub 模块纯逻辑隔离测试 PASS；`src/flac-cache-reuse-contract.test.mjs` 增加真正的 FFmpeg 源→FLAC 缓存→完成视频和软字幕成品→FFprobe 每包哈希测试。新证据路径已加入 `Test frontend` 快速/完整 Node 和 Draft `Windows B16 runtime acceptance` 的 FFmpeg 后测试段（宿主验收 Pending）。
 - 此批是**可重复执行的缓存复用证明实验**，并非生产任务已经接入缓存作为音轨输入；此前 source-only FLAC 预算拒绝仍在，`canAuthorizeStrictBudget:false`。生产 task 缓存持有/内容不可变/PTS 实际相同/余量上界/严格大小退出验收还要单独实现。文档 `docs/b16-flac-cached-packet-reuse-2026-10-14.md`。B16 与整体 B01–B25/A01–A10 均维持未闭环。
+
+## 2026-10-14 WU-02: 内封 ASS／附件字体硬压新增产品能力的准确证据
+
+**理论基线不变**：本节只追加新实现/验收证据，不替换原报告 B01–B25 和 A01–A10 分母。原有表格若标记 B07/A01 局部 Pending，以本节的精确实现范围理解为 **Windows Hosted bounded PASS + Field Pending**，不可自动提升整个条目为完成。
+
+- **B07 / A01**：Windows Native 的源探测已能列出 MKV 内封 ASS 轨；新增显式导入入口、ASS 转存、附属 TrueType/OpenType 字体提取、源文件大小/写入时刻绑定以及原有 libass 引导/专业硬压链复用。真实 Windows localhost FFmpeg 验收 `38554433547` SUCCESS（被测提交 `1148bcda`）。
+- **B05 / B06 / A02–A03 的一个实测组合**：带 1 视频＋2 音频＋1 ASS＋1 字体附件的 5.021 秒真实合成 MKV，正式 schema-v4 输出 H.264 + FLAC copy + AAC reencode；FLAC **235 包逐包有序哈希一致**，AAC 数据包变化，原字体的原始 SHA-256 一致，输出 MKV 为 **251,257 字节**；实际输出与无字幕事件的对照编码解码帧不同，证明字幕已真正烧入画面。原始软字幕及字体附件未在硬压成品中继续作为软流携带，这是该测试显式任务意图。
+- **可反证边界**：错误轨号、不同来源和来源被篡改后的资源复用会遭拒绝。Windows 首轮红灯 `38554057407` 是独立验证器中 FFmpeg Filtergraph 对 Windows 绝对路径的解析错误，正式 Native 硬压已完成；修正独立验证器后同一范围通过。
+- **仍开放**：Windows 客户端真实按钮操作可用性与完整交接 UI 浏览器验收、真实复杂 ASS/多字体字形几何、较长用户素材、用户设备和目标播放器、Android/Web 对内封资源的相应处理、其它独立功能 B08/B09/B21 及 PR #104/#105 合并发布。不能从 WU-02 专项推导整套 A01–A10 已关闭。
+
+本次 WU-02 记录：`docs/wu02-windows-embedded-ass-source-import-2026-10-14.md`。持久任务记录要求在两项已授权工作单元后重新锚定理论目标，再决定下一项工作，不得按自生成新待办继续延伸。
