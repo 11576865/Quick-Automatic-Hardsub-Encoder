@@ -1,0 +1,68 @@
+name: Windows WU02 embedded ASS and font Native acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'windows/native-bridge.ps1'
+      - 'src/windows-native-client.js'
+      - 'src/main.js'
+      - 'scripts/build-manual-rich-native-fixture.mjs'
+      - 'scripts/build-wu02-native-task.mjs'
+      - 'scripts/verify-wu02-native-output.mjs'
+      - 'scripts/check-wu02-embedded-native.ps1'
+      - '.github/workflows/windows-wu02-embedded-ass.yml'
+  workflow_dispatch:
+jobs:
+  native-embedded-ass:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate source PowerShell 5.1 grammar
+        shell: powershell
+        run: |
+          foreach($file in @('windows/native-bridge.ps1','scripts/check-wu02-embedded-native.ps1')){
+            $tokens=$null;$errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors)|Out-Null
+            if($errors.Count){$errors|Format-List;throw "Invalid PowerShell syntax: $file"}
+          }
+      - name: Install real FFmpeg with bounded retries
+        shell: powershell
+        run: |
+          $ready=$false
+          $tools=Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools'
+          for($i=1;$i -le 3;$i++){
+            choco install ffmpeg --yes --no-progress
+            # Chocolatey can report exit 0 for a 503/0-of-0 package install.
+            # Require the actual binaries, not just process exit status.
+            $ffmpeg=if(Test-Path -LiteralPath $tools){
+              Get-ChildItem -LiteralPath $tools -Recurse -File -Filter ffmpeg.exe | Select-Object -First 1
+            }else{$null}
+            $ffprobe=if($ffmpeg){Join-Path $ffmpeg.DirectoryName 'ffprobe.exe'}else{''}
+            if($ffmpeg -and (Test-Path -LiteralPath $ffprobe)){$ready=$true;break}
+            if($i -lt 3){Start-Sleep -Seconds ($i*5)}
+          }
+          if(-not $ready){throw 'FFmpeg package feed unavailable or installation has no ffmpeg/ffprobe binaries'}
+          # Chocolatey may install successfully without refreshing PATH in this
+          # PowerShell process. Resolve the real binary directory for NEXT steps.
+          $tools=Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools'
+          $ffmpeg=Get-ChildItem -LiteralPath $tools -Recurse -File -Filter ffmpeg.exe |
+            Select-Object -First 1
+          if(-not $ffmpeg){throw 'Installed FFmpeg binary not found'}
+          $ffprobe=Join-Path $ffmpeg.DirectoryName 'ffprobe.exe'
+          if(-not(Test-Path -LiteralPath $ffprobe)){throw 'Installed FFprobe binary not found'}
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $ffmpeg.DirectoryName
+          & $ffmpeg.FullName -hide_banner -version | Select-Object -First 1
+      - name: Confirm real FFmpeg and FFprobe are callable
+        shell: powershell
+        run: |
+          $ffmpeg=Get-Command ffmpeg -ErrorAction Stop
+          $ffprobe=Get-Command ffprobe -ErrorAction Stop
+          Write-Host ("FFmpeg: "+$ffmpeg.Source)
+          Write-Host ("FFprobe: "+$ffprobe.Source)
+      - name: Real Windows localhost MKV ASS font audio processing
+        shell: powershell
+        run: ./scripts/check-wu02-embedded-native.ps1

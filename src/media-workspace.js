@@ -1,9 +1,25 @@
-import { formatSize, outputReport, sampleSettings, sampleProjection } from './media-planning.js';
+import {commitVerifiedSizeBudget} from './size-budget-adoption.js';
+import {sharedTaskPresentation} from './shared-task-presentation.js';
+import {guidedTaskSettings} from './guided-task-handoff.js';
+import {compileGuidedCpuHandoff,commitGuidedCpuHandoff} from './guided-cpu-compiler-contract.js';
+import {buildTaskReview,renderTaskReview} from './task-review.js';
+import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
+import {buildAuxiliaryPreflightRequest} from './auxiliary-preflight-request.js';
+import {assessFlacEncodeObservation} from './flac-encode-preflight.js';
+import {assessIsolatedTrimCopyPreflight} from './trim-copy-preflight.js';
+import {reconcileAuxiliaryMuxObservation} from './auxiliary-mux-reconciliation.js';
 import { compileTask, commandPreview, SOFTWARE } from './media-task.js';
+import { vvcCapability } from './media-capabilities.js';
+import { mountAudioStreamPlan } from './audio-stream-plan-ui.js';
 import { audioCopyPlaybackWarning } from './media-container.js';
 import { mountTranscodeCurves } from './transcode-calibration-panel.js';
+import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-queue.js';
+import {assessCopyCutStart} from './copy-cut-feasibility.js';
+import {normalizeCompletedCutTimeline} from './cut-timeline-evidence.js';
+import {createOutputRecipe,validateOutputRecipe,outputRecipeFilename} from './output-recipe-matrix.js';
+import {makeBrowserSourceBatch,assertBrowserBatchSource} from './browser-source-batch.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
 
@@ -32,7 +48,7 @@ export function mountMediaWorkspace(hooks) {
     </div>
     <div class="media-workspace-badges"><span>同一任务格式</span><span>Native / Web</span></div>
   </div>
-  <form id="mediaTaskForm">
+  <form id="mediaTaskForm"><input type="hidden" name="subtitleRenderOrder" value="after-scale">
   <div class="task-grid media-mode-meta">${select('operation','工作模式',[['hardsub','硬字幕压制'],['transcode','纯视频转码'],['copy','视频流复制 / 快速剪辑']])}${input('start','开始时间','例如 3:57.250','0')}${input('end','结束时间','留空表示片尾；例如 5:12.800')}</div>
   <p class="note media-time-format-note">支持 MM:SS.mmm / HH:MM:SS.mmm</p>
   <section id="taskWaveformPanel" class="media-waveform-panel" aria-label="媒体剪辑时间轴">
@@ -64,7 +80,13 @@ export function mountMediaWorkspace(hooks) {
       <span>实际无损起点 <strong id="taskActualStartTime">—</strong></span>
       <span id="taskKeyframeDelta">分析关键帧后显示偏移</span>
     </div>
-    <section id="taskFramePreviewPanel" class="media-frame-preview-panel" hidden aria-label="时间轴画面预览">
+    <section id="taskCopyStrategyPanel" class="media-copy-strategy" hidden aria-label="快速复制切点可行性">
+    <div class="media-copy-strategy-title"><strong>剪切策略 · 快速复制（关键帧约束）</strong><span id="taskCopyStrategyStatus" role="status">待检查</span></div>
+    <p id="taskCopyStrategyDescription">复制编码包不等于任意帧精确；成品时间戳和音画同步仍须独立验证。</p>
+    <button id="taskPreferTranscodeTrim" type="button" class="secondary">改用重编码剪切（需要复核编码设置）</button>
+    <small>只有明确点击并确认才会更换模式。重编码也不代表已验证帧精确。</small>
+  </section>
+  <section id="taskFramePreviewPanel" class="media-frame-preview-panel" hidden aria-label="时间轴画面预览">
       <div class="media-frame-preview-heading">
         <div><strong>画面预览</strong><span id="taskFramePreviewStatus">移动时间轴光标后显示源视频画面</span></div>
         <span id="taskFramePreviewTime">—</span>
@@ -109,6 +131,35 @@ export function mountMediaWorkspace(hooks) {
       <button id="taskClearClips" type="button" class="secondary" disabled>清空</button>
     </div>
   </section>
+  <details id="taskRecipeMatrixPanel" class="media-clip-queue media-recipe-matrix">
+    <summary><strong>多输出方案矩阵</strong> · 同一来源分别硬压／转码／剪切</summary>
+    <p class="note">把当前正式方案加入矩阵；每个方案独立执行、独立验证并分别保存。此版本不支持多来源输入。</p>
+    <div class="media-clip-queue-header-actions">
+      <button type="button" class="secondary" id="taskAddRecipe">加入当前方案</button>
+      <button type="button" class="secondary" id="taskClearRecipes">清空矩阵</button>
+    </div>
+    <ol id="taskRecipeMatrixList" aria-label="多输出独立任务"></ol>
+    <p id="taskRecipeMatrixStatus" role="status">尚未添加输出方案。</p>
+    <div class="media-clip-queue-actions">
+      <button type="button" id="taskRunRecipes" disabled>执行未完成方案</button>
+      <button type="button" class="secondary" id="taskStopRecipes" hidden>停止后续输出</button>
+    </div>
+  </details>
+  <details id="taskMultiSourcePanel" class="media-clip-queue media-browser-batch">
+    <summary><strong>多来源输出队列</strong> · Web 浏览器复制／转码</summary>
+    <p class="note">一次选择多个视频，最多 8 项。分别激活来源、探测、执行并交给浏览器下载。浏览器移交不证明已写入磁盘；请允许多个下载并检查目标文件。Native 多文件、跨来源硬压和共享质量证明尚未支持。</p>
+    <label>浏览器视频文件 <input id="taskBatchSources" type="file" multiple accept="video/*,.mkv,.mp4,.mov,.webm,.avi,.ts"></label>
+    <div class="media-clip-queue-header-actions">
+      <button type="button" id="taskQueueBatchSources" class="secondary">按当前设置加入所选来源</button>
+      <button type="button" id="taskClearBatchSources" class="secondary">清空队列记录</button>
+    </div>
+    <ol id="taskMultiSourceList" aria-label="多来源独立输出任务"></ol>
+    <p id="taskMultiSourceStatus" role="status">请先选择纯转码或 Stream Copy 设置和来源视频。</p>
+    <div class="media-clip-queue-actions">
+      <button type="button" id="taskRunBatchSources" disabled>逐来源执行并保存</button>
+      <button type="button" id="taskStopBatchSources" class="secondary" hidden>停止后续来源</button>
+    </div>
+  </details>
   <div id="taskFrameFullscreen" class="media-frame-lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="taskFrameFullscreenTitle">
     <div class="media-frame-lightbox-shell">
       <header class="media-frame-lightbox-header">
@@ -170,6 +221,13 @@ export function mountMediaWorkspace(hooks) {
     <strong>视频 Stream Copy</strong><span>所选视频码流不重新编码；若视频使用 IN/OUT，主选视频流决定关键帧切入。音频可保持完整、独立剪辑、复制、转码或关闭。</span>
   </div>
   </details>
+  <details id="taskReviewDetails" class="task-review-details"><summary><span>来源、计划与成品</span><strong data-review-overview aria-live="polite">未选择来源 · 当前方案未检查 · 尚无成品</strong></summary>
+  <section id="taskObjectReview" class="task-object-review" aria-label="来源、计划与成品">
+    <article><h3>来源</h3><strong data-review="source-status"></strong><ul data-review="source-facts"></ul><p id="taskReviewSourceName"></p></article>
+    <article><h3>拟输出计划</h3><strong data-review="plan-status"></strong><p data-review="plan-codec"></p><details><summary>逐流去向与完整预算</summary><ul data-review="plan-rows"></ul><ul data-review="plan-budget"></ul></details></article>
+    <article><h3>实际成品</h3><strong data-review="artifact-status"></strong><p data-review="artifact-facts"></p><p data-review="artifact-evidence"></p></article>
+  </section>
+  </details>
   <section id="taskPlanSummary" class="task-plan-summary" aria-live="polite">
     <div class="task-plan-heading"><span>当前方案</span><strong id="taskPlanTitle">等待选择参数</strong></div>
     <div class="task-plan-facts">
@@ -182,10 +240,10 @@ export function mountMediaWorkspace(hooks) {
     <div class="button-row task-plan-actions"><button type="button" id="taskLoadPreset" class="secondary">恢复推荐方案</button><button type="button" id="taskInspect" class="secondary">验证当前方案</button></div>
   </section>
   <fieldset id="taskEncoding" class="media-encoding-panel"><legend>核心视频方案</legend><p class="note media-decision-hint">不确定时直接保留推荐方案；其他参数按需展开。</p><div class="task-grid media-core-decision-grid">
-  ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
+  ${select('codec','编码格式',[['h264','H.264'],['h265','H.265 / HEVC'],['av1','AV1'],['h266','H.266 / VVC · 实验']])}${select('encoder','编码器',[['libx264','x264 · CPU']])}${select('preset','编码速度 preset',[['medium','medium']])}
   ${select('rateMode','码率控制',[['quality','固定质量 CRF / CQ'],['bitrate','目标码率'],['size','目标体积']])}${input('quality','质量值 CRF / CQ（通常越低越保真）','','23')}${input('bitrate','目标视频码率（bit/s）','4000000')}
-  ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}
-  </div><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
+  ${input('targetSize','目标成品体积','','500')}${select('sizeUnit','体积单位',[['MB','MB（十进制）'],['GB','GB（十进制）'],['MiB','MiB（二进制）'],['GiB','GiB（二进制）']])}${input('sizeReserve','体积余量（%）','','4')}${check('twoPass','整片两遍编码（x264 码率模式）')}${select('budgetPolicy','体积交付策略',[['best-effort','目标体积 · 允许偏差'],['strict-ceiling','严格字节上限 · 超限禁止保存']])}
+  </div><p id="taskBudgetLedger" class="task-budget-ledger" role="status">复制流与附件成本未测量。</p><button type="button" id="taskMeasureBudget" class="secondary">测量源流与附件成本</button><button type="button" id="taskAuxiliaryPreflight" class="secondary">实测 FLAC / 裁切复制成本</button><p id="taskAuxiliaryPreflightStatus" role="status" class="note">可选 Windows Native 预编码观测；不改变正式体积预算，也不视为最终封装大小证明。</p><p id="taskVvcCapability" class="note" role="status"></p><details class="media-advanced-panel media-video-details"><summary>帧率、尺寸、码率边界与像素格式</summary><div class="task-grid">
   ${check('legacyFps','兼容旧 FFmpeg（使用 -vsync）')}
   ${input('maxrate','最大码率（bit/s）','编码器默认')}${input('bufsize','码率缓冲区（bit）','编码器默认')}
   ${select('fpsMode','帧率策略',[['auto','编码器自动'],['passthrough','保持源时间戳'],['cfr','恒定帧率 CFR'],['vfr','可变帧率 VFR']])}${input('fps','目标帧率','例如 24 或 24000/1001；留空保持')}${input('frames','输出总帧数上限','留空表示不限；设置后需关闭音频')}
@@ -203,6 +261,7 @@ export function mountMediaWorkspace(hooks) {
   ${input('audioTrack','音频轨','all 或音频轨序号，从 0 开始','all')}${select('audioRange','音频时间轴',[['trim','按 IN / OUT 剪辑'],['full','保持完整音频']])}
   ${select('subtitleRange','软字幕时间轴',[['trim','按 IN / OUT 剪辑'],['full','保持完整软字幕']])}
   ${check('keepSubtitles','保留内封软字幕')}${check('keepAttachments','保留附件 / 字体')}${check('keepMetadata','保留元数据',true)}${check('keepChapters','保留章节')}</div>
+  <div class="task-grid">${input('subtitleStreams','内封字幕选择','all 或字幕轨序号，例如 0,2','all')}${input('attachmentStreams','附件选择','all 或附件序号，例如 0,1','all')}</div>
   <p id="taskVideoStreamInfo">读取容器后显示可用视频流。视频流序号按 FFmpeg 的 v:N 顺序，从 0 开始。</p>
   <p>时间策略彼此独立：例如“视频按 IN/OUT、音频保持完整”会只剪视频。主动制造不同时长的流可能改变音画对应关系，这是显式任务语义，不会被自动修正。</p></details>
   <section id="taskOutputPolicy" class="media-output-policy">
@@ -226,6 +285,12 @@ export function mountMediaWorkspace(hooks) {
       <div><span>预计剩余</span><strong id="taskEta">尚未估计</strong></div>
     </div>
     <p id="taskStatus" role="status">未开始</p>
+    <section id="taskCompletedCutTimeline" class="media-copy-strategy" hidden aria-label="已完成剪切实际时间轴">
+      <strong>成品时间轴 · 实测而非关键帧预测</strong>
+      <p>Windows Native 可读取最终文件的视频解码首帧和逐音轨首包时间戳；不能证明来源包映射或整片音画同步。</p>
+      <button type="button" class="secondary" id="taskInspectCutTimeline">检查已完成成品的时间轴</button>
+      <pre id="taskCompletedCutTimelineEvidence" aria-live="polite">尚未独立检查</pre>
+    </section>
   </section>
   <section id="taskOutputVerification" class="media-output-verification" hidden aria-label="成品画质验证">
     <div class="media-output-verification-heading">
@@ -257,7 +322,13 @@ export function mountMediaWorkspace(hooks) {
   if (modeDock) modeDock.append(modeNav);
   else document.querySelector('#inputCard').before(modeNav);
   document.querySelector('#inputCard').after(section);
+  // Initial disclosure depends on viewport only; refreshes/view switches never reset user choice.
+  section.querySelector('#taskReviewDetails').open=window.matchMedia('(min-width: 821px)').matches;
   const form = section.querySelector('form'), get = name => form.elements.namedItem(name);
+  const budgetTools=document.createElement('section');budgetTools.className='shared-budget-tools';budgetTools.id='taskBudgetTools';budgetTools.setAttribute('aria-label','完整文件预算');
+  section.querySelector('#taskPlanSummary').after(budgetTools);
+  budgetTools.append(section.querySelector('#taskBudgetLedger'),section.querySelector('#taskMeasureBudget'),section.querySelector('#taskAuxiliaryPreflight'),section.querySelector('#taskAuxiliaryPreflightStatus'));
+
   const modeButtons = [...modeNav.querySelectorAll('[data-media-mode]')];
   const strategyButtons = [...document.querySelectorAll('[data-hardsub-strategy]')];
   const manualMount = document.querySelector('#hardsubManualMount');
@@ -265,6 +336,7 @@ export function mountMediaWorkspace(hooks) {
   const inputCard = document.querySelector('#inputCard');
   const productionDeck = document.querySelector('#hardsubControlDeck');
   const outputPolicy = section.querySelector('#taskOutputPolicy');
+  const audioStreamPlan=mountAudioStreamPlan({container:outputPolicy,form,media:()=>hooks.mediaSnapshot?.(),sourceIdentity:()=>hooks.videoIdentity?.()});
   const outputPolicyAnchor = document.createComment('task-output-policy-home');
   outputPolicy?.before(outputPolicyAnchor);
   outputPolicy?.querySelectorAll('[name]').forEach(control => control.setAttribute('form','mediaTaskForm'));
@@ -281,8 +353,10 @@ export function mountMediaWorkspace(hooks) {
   qualityField.classList.add('media-range-field');
   qualityField.append(qualityRange);
   const syncQualityRange = () => {
-    qualityRange.max = get('codec').value === 'av1' ? '63' : '51';
-    const value = Math.max(Number(qualityRange.min), Math.min(Number(qualityRange.max), Number(get('quality').value) || 1));
+    qualityRange.min = get('codec').value === 'h266' ? '0' : '1';
+    qualityRange.max = ['av1','h266'].includes(get('codec').value) ? '63' : '51';
+    const entered=Number(get('quality').value);
+    const value = Math.max(Number(qualityRange.min), Math.min(Number(qualityRange.max), Number.isFinite(entered) ? entered : 1));
     get('quality').value = String(value);
     qualityRange.value = String(value);
     qualityRange.style.setProperty('--media-range-progress', ((value - Number(qualityRange.min)) / (Number(qualityRange.max) - Number(qualityRange.min)) * 100) + '%');
@@ -293,11 +367,179 @@ export function mountMediaWorkspace(hooks) {
     get('quality').dispatchEvent(new Event('input',{bubbles:true}));
   });
   get('quality').addEventListener('input', syncQualityRange);
+  let budgetEvidence=null,budgetSourceIdentity='';
+  let latestAuxPreflight=null;
+  const buildAuditedTaskReport=(task,result,elapsed)=>{
+    const report=outputReport(task,result,elapsed);
+    if(latestAuxPreflight && result?.verified){
+      report.auxiliaryParity=reconcileAuxiliaryMuxObservation({
+        task,completed:result,preflight:latestAuxPreflight,
+        currentSourceKey:hooks.videoIdentity?.()||''
+      });
+    }
+    return report;
+  };
+  const completedByteLedgerMessage=report=>{
+    const ledger=report?.completedMuxByteLedger;
+    if(!ledger||ledger.status!=='completed-mux-byte-ledger')return '';
+    return ' · 成品包账本：视频 '+formatSize(ledger.videoPacketBytes)+
+      '，音频 '+formatSize(ledger.audioPacketBytes)+
+      '，字幕 '+formatSize(ledger.subtitlePacketBytes)+
+      '，其他数据与封装 '+formatSize(ledger.otherAndMuxBytes)+
+      '（不等于纯封装开销，不可外推下次预算）';
+  };
+  const auxiliaryParityMessage=report=>{
+    const pair=report?.auxiliaryParity;
+    if(!pair)return '';
+    if(!pair.comparable)return ' · 逐流预演/成品对照不可用：'+pair.reason;
+    const diff=pair.deltaBytes;
+    return ' · 本次辅助流预演/成品包字节'+
+      (diff===0?'一致':('差 '+(diff>0?'+':'')+diff+' B'))+
+      '（仅供审计，不进入下次体积预算）';
+  };
   let busy = false, completed = null, completedStale = false, lastReport = null, sampleUrls=[], taskStartedAt=0, activeTask=null;
+  let currentPlanTask=null,artifactReview=null,executingSourceName='',reviewSourceIdentity=hooks.videoIdentity?.()||'';
+  function syncTaskReview(){
+    const media=hooks.mediaSnapshot?.()||null;
+    const model=buildTaskReview({media,hasSource:!!hooks.videoIdentity?.(),sourceIdentity:hooks.videoIdentity?.()||'',task:currentPlanTask,artifact:artifactReview,stale:completedStale,state:section.dataset.taskState});
+    renderTaskReview(section.querySelector('#taskObjectReview'),model);
+    section.querySelector('#taskReviewSourceName').textContent=hooks.sourceName?.()||'';
+  }
   const clips=[],clipList=section.querySelector('#taskClipQueueList');
   const clipPanel=section.querySelector('#taskClipQueuePanel');
+  // Preserve #102: keep the live clip queue near trim IN/OUT rather than after preview.
+  section.querySelector('#taskWaveformPanel')?.before(clipPanel);
   const clipMessage=section.querySelector('#taskClipQueueStatus');
   let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null,clipAwaitingSave=null,clipEditingIndex=-1;
+  const recipes=[],recipeList=section.querySelector('#taskRecipeMatrixList');
+  const recipeMessage=section.querySelector('#taskRecipeMatrixStatus');
+  let recipeSourceKey='',recipeBatchRunning=false,recipeStopRequested=false,recipeCurrent=null,recipePendingSave=null,recipeSequence=0;
+  const browserBatch=[],batchList=section.querySelector('#taskMultiSourceList');
+  const browserBatchDone=row=>['saved','handed_off'].includes(row.state);
+  const batchStatus=section.querySelector('#taskMultiSourceStatus');
+  let batchRunning=false,batchStop=false,batchCurrent=null,batchSavePending=null;
+  const browserBatchAvailable=()=>typeof hooks.activateBrowserBatchSource==='function'&&
+    !!hooks.supportsBrowserSourceBatch?.();
+  const syncBrowserBatch=()=>{
+    const available=browserBatchAvailable();
+    section.querySelector('#taskMultiSourcePanel').hidden=!available;
+    const locked=busy||hooks.busy()||clipBatchRunning||recipeBatchRunning||batchRunning;
+    batchList.replaceChildren();
+    browserBatch.forEach((entry,index)=>{
+      const row=document.createElement('li'),info=document.createElement('div');
+      const name=document.createElement('strong');name.textContent=entry.source.name;
+      const status=document.createElement('small');
+      status.textContent=entry.source.operation+' · '+({
+        queued:'待执行',running:'执行中',saving:'保存中',
+        saved:'已确认保存',handed_off:'已交浏览器下载（落盘待确认）',failed:'执行失败',save_failed:'成品保留，待重试保存'
+      }[entry.state]||entry.state);
+      info.append(name,status);
+      const action=document.createElement('button');action.type='button';action.className='secondary';
+      action.dataset.browserBatchIndex=String(index);
+      action.dataset.browserBatchAction=batchSavePending===entry?'retry-save':'remove';
+      action.textContent=batchSavePending===entry?'仅重试保存':browserBatchDone(entry)?'移除完成记录':'删除';
+      action.disabled=locked||!!batchSavePending&&batchSavePending!==entry;
+      row.append(info,action);batchList.append(row);
+    });
+    section.querySelector('#taskBatchSources').disabled=!available||locked||!!batchSavePending;
+    section.querySelector('#taskQueueBatchSources').disabled=!available||locked||!!batchSavePending||browserBatch.length>=8;
+    section.querySelector('#taskClearBatchSources').disabled=locked||!!batchSavePending||!browserBatch.length;
+    section.querySelector('#taskRunBatchSources').disabled=!available||locked||!!batchSavePending||!browserBatch.some(e=>!browserBatchDone(e));
+    section.querySelector('#taskStopBatchSources').hidden=!batchRunning;
+    section.querySelector('#taskStopBatchSources').disabled=!batchRunning||batchStop;
+  };
+  const recipeSource=()=>hooks.videoIdentity?.()||'';
+  const recipeAsset=()=>hooks.recipeAssetIdentity?.()||'';
+  const syncRecipeMatrix=()=>{
+    const source=recipeSource();
+    const stale=!!recipeSourceKey&&recipeSourceKey!==source;
+    const locked=busy||hooks.busy()||clipBatchRunning||recipeBatchRunning||section.dataset.taskState==='saving';
+    recipeList.replaceChildren();
+    recipes.forEach((entry,index)=>{
+      const row=document.createElement('li');
+      const description=document.createElement('div');
+      const heading=document.createElement('strong');heading.textContent=entry.recipe.label;
+      const detail=document.createElement('span');
+      detail.textContent=entry.recipe.task.operation+' · '+(entry.recipe.task.encoder||'copy')+
+        ' · '+String(entry.recipe.task.outputContainer||'mkv').toUpperCase();
+      const progress=document.createElement('small');
+      progress.textContent={queued:'待执行',running:'执行中',saving:'正在保存',saved:'已保存',
+        failed:'执行失败，可重试',save_failed:'成品已验证，待重试保存'}[entry.state]||entry.state;
+      description.append(heading,detail,progress);
+      const action=document.createElement('button');action.type='button';action.className='secondary';
+      action.dataset.recipeIndex=String(index);
+      action.dataset.recipeAction=recipePendingSave===entry?'retry-save':'remove';
+      action.textContent=recipePendingSave===entry?'重试保存':'删除';
+      action.disabled=locked||(!!recipePendingSave&&recipePendingSave!==entry);
+      row.append(description,action);recipeList.append(row);
+    });
+    section.querySelector('#taskAddRecipe').disabled=locked||!!recipePendingSave||
+      !source||!hooks.mediaSnapshot?.()||recipes.length>=12||stale;
+    section.querySelector('#taskClearRecipes').disabled=locked||!!recipePendingSave||!recipes.length;
+    section.querySelector('#taskRunRecipes').disabled=locked||!!recipePendingSave||stale||
+      !source||!recipes.some(r=>r.state!=='saved');
+    section.querySelector('#taskStopRecipes').hidden=!recipeBatchRunning;
+    section.querySelector('#taskStopRecipes').disabled=!recipeBatchRunning||recipeStopRequested;
+    if(stale)recipeMessage.textContent='来源已变化；不能执行旧来源的方案。请清空后重新添加。';
+  };
+  const settlePendingRecipeSave=saved=>{
+    if(!recipePendingSave)return;
+    const entry=recipePendingSave;
+    entry.state=saved?'saved':'save_failed';
+    if(saved)recipePendingSave=null;
+    recipeMessage.textContent=saved?'上一方案成品已保存，可以继续执行剩余方案。':
+      '上一方案成品未保存；只重试保存，不要重新编码。';
+    syncRecipeMatrix();
+  };
+  section.querySelector('#taskAddRecipe').onclick=()=>{
+    try{
+      if(busy||hooks.busy()||recipeBatchRunning||clipBatchRunning||clipAwaitingSave||recipePendingSave)
+        throw Error('请先完成当前任务或保存上一个成品');
+      const source=recipeSource(),media=hooks.mediaSnapshot?.(),asset=recipeAsset();
+      if(!source||!media)throw Error('请先选择视频并读取视频参数');
+      if(recipeSourceKey&&recipeSourceKey!==source)throw Error('视频已变化，请清空旧方案矩阵');
+      const raw=read();
+      const task=compileTask({...raw,
+        budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'
+      },{...media,budgetEvidence:budgetSourceIdentity===source?budgetEvidence:undefined});
+      // A queued executable hardsub task cannot silently borrow another ASS/font.
+      if(task.operation==='hardsub'&&recipes.some(entry=>
+        entry.recipe.task.operation==='hardsub'&&entry.recipe.assetKey!==asset))
+        throw Error('矩阵已有其他字幕／字体版本；先清空或执行原方案');
+      const label={
+        hardsub:'硬字幕',transcode:'纯转码',copy:'Stream Copy'
+      }[task.operation]+' · '+(task.codec||'原码流')+' · 方案 '+(recipes.length+1);
+      const recipe=createOutputRecipe({task,media,sourceKey:source,assetKey:asset,
+        name:label,index:++recipeSequence});
+      recipeSourceKey=source;
+      recipes.push({recipe,state:'queued'});
+      recipeMessage.textContent='已冻结 '+recipes.length+' 个正式任务，执行时不会读取当前表单中的新参数。';
+      syncRecipeMatrix();
+    }catch(error){recipeMessage.textContent='方案未加入：'+error.message;}
+  };
+  recipeList.addEventListener('click',event=>{
+    if(busy||recipeBatchRunning||hooks.busy())return;
+    const button=event.target.closest('button[data-recipe-action]');
+    if(!button)return;
+    const index=Number(button.dataset.recipeIndex),entry=recipes[index];
+    if(!entry)return;
+    if(button.dataset.recipeAction==='retry-save'){
+      if(entry===recipePendingSave)section.querySelector('#taskSave').click();
+      return;
+    }
+    if(recipePendingSave)return;
+    recipes.splice(index,1);
+    if(!recipes.length)recipeSourceKey='';
+    recipeMessage.textContent=recipes.length?'已删除方案。':'矩阵已清空。';
+    syncRecipeMatrix();
+  });
+  section.querySelector('#taskClearRecipes').onclick=()=>{
+    if(busy||hooks.busy()||recipeBatchRunning||recipePendingSave)return;
+    recipes.length=0;recipeSourceKey='';
+    recipeMessage.textContent='矩阵已清空；其他输出方案不受影响。';
+    syncRecipeMatrix();
+  };
+
   const clipSource=()=>hooks.videoIdentity?.()||'';
   const clipMedia=()=>hooks.mediaSnapshot?.()||null;
   const showClipMessage=text=>{clipMessage.textContent=text;};
@@ -425,6 +667,7 @@ export function mountMediaWorkspace(hooks) {
   };
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
+  let timelineSourceKey='',timelineVideoOrdinal=-1;
   let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='',timelineFrameGeneration=0;
   const timelineFrameCache=new Map();
   const timelineFramePending=new Map();
@@ -433,7 +676,7 @@ export function mountMediaWorkspace(hooks) {
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
   const refreshConfigs=()=>{get('savedConfig').innerHTML=Object.keys(configs()).map(n=>`<option value="${escape(n)}">${escape(n)}</option>`).join('');};
-  const applyConfig=raw=>{markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=String(value??'');}updateMode();updateRate();syncQualityRange();};
+  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=key==='audioPlan'&&Array.isArray(value)?JSON.stringify(value):String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();audioStreamPlan.refresh();hooks.onBudgetEvidenceChange?.();};
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
@@ -445,8 +688,14 @@ export function mountMediaWorkspace(hooks) {
     prepare: hooks.prepare,
     validate: hooks.validate,
     calibrationSample: hooks.calibrationSample,
+    budgetEvidence:()=>budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:null,
     setBusy: hooks.setBusy,
     log: hooks.log,
+    applySizeBudget:({budget,expectedSettings,expectedSourceIdentity,media})=>{
+      const result=commitVerifiedSizeBudget({budget,expectedSettings,expectedSourceIdentity,read,sourceIdentity:()=>hooks.videoIdentity?.()||'',get,updateRate,compile:compileTask,media:{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined}});
+      if(result.ok)get('targetSize').dispatchEvent(new Event('input',{bubbles:true}));
+      return result;
+    },
     applyBitrate: bitrate => {
       markCompletedAsPrevious('bitrate');
       get('rateMode').value = 'bitrate';
@@ -461,6 +710,18 @@ export function mountMediaWorkspace(hooks) {
       syncQualityRange();
       updateRate();
       get('quality').dispatchEvent(new Event('input',{bubbles:true}));
+    },
+    adoptCandidate: ({candidate,bitrate,wholeBudget,expectedSettings,expectedSourceIdentity,media})=>{
+      const committed=commitVerifiedManualCandidate({
+        candidate,bitrate,wholeBudget,expectedSettings,expectedSourceIdentity,
+        read,sourceIdentity:()=>hooks.videoIdentity?.()||'',get,
+        updateEncoder,updatePreset,updateRate,compile:compileTask,media:{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined}
+      });
+      if(!committed.ok)return committed;
+      // Exactly one coherent event after all form fields have been committed:
+      // the existing plan/candidate invalidation happens only now.
+      get('bitrate').dispatchEvent(new Event('input',{bubbles:true}));
+      return committed;
     }
   });
 
@@ -507,6 +768,10 @@ export function mountMediaWorkspace(hooks) {
   const requestedStartTime=section.querySelector('#taskRequestedStartTime');
   const actualStartTime=section.querySelector('#taskActualStartTime');
   const keyframeDelta=section.querySelector('#taskKeyframeDelta');
+  const cutStrategyPanel=section.querySelector('#taskCopyStrategyPanel');
+  const cutStrategyStatus=section.querySelector('#taskCopyStrategyStatus');
+  const cutStrategyDescription=section.querySelector('#taskCopyStrategyDescription');
+  const preferTranscodeTrim=section.querySelector('#taskPreferTranscodeTrim');
   const keyframePrev=section.querySelector('#taskKeyframePrev');
   const keyframeNext=section.querySelector('#taskKeyframeNext');
   const keyframeSnapStart=section.querySelector('#taskKeyframeSnapStart');
@@ -591,6 +856,7 @@ export function mountMediaWorkspace(hooks) {
     waveformRuler.replaceChildren(frag);
   }
   const previousKeyframe = value => {
+    if(timelineSourceKey!==(hooks.videoIdentity?.()||'')||timelineVideoOrdinal!==primaryVideoStream())return null;
     const time=clampWaveformTime(value);
     if(timelineKeyframesTruncated&&timelineKeyframes.length&&time>timelineKeyframes.at(-1)+.000001)return null;
     let previous=null;
@@ -1131,6 +1397,39 @@ export function mountMediaWorkspace(hooks) {
     }
     keyframeLane.replaceChildren(frag);
   }
+  function syncCopyStrategy(){
+    const copy=get('operation').value==='copy'&&get('videoRange').value==='trim';
+    cutStrategyPanel.hidden=!copy;
+    if(!copy)return;
+    let start=0;
+    try{start=parseMediaTime(get('start').value,{empty:0,label:'请求 IN'});}
+    catch{cutStrategyStatus.textContent='切点输入无效';cutStrategyStatus.dataset.state='unknown';return;}
+    const identity=hooks.videoIdentity?.()||'';
+    const validEvidence=!!identity&&identity===timelineSourceKey&&
+      timelineVideoOrdinal===primaryVideoStream()&&waveformDuration>0;
+    const assessment=assessCopyCutStart({requestedIn:start,
+      keyframes:timelineKeyframes,truncated:timelineKeyframesTruncated,
+      evidenceCurrent:validEvidence});
+    cutStrategyStatus.dataset.state=assessment.state;
+    // Evaluate only the selected state: UNKNOWN has no numeric delta.
+    cutStrategyStatus.textContent=assessment.state==='predicted-early'
+      ? '可能提前 '+assessment.delta.toFixed(3)+' 秒（仅预测）'
+      : assessment.state==='predicted-aligned'
+        ? '关键帧接近 IN（仅预测）'
+        : assessment.state==='beginning'?'源文件起点':'切点尚未知晓';
+    cutStrategyDescription.textContent=assessment.description+
+      ' 本功能不会自动重编码；是否保留快速复制由你决定。';
+    preferTranscodeTrim.disabled=busy||hooks.busy()||clipBatchRunning||
+      recipeBatchRunning||!identity||!hooks.mediaSnapshot?.();
+  }
+  preferTranscodeTrim.onclick=()=>{
+    if(cutStrategyPanel.hidden||busy||hooks.busy()||clipBatchRunning||recipeBatchRunning)return;
+    if(!window.confirm('切换到视频重编码剪切？将保持当前 IN/OUT，并使用当前转码编码器及质量设置。输出不再是 Stream Copy；仍需独立验证成品时间轴。'))return;
+    get('operation').value='transcode';
+    get('videoRange').value='trim';
+    get('operation').dispatchEvent(new Event('change',{bubbles:true}));
+    status('已按你的确认改用重编码剪切。IN/OUT 保留；请核对编码器、质量、音轨和输出方案，再开始任务。');
+  };
   function syncCopyBoundaryPreview(start){
     const copy=get('operation').value==='copy';
     copyBoundaryInfo.hidden=!copy||!(waveformDuration>0);
@@ -1159,6 +1458,7 @@ export function mountMediaWorkspace(hooks) {
     scheduleBoundaryFramePreview(start,actual);
   }
   function syncWaveformMarkers(){
+    syncCopyStrategy();
     if(!(waveformDuration>0))return;
     const start=readBoundary('start',0);
     const end=Math.max(start,readBoundary('end',waveformDuration));
@@ -1266,12 +1566,15 @@ export function mountMediaWorkspace(hooks) {
     boundaryFrameInspector.hidden=true;
     const copy=get('operation').value==='copy';
     const videoTrim=copy&&get('videoRange').value==='trim';
+    const requestedSourceKey=hooks.videoIdentity?.()||'';
+    const requestedVideoOrdinal=primaryVideoStream();
     waveformStatus.textContent=videoTrim?'正在分析时间范围、波形与主选视频关键帧…':'正在分析时间范围与音频波形…';
     try{
       const audioValue=String(get('audioTrack')?.value||'all');
       const audioTrack=audioValue==='all'?0:Math.max(0,Number(audioValue)||0);
       const result=await hooks.waveform({audioTrack,videoStream:primaryVideoStream(),width:2400,height:160,includeKeyframes:videoTrim,maxKeyframes:12000,allowNoWaveform:true});
       if(!(Number(result?.duration)>0))throw Error('时间轴结果缺少有效时长');
+      if(requestedSourceKey!==(hooks.videoIdentity?.()||'')||requestedVideoOrdinal!==primaryVideoStream())throw Error('来源或视频流在时间轴分析期间改变；丢弃旧关键帧');
       if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
       waveformUrl=result.url||null;
       waveformDuration=Number(result.duration);
@@ -1279,6 +1582,8 @@ export function mountMediaWorkspace(hooks) {
         ? result.keyframes.map(Number).filter(Number.isFinite).filter(value=>value>=0&&value<=waveformDuration).sort((a,b)=>a-b)
         : [];
       timelineKeyframesTruncated=!!result.keyframesTruncated;
+      timelineSourceKey=requestedSourceKey;
+      timelineVideoOrdinal=requestedVideoOrdinal;
       if(waveformUrl){
         waveformImage.src=waveformUrl;
         waveformImage.hidden=false;
@@ -1325,14 +1630,15 @@ export function mountMediaWorkspace(hooks) {
     return '均衡';
   };
   const renderPlanSummary = task => {
+    syncTaskReview();
     const raw=read(),operation=raw.operation,copy=operation==='copy';
     const operationLabel=operation==='hardsub'?'硬字幕压制':operation==='transcode'?'纯视频转码':'视频流复制 / 快速剪辑';
-    const codecLabel={h264:'H.264',h265:'H.265 / HEVC',av1:'AV1'}[raw.codec]||raw.codec||'—';
+  const codecLabel={h264:'H.264',h265:'H.265 / HEVC',av1:'AV1',h266:'H.266 / VVC'}[raw.codec]||raw.codec||'—';
     const encoderLabel=get('encoder').selectedOptions?.[0]?.textContent||raw.encoder||'—';
     const speed=copy?'无需编码':presetIntent(raw.encoder,raw.preset);
     let rate='无损复制',note='不重新编码；实际切入点受关键帧约束。';
     if(!copy && raw.rateMode==='quality'){
-      rate='质量优先 · '+(String(raw.encoder).endsWith('_nvenc')?'CQ ':'CRF ')+(raw.quality||'—');
+      rate='质量优先 · '+(raw.encoder==='libvvenc'?'QP ':String(raw.encoder).endsWith('_nvenc')?'CQ ':'CRF ')+(raw.quality||'—');
       note='质量模式不会根据 CQ / CRF 伪造精确成品大小；需要大小判断时先做短片试压。';
     }else if(!copy && raw.rateMode==='bitrate'){
       const b=Number(raw.bitrate||0);
@@ -1343,7 +1649,8 @@ export function mountMediaWorkspace(hooks) {
       note='目标体积会换算为视频码率预算；封装、音频和实际编码偏差仍会影响最终大小。';
     }
     const size=copy?'保持源画面':raw.width&&raw.height?raw.width+'×'+raw.height:raw.width?raw.width+' 宽 · 高度按比例':raw.height?'宽度按比例 · '+raw.height+' 高':'保持源分辨率';
-    const audio=raw.audio==='copy'?'原音频复制':raw.audio==='none'?'无音频':String(raw.audio||'').toUpperCase();
+    let audio=raw.audio==='copy'?'原音频复制':raw.audio==='none'?'无音频':String(raw.audio||'').toUpperCase();
+    if(raw.audioPlan){try{audio='逐轨 · '+JSON.parse(raw.audioPlan).filter(a=>a.action!=='drop').map(a=>'a:'+a.sourceOrdinal+' '+a.action).join(' / ');}catch{audio='音轨计划待修正';}}
     const container=task?.outputContainer ? task.outputContainer.toUpperCase() : ({auto:'AUTO',keep:'保持源容器',mkv:'MKV',mp4:'MP4'}[raw.outputContainer]||'AUTO');
     section.querySelector('#taskPlanTitle').textContent=operationLabel+(copy?'':' · '+codecLabel+' · '+speed);
     section.querySelector('#taskPlanEncoder').textContent=copy?'直接复制':codecLabel+' · '+encoderLabel;
@@ -1352,6 +1659,7 @@ export function mountMediaWorkspace(hooks) {
     const selectedVideos=String(raw.videoStreams||'0').trim().toLowerCase()==='all'?'全部视频流':'视频 #'+String(raw.videoStreams||'0').split(',').map(x=>x.trim()).filter(Boolean).join(' / #');
     const rangeSummary='视频'+(raw.videoRange==='full'?'完整':'IN/OUT')+' · 音频'+(raw.audioRange==='full'?'完整':'IN/OUT');
     section.querySelector('#taskPlanOutput').textContent=selectedVideos+' · '+size+' · '+audio+' · '+container;
+    if(task?.sizePlan){const b=task.sizePlan;section.querySelector('#taskBudgetLedger').textContent='目标 '+formatSize(b.targetBytes)+' · 固定流/附件 '+formatSize(b.fixedPayloadBytes)+' · 编码音频 '+formatSize(b.encodedAudioBytes)+' · 封装余量 '+formatSize(b.containerReserveBytes)+' · 视频 '+(b.videoRate/1e6).toFixed(3)+' Mbps'+(b.copiedTrimReserveBytes>0?' · 裁切复制流按完整源流预留 '+formatSize(b.copiedTrimReserveBytes):'');}
     section.querySelector('#taskPlanNote').textContent=note+' '+rangeSummary+'。'+(task?.estimatedBytes>0?' 当前任务估计数据量 '+formatSize(task.estimatedBytes)+'。':'');
   };
   const renderContainerDecision = task => {
@@ -1423,9 +1731,19 @@ export function mountMediaWorkspace(hooks) {
         ? (stateName==='save_failed'?'重试保存上一成品':stateName==='saved'?'再次保存上一成品':'保存上一成品')
         : stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
     save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
-    save.disabled=busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
-    run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave;
+    save.disabled=lastReport?.deliveryAllowed===false||busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
+    run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave||!!recipePendingSave||!!batchSavePending;
+    const timelinePanel=section.querySelector('#taskCompletedCutTimeline');
+    if(timelinePanel){
+      const canInspect=finished&&!previousResult&&
+        activeTask?.operation==='copy'&&activeTask?.hasTrimRange&&
+        !!completed?.jobId&&typeof hooks.inspectCutTimeline==='function';
+      timelinePanel.hidden=!canInspect;
+      const inspect=section.querySelector('#taskInspectCutTimeline');
+      inspect.disabled=!canInspect||busy;
+    }
     section.dataset.completedStale=previousResult?'true':'false';
+    syncTaskReview();
   };
   const setTaskState = next => {
     section.dataset.taskState=next;
@@ -1440,6 +1758,7 @@ export function mountMediaWorkspace(hooks) {
   };
   const nonOutputFields=new Set(['configName','savedConfig','sampleStart','sampleLength']);
   const markCompletedAsPrevious = sourceName => {
+    if(!sourceName||!nonOutputFields.has(sourceName))currentPlanTask=null;
     const stateName=section.dataset.taskState||'idle';
     if(!completed||!['verified','save_failed','saved'].includes(stateName))return;
     if(sourceName&&nonOutputFields.has(sourceName))return;
@@ -1504,8 +1823,11 @@ export function mountMediaWorkspace(hooks) {
   window.addEventListener('quick-hardsub-native-export-result',nativeExportListener);
   function updateEncoder() {
     const c=get('codec').value,previousEncoder=get('encoder').value;
-    const choices=[[SOFTWARE[c],{h264:'x264',h265:'x265',av1:'SVT-AV1'}[c]+' · CPU']];
-    if(windows() && hooks.hasNvenc(c)) choices.push([{h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc'}[c],'NVENC · GPU']);
+    const capability=vvcCapability(hooks.platformKey?.()||{});
+    get('codec').querySelector('option[value="h266"]').disabled=!capability.available;
+    section.querySelector('#taskVvcCapability').textContent=capability.reason;
+    const choices=[[SOFTWARE[c],{h264:'x264',h265:'x265',av1:'SVT-AV1',h266:'VVenC'}[c]+' · CPU']];
+    if(c!=='h266' && windows() && hooks.hasNvenc(c)) choices.push([{h264:'h264_nvenc',h265:'hevc_nvenc',av1:'av1_nvenc'}[c],'NVENC · GPU']);
     get('encoder').innerHTML=choices.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
     if(choices.some(([v])=>v===previousEncoder))get('encoder').value=previousEncoder;
     updatePreset();updateRate();
@@ -1513,7 +1835,7 @@ export function mountMediaWorkspace(hooks) {
   function updatePreset(reset=false) {
     const previous=get('preset').value;
     const nv=get('encoder').value.endsWith('_nvenc');
-    const vals=nv?['p1','p2','p3','p4','p5','p6','p7']:get('codec').value==='av1'?Array.from({length:14},(_,i)=>String(i)):['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
+    const vals=get('codec').value==='h266'?['faster','fast','medium','slow','slower']:nv?['p1','p2','p3','p4','p5','p6','p7']:get('codec').value==='av1'?Array.from({length:14},(_,i)=>String(i)):['ultrafast','superfast','veryfast','faster','fast','medium','slow','slower','veryslow'];
     get('preset').innerHTML=vals.map(v=>`<option value="${v}">${v} · ${presetIntent(get('encoder').value,v)}</option>`).join('');
     get('preset').value=!reset&&vals.includes(previous)?previous:nv?'p5':get('codec').value==='av1'?'6':'medium';
     section.querySelector('#taskNvencDetails').hidden=!nv;
@@ -1584,6 +1906,7 @@ export function mountMediaWorkspace(hooks) {
   function syncHardsubStrategyChrome(mode = get('operation').value) {
     const hardsub = mode === 'hardsub';
     const guided = hardsubStrategy === 'guided';
+    audioStreamPlan.panel.hidden=hardsub&&guided;
     document.body.dataset.hardsubStrategy = hardsubStrategy;
     section.dataset.mobileStageSection = hardsub ? 'produce' : 'prepare';
     for (const button of strategyButtons) {
@@ -1612,9 +1935,12 @@ export function mountMediaWorkspace(hooks) {
       if (outputPolicy && outputPolicy.parentElement !== form) outputPolicyAnchor.after(outputPolicy);
     }
 
-    section.classList.toggle('hardsub-strategy-suppressed', hardsub && (guided || !productionAvailable));
-    document.querySelector('#planCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
-    document.querySelector('#encodeCard')?.classList.toggle('hardsub-strategy-suppressed', hardsub && !guided);
+    const view=sharedTaskPresentation({operation:mode,strategy:hardsubStrategy,sourceReady:!!productionAvailable,legacyJob:!!hooks.legacyGuidedJob?.()});
+    section.classList.toggle('hardsub-strategy-suppressed',view.workspaceSuppressed);
+    section.classList.toggle('guided-shared-task',view.hideParameters);
+    section.querySelector('#taskEncoding').hidden=view.hideParameters;
+    document.querySelector('#planCard')?.classList.toggle('hardsub-strategy-suppressed',view.hideGoalExplorer);
+    document.querySelector('#encodeCard')?.classList.toggle('hardsub-strategy-suppressed',view.hideLegacyExecution);
   }
 
   for (const button of strategyButtons) {
@@ -1626,6 +1952,38 @@ export function mountMediaWorkspace(hooks) {
     });
   }
 
+  const guidedHandoffButton=document.querySelector('#guidedToManual');
+  let initialManualSettings;
+  if(guidedHandoffButton)guidedHandoffButton.onclick=()=>{
+    if(busy||hooks.busy()||clipBatchRunning||clipAwaitingSave)return;
+    try{
+      const sourceKey=hooks.videoIdentity?.()||'';
+      const source=hooks.mediaSnapshot?.();
+      const evidence=budgetSourceIdentity===sourceKey?budgetEvidence:null;
+      const compiled=compileGuidedCpuHandoff({
+        snapshot:hooks.guidedSnapshot?.(),defaults:initialManualSettings,
+        media:source,evidence,sourceKey,evidenceSourceKey:budgetSourceIdentity
+      });
+      if(!compiled.ok)throw Error('无法安全交接 CPU 任务：'+compiled.reason+
+        (compiled.detail?' · '+compiled.detail:''));
+      const applied=commitGuidedCpuHandoff({
+        contract:compiled,read,apply:applyConfig,media:source,evidence,
+        sourceIdentity:()=>hooks.videoIdentity?.()||'',
+        expectedSourceIdentity:sourceKey
+      });
+      if(!applied.ok)throw Error('交接没有采用任何新任务：'+applied.reason+
+        (applied.detail?' · '+applied.detail:''));
+      hardsubStrategy='manual';
+      localStorage.setItem('hardsub-control-strategy-v1',hardsubStrategy);
+      // Handoff previews and compiles the proposed task, but only prepare() +
+      // hooks.validate() may mark the current plan as independently checked.
+      activeTask=null;currentPlanTask=null;transcodeCurves.invalidate();
+      syncHardsubStrategyChrome();syncTaskReview();renderPlanSummary(applied.task);
+      status('CPU 交接已通过共同任务编译与实际表单复核；保留原目标体积、逐流成本和双遍/严格策略。需要重新验证编码结果，ASS / VBR 短样证据不转移。');
+      section.scrollIntoView?.({block:'start'});
+    }catch(error){hooks.log?.('方案交接未完成：'+error.message);alert(error.message);}
+  };
+
   const subtitleCardObserver = new MutationObserver(() => syncHardsubStrategyChrome());
   const observedSubtitleCard = document.querySelector('#subtitleCard');
   if (observedSubtitleCard) subtitleCardObserver.observe(observedSubtitleCard, { attributes:true, attributeFilter:['class'] });
@@ -1636,6 +1994,7 @@ export function mountMediaWorkspace(hooks) {
       const nextMode=button.dataset.mediaMode;
       if(get('operation').value!==nextMode)markCompletedAsPrevious('operation');
       get('operation').value = nextMode;
+      if(nextMode==='copy')get('budgetPolicy').value='best-effort';
       updateMode();
       updateRate();
     });
@@ -1643,12 +2002,14 @@ export function mountMediaWorkspace(hooks) {
 
   function updateMode() {
     const mode=get('operation').value;
+    if(currentPlanTask&&currentPlanTask.operation!==mode)currentPlanTask=null;
     const copy=mode==='copy';
     if(!copy)clipEditingIndex=-1;
     syncModeChrome(mode);
     section.querySelector('#taskEncoding').disabled=copy;
     document.querySelectorAll('.input-ass,.input-font').forEach(el=>el.classList.toggle('hidden',get('operation').value!=='hardsub'));
     syncClipQueue();
+    syncCopyStrategy();
     section.querySelector('#taskModeHint').textContent=copy
       ? (get('videoRange').value==='trim'
         ? '无损剪切：IN 可能提前对齐关键帧；音频可独立处理。'
@@ -1680,6 +2041,10 @@ export function mountMediaWorkspace(hooks) {
   function updateRate(){
     const mode=get('rateMode').value;
     const copy=get('operation').value==='copy';
+    const vvc=get('codec').value==='h266';
+    qualityField.firstChild.textContent=vvc?'量化参数 QP（0–63，越低通常越保真）':'质量值 CRF / CQ（通常越低越保真）';
+    setRateControl('budgetPolicy',!copy && mode==='size');
+    get('rateMode').querySelector('option[value="quality"]').textContent=vvc?'固定量化参数 QP':'固定质量 CRF / CQ';
     setRateControl('quality', !copy && mode==='quality');
     setRateControl('bitrate', !copy && mode==='bitrate');
     for(const key of ['targetSize','sizeUnit','sizeReserve'])setRateControl(key, !copy && mode==='size');
@@ -1693,10 +2058,16 @@ export function mountMediaWorkspace(hooks) {
   const handleSharedAudioChange = event => {
     const audioControl=outputPolicy?.querySelector('[name="audio"]');
     if (event.target !== audioControl) return;
-    updateRate();
+    updateRate();audioStreamPlan.refresh();
     syncAudioPlaybackWarning();
   };
-  const mediaInfoListener = () => { syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); };
+  const invalidateBudgetEvidence = () => {if(budgetSourceIdentity!==hooks.videoIdentity?.()){latestAuxPreflight=null;budgetEvidence=null;section.querySelector('#taskBudgetLedger').textContent='来源已变更；复制流与附件成本未测量。';section.querySelector('#taskAuxiliaryPreflightStatus').textContent='来源已变更：旧 FLAC / 裁切复制观测已失效。';}};
+  function syncReviewSource(){
+    currentPlanTask=null;const identity=hooks.videoIdentity?.()||'';
+    if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
+    syncTaskReview();
+  }
+  const mediaInfoListener = () => { syncBrowserBatch();syncReviewSource();invalidateBudgetEvidence();syncCopyStrategy();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); syncRecipeMatrix(); hooks.onBudgetEvidenceChange?.(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
@@ -1707,21 +2078,90 @@ export function mountMediaWorkspace(hooks) {
   section.querySelector('#taskDelete').onclick=()=>{const c=configs();delete c[get('savedConfig').value];localStorage.setItem(storageKey,JSON.stringify(c));refreshConfigs();};
   section.querySelector('#taskExportConfig').onclick=()=>download({version:2,settings:read()},'media-config.json');
   section.querySelector('#taskImportConfig').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;if(file.size>65536)throw Error('配置文件超过 64 KiB');const data=JSON.parse(await file.text());if(data.version!==2||!data.settings||typeof data.settings!=='object')throw Error('配置格式无效');applyConfig(data.settings);status('已导入配置，执行前仍会验证参数');}catch(err){status(err.message);}finally{e.target.value='';}};
-  section.querySelector('#taskReport').onclick=()=>{if(lastReport)download(lastReport,'media-task-report.json');};
-  get('codec').onchange=()=>{updateEncoder();get('quality').value=get('codec').value==='av1'?'32':'23';syncQualityRange();};
+  section.querySelector('#taskInspectCutTimeline').onclick=async()=>{
+    const button=section.querySelector('#taskInspectCutTimeline');
+    const evidenceBox=section.querySelector('#taskCompletedCutTimelineEvidence');
+    if(button.disabled||busy||completedStale||!completed?.jobId||
+      activeTask?.operation!=='copy'||!activeTask?.hasTrimRange)return;
+    const job=completed.jobId,identity=hooks.videoIdentity?.()||'';
+    const oldCompleted=completed;
+    button.disabled=true;evidenceBox.textContent='正在读取已完成文件的实际时间戳…';
+    try{
+      const result=await hooks.inspectCutTimeline(job);
+      if(completed!==oldCompleted||completedStale||
+        (hooks.videoIdentity?.()||'')!==identity)throw Error('任务或来源已变化，丢弃这份时间轴收据');
+      const normalized=normalizeCompletedCutTimeline(activeTask,completed,result);
+      completed={...completed,cutTimelineEvidence:normalized};
+      lastReport=buildAuditedTaskReport(activeTask,completed,lastReport?.elapsedSeconds||0);
+      if(artifactReview)artifactReview.report=structuredClone(lastReport);
+      evidenceBox.textContent=[
+        '请求 IN / OUT：'+normalized.requestedIn.toFixed(3)+' / '+normalized.requestedOut.toFixed(3)+' s（源时间）',
+        'Native 关键帧寻址提示：'+normalized.executionSeekIn.toFixed(3)+' s（非成品证据）',
+        '成品首个解码呈现帧：'+normalized.actualFirstPresentation.toFixed(3)+' s（输出时间）',
+        '首个视频编码包 PTS / DTS：'+normalized.firstVideoPacketPts.toFixed(3)+' / '+normalized.firstVideoPacketDts.toFixed(3)+' s',
+        ...normalized.audioTimeMapping.map(a=>'成品音轨 #'+a.outputOrdinal+' 首包 PTS / DTS：'+a.outputFirstPts.toFixed(3)+' / '+a.outputFirstDts.toFixed(3)+' s'),
+        ...(normalized.startClockReviewRequired?[
+          '注意：首视频呈现帧与至少一条音轨首包时间差超过 0.5 s。须检查播放器及完整时间轴；首包差异本身不能证明音画失同步。'
+        ]:[]),
+        '源包区间映射与整片同步：未验证。不可将首包观测等同于帧精确。'
+      ].join('\n');
+      status('已将 FFprobe 成品首界时间轴加入任务报告；源包身份、尾界、VFR/B 帧同步仍未验收。');
+      section.querySelector('#taskReport').disabled=false;
+    }catch(err){
+      evidenceBox.textContent='成品时间轴检查不可用：'+err.message+'。原成品仍可保存。';
+    }finally{syncTaskActions();}
+  };
+  section.querySelector('#taskReport').onclick=async()=>{
+    if(!lastReport)return;
+    const jobId=completed?.jobId;
+    if(jobId && lastReport.trimCopyAuditState==='running' && hooks.refreshCompletedAudit){
+      try{
+        const evidence=await hooks.refreshCompletedAudit(jobId);
+        if(evidence?.state==='completed' && completed?.jobId===jobId){
+          completed={...completed,outputPacketEvidence:evidence.outputPacketEvidence,
+            outputPacketAuditState:evidence.outputPacketAuditState};
+          lastReport=buildAuditedTaskReport(activeTask||completed.task,completed,lastReport.elapsedSeconds);
+          if(artifactReview)artifactReview.report=structuredClone(lastReport);
+          if(lastReport.auxiliaryParity?.comparable){
+            status('后台逐流成品审计完成'+auxiliaryParityMessage(lastReport)+completedByteLedgerMessage(lastReport)+'。');
+          }else if(lastReport.trimCopyAudit){
+            status('后台裁切复制流审计完成'+completedByteLedgerMessage(lastReport)+'；正式完整源流预算未改变。');
+          }else if(lastReport.trimCopyAuditState==='unavailable'){
+            status('后台裁切复制流审计不可用；现有成品与正式预算仍有效。');
+          }
+        }
+      }catch(err){hooks.log?.('裁切审计收据刷新失败：'+err.message);}
+    }
+    download(lastReport,'media-task-report.json');
+  };
+  let lastManualCodec=get('codec').value;
+  let previousPixelFormat=null;
+  get('codec').onchange=()=>{
+    const codec=get('codec').value;
+    if(codec==='h266' && lastManualCodec!=='h266'){
+      previousPixelFormat=get('pixelFormat').value;
+      get('pixelFormat').value='yuv420p10le';
+    }else if(lastManualCodec==='h266' && previousPixelFormat){
+      get('pixelFormat').value=previousPixelFormat;previousPixelFormat=null;
+    }
+    lastManualCodec=codec;
+    updateEncoder();get('quality').value=['av1','h266'].includes(codec)?'32':'23';
+    syncQualityRange();transcodeCurves.refresh();
+  };
   get('encoder').onchange=()=>{updatePreset();updateRate();};
-  get('operation').onchange=()=>{updateMode();updateRate();};
+  get('operation').onchange=()=>{if(get('operation').value==='copy')get('budgetPolicy').value='best-effort';updateMode();updateRate();};
   get('videoRange').onchange=()=>{updateMode();renderPlanSummary(activeTask);};
   get('audioRange').onchange=()=>renderPlanSummary(activeTask);
   get('subtitleRange').onchange=()=>renderPlanSummary(activeTask);
   get('videoStreams').addEventListener('input',()=>{clearTimelineFrameCache();renderPlanSummary(activeTask);});
-  section.querySelector('#taskLoadPreset').onclick=()=>{markCompletedAsPrevious('preset');updatePreset(true);get('quality').value=get('codec').value==='av1'?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
+  section.querySelector('#taskLoadPreset').onclick=()=>{markCompletedAsPrevious('preset');updatePreset(true);get('quality').value=['av1','h266'].includes(get('codec').value)?'32':'23';get('rateMode').value='quality';updateRate();renderPlanSummary(activeTask);status('已恢复推荐方案；其他高级设置保持当前值。先确认“当前方案”，需要时再展开详细参数。');};
   let platformKey='';
-  const platformTimer=setInterval(()=>{const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
+  const platformTimer=setInterval(()=>{syncHardsubStrategyChrome();const key=JSON.stringify(hooks.platformKey());if(key!==platformKey&&!busy){platformKey=key;updateEncoder();}},1000);
   const prepare=async()=>{
     const raw=read(),media=await hooks.prepare(raw.operation);
-    const task=compileTask(raw,media);
+    const task=compileTask({...raw,budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,sourceIdentity:hooks.videoIdentity?.()||'',budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined});
     await hooks.validate?.(task);
+    currentPlanTask=task;
     renderContainerDecision(task);
     syncAudioPlaybackWarning(task,media);
     const compat = Array.isArray(task.compatibilityWarnings) && task.compatibilityWarnings.length
@@ -1749,13 +2189,239 @@ export function mountMediaWorkspace(hooks) {
     }):null;
     try{
       const saved=await Promise.resolve(hooks.save(result));
+      if(artifactReview)artifactReview.saveKind=saved?.kind||'';
       if(saved?.ok===false)throw Error(saved.error||'保存失败');
       if(saved?.pending){
         if(!nativeOutcome)throw Error('无法确认成品保存完成，批量任务已暂停');
         await nativeOutcome;
       }
+      return saved;
     }finally{
       if(listener)window.removeEventListener('quick-hardsub-native-export-result',listener);
+    }
+  };
+
+
+  // B21 user-selected multi-source Web lane. Never reuse a previous source
+  // probe, ASS/font binding, or codec evidence across independent File jobs.
+  section.querySelector('#taskQueueBatchSources').onclick=()=>{
+    try{
+      if(!browserBatchAvailable()||busy||hooks.busy()||batchRunning||
+        recipeBatchRunning||clipBatchRunning||batchSavePending||recipePendingSave||clipAwaitingSave)
+        throw Error('浏览器多来源队列不可用或已有未保存任务');
+      const items=makeBrowserSourceBatch({
+        files:section.querySelector('#taskBatchSources').files,
+        settings:read(),existingCount:browserBatch.length
+      });
+      const existing=new Set(browserBatch.map(x=>x.source.identity));
+      if(items.some(x=>existing.has(x.identity)))throw Error('队列已有相同来源身份，不能混用文件对象');
+      const used=new Set(browserBatch.map(row=>row.number));
+      for(const source of items){
+        const number=Array.from({length:8},(_,i)=>i+1).find(n=>!used.has(n));
+        if(!number)throw Error('队列中的输出编号已满');
+        used.add(number);browserBatch.push({source,state:'queued',number});
+      }
+      section.querySelector('#taskBatchSources').value='';
+      batchStatus.textContent='已加入 '+items.length+' 个用户选定文件，配置已冻结。执行时每个来源独立探测。';
+    }catch(error){batchStatus.textContent='加入失败：'+error.message;}
+    syncBrowserBatch();
+  };
+  batchList.addEventListener('click',event=>{
+    if(busy||batchRunning||hooks.busy())return;
+    const btn=event.target.closest('button[data-browser-batch-action]');
+    if(!btn)return;
+    const row=browserBatch[Number(btn.dataset.browserBatchIndex)];
+    if(!row)return;
+    if(btn.dataset.browserBatchAction==='retry-save'){
+      if(row===batchSavePending)section.querySelector('#taskSave').click();
+      return;
+    }
+    if(batchSavePending)return;
+    browserBatch.splice(browserBatch.indexOf(row),1);
+    batchStatus.textContent='已移除队列记录；已经移交浏览器的下载不受影响，文件落盘仍须自行确认。';
+    syncBrowserBatch();
+  });
+  section.querySelector('#taskClearBatchSources').onclick=()=>{
+    if(busy||hooks.busy()||batchRunning||batchSavePending)return;
+    browserBatch.length=0;
+    batchStatus.textContent='队列记录已清空。此前移交给浏览器的下载不受影响，文件落盘仍须自行检查。';
+    syncBrowserBatch();
+  };
+  const settlePendingBatchSave=saved=>{
+    if(!batchSavePending)return;
+    batchSavePending.state=saved?(saved==='handed_off'?'handed_off':'saved'):'save_failed';
+    if(saved)batchSavePending=null;
+    batchStatus.textContent=saved?(saved==='handed_off'?'已移交浏览器下载；请核对目标文件。':'成品已确认保存；可继续剩余来源。'):
+      '成品仍在；请仅重试保存，不需要重新执行编码。';
+    syncBrowserBatch();
+  };
+  section.querySelector('#taskStopBatchSources').onclick=()=>{
+    if(!batchRunning||batchStop)return;
+    batchStop=true;
+    batchStatus.textContent='停止后续来源已请求，当前输出须先完成或取消。';
+    if(batchCurrent?.state==='running')hooks.cancel?.();
+    syncBrowserBatch();
+  };
+  section.querySelector('#taskRunBatchSources').onclick=async()=>{
+    if(busy||hooks.busy()||batchRunning||recipeBatchRunning||clipBatchRunning||
+      batchSavePending||recipePendingSave||clipAwaitingSave)return;
+    let current=null,phase='prepare';
+    try{
+      if(!browserBatchAvailable())throw Error('当前原生后端不提供 Web File 多来源执行');
+      const pending=browserBatch.filter(row=>!browserBatchDone(row));
+      if(!pending.length)throw Error('队列没有待执行来源');
+      if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
+        throw Error('请先保存当前其它任务成品');
+      busy=true;batchRunning=true;batchStop=false;hooks.setBusy(true);
+      for(const input of form.elements)input.disabled=true;
+      for(const button of modeButtons)button.disabled=true;
+      setTaskState('preparing');syncBrowserBatch();
+      for(const row of pending){
+        if(batchStop)break;
+        current=row;batchCurrent=row;phase='prepare';row.state='running';
+        batchStatus.textContent='正在激活并探测：'+row.source.name;
+        syncBrowserBatch();
+        const active=await hooks.activateBrowserBatchSource(row.source.file);
+        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        const settings=row.source.settings,media=await hooks.prepare(settings.operation);
+        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        const task=compileTask({...settings,budgetPolicy:'best-effort'},{
+          ...media,sourceIdentity:row.source.identity,budgetEvidence:undefined
+        });
+        await hooks.validate?.(task);
+        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        activeTask=task;currentPlanTask=task;
+        executingSourceName=row.source.name;taskStartedAt=performance.now();
+        setTaskState('encoding');phase='encode';syncBrowserBatch();
+        batchStatus.textContent='正在处理 '+row.source.name+' · '+task.operation;
+        const result=await hooks.run(task,media,(p,message,meta)=>updateTaskProgress(p,message,meta));
+        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        if(result?.verified!==true)throw Error('本来源未取得可信的成品验证结果');
+        completed={...result,name:outputRecipeFilename(result.name||row.source.name,row.number)};
+        completedStale=false;
+        lastReport=buildAuditedTaskReport(task,completed,(performance.now()-taskStartedAt)/1000);
+        artifactReview={source:row.source.name,task:structuredClone(task),report:structuredClone(lastReport)};
+        if(lastReport.deliveryAllowed===false)throw Error('本来源成品未达到交付要求');
+        setTaskState('verified');phase='save';row.state='saving';syncBrowserBatch();
+        setTaskState('saving');
+        const saved=await saveQueuedResult(completed);
+        row.state=saved?.kind==='browser-download'?'handed_off':'saved';setTaskState('saved');
+        batchStatus.textContent='已完成 '+browserBatch.filter(browserBatchDone).length+
+          ' / '+browserBatch.length+' 个来源输出；浏览器下载须在本机独立确认。';
+        syncBrowserBatch();
+      }
+      if(batchStop)batchStatus.textContent='已停止后续来源；已移交浏览器的文件需要检查下载结果。';
+      else if(browserBatch.every(browserBatchDone))batchStatus.textContent=
+        '全部来源已分别探测、编译、运行并移交保存；请检查浏览器下载是否落盘。';
+    }catch(error){
+      if(current){
+        if(phase==='save'&&completed?.verified){
+          current.state='save_failed';batchSavePending=current;setTaskState('save_failed');
+        }else{current.state='failed';setTaskState(isCancellationError(error)?'idle':'failed');}
+      }else setTaskState('failed');
+      batchStatus.textContent='队列停止于 '+(current?.source.name||'预检查')+'：'+error.message+
+        (batchSavePending?'；只重试保存，无需重编码。':'；此前已保存成品不会被重做。');
+      hooks.log?.(error.stack||error.message);
+    }finally{
+      batchCurrent=null;batchRunning=false;batchStop=false;
+      busy=false;hooks.setBusy(false);
+      for(const el of form.elements)el.disabled=false;
+      for(const button of modeButtons)button.disabled=false;
+      section.querySelector('#taskCancel').disabled=true;
+      updateMode();updateRate();audioStreamPlan.refresh();
+      syncTaskActions();syncClipQueue();syncRecipeMatrix();syncBrowserBatch();
+    }
+  };
+
+  section.querySelector('#taskStopRecipes').onclick=()=>{
+    if(!recipeBatchRunning||recipeStopRequested)return;
+    recipeStopRequested=true;
+    recipeMessage.textContent='停止请求已记录。当前保存窗口须先完成或取消。';
+    if(recipeCurrent?.state==='running')hooks.cancel();
+    syncRecipeMatrix();
+  };
+  section.querySelector('#taskRunRecipes').onclick=async()=>{
+    if(busy||hooks.busy()||recipeBatchRunning||clipBatchRunning||clipAwaitingSave||recipePendingSave)return;
+    let current=null,phase='preflight';
+    try{
+      if(!recipes.length)throw Error('先加入至少一个输出方案');
+      if(!recipeSource()||recipeSourceKey!==recipeSource())throw Error('来源已变化，拒绝执行旧矩阵');
+      if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
+        throw Error('先保存当前已验证成品，避免覆盖');
+      busy=true;recipeBatchRunning=true;recipeStopRequested=false;
+      hooks.setBusy(true);
+      for(const element of form.elements)element.disabled=true;
+      for(const button of modeButtons)button.disabled=true;
+      setTaskState('preparing');syncRecipeMatrix();
+      const pending=recipes.map((entry,index)=>({entry,index})).filter(x=>x.entry.state!=='saved');
+      // Compile at "add" time, freeze, then validate EVERY immutable task
+      // before the first encoding step. This never reads the mutable form.
+      const jobs=[];
+      for(const {entry,index} of pending){
+        const source=recipeSource(),asset=recipeAsset();
+        const media=await hooks.prepare(entry.recipe.task.operation);
+        const task=validateOutputRecipe(entry.recipe,{sourceKey:source,assetKey:asset,media});
+        await hooks.validate?.(task);
+        jobs.push({entry,index,task,media});
+      }
+      for(const item of jobs){
+        if(recipeStopRequested)break;
+        current=item;recipeCurrent=item.entry;phase='encode';
+        validateOutputRecipe(item.entry.recipe,{
+          sourceKey:recipeSource(),assetKey:recipeAsset(),media:hooks.mediaSnapshot?.()
+        });
+        item.entry.state='running';activeTask=item.task;currentPlanTask=item.task;
+        executingSourceName=hooks.sourceName?.()||'来源';
+        taskStartedAt=performance.now();
+        section.querySelector('#taskProgress').value=0;
+        section.querySelector('#taskPercent').textContent='0%';
+        setTaskState('encoding');syncRecipeMatrix();
+        recipeMessage.textContent='正在生成独立输出 '+(item.index+1)+' / '+recipes.length+
+          '：'+item.entry.recipe.label;
+        const result=await hooks.run(item.task,item.media,(p,message,meta)=>updateTaskProgress(p,message,meta));
+        if(!result?.verified)throw Error('当前配方尚未通过后端成品验证');
+        completed={...result,name:outputRecipeFilename(result.name,item.index+1)};
+        completedStale=false;
+        lastReport=buildAuditedTaskReport(item.task,completed,(performance.now()-taskStartedAt)/1000);
+        artifactReview={source:executingSourceName,task:structuredClone(item.task),report:structuredClone(lastReport)};
+        if(lastReport.deliveryAllowed===false)throw Error('成品未通过交付预算，拒绝保存');
+        section.querySelector('#taskProgress').value=1;
+        section.querySelector('#taskPercent').textContent='100%';
+        section.querySelector('#taskReport').disabled=false;
+        setTaskState('verified');
+        phase='save';item.entry.state='saving';syncRecipeMatrix();
+        setTaskState('saving');
+        await saveQueuedResult(completed);
+        item.entry.state='saved';setTaskState('saved');
+        recipeMessage.textContent='已保存 '+recipes.filter(r=>r.state==='saved').length+
+          ' / '+recipes.length+' 个独立输出。';
+        syncRecipeMatrix();
+      }
+      if(recipeStopRequested)recipeMessage.textContent='已停止后续输出；已保存成品保持有效。';
+      else if(recipes.every(r=>r.state==='saved'))recipeMessage.textContent=
+        '全部 '+recipes.length+' 个输出已独立执行、验证并保存。';
+    }catch(err){
+      if(current){
+        if(phase==='save'&&completed?.verified){
+          current.entry.state='save_failed';
+          recipePendingSave=current.entry;
+          setTaskState('save_failed');
+        }else{
+          current.entry.state='failed';
+          setTaskState(isCancellationError(err)?'idle':'failed');
+        }
+      }else setTaskState('failed');
+      recipeMessage.textContent='矩阵在'+(current?'方案 '+(current.index+1):'预检查')+
+        '停止：'+err.message+(recipePendingSave?'；成品仍在，点击“重试保存”即可':'；已保存输出不会重做');
+      hooks.log?.(err.stack||err.message);
+    }finally{
+      recipeCurrent=null;recipeBatchRunning=false;recipeStopRequested=false;
+      busy=false;hooks.setBusy(false);
+      for(const el of form.elements)el.disabled=false;
+      for(const btn of modeButtons)btn.disabled=false;
+      section.querySelector('#taskCancel').disabled=true;
+      updateMode();updateRate();audioStreamPlan.refresh();
+      syncTaskActions();syncClipQueue();syncRecipeMatrix();
     }
   };
   section.querySelector('#taskStopClips').onclick=()=>{
@@ -1766,7 +2432,7 @@ export function mountMediaWorkspace(hooks) {
     syncClipQueue();
   };
   section.querySelector('#taskExportClips').onclick=async()=>{
-    if(clipBatchRunning||busy||hooks.busy())return;
+    if(clipBatchRunning||recipeBatchRunning||recipePendingSave||busy||hooks.busy())return;
     let current=null,phase='prepare';
     try{
       if(!clips.length)throw Error('请先加入至少一个片段');
@@ -1775,7 +2441,7 @@ export function mountMediaWorkspace(hooks) {
       const settings=read();
       validateQueuedCopySettings(settings);
       if(clipEditingIndex>=0)throw Error('请先更新或取消正在编辑的片段');
-      if(clipAwaitingSave)throw Error('先重试保存未导出的片段成品，避免重新剪切');
+      if(clipAwaitingSave||recipePendingSave)throw Error('先重试保存未导出的队列成品，避免重新压制');
       if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
         throw Error('先保存或处理上一任务的成品，避免批量剪切覆盖未保存的结果');
       // Reserve task ownership before await: no duplicate bulk runs, mode
@@ -1803,7 +2469,7 @@ export function mountMediaWorkspace(hooks) {
         if(clipBatchStopRequested)break;
         current=item;clipBatchCurrent=item.clip;phase='run';
         item.clip.state='running';
-        activeTask=item.task;taskStartedAt=performance.now();
+        activeTask=item.task;currentPlanTask=item.task;executingSourceName=hooks.sourceName?.()||'执行时来源';taskStartedAt=performance.now();
         section.querySelector('#taskProgress').value=0;
         section.querySelector('#taskPercent').textContent='0%';
         showClipMessage('正在处理片段 '+(item.index+1)+' / '+clips.length+'：'+item.clip.startText+' → '+item.clip.endText);
@@ -1814,6 +2480,7 @@ export function mountMediaWorkspace(hooks) {
         // The output is unique even for repeated same-source clips.
         completed={...result,name:clipOutputName(result.name,item.index+1)};
         completedStale=false;lastReport=null;
+        artifactReview={source:executingSourceName,task:structuredClone(item.task),report:outputReport(item.task,completed,(performance.now()-taskStartedAt)/1000)};
         section.querySelector('#taskProgress').value=1;
         section.querySelector('#taskPercent').textContent='100%';
         setTaskState('verified');
@@ -1857,14 +2524,76 @@ export function mountMediaWorkspace(hooks) {
       for(const element of form.elements)element.disabled=false;
       for(const button of modeButtons)button.disabled=false;
       section.querySelector('#taskCancel').disabled=true;
-      updateMode();updateRate();syncTaskActions();syncClipQueue();
+      updateMode();updateRate();audioStreamPlan.refresh();syncTaskActions();syncClipQueue();
     }
   };
 
+  section.querySelector('#taskMeasureBudget').onclick=async()=>{
+    if(busy||hooks.busy())return;
+    const button=section.querySelector('#taskMeasureBudget'),ledger=section.querySelector('#taskBudgetLedger');
+    const identity=hooks.videoIdentity?.();
+    if(!hooks.measureBudget||!identity){ledger.textContent='当前后端未提供成本计量；可选择 AAC / Opus 并关闭未测流。';return;}
+    busy=true;hooks.setBusy(true);button.disabled=true;syncTaskActions();
+    ledger.textContent='正在扫描完整源文件，最多 80 秒；不会重编码…';
+    try{
+      latestAuxPreflight=null;
+      const result=await hooks.measureBudget();
+      if(identity!==hooks.videoIdentity?.())throw Error('测量期间来源变更，结果已丢弃');
+      if(result?.version!==1||result.scope!=='full-source')throw Error('成本测量格式无效');
+      budgetEvidence=result;budgetSourceIdentity=identity;
+      ledger.textContent='完整源流成本已测量。点击“验证当前方案”查看预算分项；裁切复制流按完整源流保守预留，FLAC 重编码仍未知。';
+    }catch(e){budgetEvidence=null;ledger.textContent='成本仍未知：'+e.message;}
+    finally{busy=false;hooks.setBusy(false);button.disabled=false;transcodeCurves.invalidate();hooks.onBudgetEvidenceChange?.();syncTaskActions();}
+  };
+  section.querySelector('#taskAuxiliaryPreflight').onclick=async()=>{
+    const statusEl=section.querySelector('#taskAuxiliaryPreflightStatus');
+    const btn=section.querySelector('#taskAuxiliaryPreflight');
+    if(busy||hooks.busy())return;
+    const sourceKey=hooks.videoIdentity?.()||'';
+    const budget=budgetSourceIdentity===sourceKey?budgetEvidence:null;
+    const selected=buildAuxiliaryPreflightRequest({
+      settings:read(),media:hooks.mediaSnapshot?.(),budgetEvidence:budget
+    });
+    if(!selected.ok){
+      statusEl.textContent='无法建立逐流预演：'+selected.reason+
+        (selected.detail?' · '+selected.detail:'')+'。请先测量完整源流并检查音轨及 IN/OUT。';
+      return;
+    }
+    if(!hooks.auxiliaryPreflight){
+      statusEl.textContent='此预演仅支持 Windows Native；当前后端不提供独立逐流预编码器。';
+      return;
+    }
+    busy=true;hooks.setBusy(true);btn.disabled=true;syncTaskActions();
+    statusEl.textContent=(selected.mode==='flac'?'FLAC':'裁切复制')+
+      ' 独立预编码观测进行中；不会修改当前方案或目标字节数。';
+    try{
+      const response=await hooks.auxiliaryPreflight(selected.request);
+      if(sourceKey!==hooks.videoIdentity?.() ||
+         budgetSourceIdentity!==sourceKey ||
+         response?.receipt?.measurementId!==budget?.measurementId)
+        throw Error('来源或完整源流计量已更换，拒收预演。');
+      const receipt=response.receipt;
+      const sourceStat={length:Number(response.sourceSize),writeTicks:String(receipt.sourceWriteTicks)};
+      const result=selected.mode==='flac'
+        ?assessFlacEncodeObservation({receipt,request:selected.request,sourceStat,fullSourceEvidence:budget})
+        :assessIsolatedTrimCopyPreflight({receipt,request:selected.request,sourceStat,fullSourceEvidence:budget});
+      if(!result.ok)throw Error(result.reason);
+      latestAuxPreflight={request:selected.request,receipt,
+        sourceKey,measurementId:budget.measurementId,
+        sourceStat,partial:selected.partial};
+      statusEl.textContent=(selected.mode==='flac'?'真实 FLAC 音频':'隔离裁切复制')+
+        ' 观察包字节 '+formatSize(result.observedBytes)+
+        ' · '+(result.tracks?.length||result.mapped?.length||0)+' 条流'+
+        (selected.partial?' · 仅覆盖其中一部分选流':'')+
+        '。此收据仅供诊断，严格体积预算仍按独立保守规则；未经最终混合封装证明不能采用此数值。';
+    }catch(e){statusEl.textContent='预演不可采用：'+e.message+'；正式体积预算保持不变。';}
+    finally{busy=false;hooks.setBusy(false);btn.disabled=false;syncTaskActions();}
+  };
   section.querySelector('#taskInspect').onclick=async()=>{if(busy||hooks.busy())return;busy=true;hooks.setBusy(true);try{await prepare();status('当前方案验证通过，可以直接开始；原始 FFmpeg 命令仅用于技术核对。');}catch(e){status(e.message);}finally{busy=false;hooks.setBusy(false);syncTaskActions();}};
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};
   section.querySelector('#taskSave').onclick=async()=>{
-    if(!completed||clipBatchRunning||busy||hooks.busy()||section.dataset.taskState==='saving')return;
+    if(lastReport?.deliveryAllowed===false){status('成品超限或字节数未知，禁止保存。请增大预算、降低视频码率或调整流计划后重新执行。');return;}
+    if(!completed||clipBatchRunning||recipeBatchRunning||batchRunning||busy||hooks.busy()||section.dataset.taskState==='saving')return;
     setTaskState('saving');
     syncClipQueue();
     status('正在打开保存位置；取消选择不会丢失已验证成品。');
@@ -1872,21 +2601,26 @@ export function mountMediaWorkspace(hooks) {
       const result=await Promise.resolve(hooks.save(completed));
       if(result?.pending)return;
       if(result?.ok===false)throw Error(result.error||'保存失败');
+      if(artifactReview)artifactReview.saveKind=result?.kind||'';
       setTaskState('saved');
       settlePendingClipSave(true);
+      settlePendingRecipeSave(true);
+      settlePendingBatchSave(result?.kind==='browser-download'?'handed_off':true);
       status(result?.kind==='browser-download'?'已交给浏览器保存。':'成品已保存。');
     }catch(e){
       setTaskState('save_failed');
       settlePendingClipSave(false);
+      settlePendingRecipeSave(false);
+      settlePendingBatchSave(false);
       status('保存失败：'+e.message+'。已验证成品仍可直接重试保存，无需重新压制。');
       hooks.log?.(e.stack||e.message);
     }
   };
   form.onsubmit=async e=>{
     e.preventDefault();
-    if(clipAwaitingSave){status('先重试保存已验证的片段成品，避免重新剪切或覆盖。');return;}
+    if(clipAwaitingSave||recipePendingSave||batchSavePending){status('先重试保存已验证的队列成品，避免重新编码或覆盖。');return;}
     if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
-    busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
+    busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;artifactReview=null;currentPlanTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
     section.querySelector('#taskReport').disabled=true;
     section.querySelector('#taskProgress').value=0;
     section.querySelector('#taskPercent').textContent='0%';
@@ -1899,23 +2633,37 @@ export function mountMediaWorkspace(hooks) {
     try {
       status('正在读取素材与检查设置…');
       const {task,media}=await prepare();
-      activeTask=task;
+      activeTask=task;executingSourceName=hooks.sourceName?.()||'执行时来源';
       renderPlanSummary(task);
       for(const control of form.elements)control.disabled=true;
       section.querySelector('#taskCancel').disabled=false;
       setTaskState('encoding');
       const started=performance.now();
       completed=await hooks.run(task,media,(p,message,meta)=>updateTaskProgress(p,message,meta));
-      lastReport=outputReport(task,completed,(performance.now()-started)/1000);
+      lastReport=buildAuditedTaskReport(task,completed,(performance.now()-started)/1000);
+      artifactReview={source:executingSourceName,task:structuredClone(task),report:structuredClone(lastReport)};
       section.querySelector('#taskReport').disabled=false;
       section.querySelector('#taskProgress').value=1;
       section.querySelector('#taskPercent').textContent='100%';
       section.querySelector('#taskMediaTime').textContent=formatTaskClock(task.expectedDuration)+' / '+formatTaskClock(task.expectedDuration);
       section.querySelector('#taskElapsed').textContent=formatTaskClock((performance.now()-taskStartedAt)/1000);
       section.querySelector('#taskEta').textContent='处理完成';
+      if(!lastReport.deliveryAllowed){setTaskState('failed');status('成品超限或字节数未知，禁止交付。请增大预算、降低视频码率或调整流计划后重新执行；不会自动重编码。');return;}
       setTaskState('verified');
       syncOutputVerificationAvailability();
-      status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+' · 尚未保存到你的文件夹。下一步：保存成品。');
+      const trimAudit=lastReport.trimCopyAudit;
+      const trimAuditText=trimAudit
+        ? ' · 裁切复制流：源预算上界 '+formatSize(trimAudit.sourcePacketBytes)+
+          '，成品实测 '+formatSize(trimAudit.outputPacketBytes)+
+          (trimAudit.status==='observed'
+            ? '（节省 '+formatSize(trimAudit.overreserveBytes)+'，不减少正式预算）'
+            : '（实测超出源预算，请复核来源流）')
+        : lastReport.trimCopyAuditState==='running'
+          ? ' · 裁切复制流审计正在后台运行；可稍后点任务报告刷新（不影响成品保存）'
+          : lastReport.trimCopyAuditState==='unavailable'
+            ? ' · 裁切复制流审计不可用；完整源流预算仍保留'
+            : '';
+      status('成品已验证 · '+formatSize(lastReport.outputBytes)+(lastReport.withinBudget===false?' · 超出体积预算；建议视频码率 '+lastReport.suggestedVideoRate+' bit/s':lastReport.withinBudget===true?' · 在体积预算内':'')+trimAuditText+auxiliaryParityMessage(lastReport)+completedByteLedgerMessage(lastReport)+' · 尚未保存到你的文件夹。下一步：保存成品。');
     }catch(e){
       if(isCancellationError(e)){
         setTaskState('idle');
@@ -1930,44 +2678,56 @@ export function mountMediaWorkspace(hooks) {
     }
     finally{
       busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;
-      updateMode();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;updateRate();syncTaskActions();
+      updateMode();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;updateRate();audioStreamPlan.refresh();syncTaskActions();
     }
   };
   section.querySelector('#taskSamples').onclick=async()=>{
     if(busy||hooks.busy())return;
     busy=true;hooks.setBusy(true);const raw=read();const results=section.querySelector('#taskSampleResults');
     try{
-      const media=await hooks.prepare(raw.operation),full=compileTask(raw,media),range=sampleSettings(raw,media);
+      const media=await hooks.prepare(raw.operation),full=compileTask({...raw,budgetPolicy:raw.rateMode==='size'?raw.budgetPolicy:'best-effort'},{...media,budgetEvidence:budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:undefined}),range=sampleSettings(raw,media);
       results.replaceChildren();for(const url of sampleUrls)URL.revokeObjectURL(url);sampleUrls=[];
       for(const control of form.elements)control.disabled=true;section.querySelector('#taskCancel').disabled=false;
       for(const adjustment of [-1,0,1]){
-        const options={...raw,...range,frames:'',twoPass:false,keepAttachments:false,keepSubtitles:false,keepChapters:false};
-        if(raw.rateMode==='quality')options.quality=Math.max(1,Math.min(full.encoder.endsWith('_nvenc')||full.codec!=='av1'?51:63,Number(full.quality)+adjustment*2));
+        const options={...raw,budgetPolicy:'best-effort',...range,frames:'',twoPass:false,keepAttachments:false,keepSubtitles:false,keepChapters:false};
+        if(raw.rateMode==='quality')options.quality=sampleQualityTrial(full,adjustment).quality;
         else {options.rateMode='bitrate';options.bitrate=Math.round(Number(full.bitrate)*(1+adjustment*.2));}
         const task=compileTask(options,media);await hooks.validate?.(task);const started=performance.now();
         const result=await hooks.run(task,media,(p,message)=>{section.querySelector('#taskProgress').value=(adjustment+1+p)/3;status('短片 '+(adjustment+2)+'/3 · '+message);});
         const report=outputReport(task,result,(performance.now()-started)/1000),row=document.createElement('div');row.className='task-sample';
-        row.innerHTML=`<p>${escape(raw.rateMode==='quality'?'CRF / CQ '+options.quality:'视频码率 '+options.bitrate+' bit/s')} · ${escape(formatSize(report.outputBytes))} · ${report.elapsedSeconds.toFixed(1)} 秒；整片外推 ${escape(formatSize(sampleProjection(report.outputBytes,task.expectedDuration,full.expectedDuration)))}</p>`;
+        row.innerHTML=`<p>${escape(raw.rateMode==='quality'?sampleQualityTrial(full,adjustment).label+' '+options.quality:'视频码率 '+options.bitrate+' bit/s')} · ${escape(formatSize(report.outputBytes))} · ${report.elapsedSeconds.toFixed(1)} 秒；整片外推 ${escape(formatSize(sampleProjection(report.outputBytes,task.expectedDuration,full.expectedDuration)))}</p>`;
         if(result.blob){const video=document.createElement('video');video.controls=true;video.preload='metadata';const url=URL.createObjectURL(result.blob);sampleUrls.push(url);video.src=url;row.append(video);}
         const save=document.createElement('button');save.type='button';save.textContent='保存此短片';save.onclick=()=>hooks.save(result);row.append(save);
         const use=document.createElement('button');use.type='button';use.textContent='采用此参数';use.onclick=()=>{markCompletedAsPrevious('sample');if(raw.rateMode==='quality')get('quality').value=options.quality;else{get('rateMode').value='bitrate';get('bitrate').value=options.bitrate;}updateRate();status('已采用此短片参数；请重新检查整片体积预算。');};row.append(use);results.append(row);
       }
-      status('三组试压完成；浏览器播放受 AV1 / MKV 支持限制，可保存短片比较。');
+      status('三组试压完成；浏览器播放受 AV1 / H.266 / MKV 支持限制，可保存短片比较。');
     }catch(e){status('试压失败：'+e.message);}
-    finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
+    finally{busy=false;hooks.setBusy(false);for(const control of form.elements)control.disabled=false;updateMode();updateRate();audioStreamPlan.refresh();section.querySelector('#taskCancel').disabled=true;section.querySelector('#taskReport').disabled=!lastReport;syncTaskActions();}
   };
   const invalidateCompiledPlan = event => {
     const sourceName=event?.target?.name||'';
     if(!sourceName)return;
-    if(!new Set(['quality','bitrate','rateMode','targetSize','sizeUnit','sizeReserve','sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
+    if(['audio','audioTrack','audioRange','audioBitrate'].includes(sourceName))audioStreamPlan.refresh();
+    if(!new Set(['sampleStart','sampleLength','configName','savedConfig']).has(sourceName)) transcodeCurves.invalidate();
     markCompletedAsPrevious(sourceName);
-    activeTask=null;
+    latestAuxPreflight=null;
+    activeTask=null;currentPlanTask=null;
     renderContainerDecision(null);
     syncAudioPlaybackWarning();
     renderPlanSummary();
+    // Audio choices change the full-container cost coordinate even when
+    // source packet evidence and video-only CQ measurements stay valid.
+    if(['audio','audioTrack','audioRange','audioBitrate','audioChannels',
+        'audioSampleRate','audioPlan'].includes(sourceName)){
+      hooks.onBudgetEvidenceChange?.();
+    }
   };
+  outputPolicy?.addEventListener('input',event=>{if(!form.contains(event.target))invalidateCompiledPlan(event);});
+  outputPolicy?.addEventListener('change',event=>{if(!form.contains(event.target))invalidateCompiledPlan(event);});
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
-  updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
-  return {section,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  form.addEventListener('change',syncBrowserBatch);
+  updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');syncRecipeMatrix();syncBrowserBatch();
+  initialManualSettings=read();
+  return {section,runCurrent:()=>form.onsubmit({preventDefault(){}}),getActiveBudgetEvidence:()=>budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:null,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }

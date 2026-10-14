@@ -1,0 +1,81 @@
+{
+  "scope": "Windows hosted synthetic source, actual Bridge /api/encode, QP and bitrate; optional ASS hardsub; independent FFprobe and decode",
+  "status": "PASS",
+  "tasks": [
+    {
+      "artifact": "transcode-quality.mkv",
+      "rateMode": "quality",
+      "outputDuration": 1,
+      "status": "PASS",
+      "outputBytes": 26052,
+      "operation": "transcode",
+      "independentVideo": {
+        "codec_name": "vvc",
+        "pix_fmt": "yuv420p10le",
+        "nb_read_frames": "24"
+      },
+      "encoder": "libvvenc",
+      "sha256": "a591e82cdb41010f814b64de610e89a01c5270f6770d391510ada5b7740e7d83"
+    },
+    {
+      "artifact": "transcode-bitrate.mkv",
+      "rateMode": "bitrate",
+      "outputDuration": 1,
+      "status": "PASS",
+      "outputBytes": 31566,
+      "operation": "transcode",
+      "independentVideo": {
+        "codec_name": "vvc",
+        "pix_fmt": "yuv420p10le",
+        "nb_read_frames": "24"
+      },
+      "encoder": "libvvenc",
+      "sha256": "636123d91f7c4c85d19804e5f5e0711b8071720ba733dbdb0446bce195f056a4"
+    },
+    {
+      "artifact": "hardsub-quality.mkv",
+      "rateMode": "quality",
+      "outputDuration": 1,
+      "status": "PASS",
+      "outputBytes": 25990,
+      "operation": "hardsub",
+      "independentVideo": {
+        "codec_name": "vvc",
+        "pix_fmt": "yuv420p10le",
+        "nb_read_frames": "24"
+      },
+      "encoder": "libvvenc",
+      "sha256": "a838950cc4b25c9b5c5d4d34dd9737288a3c95e84c08f8b2f6fad97302e448b2"
+    }
+  ],
+  "externalPlayer": "NOT_TESTED",
+  "runtimeProbe": {
+    "Available": true,
+    "ExitCode": 0,
+    "Bytes": 2532,
+    "Error": "",
+    "Protocol": "encode-mkv-decode-v1"
+  },
+  "tested_head": "7a67d9e93a2440ace2cde8a7755a16fbd2cc27c0",
+  "tested_merge": "7bfc63b9b6c133d90c3e974de7bc548954fbbdac",
+  "run_id": 38345727802,
+  "artifact_id": 11788845480,
+  "artifact_sha256": "760572095d5633d8e33c784865a52527919978800eb2d64d43837f7ebc4a3f65",
+  "toolchain": {
+    "assetName": "ffmpeg-master-latest-win64-gpl.zip",
+    "releasePublishedAt": "2026-10-12T13:33:26Z",
+    "ffmpegVersion": "ffmpeg version N-127388-g615b07170e-20261012 Copyright (c) 2000-2026 the FFmpeg developers\nbuilt with gcc 16.2.0 (crosstool-NG 1.29.0.7_b1a94f6)\nconfiguration: --prefix=/ffbuild/prefix --pkg-config-flags=--static --pkg-config=pkg-config --cross-prefix=x86_64-w64-mingw32- --arch=x86_64 --target-os=mingw32 --enable-gpl --enable-version3 --disable-debug --disable-w32threads --enable-pthreads --enable-iconv --enable-zlib --enable-libxml2 --enable-libvmaf --disable-libxcb --disable-xlib --enable-fontconfig --enable-libharfbuzz --enable-libfreetype --enable-libfribidi --enable-lcms2 --enable-vulkan --enable-libdav1d --enable-libvorbis --enable-librav1e --enable-librsvg --disable-libpulse --enable-gmp --enable-lzma --enable-liblcevc-dec --enable-opencl --enable-amf --enable-libaom --enable-avisynth --enable-chromaprint --enable-libdavs2 --enable-libdvdread --enable-libdvdnav --disable-libfdk-aac --enable-ffnvcodec --enable-cuda-llvm --enable-frei0r --enable-libgme --enable-libkvazaar --enable-libaribb24 --enable-libaribcaption --enable-libass --enable-libbluray --enable-libcurl --enable-libjxl --enable-libmp3lame --enable-libopus --enable-libplacebo --enable-librist --enable-libssh --enable-libtheora --enable-libvpx --enable-libwebp --enable-libzmq --enable-lv2 --enable-libvpl --enable-openal --enable-liboapv --enable-libopencore-amrnb --enable-libopencore-amrwb --enable-libopenh264 --enable-libopenjpeg --enable-libopenmpt --enable-librubberband --enable-schannel --enable-sdl2 --enable-libsnappy --enable-libsoxr --enable-libsrt --enable-libsvtav1 --enable-libtwolame --enable-libuavs3d --disable-libdrm --enable-vaapi --enable-vapoursynth --enable-libvidstab --enable-libvvenc --disable-whisper --enable-libx264 --enable-libx265 --enable-libxavs2 --enable-libxvid --enable-libzimg --enable-libzvbi --extra-cflags=-DLIBTWOLAME_STATIC --extra-cxxflags= --extra-libs=-lgomp --extra-ldflags=-pthread --extra-ldexeflags= --cc=x86_64-w64-mingw32-gcc --cxx=x86_64-w64-mingw32-g++ --ar=x86_64-w64-mingw32-gcc-ar --ranlib=x86_64-w64-mingw32-gcc-ranlib --nm=x86_64-w64-mingw32-gcc-nm --extra-version=20261012\nlibavutil      61. 13.100 / 61. 13.100\nlibavcodec     63. 18.101 / 63. 18.101\nlibavformat    63.  9.100 / 63.  9.100\nlibavdevice    63.  2.100 / 63.  2.100\nlibavfilter    12.  5.100 / 12.  5.100\nlibswscale     10.  2.100 / 10.  2.100\nlibswresample   7.  3.101 /  7.  3.101\n\nExiting with exit code 0",
+    "ffprobePath": "D:\\a\\_temp\\qhe-vvc-toolchain-431ac1bc586c4b6581a276e2c9c6ad24\\expanded\\ffmpeg-master-latest-win64-gpl\\bin\\ffprobe.exe",
+    "releaseId": 410636293,
+    "scope": "isolated hosted CI, not product distribution",
+    "releaseTag": "latest",
+    "repository": "BtbN/FFmpeg-Builds",
+    "ffmpegPath": "D:\\a\\_temp\\qhe-vvc-toolchain-431ac1bc586c4b6581a276e2c9c6ad24\\expanded\\ffmpeg-master-latest-win64-gpl\\bin\\ffmpeg.exe",
+    "assetId": 633881560,
+    "archiveSha256": "4480b1abcae8bb46146e271fe603efaa90f29671ff9013bb0aed2d64d12951c8"
+  },
+  "limitations": [
+    "Hosted Windows synthetic one-second source only",
+    "No physical-device, long-form, external-player or perceptual subtitle fidelity acceptance"
+  ]
+}

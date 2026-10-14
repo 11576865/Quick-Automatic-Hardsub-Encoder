@@ -1,0 +1,53 @@
+name: QHE WU10 real Native locked audio packet identity
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/audio-preservation-lock.js'
+      - 'src/media-task.js'
+      - 'src/media-stream-plan.js'
+      - 'scripts/build-wu10-preserved-audio-task.mjs'
+      - 'scripts/check-wu10-native-audio-preservation.ps1'
+      - '.github/workflows/windows-wu10-locked-audio-packets.yml'
+      - 'windows/native-bridge.ps1'
+      - 'windows/media-task.ps1'
+  workflow_dispatch:
+jobs:
+  locked-flac-aac-real-artifact:
+    runs-on: windows-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate official task contract and PowerShell syntax
+        shell: powershell
+        run: |
+          node --test src/audio-preservation-lock.test.mjs
+          if($LASTEXITCODE -ne 0){throw 'Official compiler guard tests failed'}
+          foreach($file in @('windows/native-bridge.ps1','scripts/check-wu10-native-audio-preservation.ps1')){
+            $tokens=$null;$errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors)|Out-Null
+            if($errors.Count){$errors|Format-List;throw "Invalid PowerShell grammar in $file"}
+          }
+      - name: Install local real FFmpeg and FFprobe
+        shell: powershell
+        run: |
+          $ready=$false
+          for($i=0;$i -lt 3;$i++){
+            choco install ffmpeg --yes --no-progress
+            $tools=Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools'
+            $executable=if(Test-Path $tools){Get-ChildItem $tools -Recurse -File -Filter ffmpeg.exe | Select-Object -First 1}else{$null}
+            if($executable -and (Test-Path (Join-Path $executable.DirectoryName 'ffprobe.exe'))){
+              Add-Content -LiteralPath $env:GITHUB_PATH -Value $executable.DirectoryName
+              $ready=$true;break
+            }
+            if($i -lt 2){Start-Sleep -Seconds (5*($i+1))}
+          }
+          if(-not $ready){throw 'External Chocolatey FFmpeg service failed before any media execution'}
+      - name: Real H264 FLAC AAC source to locked Native v4 job and independent SHA256 packet receipt
+        shell: powershell
+        run: |
+          Get-Command ffmpeg,ffprobe -ErrorAction Stop | Select-Object -ExpandProperty Source
+          ./scripts/check-wu10-native-audio-preservation.ps1

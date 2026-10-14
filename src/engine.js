@@ -1,6 +1,7 @@
 import { parseEncoderHelp, validateEncoderSupport } from './media-capabilities.js';
 import { taskSourceArgs, firstPassArgs, retimeTask } from './media-task.js';
 import { hardsubReferenceFilter } from './media-verification.js';
+import {validatePlannedAudioOutput} from './media-stream-plan.js';
 const VENDOR_ENTRY = './vendor/ffmpeg-kit-next-web/dist/index.js';
 const FALLBACK_FONT_URL = './vendor/fallback-fonts/NotoSansSC-Regular.otf';
 const FALLBACK_FONT_FAMILY = 'Noto Sans SC';
@@ -43,18 +44,9 @@ export class EncoderEngine {
   async stageFiles(videoFile, assFile, fontFiles = []) {
     this.assertReady();
     const previousVideo = this.sourceVideoFile;
-    const sameVideo = !!(
-      previousVideo &&
-      videoFile &&
-      (
-        previousVideo === videoFile ||
-        (
-          previousVideo.name === videoFile.name &&
-          Number(previousVideo.size || 0) === Number(videoFile.size || 0) &&
-          Number(previousVideo.lastModified || 0) === Number(videoFile.lastModified || 0)
-        )
-      )
-    );
+    // Only the exact same immutable File object can reuse mounted bytes.
+    // Name, size and lastModified are not proof of equal media content.
+    const sameVideo = !!(previousVideo && videoFile && previousVideo === videoFile);
 
     this.sourceVideoFile = videoFile;
     this.sourceAssFile = assFile;
@@ -130,7 +122,10 @@ export class EncoderEngine {
   async validateTask(task) {
     const caps=await this.taskCapabilities(task.encoder || 'copy');
     validateEncoderSupport(task,caps.encoder,caps.globalOptions);
-    if(['aac','libopus'].includes(task.audio)){const audio=await this.taskCapabilities(task.audio);if(!audio.encoder.available)throw Error('当前核心不支持音频编码器 '+task.audio);}
+    const audioEncoders=task.audioPlan?task.audioPlan.map(a=>a.action):[task.audio];
+    for(const name of new Set(audioEncoders.filter(a=>['aac','libopus','flac'].includes(a)))){
+      const audio=await this.taskCapabilities(name);if(!audio.encoder.available)throw Error('当前核心不支持音频编码器 '+name);
+    }
   }
 
   async probe() {
@@ -690,7 +685,7 @@ export class EncoderEngine {
     });
 
     const layoutSession = await FFprobeKit.execute(
-      `-v error -show_streams -show_entries stream=index,codec_type,width,height,avg_frame_rate,pix_fmt -of compact=p=0:nk=0 ${q(path)}`
+      `-v error -show_streams -show_entries stream=index,codec_type,codec_name,channels,sample_rate,width,height,avg_frame_rate,pix_fmt -of compact=p=0:nk=0 ${q(path)}`
     );
     const layoutRc = layoutSession.getReturnCode?.();
     const layoutOutput = await layoutSession.getOutput?.() || '';
@@ -699,6 +694,7 @@ export class EncoderEngine {
     }
 
     const streamTypes = new Map();
+    const audioOutput=[];
     for (const rawLine of String(layoutOutput).split(/\r?\n/)) {
       const fields = {};
       for (const part of rawLine.trim().split('|')) {
@@ -709,6 +705,7 @@ export class EncoderEngine {
       const index = Number(fields.index);
       if (Number.isInteger(index) && fields.codec_type) {
         streamTypes.set(index, fields.codec_type);
+        if(fields.codec_type==='audio')audioOutput.push(fields);
         if(fields.codec_type==='video' && validation.task){
           const t=validation.task,rate=String(fields.avg_frame_rate||'').split('/').map(Number),fps=rate.length===2?rate[0]/rate[1]:rate[0];
           if(t.expectedWidth && (Number(fields.width)!==t.expectedWidth || Number(fields.height)!==t.expectedHeight))throw Error('成品分辨率与设置不符');
@@ -721,6 +718,7 @@ export class EncoderEngine {
     const videoIndexes = [...streamTypes.entries()]
       .filter(([, type]) => type === 'video')
       .map(([index]) => index);
+    if(validation.task)validatePlannedAudioOutput(validation.task,audioOutput,this.mediaInfo?.audioStreams||[]);
     const audioIndexes = [...streamTypes.entries()]
       .filter(([, type]) => type === 'audio')
       .map(([index]) => index);
@@ -1046,6 +1044,10 @@ function normalizeMediaInfo(info) {
     highBitDepth: !!video.highBitDepth,
     unsafeColorPipeline: !!video.unsafeColorPipeline,
     audioStreams,
+    subtitleStreams:streams.filter(s=>(s.codec_type||s.type)==='subtitle'),
+    subtitleTracks:streams.filter(s=>(s.codec_type||s.type)==='subtitle').length,
+    attachmentStreams:streams.filter(s=>(s.codec_type||s.type)==='attachment'),
+    attachmentTracks:streams.filter(s=>(s.codec_type||s.type)==='attachment').length,
     audioCodec: audio.codec || '',
     audioCodecs: audioStreams.map(stream => stream.codec).filter(Boolean),
     audioTracks: audioStreams.length,

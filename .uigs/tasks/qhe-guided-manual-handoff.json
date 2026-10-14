@@ -1,0 +1,39 @@
+{
+  "goal": "Unify guided and manual task interaction without transferring unsupported evidence",
+  "status": "hosted_validation_complete",
+  "current_bounded_work_unit": "explicit guided intent to CPU manual task handoff",
+  "completed_units": [
+    "Guided quality/size target, audio, container, dimensions and two-pass intent mapping",
+    "Idle-only explicit handoff to existing manual compiler; previous artifact remains source-owned",
+    "Reset manual defaults and per-track overrides; do not transfer calibration evidence"
+  ],
+  "next_units": [
+    "Read hosted handoff browser validation",
+    "Complete two-way shared task authority and generic codec/resolution/preset candidate decisions"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "a954ba66aab648bfc3a52d6faaeaeec9e5d40f9c",
+  "local_tests": {
+    "passed": 222,
+    "skipped": 7,
+    "failed": 0,
+    "build": "pass"
+  },
+  "external_validation_states": {
+    "new_browser": "PASS 38355738500; all nine workflows success",
+    "previous_head": "8/9 workflows pass; Android emulator V4D-06 video packet end 5.033s versus expected 6.021s failed",
+    "physical_devices": "Pending",
+    "android_latest": "PASS 38355738585; prior V4D-06 intermittence unresolved"
+  },
+  "blockers": [
+    "One-way CPU intent reconstruction, not full two-way task-domain unification",
+    "Local Chromium missing",
+    "Android V4D-06 acceptance failure unresolved; no claims of platform completion"
+  ],
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/observations/2026-10-13-qhe-guided-manual-intent-handoff.md"
+  },
+  "updated_timestamp": "2026-10-13T06:15:07.295371+00:00"
+}

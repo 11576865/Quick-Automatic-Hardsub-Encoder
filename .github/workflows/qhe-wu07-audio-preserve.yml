@@ -1,0 +1,34 @@
+name: QHE WU07 P2 audio preservation lock acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/audio-preservation-lock.js'
+      - 'src/audio-preservation-lock.test.mjs'
+      - 'src/media-task.js'
+      - 'src/audio-stream-plan-ui.js'
+      - 'src/media-workspace.js'
+      - 'src/media-stream-plan.js'
+      - 'src/task-review.js'
+      - 'scripts/check-wu07-audio-preserve-browser.cjs'
+      - '.github/workflows/qhe-wu07-audio-preserve.yml'
+  workflow_dispatch:
+jobs:
+  production-audio-preserve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Verify official schema-v4 must-preserve compiler
+        run: node --test src/audio-preservation-lock.test.mjs src/delivery-contract-projection.test.mjs
+      - name: Install real Chromium and production frontend
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Exercise explicit lock, mixed audio, compiler rejection, unlock and source drift
+        run: node scripts/check-wu07-audio-preserve-browser.cjs

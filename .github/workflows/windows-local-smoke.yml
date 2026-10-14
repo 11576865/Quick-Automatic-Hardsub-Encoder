@@ -1,20 +1,34 @@
 name: Windows local smoke
 on:
   push:
+    branches: [main]
     paths:
       - 'windows/**'
       - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-trim-copy-preflight.ps1'
       - 'scripts/check-native-cancel-lifecycle.ps1'
+      - 'scripts/check-vvc-native.ps1'
+      - 'scripts/check-media-frame-rate.ps1'
+      - 'scripts/check-stream-plan-arguments.ps1'
+      - 'scripts/build-stream-plan-tasks.mjs'
+      - 'scripts/build-vvc-tasks.mjs'
       - 'src/main.js'
       - 'src/media-workspace.js'
       - 'src/clip-queue.js'
       - 'src/style.css'
       - '.github/workflows/windows-local-smoke.yml'
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'windows/**'
       - 'scripts/check-guided-budget-native.ps1'
+      - 'scripts/check-trim-copy-preflight.ps1'
       - 'scripts/check-native-cancel-lifecycle.ps1'
+      - 'scripts/check-vvc-native.ps1'
+      - 'scripts/check-media-frame-rate.ps1'
+      - 'scripts/check-stream-plan-arguments.ps1'
+      - 'scripts/build-stream-plan-tasks.mjs'
+      - 'scripts/build-vvc-tasks.mjs'
       - 'src/main.js'
       - 'src/media-workspace.js'
       - 'src/clip-queue.js'
@@ -22,8 +36,13 @@ on:
       - '.github/workflows/windows-local-smoke.yml'
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -34,7 +53,7 @@ jobs:
       - name: Parse Windows entry point
         shell: powershell
         run: |
-          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/native-backend.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1')) {
+          foreach ($path in @('windows/hardsub_windows.ps1', 'windows/native-bridge.ps1', 'windows/trim-packet-audit.ps1', 'windows/trim-copy-preflight.ps1','scripts/check-trim-copy-preflight.ps1','windows/guided-rendered-sample-evidence.ps1', 'scripts/check-guided-vbr-evidence.ps1', 'windows/native-backend.ps1', 'windows/vvc-runtime.ps1', 'windows/output-safety.ps1', 'windows/media-task.ps1', 'windows/compression-history.ps1', 'windows/bink-import.ps1', 'scripts/check-vvc-native.ps1','windows/media-frame-rate.ps1','scripts/check-media-frame-rate.ps1','scripts/check-stream-plan-arguments.ps1')) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
@@ -70,6 +89,9 @@ jobs:
             $env:RADVIDEO64 = $previous
           }
 
+      - name: Verify isolated Guided ASS Native VBR staged-asset receipt
+        shell: powershell
+        run: ./scripts/check-guided-vbr-evidence.ps1
       - name: Guard Windows launcher and console visibility contract
         shell: powershell
         run: |
@@ -143,7 +165,37 @@ jobs:
 
       - name: Install FFmpeg for encoding smoke
         shell: powershell
-        run: choco install ffmpeg --yes --no-progress
+        run: |
+          $ready=$false
+          for($attempt=1;$attempt -le 3;$attempt++){
+            choco install ffmpeg --yes --no-progress
+            if($LASTEXITCODE -eq 0){$ready=$true;break}
+            Write-Warning "FFmpeg Chocolatey installation attempt $attempt failed (upstream package feed may be unavailable)."
+            if($attempt -lt 3){Start-Sleep -Seconds ($attempt * 5)}
+          }
+          if(-not $ready){throw 'Cannot install FFmpeg after bounded retries; external package service failure, not an encoder regression.'}
+      - name: B16 independent real FFmpeg pre-encode trimmed auxiliary remux packet oracle
+        shell: powershell
+        run: ./scripts/check-trim-copy-preflight.ps1
+      - name: Validate native Manual sample evidence receipts on real FFmpeg source
+        shell: powershell
+        run: ./scripts/check-manual-sample-evidence.ps1
+      - name: Validate per-stream structured task contract
+        shell: powershell
+        run: ./scripts/check-stream-plan-arguments.ps1
+      - name: Validate rational FPS parser
+        shell: powershell
+        run: ./scripts/check-media-frame-rate.ps1
+      - name: Validate H.266 structured task and actual VVC runtime when available
+        shell: powershell
+        run: ./scripts/check-vvc-native.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vvc-native-acceptance
+          path: vvc-native-acceptance.json
+          if-no-files-found: ignore
+
       - name: Verify exact CQ and VBR sample encoder arguments
         shell: powershell
         run: |

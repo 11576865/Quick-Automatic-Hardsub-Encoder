@@ -1,0 +1,38 @@
+{
+  "tested_head": "2e81ac1449319136aafa70c103f2d3c178329694",
+  "observed_at": "2026-10-13T07:26:15.516213+00:00",
+  "workflows": {
+    "frontend": 38360213661,
+    "windows_smoke": 38360213667,
+    "windows_stream_plan": 38360213677,
+    "paired_codec": 38360213702,
+    "vvc_required": 38360213716,
+    "android_emulator": 38360213777,
+    "android_compile": 38360213732,
+    "device_fixture": 38360213711,
+    "uigs": 38360213672
+  },
+  "workflow_conclusion": "all nine success",
+  "browser": "check-media-ui.cjs completed; shared form values, run, cancel, cross-view save failure/retry checked using simulated media callbacks",
+  "artifact": {
+    "id": 11795090075,
+    "sha256": "2a61c0dfd720bfa0013d781d3d556b9dc87f4ebcc92ff3d609325681201ec258",
+    "download_digest_verified": true
+  },
+  "visual_review": [
+    {
+      "file": "media-workspace-hardsub-goal-mobile.png",
+      "sha256": "b7a1fe00d05a323d488c0e479dc62eba085cef5f438691d5548c809707e0d601"
+    },
+    {
+      "file": "media-workspace-hardsub-goal-desktop.png",
+      "sha256": "ce3c9bd5c4b84cdd039fb30f08a50f68daeff3e9801c4ee15b72ba1c94bb3b8b"
+    }
+  ],
+  "visual_scope": "Production desktop/phone CSS; source-unloaded layout fixtures, not actual user-media operation. Phone shared workspace visible; long vertical config/trial content remains refinement debt. Desktop empty-source view cannot establish loaded task layout.",
+  "limits": [
+    "Physical device/provider dialogs, long-form, player acceptance Pending",
+    "Windows four-candidate quality measurement not yet independently accepted",
+    "Resolution cross-product and exact auxiliary budget measurement remain open"
+  ]
+}

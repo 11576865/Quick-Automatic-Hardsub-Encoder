@@ -10,6 +10,30 @@ const {spawn}=require('node:child_process');
   browser=await chromium.launch({headless:true});
   await require('./check-curve-design.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-calibration-lifecycle.cjs')(browser,'http://127.0.0.1:4179');
+  await require('./check-vvc-ui.cjs')(browser,'http://127.0.0.1:4179');
+  await require('./check-whole-budget-ui.cjs')(browser,'http://127.0.0.1:4179');
+  await require('./check-audio-plan-ui.cjs')(browser,'http://127.0.0.1:4179');
+  // Review disclosure must shorten a fresh phone view without hiding terminal states.
+  const compactPage=await browser.newPage({viewport:{width:320,height:800}});
+  await compactPage.goto('http://127.0.0.1:4179');
+  await compactPage.waitForSelector('#taskReviewDetails',{state:'attached'});
+  await compactPage.evaluate(()=>{const op=document.querySelector('[name=operation]');op.value='transcode';op.dispatchEvent(new Event('change',{bubbles:true}));});
+  if(await compactPage.locator('#taskReviewDetails').evaluate(el=>el.open))throw Error('Fresh phone review should be collapsed');
+  if(!(await compactPage.locator('[data-review-overview]').textContent()).includes('尚无成品'))throw Error('Collapsed review lost artifact state');
+  const collapsedHeight=await compactPage.locator('#taskReviewDetails').evaluate(el=>el.getBoundingClientRect().height);
+  await compactPage.locator('#taskReviewDetails>summary').focus();
+  await compactPage.keyboard.press('Enter');
+  if(!await compactPage.locator('#taskObjectReview').isVisible())throw Error('Keyboard cannot expand phone review');
+  const expandedHeight=await compactPage.locator('#taskReviewDetails').evaluate(el=>el.getBoundingClientRect().height);
+  if(expandedHeight-collapsedHeight<120)throw Error('Collapsed review did not reduce phone height');
+  await compactPage.selectOption('[name=preset]','fast');
+  if(!await compactPage.locator('#taskReviewDetails').evaluate(el=>el.open))throw Error('Parameter refresh reset review disclosure');
+  if(await compactPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1))throw Error('Expanded review overflow at 320px');
+  await compactPage.screenshot({path:'media-workspace-review-phone-expanded.png',fullPage:true});
+  await compactPage.locator('#taskReviewDetails>summary').click();
+  await compactPage.screenshot({path:'media-workspace-review-phone-compact.png',fullPage:true});
+  await compactPage.close();
+
 
   // Exercise the real browser refresh boundary for Windows Native. The launch
   // URL is intentionally one-shot; the second load must reconnect from
@@ -200,7 +224,7 @@ const {spawn}=require('node:child_process');
   await viewportPage.screenshot({path:'media-workspace-studio-intake-320.png',fullPage:true});
   await viewportPage.evaluate(()=>{
     document.body.dataset.mobileStage='produce';
-    document.querySelector('[data-hardsub-strategy="guided"]')?.click();
+    document.querySelector('button[data-hardsub-strategy="guided"]')?.click();
     ['subtitleCard','planCard','encodeCard'].forEach(id=>document.getElementById(id)?.classList.remove('hidden'));
   });
   if(!await viewportPage.locator('#sharedMediaOutputMount').isVisible())
@@ -271,7 +295,7 @@ const {spawn}=require('node:child_process');
   await page.selectOption('[name=audio]','copy');
   if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Guided copied-audio warning does not return after selecting copy');
   await page.screenshot({path:'media-workspace-hardsub-goal-desktop.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
+  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace');
   if(await page.locator('.media-workflow-notes').evaluate(el=>el.open))
     throw Error('Verbose task architecture is expanded in the default manual editor');
@@ -282,8 +306,11 @@ const {spawn}=require('node:child_process');
 
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
   await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="guided"]').click());
-  if(await page.locator('#mediaWorkspace').isVisible())throw Error('Returning to goal-controlled hardsub left the parameter workspace visible');
+  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="guided"]').click());
+  if(!await page.locator('#mediaWorkspace').isVisible() ||
+     !await page.locator('#taskEncoding').isHidden() ||
+     !await page.locator('#planCard').isVisible())
+    throw Error('Guided hardsub must keep the shared workspace and goal plan, but hide professional encoder parameters');
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'copy');
   if(!await page.locator('#taskRun').isDisabled() ||
      (await page.locator('#taskRun').getAttribute('data-input-requirement'))!=='video')
@@ -362,14 +389,16 @@ const {spawn}=require('node:child_process');
   await page.screenshot({path:'media-workspace-mobile.png',fullPage:true});
   if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('Mobile horizontal overflow: '+JSON.stringify(await page.evaluate(()=>[...document.querySelectorAll('body *')].map(el=>({tag:el.tagName,id:el.id,class:el.className,right:el.getBoundingClientRect().right})).filter(el=>el.right>innerWidth+1).slice(0,12))));
   await page.evaluate(mode=>{const control=document.querySelector('[name=operation]');control.value=mode;control.dispatchEvent(new Event('change',{bubbles:true}));},'hardsub');
-  await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('[data-hardsub-strategy="guided"]').click();});
-  if(await page.locator('#mediaWorkspace').isVisible())throw Error('Goal-controlled hardsub exposes parameter controls on mobile');
+  await page.evaluate(()=>{document.body.dataset.mobileStage='produce';document.querySelector('button[data-hardsub-strategy="guided"]').click();});
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub lost the shared task workspace on mobile');
+  if(await page.locator('#taskEncoding').isVisible())throw Error('Guided hardsub exposes precision parameters on mobile');
+  if(await page.locator('#encodeCard').isVisible())throw Error('Guided hardsub exposes a second legacy executor without a recovered job');
   const phonePlanTabs=await page.locator('#planCard .plan-mode-tab').evaluateAll(tabs=>
     tabs.map(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:r.width,visible:getComputedStyle(el).display!=='none'};}));
   if(phonePlanTabs.length!==3||phonePlanTabs.some(t=>!t.visible||t.left<-1||t.right>390.5||t.width<80))
     throw Error('Phone guided strategy hides or clips one of three goal choices: '+JSON.stringify(phonePlanTabs));
   await page.screenshot({path:'media-workspace-hardsub-goal-mobile.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('[data-hardsub-strategy="manual"]').click());
+  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="manual"]').click());
   if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub is hidden from the mobile produce stage');
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible()){
     const gateState=await page.evaluate(()=>Object.fromEntries(['planCard','encodeCard','mediaWorkspace'].map(id=>{
@@ -771,7 +800,32 @@ const {spawn}=require('node:child_process');
      (await page.locator('#taskAddClip').textContent()).trim()!=='加入片段'||
      !(await page.locator('#taskClipQueueList li').last().textContent()).includes('2:15'))
     throw Error('Cancelled clip edit modified the existing queue');
+  const queueFlow=await page.evaluate(()=>{
+    const r=id=>document.querySelector(id).getBoundingClientRect();
+    return {inputEnd:r('[name=end]').bottom,queue:r('#taskClipQueuePanel').top,
+      queueBottom:r('#taskClipQueuePanel').bottom,timeline:r('#taskWaveformPanel').top};
+  });
+  if(queueFlow.queue<queueFlow.inputEnd-1||queueFlow.queueBottom>queueFlow.timeline+1)
+    throw Error('Clip queue is not located between IN/OUT and the optional timeline: '+JSON.stringify(queueFlow));
   await page.screenshot({path:'media-workspace-copy-segment-queue-390.png',fullPage:true});
+  await page.setViewportSize({width:320,height:720});
+  await page.evaluate(()=>{document.documentElement.style.fontSize='24px';});
+  const queuePhone=await page.evaluate(()=>{
+    const r=id=>document.querySelector(id).getBoundingClientRect();
+    const buttons=[...document.querySelectorAll('#taskClipQueuePanel button')].filter(el=>
+      getComputedStyle(el).display!=='none'&&el.getBoundingClientRect().width>0);
+    return {overflow:document.documentElement.scrollWidth>innerWidth,
+      endBottom:r('[name=end]').bottom,queueTop:r('#taskClipQueuePanel').top,
+      queueBottom:r('#taskClipQueuePanel').bottom,timelineTop:r('#taskWaveformPanel').top,
+      tinyButtons:buttons.filter(el=>el.getBoundingClientRect().height<44).map(el=>el.id||el.textContent.trim())};
+  });
+  if(queuePhone.overflow||queuePhone.tinyButtons.length||
+     queuePhone.queueTop<queuePhone.endBottom-1||
+     queuePhone.queueBottom>queuePhone.timelineTop+1)
+    throw Error('320px 150%-root-font queue has overflow, small hit targets or wrong order: '+JSON.stringify(queuePhone));
+  await page.screenshot({path:'media-workspace-copy-segment-queue-320-large-text.png',fullPage:true});
+  await page.evaluate(()=>{document.documentElement.style.fontSize='';});
+  await page.setViewportSize({width:390,height:720});
   await page.evaluate(()=>{window.clipBatchMockActive=true;window.clipExportRequests=[];});
   const previousRuns=await page.evaluate(()=>window.taskRuns.length);
   await page.click('#taskExportClips');

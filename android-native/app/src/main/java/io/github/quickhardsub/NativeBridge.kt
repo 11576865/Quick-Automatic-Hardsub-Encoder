@@ -298,6 +298,8 @@ class NativeBridge(
                     .put("unsafeColorPipeline", hdr || inferredDepth > 8)
                     .put("audioTracks", audioTracks)
                     .put("audioStreams", audioFacts)
+                    .put("subtitleTracks", streams.count { it.getType() == "subtitle" })
+                    .put("attachmentTracks", streams.count { it.getType() == "attachment" })
                     .put("audioCodec", audioStreams.firstOrNull()?.getCodec() ?: "")
                     .put("audioCodecs", JSONArray(audioStreams.map { it.getCodec() ?: "" }))
                     .put("audioBitRate", audioBitRate)
@@ -1635,6 +1637,8 @@ class NativeBridge(
     fun exportJobOutput(jobId: String, destination: Uri) {
         thread(name = "native-export-" + jobId.take(8)) {
             val result = JSONObject().put("jobId", jobId)
+            var strictExport = false
+            var verifiedSnapshot: java.io.File? = null
             try {
                 if (!NativeJobStore.isSafeJobId(jobId)) {
                     throw IllegalStateException("无效 Native job id")
@@ -1649,20 +1653,82 @@ class NativeBridge(
                     throw IllegalStateException("Native 成品文件不存在")
                 }
 
+                val request = JSONObject(NativeJobStore.requestFile(activity, jobId).readText(Charsets.UTF_8))
+                val ceiling = NativeJobStore.strictBudgetCeiling(request.optJSONObject("task"))
+                strictExport = ceiling > 0L
+                // Freeze and verify the private source before opening the newly
+                // created SAF document. Never write unapproved source bytes.
+                var exportSource = output
+                if (strictExport) {
+                    val snapshot = java.io.File(NativeJobStore.jobDir(activity, jobId), "export-" + java.util.UUID.randomUUID().toString() + ".tmp")
+                    verifiedSnapshot = snapshot
+                    val approved = java.security.MessageDigest.getInstance("SHA-256")
+                    var length = 0L
+                    output.inputStream().use { input -> snapshot.outputStream().use { out ->
+                        val buffer = ByteArray(1024 * 1024)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            length += count
+                            NativeJobStore.requireBudgetBytes(length, ceiling)
+                            approved.update(buffer, 0, count)
+                            out.write(buffer, 0, count)
+                        }
+                    } }
+                    require(length == status.optLong("outputBytes") && approved.digest().joinToString("") { "%02x".format(it) } == status.optString("sha256")) { "Strict staged source differs from verified output" }
+                    exportSource = snapshot
+                }
+                NativeJobStore.requireBudgetBytes(output.length(), ceiling)
+                val digest = java.security.MessageDigest.getInstance("SHA-256")
+                var copied = 0L
                 activity.contentResolver.openOutputStream(destination, "w")?.use { out ->
-                    output.inputStream().use { input ->
-                        input.copyTo(out, 1024 * 1024)
+                    exportSource.inputStream().use { input ->
+                        val buffer = ByteArray(1024 * 1024)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            copied += count
+                            NativeJobStore.requireBudgetBytes(copied, ceiling)
+                            digest.update(buffer, 0, count)
+                            out.write(buffer, 0, count)
+                        }
                     }
                 } ?: throw IllegalStateException("无法打开目标保存位置")
+                NativeJobStore.requireBudgetBytes(copied, ceiling)
+                if (ceiling > 0L) {
+                    val copiedHash = digest.digest().joinToString("") { "%02x".format(it) }
+                    require(copied == status.optLong("outputBytes") && copiedHash == status.optString("sha256")) { "Strict copied output differs from verified artifact" }
+                    val readback = java.security.MessageDigest.getInstance("SHA-256")
+                    var savedBytes = 0L
+                    activity.contentResolver.openInputStream(destination)?.use { input ->
+                        val buffer = ByteArray(1024 * 1024)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            savedBytes += count
+                            NativeJobStore.requireBudgetBytes(savedBytes, ceiling)
+                            readback.update(buffer, 0, count)
+                        }
+                    } ?: throw IllegalStateException("Strict save requires destination readback verification")
+                    require(savedBytes == copied && readback.digest().joinToString("") { "%02x".format(it) } == copiedHash) { "Strict saved container differs from verified artifact" }
+                }
 
                 result
                     .put("ok", true)
-                    .put("bytes", output.length())
+                    .put("bytes", copied)
                     .put("sha256", status.optString("sha256", ""))
             } catch (e: Throwable) {
+                // This URI comes only from MainActivity ACTION_CREATE_DOCUMENT;
+                // remove our new partial/unverified document, never a source.
+                val cleaned = if (strictExport) try {
+                    android.provider.DocumentsContract.deleteDocument(activity.contentResolver, destination)
+                } catch (_: Throwable) { false } else true
                 result
                     .put("ok", false)
-                    .put("error", e.message ?: e.javaClass.simpleName)
+                    .put("cleanupOk", cleaned)
+                    .put("error", (e.message ?: e.javaClass.simpleName) + if (cleaned) "" else "；目标提供方拒绝清理，未验证文件可能仍在保存位置，请删除后重试")
+            } finally {
+                try { verifiedSnapshot?.delete() } catch (_: Throwable) {}
             }
             postJsonCallback("__onNativeExportResult", result)
         }

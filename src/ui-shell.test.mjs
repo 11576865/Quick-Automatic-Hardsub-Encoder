@@ -234,7 +234,7 @@ test('runtime-first three-endpoint layout keeps Android and Windows entry visibl
   assert.match(main, /<span class="step-no">02<\/span>[\s\S]*?<span class="preflight-heading">媒体与字幕预检/);
   assert.match(main, /<span class="step-no">03<\/span>[\s\S]*?<h2>真实字幕预览/);
   assert.match(main, /<h2>选择控制方式<\/h2>/);
-  assert.match(main, /<span class="step-no">04<\/span><div><h2>输出策略/);
+  assert.match(main, /<span class="step-no">04<\/span><div><h2>引导目标/);
   assert.match(main, /<span class="step-no">05<\/span><div><h2>执行与验证/);
 
   assert.match(css, /Runtime-first responsive workbench v4/);
@@ -427,7 +427,11 @@ test('target-size mode exposes a draggable measured frontier', async () => {
   assert.match(main, /sizeFrontierChart'\)\.addEventListener\('keydown', commitSizeFrontierKeyboard\)/);
   assert.match(main, /state\.sizeBudgetTargetBytes = Math\.round\(clamped\)/);
   assert.match(main, /budgetSource: directBudgetBytes > 0 \? 'frontier' : 'multiplier'/);
-  assert.match(main, /directBudgetBytes > 0\s*\? ceilingVideoBitrate/);
+  // Both multiplier and direct-frontier targets use the same formal whole-file
+  // ledger and integer video bitrate; the former split is no longer valid.
+  assert.match(main, /const targetVideoBitrate = ceilingVideoBitrate;/);
+  assert.match(main, /const ceilingVideoBitrate = feasibility\.availableVideoBitrate;/);
+  assert.match(main, /assessGuidedWholeFileBudget\(\{/);
   assert.match(main, /state\.rateDistortionModels = \{\}/);
   assert.match(main, /state\.sizeBudgetTargetBytes = null/);
 
@@ -519,7 +523,8 @@ test('guided size budget compares compatible measured codec curves with explicit
  assert.match(main,/样本质量下限/);
  assert.match(main,/createMultiBranchFrontier\(/);
  assert.match(main,/state\.sizeEnvelopeEnabled=compareForSize/);
- assert.match(main,/selectCodec\(recommendation\.branchId\)/);
+ assert.match(main,/createGuidedBranchProposal\(/);
+ assert.match(main,/commitVerifiedGuidedBranch\(/);
  assert.match(main,/calibrationShouldContinue\(/);
 });
 
@@ -527,10 +532,10 @@ test('final verified output reports predicted vs actual size without claiming pe
  const source=await readFile(new URL('./main.js',import.meta.url),'utf8');
  assert.match(source,/nativeJobProjection/);
  assert.match(source,/plannedBytes:Number\(plan\.plannedBytes/);
- assert.match(source,/const sizeError=projection\?\.plannedBytes/);
- assert.match(source,/体积误差/);
- assert.match(source,/已超出目标体积上限/);
- assert.match(source,/sizeComparison:projection/);
+ assert.match(source,/const comparison=completedGuidedNativeBudget\(/);
+ assert.match(source,/formatCompletedGuidedNativeBudget\(comparison,formatBytes\)/);
+ assert.match(source,/sizeComparison:comparison/);
+ assert.match(source,/const comparison=completedGuidedNativeBudget\(status,jobId\)/);
 });
 
 test('guided multi-resolution calibration keeps output scale, SSIM reference and execution branch aligned',async()=>{
@@ -544,7 +549,8 @@ test('guided multi-resolution calibration keeps output scale, SSIM reference and
  assert.match(main,/resolutionRateDistortionModels/);
  assert.match(main,/referenceWidth:outputSize\?\.width/);
  assert.match(main,/outputWidth:plan\.outputWidth\|\|0/);
- assert.match(main,/state\.guidedOutputSize=resolution\.outputWidth>0/);
+ assert.match(main,/state\.guidedOutputSize=selection\.outputSize\?\{\.\.\.selection\.outputSize\}:null/);
+ assert.match(main,/preview:p=>buildEncodePlan\(p\.codec,p\.outputSize\)/);
  assert.match(bridge,/scale='\+\$ReferenceWidth\+':'\+\$ReferenceHeight/);
  assert.match(bridge,/Guided output resolution differs from adopted calibration branch/);
  assert.match(bridge,/scale='\+\$outW\+':'\+\$outH\+':flags=bicubic/);
@@ -576,7 +582,8 @@ test('budgeted paired refinement is attached after codec and resolution comparis
  assert.match(main,/originalFingerprint:plan\.previousFingerprint/);
  assert.match(main,/if\(!check\.ok \|\| check\.evaluateTargetBytes\(targetBytes\)\.status/);
  assert.match(main,/配对追加测量未发布/);
- assert.match(main,/sourceScope:sourceEvidenceKey\(state\.media/);
+ assert.match(main,/sourceScope:samplePlan\.decisionScope/);
+ assert.match(main,/const sourceScope=currentGuidedDecisionScope\(\)/);
 });
 
 test('guided sample ingress refuses missing or falsified elapsed timing evidence',async()=>{
@@ -594,7 +601,9 @@ test('guided size target distinguishes CQ samples from formal VBR and actual fil
  assert.match(main,/CQ 短样曲线/);
  assert.match(main,/CQ 短样质量曲线不能代表正式 VBR 的整片 SSIM/);
  assert.match(main,/可能明显超出预算/);
- assert.match(main,/actualBytes>projection\.budgetBytes/);
+ const receipt=await readFile(new URL('./native-guided-budget-recovery.js',import.meta.url),'utf8');
+ assert.match(receipt,/const withinBudget=actualBytes<=budgetBytes/);
+ assert.match(receipt,/严格验收凭据不完整，不能宣称已核验/);
 });
 
 test('guided size budget explicitly records execution policy and byte ceiling',async()=>{
@@ -616,6 +625,7 @@ test('two-pass software execution cannot inherit CQ/NVENC quality and speed pred
  assert.match(main,/executionPolicy\.policy==='best-effort'\s*\? currentSizeFrontier\(codec\) : null/);
  assert.match(main,/sizeBudgetPolicy!=='best-effort'/);
  assert.match(main,/containerReserveBytes,/);
- assert.match(main,/严格字节上限已核验/);
+ const budgetReceipt=await readFile(new URL('./native-guided-budget-recovery.js',import.meta.url),'utf8');
+ assert.match(budgetReceipt,/严格字节上限已由 Native 核验/);
  assert.match(main,/Strict container byte ceiling exceeded/);
 });

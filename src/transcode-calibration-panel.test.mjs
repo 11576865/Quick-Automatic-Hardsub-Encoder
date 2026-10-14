@@ -15,7 +15,7 @@ test('manual transcode renders one measured size-quality curve with optional CQ 
   assert.equal((panel.match(/<svg id="task[^"]+Chart"/g)||[]).length,1);
   assert.match(panel,/exploreQuality\(/);
   assert.match(panel,/createMeasuredSizeFrontier/);
-  assert.match(panel,/hooks\.applyBitrate/);
+  assert.match(panel,/hooks\.applySizeBudget/);
   assert.match(panel,/hooks\.applyQuality/);
   assert.match(panel,/raw\.operation!=='transcode'/);
   assert.match(panel,/calibrationSampleStarts/);
@@ -41,7 +41,7 @@ test('calibration workflow retains source identity and stops incomplete trials s
   assert.match(panel,/clearEvidence\(\);[\s\S]*?label\(\(cancelRequested/);
   assert.match(panel,/const evidenceIsCurrent/);
   assert.match(panel,/evidenceIsCurrent\(\)/);
-  assert.match(panel,/expectedAudioDuration/);
+  assert.match(panel,/wholeFileLedger\(task,hooks\.budgetEvidence/);
   assert.match(workspace,/transcodeCurves\.invalidate\(\)/);
   assert.match(main,/sampleExact: true/);
   assert.match(main,/multipass, sampleExact: true/);
@@ -55,7 +55,8 @@ test('exact video-only calibration reads source directly for SSIM instead of wri
   const script=await readFile(new URL('../windows/native-bridge.ps1',import.meta.url),'utf8');
   assert.match(script,/function Get-SsimAgainstSource/);
   assert.match(script,/format=yuv420p,setpts=PTS-STARTPTS/);
-  assert.match(script,/if\(-not \[bool\]\$o\.sampleExact\)/);
+  assert.match(script,/\$exactManualEvidence=\[bool\]\$o\.sampleExact -and -not \[bool\]\$o\.withSubtitles -and \[bool\]\$o\.measureSsim/);
+  assert.match(script,/if\(\$exactManualEvidence\)\{\s*Get-SsimAgainstSource/);
   assert.match(script,/Get-SsimAgainstSource \$candidate \$video \$startText \$durationText/);
   assert.match(script,/Get-Ssim \$candidate \$reference \$work/);
 });
@@ -78,6 +79,8 @@ test('the single manual curve retains measured evidence and pointer geometry',as
   assert.doesNotMatch(main,/\(svgX - 34\) \/ \(720 - 68\)/);
   assert.match(panel,/class="media-curve-legend"/);
   assert.match(svg,/curve-sample-whisker/);
+ assert.match(svg,/短样拟合 SSIM/);
+ assert.doesNotMatch(svg,/平均样本 SSIM/);
   assert.match(style,/\.curve-axis/);
   assert.match(mediaCss,/\.media-curve-legend/);
 });
@@ -126,4 +129,35 @@ test('native exact CQ/VBR probes include an FFmpeg process timeout',async()=>{
  assert.match(bridge,/if \(\$TimeoutSeconds -gt 0\)/);
  assert.match(bridge,/\$p\.Kill\(\)/);
  assert.match(bridge,/FFmpeg sample encode timeout after/);
+});
+
+test('optional real Native x264/x265 comparison reuses one Manual chart and refuses implicit adoption',async()=>{
+ const [panel,optional,css]=await Promise.all([
+  readFile(new URL('./transcode-calibration-panel.js',import.meta.url),'utf8'),
+  readFile(new URL('./manual-transcode-compare-ui.js',import.meta.url),'utf8'),
+  readFile(new URL('./media-workspace-ui.css',import.meta.url),'utf8')
+ ]);
+ assert.match(panel,/mountManualTranscodeComparison\(/);
+ assert.match(panel,/compareController\.showResult\(\)/);
+ assert.match(panel,/compareController\.selectPointer\(event\)/);
+ assert.match(panel,/compareController\.selectKeyboard\(event\)/);
+ assert.match(panel,/compareController\?\.invalidate\(\)/);
+ assert.equal((panel.match(/<svg id="task[^"]+Chart"/g)||[]).length,1);
+ assert.doesNotMatch(optional,/<svg/);
+ assert.match(optional,/id="taskCompareStart"/);
+ assert.match(optional,/id="taskCompareStop"/);
+ assert.match(optional,/id="taskCompareSingle"/);
+ assert.match(optional,/id="taskCompareDetails"/);
+ assert.match(optional,/runManualPairedSweep\(/);
+ assert.match(optional,/hooks\.calibrationSample\(/);
+ assert.match(optional,/createManualTranscodeSession\(/);
+ assert.match(optional,/await hooks\.validate/);
+ assert.match(optional,/samplePlanVersion:'manual-ui-paired-risk-v2:'\+scenePlan\.fingerprint/);
+ assert.match(optional,/prepareManualPairedRiskPlan\(/);
+ assert.match(optional,/manualCandidateSet\(activePolicy,geometry\)/);
+ assert.match(optional,/maxTotalSamples:maxRequests/);
+ assert.match(optional,/activePolicy===policy.value/);
+ assert.match(optional,/audioEvidence:'estimated'/);
+ assert.doesNotMatch(optional,/hooks\.applyQuality\(|hooks\.applyBitrate\(/);
+ assert.match(css,/\.media-compare-controls/);
 });

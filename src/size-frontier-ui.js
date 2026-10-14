@@ -134,6 +134,7 @@ export function buildSizeFrontierPlot(frontier, {
 
   return {
     ok: true,
+    budgetLabel:frontier.kind==='whole-file-projection'?'成品目标体积':null,
     width,
     height,
     paddingX,

@@ -1,0 +1,174 @@
+{
+  "goal": "Implement most researched QHE workflows including VVC and task-centered UI within five work units",
+  "status": "historical_scoped_delivery_not_initial_version_completion",
+  "round": 5,
+  "current_bounded_work_unit": "follow-up conservative budget reservation for trimmed copied streams",
+  "completed_units": [
+    {
+      "round": 1,
+      "scope": "Windows VVC task/compiler, capability gate, manual UI, codec-safe short trials and cancellable full-output decode",
+      "implementation": "complete",
+      "local_node_tests": {
+        "pass": 190,
+        "skipped": 5,
+        "failed": 0
+      },
+      "legacy_ffmpeg_integration": {
+        "pass": 3,
+        "failed": 0
+      },
+      "build": "pass",
+      "review": "3 Important findings addressed; no Critical findings",
+      "windows_runtime": "Windows smoke failed in new top-level-array reader; fixed in round 2, awaiting rerun",
+      "browser": "hosted frontend success, mocked Native capability scope"
+    },
+    {
+      "round": 2,
+      "implementation": "complete",
+      "scope": "heterogeneous audio plan, auxiliary mapping, authoritative UI, output audio contract, rational FPS parser and prior PS array fix",
+      "local_node_tests": {
+        "pass": 196,
+        "skipped": 6,
+        "failed": 0
+      },
+      "real_ffmpeg_integration": {
+        "pass": 4,
+        "failed": 0
+      },
+      "build": "pass",
+      "independent_review": "5 Important findings addressed",
+      "windows_android_browser": "pending CI"
+    },
+    {
+      "round": 3,
+      "implementation": "complete",
+      "scope": "whole-container payload ledger and completion/export strict gate; Android nullability and responsive sizing repairs",
+      "local_node_tests": {
+        "pass": 204,
+        "skipped": 7,
+        "failed": 0
+      },
+      "real_ffmpeg_integration": {
+        "pass": 5,
+        "failed": 0
+      },
+      "build": "pass",
+      "independent_review": "three Important findings addressed and duplicate BOM repaired",
+      "windows_android_browser": "pending CI",
+      "limits": [
+        "Windows-only source-cost measurement",
+        "trim-specific copied stream costs and FLAC re-encode unknown",
+        "SAF source mutation/readback/provider cleanup field tests pending"
+      ]
+    },
+    {
+      "round": 4,
+      "implementation": "complete",
+      "scope": "manual source/plan/artifact review; copied/removed stream and budget projection; original result ownership; saved-state inspect fix",
+      "local_node_tests": {
+        "pass": 211,
+        "skipped": 7,
+        "failed": 0
+      },
+      "real_ffmpeg_integration": {
+        "pass": 5,
+        "failed": 0
+      },
+      "build": "pass",
+      "review": "self-review; source frame ownership and browser save-kind addressed",
+      "limits": [
+        "guided hard-sub retains existing presentation",
+        "browser visual/runtime Pending",
+        "physical device Pending"
+      ]
+    },
+    {
+      "round": 5,
+      "scope": "exact-head 8-workflow acceptance; Android 8-output report; desktop/phone visual review; explicit VVC unsupported boundary",
+      "implementation": "complete",
+      "tested_head": "95fc86dee63585493818f9c452b69649dd68fc1c",
+      "acceptance_manifest": "docs/evidence/five-round-delivery/acceptance-2026-10-13.json",
+      "hosted_workflows": {
+        "success": 8,
+        "failed": 0,
+        "pending": 0
+      },
+      "android_outputs": {
+        "passed": 8,
+        "total": 8
+      },
+      "vvc_actual_runtime": "UNSUPPORTED in CI; libvvenc absent; field Pending"
+    }
+  ],
+  "next_units": [
+    "physical-device and actual libvvenc acceptance; product-wide remaining research scope; integration/merge decision separate"
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "base_commit": "0feed738042745ace6c031f726a3ad93561e56e8",
+  "pr": 105,
+  "latest_durable_commit": "4549acf57e13514c5bcbfe66612b1c3d847fa76e",
+  "external_validation_states": {
+    "windows_vvc": "PASS hosted three actual jobs, run 38345727802; physical Pending",
+    "browser": "Passed run 38342175981; production desktop and VVC phone screenshots visually reviewed",
+    "physical_device": "Pending",
+    "windows_stream_plan": "Passed exact checkpoint 95fc86d, run 38342175957",
+    "android_stream_plan": "Android compilation passed exact checkpoint 95fc86d, run 38342176046; emulator pending",
+    "android_emulator": "Passed run 38342175961; independent output verification 8/8",
+    "windows_budget": "Passed hosted Windows smoke run 38341203400",
+    "android_budget": "instrumentation OK (2 tests), hosted emulator; physical SAF/provider mutation Pending",
+    "browser_budget": "Passed browser fixture, source/plan/artifact/strict-save/mode-switch checks, simulated backend",
+    "round3_ci": "superseded by all-green exact tested head 95fc86d",
+    "round3_fixture_repair": "Passed under exact tested head 95fc86d",
+    "round4_ci": "All 8 exact-head workflows success",
+    "windows_paired_codec": "Passed exact checkpoint 95fc86d, run 38342175960",
+    "windows_smoke_latest": "Passed run 38342175973"
+  },
+  "blockers": [
+    "physical GPU/Windows/Android/SAF/provider dialogs/long-form/player compatibility Pending",
+    "source-cost measurement Windows-only; trimmed copied payload and FLAC re-encode costs unknown",
+    "guided hard-sub retains prior interface",
+    "long vertical manual editor and duplicated overview content remain UI refinement debt",
+    "no main merge or deployment"
+  ],
+  "updated_timestamp": "2026-10-13T11:57:57.358259+00:00",
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/tests/2026-10-13-qhe-heterogeneous-audio-plan-and-source-owned-ui.md"
+  },
+  "publication": {
+    "status": "published",
+    "destination": "11576865/Quick-Automatic-Hardsub-Encoder",
+    "branch": "feat/qhe-five-round-delivery-20261013",
+    "authorization": "User explicitly authorized public publication of round 3 to named repository and branch, PR #105.",
+    "method": "GitHub connected API; command-line Git lacks HTTPS credentials",
+    "remote_commit": "eff12de96ddaf1128d26484775932c11296b5e86",
+    "verified_tree": "b2eed07363bfebf5dc70d4284adccd3a824940ed"
+  },
+  "repair": {
+    "tests": {
+      "pass": 206,
+      "skipped": 7,
+      "failed": 0
+    },
+    "build": "pass",
+    "changes": [
+      "manual fixture searches actual quick-media-job namespace",
+      "VVC resize waits for phone shell and animation frames; overflow assertion unchanged, geometry diagnostics added"
+    ],
+    "scope": "fixture repair only; no new round-four UI claimed"
+  },
+  "round5": {
+    "status": "complete_for_scoped_delivery",
+    "tested_head": "95fc86dee63585493818f9c452b69649dd68fc1c",
+    "remaining": [
+      "Windows VVC actual runtime not tested: libvvenc absent in CI",
+      "physical GPU/Windows/Android/SAF/provider dialogs/long-form/player compatibility Pending",
+      "source-cost measurement Windows-only; trimmed copied payload and FLAC re-encode costs unknown",
+      "guided hard-sub retains prior interface",
+      "long vertical manual editor and duplicated overview content remain UI refinement debt",
+      "no main merge or deployment"
+    ]
+  },
+  "superseded_for_product_completion_by": ".uigs/tasks/qhe-initial-version-full-report.json",
+  "scope_correction": "Full theoretical reports are initial-version baseline per owner. Five-round completion is a subset only; report gaps cannot be deferred without owner approval."
+}

@@ -1,0 +1,675 @@
+{
+  "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
+  "status": "incomplete_full_report_WU11_integrated_native_path_planning",
+  "current_bounded_work_unit": "WU11 continuation / integration planning authorized: existing Guided→Manual→Windows Native output with ASS/font, source-bound P3 and protected audio; no new product code yet.",
+  "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
+  "reports": [
+    {
+      "id": "R19",
+      "file": "19-QHE_-_2026-10-12_-1-.pdf",
+      "sha256": "155de82b383030e5b676572c50ae845540f24798e9d61d8c1b0452b01a9aabce"
+    },
+    {
+      "id": "R24",
+      "file": "24-QHE_-_-_2026-10-13-1-.pdf",
+      "sha256": "b4c3273caead7381b5d5c7a1a26240ee3a279f8aaff9869213bc7178069df0a5"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "B01",
+      "source": "R19 §01、§16–19；R24 §23–24",
+      "requirement": "初版以整份报告为完成分母，证据分层，旧能力不退化",
+      "implementation_status": "范围记录错误，现纠正",
+      "evidence": "AGENTS.md；五轮任务记录；9 条 CI",
+      "remaining": "五轮交付是子集；无逐报告验收矩阵时不能宣布初版完成"
+    },
+    {
+      "id": "B02",
+      "source": "R19 §03；R24 §04–05",
+      "requirement": "来源资源、轨道、用户意图、计划、冻结任务和实际成品分离",
+      "implementation_status": "部分实现",
+      "evidence": "media-task.js；task-review.js；manual-sample-evidence.ps1",
+      "remaining": "目前由表单/编译任务投影构成；完整来源/意图/保留合同及跨端身份需补齐"
+    },
+    {
+      "id": "B03",
+      "source": "R19 §05；R24 §06–09",
+      "requirement": "ASS、纯转码、Stream Copy 是完整且平等的工作流",
+      "implementation_status": "已实现主要路径，验收有限",
+      "evidence": "media-workspace.js；main.js；clip-queue.js；Windows/Android CI",
+      "remaining": "复杂真实素材、旧路径完整回归和用户任务成本未全部验收"
+    },
+    {
+      "id": "B04",
+      "source": "R19 §03、§14；R24 §19–20",
+      "requirement": "引导和专业视图编辑执行同一份任务，切换无覆盖",
+      "implementation_status": "部分实现：Guided/Manual 交接现在通过共用 compileTask 正式任务预编译、逐流预算核查、执行参数回读与失败回滚；仍缺多平台统一任务序列化及全端验收。",
+      "evidence": "shared-task-presentation.js；guided-task-handoff.js；shared-task-ui acceptance；decision-reference-scope.js + tests; main.js currentGuidedDecisionScope/model scope/readiness/Native sample invalidation; manual-transcode-comparison.js referenceScope + manual-transcode-compare-ui.js receipt reference domain; 7 isolated V8 logic checks PASS, exact-head CI Pending；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending；src/guided-cpu-compiler-contract.js + 11 live-dependency V8 pure tests, src/media-task.js subtitleRenderOrder, guided-task-handoff.js bicubic+4% budget, media-workspace.js source-aware preflight and compiled rollback, frontend fast/full suite; exact-head Node/Browser/Native acceptance Pending",
+      "remaining": "真实浏览器/FFmpeg ASS rendering parity、Windows GPU 与 CPU 互通需另验，不可转移 Native VBR SSIM 收据；B16 裁切与 FLAC 计量、跨平台完整任务编译和 A01–A10 仍开放。"
+    },
+    {
+      "id": "B05",
+      "source": "R19 §03、§07；R24 §05、§11–12",
+      "requirement": "逐流保留/变更意图、不可改变属性、冻结执行计划及成果证据",
+      "implementation_status": "部分实现",
+      "evidence": "media-stream-plan.js；media-task.js；task-review.js",
+      "remaining": "输出投影已有，但未证明独立保留合同覆盖全部属性和任务生命周期"
+    },
+    {
+      "id": "B06",
+      "source": "R19 §07、A02/A03；R24 §11",
+      "requirement": "逐音轨 copy/AAC/Opus/FLAC/drop，语言、声道、标志和时间对应",
+      "implementation_status": "主要策略已实现，属性验收不全",
+      "evidence": "audio-stream-plan-ui.js；media-stream-plan.js；rich-MKV Windows fixtures",
+      "remaining": "真实多声道、多语言默认标志和延迟/降混组合未全部验收"
+    },
+    {
+      "id": "B07",
+      "source": "R19 §05、§07、§12、A01；R24 §07",
+      "requirement": "内封 ASS 与字体依赖绑定、真实 libass 渲染和复杂几何验证",
+      "implementation_status": "部分实现/需继续追踪",
+      "evidence": "ass.js；fonts.js；font-diagnostics.js；main.js；VVC ASS smoke",
+      "remaining": "已有外置输入和实际渲染路径；内封选择到字体绑定的跨端完整链不能视作已闭环"
+    },
+    {
+      "id": "B08",
+      "source": "R19 §06、A04；R24 §09",
+      "requirement": "请求/实际呈现切点、复制包范围、音频时间映射和验证状态",
+      "implementation_status": "部分实现",
+      "evidence": "media-task.js；native-bridge.ps1；device verifier；clip queue",
+      "remaining": "actualStart 和关键帧预览不等于完整 requested/actual/PTS/DTS/A-V 时间审计；VFR/B帧/偏移真实验收待补"
+    },
+    {
+      "id": "B09",
+      "source": "R19 §12；R24 §04、§07",
+      "requirement": "字幕事件、章节、音频时钟、PTS/DTS 与重基准一致",
+      "implementation_status": "局部测试已有",
+      "evidence": "media-stream-plan integration；rich MKV and device verifier",
+      "remaining": "边界事件、非零偏移、VFR、完整音轨配裁切视频的综合矩阵待补"
+    },
+    {
+      "id": "B10",
+      "source": "R19 §12、§18；R24 §16、§21",
+      "requirement": "色彩变化必须明确，HDR/位深不能混同",
+      "implementation_status": "保护性门禁已有",
+      "evidence": "media-task.js；media-capabilities.js",
+      "remaining": "保持不安全输入阻断；端到端色彩正确性/显示实验仍缺，不能以门禁等同色彩能力完成"
+    },
+    {
+      "id": "B11",
+      "source": "R19 §08–09；R24 §13–16、§20",
+      "requirement": "共同参考上包络、证据域、CQ/VBR 分离、显式采用和回滚",
+      "implementation_status": "部分实现：Guided 多候选 RD 曲线、候选源参考作用域、实测 ASS VBR 及原子显式分支采用已接线；修正 NVENC 真正执行 p7 preset 的收据身份。真实跨候选 Windows/浏览器/设备和整片质量/体积仍需验收。；本轮补齐 Guided->Manual CPU ASS 渲染/缩放顺序身份一致性验证；不转移旧 SSIM/VBR Native 证据。",
+      "evidence": "manual-transcode-comparison/session/vbr-verification/adoption.js；decision-reference-scope.js + tests; main.js currentGuidedDecisionScope/model scope/readiness/Native sample invalidation; manual-transcode-comparison.js referenceScope + manual-transcode-compare-ui.js receipt reference domain; 7 isolated V8 logic checks PASS, exact-head CI Pending；windows/guided-rendered-sample-evidence.ps1 + native-bridge.ps1 exact Guided branch；src/guided-native-vbr-verification.js + 8 pure tests；main.js size-budget verify/explicit confirmation UI；scripts/check-guided-vbr-evidence.ps1 and actual Windows localhost 2-window extension to check-guided-budget-native.ps1, external CI Pending；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending；src/guided-cpu-compiler-contract.js + 11 live-dependency V8 pure tests, src/media-task.js subtitleRenderOrder, guided-task-handoff.js bicubic+4% budget, media-workspace.js source-aware preflight and compiled rollback, frontend fast/full suite; exact-head Node/Browser/Native acceptance Pending",
+      "remaining": "真实浏览器/FFmpeg ASS rendering parity、Windows GPU 与 CPU 互通需另验，不可转移 Native VBR SSIM 收据；B16 裁切与 FLAC 计量、跨平台完整任务编译和 A01–A10 仍开放。"
+    },
+    {
+      "id": "B12",
+      "source": "R19 §08、§16；R24 §13–16",
+      "requirement": "有界 codec × resolution × preset 候选与明确可比范围",
+      "implementation_status": "部分实现：Guided 软件 CPU 交接采用权威 Manual 编译器、源来源成本和完整执行字段核对及原子表单回滚；ASS 先渲染再 bicubic 缩放显式编译，不再沿用隐式 Manual 高级选项。真实浏览器/FFmpeg 与跨设备统一合同未完成。",
+      "evidence": "manual-candidate-set.js：x264/x265 × medium/fast × 原尺寸/1080p/720p；src/guided-branch-adoption.js + tests; main.js staged Guided frontier candidate -> pending plan Native VBR -> explicit atomic selection + rollback; real NVENC p7 receipt correction; 18 isolated JS pure regression checks PASS, Node/Windows/Browser Pending；src/guided-cpu-compiler-contract.js + 11 live-dependency V8 pure tests, src/media-task.js subtitleRenderOrder, guided-task-handoff.js bicubic+4% budget, media-workspace.js source-aware preflight and compiled rollback, frontend fast/full suite; exact-head Node/Browser/Native acceptance Pending",
+      "remaining": "真实浏览器/FFmpeg ASS rendering parity、Windows GPU 与 CPU 互通需另验，不可转移 Native VBR SSIM 收据；B16 裁切与 FLAC 计量、跨平台完整任务编译和 A01–A10 仍开放。"
+    },
+    {
+      "id": "B13",
+      "source": "R19 §09、§11、P3；R24 §14、§18",
+      "requirement": "总文件目标与固定/编码音轨、字幕、附件、封装预算接入同一决策坐标",
+      "implementation_status": "Shared manual/guided source-owned whole-file budget, formal bitrate parity, Native receipt/source track validation, real Windows two-stream copied-audio packet SHA256 output checks, and same-process browser-reload completed budget/status normalization tested. Still incomplete for bridge-process persistence and full Guided ASS VBR quality/field acceptance.",
+      "evidence": "whole-file-frontier.js; size-budget-adoption.js; guided-whole-file-budget.js assessGuidedWholeFileBudget; main.js currentGuidedBudgetAssessment / buildEncodePlan; guided-whole-file-budget.test.mjs + guided-budget-ui-wiring.test.mjs; frontend CI 38417854286 PASS on d517d44; prior Windows/Android CI separate；guided-whole-file-budget.integration.test.mjs 真实双音轨AAC复制+硬ASS+丢弃软字幕附件，FFmpeg/FFprobe CI 38422475740 PASS；Chromium shared-workspace audio policy/input/config restore checks，frontend 38423311878 PASS；QHE ee9ab66；Native source receipt + two audio packet SHA256 Windows CI 09ce78c PASS 9/9 and ad917ef PASS 9/9；Guided completed budget receipt module native-guided-budget-recovery.js and Windows native-bridge.ps1 first/repeated status + real Windows smoke passed；frontend 429de52 SUCCESS（pending exact-head other CI at ledger update）",
+      "remaining": "Native Bridge process restart job state not persisted; SSIM/CQ/VBR shared Guide ASS sampling/quality adoption not closed; physical user-source/long-form/player verification and exact B16 trim/FLAC/Android/Web costs pending."
+    },
+    {
+      "id": "B14",
+      "source": "R19 §10、§15；R24 §13、§17",
+      "requirement": "质量/大小/编码时间及资源与兼容条件的可解释取舍",
+      "implementation_status": "部分实现：Windows Native Manual 多候选 CQ 实测 FFmpeg 编码耗时、相同配对窗口的质量/码率/速度可解释对照、近似同画质配对和 JSON 收据已写入 Draft；新增单测/前端实际 CI 待验收。",
+      "evidence": "manual-transcode-session.js encode-time quota；main.js 风险采样；src/manual-time-tradeoff.js + tests, manual-transcode-compare-ui.js observed time/SSIM/bitrate + exported evidence, manual-transcode-session.test.mjs end-to-end in-memory receipt, frontend draft-fast/full suite wiring; exact-head CI Pending",
+      "remaining": "真实长片/多设备/ASS 与 VBR 任务的整体速度、能耗、资源占用、重复测量方差及用户时间意图优化未完成；近似同画质样本不构成整片性能承诺。"
+    },
+    {
+      "id": "B15",
+      "source": "R19 §10；R24 §17",
+      "requirement": "风险场景、配对窗口、追加测量和不足证据结果",
+      "implementation_status": "部分实现：Guided ASS 已用 Native 风险分层；本轮新增 Manual 多编码器 Native 风险信号探测与同一 selectPairedSceneWindows 双窗口预检（包含失效拒收/无风险数据降级/绝对时间范围），已写入 Draft，exact-head CI 和真实 Native 验收 Pending。 本轮进一步限定 Guided Native 风险预检与逐样本结果必须保持同一 ASS/字体渲染作用域，否则拒收。",
+      "evidence": "scene-risk-selection.js；calibration-refinement.js；main.js；Manual 两窗口；src/manual-paired-risk-plan.js + manual-paired-risk-plan.test.mjs；src/main.js Native sceneRiskProbe；src/manual-transcode-compare-ui.js same source-paired protocol fingerprint；frontend CI fast/full wiring；6 isolated source-equivalent JavaScript tests PASS (not full Node CI)；decision-reference-scope.js + tests; main.js currentGuidedDecisionScope/model scope/readiness/Native sample invalidation; manual-transcode-comparison.js referenceScope + manual-transcode-compare-ui.js receipt reference domain; 7 isolated V8 logic checks PASS, exact-head CI Pending；Guided 单遍 VBR 利用同一有界 Native 风险预检生成两个互不重叠的源时间窗口（实机测试 Pending）",
+      "remaining": "真实 Windows 风险探测及 UI/浏览器验收 Pending；Guided ASS 字幕/字体渲染参考与 Manual 纯源参考的质量决策合同仍不通用；追加配对采样、风险/置信区间、暗场/噪声/VFR/高密字幕长素材仍待实测。；本轮新增身份模块非内容哈希，无法替代真实 ASS 渲染质量/VBR/整片体积/异构设备验收。"
+    },
+    {
+      "id": "B16",
+      "source": "R19 §11；R24 §18",
+      "requirement": "复制流精确范围成本、重编码音频成本、附件和余量完整计量",
+      "implementation_status": "部分实现：Windows B16 FFmpeg FLAC/裁切复制专项真实验收在 0bd2381c 已 PASS；本轮修复 FLAC 质量/码率任务不触发成品 packet audit、字幕与附件 all 映射无逐流编号和字幕对象查找误用问题，新增 Native localhost source-ledger 与正式双 FLAC 完成后独立 FFprobe 核对；精确新头 Windows HTTP/成品验收尚 Pending。正式预测 FLAC 成本与严格大小预算仍不能直接采用孤立预演。；本批完成品 packet 回执附作业 ID/成品总字节/NTFS FILETIME 文本，短片同步回执加入缓存失效检查，长片异步真实 182 秒 Windows Native 用例已接线（最新提交实测 Pending）。；本批成品 Native 短片/182 秒异步新增视频 packet 真实测量，完整成品包字节归因可分解视频/音频/字幕/其他及封装，但不改变下次 FLAC 严格体积预算权限。；本批引入实验性 FLAC 已编码缓存→最终视频+双音轨+软字幕 MKV 的逐包 SHA-256 复用验证（非生产正式任务，非严格体积预算采纳），增加 Draft Windows 真实 FFmpeg 门禁；Windows exact-head 结果待观察。",
+      "evidence": "media-planning.js；Windows source-budget；whole-file-budget tests；trim-copy-audit.js + tests; media-planning.js::outputReport trimCopyAudit; windows/native-bridge.ps1 bounded FFprobe completion audit; main.js/media-workspace.js result+UI; whole-file-budget.integration.test.mjs Linux actual MKV and scripts/check-guided-budget-native.ps1 Windows Native two PCM trim. Frontend 7d3b784 test+integration PASS; Windows local smoke 451be21 PASS; later current SHA fb07c74 full CI pending.；windows/trim-packet-audit.ps1 + Windows Bridge Get-AsyncTrimPacketEvidence, state/result readback, main.js/media-workspace.js report refresh, trim-copy-audit.test.mjs and check-guided-budget-native.ps1 worker oracle: code submitted, exact-head Windows CI Pending；windows/trim-copy-preflight.ps1 和 trim-copy-preflight-bridge.ps1，Native POST/GET /api/trim-copy-preflight 单飞异步入口；src/trim-copy-preflight.js + 8 isolated V8 checks，scripts/check-trim-copy-preflight.ps1 两音轨+软字幕真实 FFmpeg 独立对照，check-guided-budget-native.ps1 localhost API 测试；Windows/Node exact-head CI Pending；pre-submit: cached Native ready receipt now invalidated on replaced full-source measurement ID; worker method and nonnegative signed packet evidence verified; bounded sequential audit 270s parent; nine isolated tests PASS；windows/flac-encode-preflight.ps1 + flac-encode-preflight-bridge.ps1 + Native API, src/flac-encode-preflight.js、src/auxiliary-preflight-request.js、Windows client/main/workspace read-only UI; scripts/check-flac-encode-preflight.ps1 双音轨 full/trim 真实 Windows oracle, .github/workflows/windows-b16-runtime.yml 允许 Draft 定向执行；16 项孤立模块逻辑测试与 2 项源码接线测试 PASS，Linux 本机 FFmpeg 双轨真实复现，托管 Windows Pending；Windows B16 run 38510258959: PowerShell parser and Node 19/19 PASS, FFmpeg installed, actual FLAC runtime FAIL at FFprobe no input file; corrected PowerShell parameter '$Arguments' and '$muxOptions' for two workers; src/auxiliary-mux-reconciliation.js and 9 isolated behavior tests PASS, UI task report/waiting audit integration, real Linux 3s mixed video+dual FLAC+subtitle 39300 and 27599 bytes both isolated/mixed; Windows next exact-head Pending；Windows B16 runtime 38513613921 SUCCESS (real FFmpeg dual-FLAC and copy/subtitle), Test frontend SUCCESS and UIGS Evidence SUCCESS on 0bd2381c. Added Windows Native actual quality FLAC post-output audit gate independent of sizePlan, explicit all source subtitle/attachment maps, Native localhost HTTP same-file ledger invalidation + real mixed finished FLAC packet compare script; 17 isolated actual-module tests PASS, exact-head Windows CI Pending.；windows/native-bridge.ps1 packet receipt artifactBytes/artifactWriteTicks/artifactJobId; src/auxiliary-mux-reconciliation.js 正式 outputPlan 流序/回执方法/成品身份核验；src/auxiliary-mux-reconciliation.test.mjs 拒收测试；scripts/check-flac-native-http-lifecycle.ps1 篡改后回执作废；scripts/check-b16-long-async-output-identity.ps1 182s 异步 FLAC 真实 Windows fixture；专用 Draft Windows B16 CI。；windows/trim-packet-audit.ps1 + native-bridge.ps1 completed videoPacketBytes; src/completed-mux-byte-ledger.js + 8 isolated V8 tests, src/media-planning.js outputReport + media-workspace.js UI; scripts/check-flac-native-http-lifecycle.ps1 and check-b16-long-async-output-identity.ps1 independent video FFprobe, check-flac-encode-preflight.ps1 actual 1v+2a+1s stream ledger; Draft Windows B16 + frontend CI exact-head Pending；src/flac-cache-reuse-contract.js + 6 组实际模块纯验证；flac-cache-reuse-contract.test.mjs QHE_B16_REAL_PACKET_FIXTURE=1 真实 FFmpeg 合成源→音频缓存→完成混合 MKV 每包 (size,data_hash SHA256) 验证；本地 Linux 同命令链 32包39300B / 21包27599B 的有序包全同；windows-b16-runtime.yml Draft/fast/full 新真实门禁，生产复用 Pending",
+      "remaining": "完成品其他及封装剩余字节可能包含附件和容器头、索引等，不能充当下次任务固定 overhead；FLAC 真正可复用的已编码音频缓存/同位流、PTS 和严格预算准入事务、跨平台用户 UI/Android/Web 仍开放。；真正让正式 Native 任务复用缓存 FLAC 制品并持有源 SHA256/FFmpeg 编码器/PTS 时间轴/流配置、足够的最终封装上界和真正可采纳的严格预算事务，仍为下一轮核心未完成项。"
+    },
+    {
+      "id": "B17",
+      "source": "R19 A07/A08；R24 §18、§20",
+      "requirement": "严格实际字节上限、取消、保存失败重试、来源变更和旧文件安全",
+      "implementation_status": "主要机制已实现",
+      "evidence": "native-bridge.ps1；Android EncodeService；browser save fixture",
+      "remaining": "合成及模拟回归通过；真实提供者、重开成品、并发变更/磁盘不足场景仍需验收"
+    },
+    {
+      "id": "B18",
+      "source": "R19 §04、A10；R24 §10、§21",
+      "requirement": "三端同业务语义，能力逐级探测，不支持明确拒绝",
+      "implementation_status": "部分实现",
+      "evidence": "media-capabilities.js；platform adapters；三端 compile/CI",
+      "remaining": "三端无相同编码器承诺；浏览器大文件、Android生命周期/空间和用户机能力链证据待完善"
+    },
+    {
+      "id": "B19",
+      "source": "R19 §04、P4、§19；R24 §10、§21",
+      "requirement": "VVC/GPU/HDR 按适配器实验与证据边界推进",
+      "implementation_status": "Windows VVC合成链已验收；其余未关闭",
+      "evidence": "windows/vvc-runtime.ps1；required VVC CI",
+      "remaining": "许可/分发、目标设备与真实文件缺；HDR继续保护性阻断；报告实验性要求仍在矩阵，不擅自延期"
+    },
+    {
+      "id": "B20",
+      "source": "R19 §14、P5；R24 §19–20",
+      "requirement": "任务中心、多尺寸、单主图、候选解释、回退和真实预览",
+      "implementation_status": "主要展示已改，产品验收不全",
+      "evidence": "media-workspace.js；task-review；curve SVG；候选比较表；compact disclosure",
+      "remaining": "表格是报告允许的候选展示，不强制重复PR103虚线；信息收敛、真实载入态/字体/触控/可用性仍待验收"
+    },
+    {
+      "id": "B21",
+      "source": "R19 P5；R24 §19",
+      "requirement": "批次矩阵与每项来源/意图/计划/执行/成果管理",
+      "implementation_status": "综合矩阵未确认实现",
+      "evidence": "clip-queue.js 仅现有剪切片段队列",
+      "remaining": "剪切队列不能替代多来源/多输出转换矩阵；需设计和接入统一任务执行"
+    },
+    {
+      "id": "B22",
+      "source": "R19 §13、P5；R24 §22",
+      "requirement": "可选的版本化成果交换与跨项目证据语义",
+      "implementation_status": "可选设计项未实现",
+      "evidence": "现有outputReport/JSON，非正式ArtifactManifest",
+      "remaining": "保留报告可选性质，不强制合并产品；版本/身份/证据适配尚未建立，不把一般报告导出当成协议"
+    },
+    {
+      "id": "B23",
+      "source": "R19 §15；R24 §03、§23",
+      "requirement": "同素材同约束的任务收益、操作/时间/错误率对照",
+      "implementation_status": "缺少控制实验",
+      "evidence": "报告列出HandBrake/StaxRip等对照维度",
+      "remaining": "没有实际收益证据；不拿功能数量或编码器存在证明产品定位完成"
+    },
+    {
+      "id": "B24",
+      "source": "R19 §16–17；R24 §23",
+      "requirement": "版本化综合黄金样本和 A01–A10 独立验收",
+      "implementation_status": "部分合成矩阵，现场待补",
+      "evidence": "scripts/verify-stream-plan-v4-device-outputs.mjs；rich MKV；paired codec CI",
+      "remaining": "所有验收项必须分别绑定素材、后端、版本、PASS/FAIL/UNSUPPORTED/FIELD-PENDING，见下表"
+    },
+    {
+      "id": "B25",
+      "source": "R19 §16–19；R24 §24",
+      "requirement": "完整范围关闭后集成和可安装/可运行交付",
+      "implementation_status": "未完成",
+      "evidence": "PR104→PR105仍草稿且未合并 main",
+      "remaining": "不能以分支 CI 全绿宣布产品完成；报告缺项、产品审阅、集成与发布产物验收均需关闭"
+    }
+  ],
+  "completed_units": [
+    "Report sections and acceptance gates mapped to current code and evidence",
+    "Five-round completion classified as historical subset, not initial-version completion",
+    "Manual complete-file axis/ledger/default; explicit video diagnostic; exact compiled rate; strict policy transaction; local checks passed",
+    "Single-encoder panel uses shared whole ledger/frontier; current encoder preserved during exact size/strict-policy adoption; 245 local tests and build pass",
+    "Guided ASS source-owned copy packet budget projection shares wholeFileLedger; preserves explicit estimated-copy distinction, 3 new pure budget regressions (frontend CI PASS at 90f4162)",
+    "Guided shared budget measurement/source change notifies decision UI to recompute; UI wiring regression PASS in exact-head frontend workflow at 2f73032; physical/browser loaded source acceptance remains open",
+    "Guided ASS formal size feasibility now derives video rate, fixed/coded audio bytes and ceil reserve from shared wholeFileLedger; no separate source-codec budget headroom; 4 new behavioral regressions exact compiler equality / missing copied bytes / minimum byte boundary / multi-copy track, plus source wiring test",
+    "Updated stale UI-shell implementation-specific assertion to validate shared compiler-rate behavior; exact-head frontend 38417854286 SUCCESS",
+    "Guided ASS short real MKV (2 AAC copied audio, SRT+attachment dropped, burned ASS) budget parity to formal v4 compiler, independent ffprobe packet-byte and output gate regressions; frontend hosted full suite 38422475740 succeeded.",
+    "Shared workbench audio edits and config restoration now notify Guided cost-projection views; source wiring and actual Chromium DOM-event/no-encode regression; exact implementation frontend 38423311878 succeeded.",
+    "B13 Windows Native source budget receipt: Native-selected source/packet cost validation rejects missing, stale, tampered or false zero-track claims, and real two-pass Guided ASS preserves two copied audio packet SHA256 hashes; 9/9 CI PASS at ad917ef, Native step and 9/9 CI PASS at 09ce78c.",
+    "B13 Native same-process page-reload completed budget comparison: budgetProjection is returned on both completed status paths after strict output gate; UI recovers original planning target, actual output, origin and Native-only strict verification. Pure/VM recovery tests and hosted real Windows Guided two-pass/strict smoke step PASS; 429de52 frontend PASS; entire exact-head platform suite still completing at checkpoint.",
+    "B16 post-output audit: native completed structured trim task returns source-linked completed-artifact audio/subtitle packet byte observation; normalized report maps output ordinals, reveals full-source overreserve, leaves formal strict ceiling unchanged. Linux actual MKV and Windows Native two-PCM trim tests PASS at 7d3b784/451be21; newer exact code fb07c74 CI pending.",
+    "B16 code submitted: bounded constant-memory Windows FFprobe auxiliary packet audit worker and Native status owner, output identity checks, pending/ready/unavailable receipts, report refresh, short-clip independent Windows worker test (hosted execution Pending)",
+    "B14 code submitted: paired Native CQ short-sample encoding time/quality/video bitrate observability, matched-quality cost ratio, per-candidate UI rows and explicit JSON receipts; CI Pending",
+    "B15 code submitted: Manual candidate preflight reuses Guided scene-risk selector and Native probe, bounded distinct paired windows, absolute trim offsets, stale-source refusal, explicit risk evidence scope and matching same-window protocol for all codecs; 6 isolated JS logic checks passed",
+    "B11 code submitted: shared reference scope contract with separate Guided ASS and Manual tokens; tags Guided R-D models, Native source-paired asynchronous samples and formal CRF plan; seven isolated JS tests PASS",
+    "B11 implementation submitted: genuine ASS-rendered Windows Native single-pass VBR exact samples with staged-source/font SHA256, paired JS verifier, explicit current-parameters confirmation and offline/real Native CI tests; exact-head hosted validation Pending",
+    "B11 submitted: Guided RD branch action no longer mutates selection before VBR; pending proposal identity and live frontier admission, explicit atomic commit with executable-plan comparison/rollback, NVENC actual preset evidence correction; 18 isolated JS assertions PASS.",
+    "B12 code submitted: actual shared Manual compileTask contract for Guided CPU handoff, frozen ASS render order and 4% reserve, reject inherited unrelated advanced flags, source-checked staged form and rollback; 11 real-module V8 checks passed, hosted CI pending.",
+    "B16 code submitted: independent before-encode bounded remux of trimmed copied audio/subtitles, active-source Native async POST/GET, standalone packet oracle & source stat string precision checks; 8 V8 behavior checks, 12 wiring checks; Windows localhost/FFmpeg tests wired Pending.",
+    "B16 isolated trim pre-encode worker and Native async start/status submitted as source-owned observation-only evidence; after hardening 9 isolated JS tests PASS; actual Windows and host CI Pending.",
+    "B16 integrated FLAC multi-stream actual encode preflight and source-owned Native/client/workbench observations, Draft-focused Windows FLAC+trim runtime gate; 16 isolated V8 JS logic tests and 2 static wiring tests PASS, Linux real FFmpeg dual-track command succeeds.",
+    "B16 focused Windows CI exposed actual FFprobe missing input path; same PowerShell automatic $args bug repaired in both FLAC and copied trim workers. Added complete-output mixed mux packet reconciliation UI/report and 9 isolated tests PASS; real Linux synthetic mixed mux sample PASS; exact-head Windows retest Pending.",
+    "B16 previous real Windows focused FFmpeg run 38513613921 PASS. This batch: Native completed FLAC audit even in quality mode, explicit source subtitle and attachment all mappings, source-bound final mux parity surface, Windows HTTP/source measurement revocation and real mixed quality job fixture. 17 actual-module behavior tests PASS.",
+    "B16 output identity code submitted: short and long Native actual packet observations bind artifact bytes/FILETIME/jobId; finalized compiled audio/subtitle output inventory and method admission, mutation-invalidating cached packet audits; isolated V8 pure checks PASS; hosted exact-head Windows long fixture Pending.",
+    "B16 completed mixed mux codec byte attribution for real video/audio/subtitle packets, unaccounted container + attachments residual; 8 actual-module V8 behavior tests PASS, Windows video oracles wired and pending.",
+    "B16 FLAC cached bitstream reuse hypothesis made executable: local Linux real FFmpeg cached two FLAC audio streams and copied them unchanged into x264 video+SRT MKV with matching packet SHA256, 6 retrieved-source JS guard tests PASS; Draft Windows targeted CI added, production formal cache reuse/strict-budget remains open.",
+    "2026-10-14 ROUTE_ONLY: audited fixed R19/R24 B01–B25/A01–A10 denominator and PR104→PR105 branch identity, committed route snapshot and agent re-anchoring gate, archived 18 generated followups as non-authoritative, authorized only WU-01/WU-02. No product code, merge, release or new device validation.",
+    "WU-01 bounded progress: sourceKey/recompile guard + direct regressions and real FFmpeg ASS-before-scale execution oracle submitted; no WU-01 completion claim.",
+    "WU-01 continued: prior exact-head FFmpeg/libass x264 CPU fixture workflow 38547044072 PASS; submitted a real-Chromium DOM Guided→Manual executable plan test and Draft CI with controlled transport; no Windows Native parity or WU01 complete claim.",
+    "WU-02 product ability: explicit Windows Native MKV embedded ASS track + font attachment import to existing ASS workflow; source-stamp safety, selection invalidation, bounded extraction. No Android/Web parity or verified output claim until CI.",
+    "WU-02 Windows source-owned embedded ASS+font import + actual Native end-to-end real hosted CI PASS at 1148bcda run 38554433547: 251257-byte mixed MKV with 235 FLAC packets copied unchanged, AAC re-encoded and independent libass burned-event pixel difference. This is a NEW initial-version product capability, not whole A01 or field acceptance.",
+    "WU03 root reanchoring checkpoint: read original R19 P5, R24 section 22; selected B21 genuine new user capability instead of another WU01/WU02 test or B16 descendant. Prior two unit states and A01–A10 scope unchanged.",
+    "WU03 B21 real user-facing single-source multi-output recipe panel implemented and hosted browser bounded PASS at 7cdff9; two codec variants serially executed in Chromium using controlled backend, save-only retry. NOT multi-source batch or real FFmpeg repeated runtime. Source reports unchanged.",
+    "WU04 bounded implementation submitted: source-bound prediction vs unknown states and explicit user-triggered transcode trim; no silent frame-exact promise; actual A04 output verification remains open.",
+    "WU04 B08 real interface ability: native copy-cut diagnosis and user-selectable reencode trimming tested with real Chromium and official v4 compiler task at 5019747 run 38562833192; WU04 scope hosted accepted, frame-accurate PTS/DTS and real VFR/B-frame full source still open.",
+    "WU05 reanchored from original R19§06/R24§09 first/actual/PTS-DTS/output cut contract; explicitly limited to actual completed-asset timing receipt, no new video codec nor generic test expansion.",
+    "WU05 bounded output timeline product slice submitted: read-only FFprobe first decoded output frame and packet PTS/DTS with job bytes/stamp, UI inspect/re-export JSON; explicit source packet mapping unverified.",
+    "WU05 B09/A04 product-level FIRST output timestamp observation hosted PASSED, exact-head cfed326: read-only Native FFprobe + Chrome click + report + clock-gap human review. Actual 2.0s output first video vs .005s first audio is not silently marked aligned; source time mapping and full AV sync pending.",
+    "WU06 root reanchor: selected original R19 §03/§16 P1 and R24 §05 read-only domain projection. Existing task.outputPlan is partial; next unit must expose source, intent, output provenance and executable parameter trace without replacing compiler.",
+    "WU06 hosted PASS 0124946: P1 passive compiled v4 → SourceAsset/Streams/UserIntent-inferred/OutputPlan/executable map/unknown ArtifactRecord inspect; source replacement invalidates view; no changed task args or new mutable user intent.",
+    "WU07 owner-report reanchor: R19 P2 and R24 UserIntent must-preserve original stream. Prior P1 only inferred intent; moving ONE user-approved audio stream lock into the existing v4 compiler, not a full schema migration.",
+    "WU07 P2 implemented source-bound user must-copy lock in existing per-track UI, official v4 compiler rejects conflicting drop or reencode, and output review displays lock; CI pending.",
+    "WU07 source-bound owner-approved must-copy audio contract implemented and Chromium hosted accepted at 38d4b04: source FLAC copy + AAC reencode allowed, locked FLAC drop/AAC/Opus prohibited by authoritative compileTask, source drift and manual reset carefully handled. Physical output packet hash not inferred.",
+    "Root re-anchor for WU08: P5 B21 genuine multiple-source gap selected, after seven bounded units; preserve root R19/R24 and no assumptions that WU03 same-source matrix fulfills it.",
+    "WU08 B21 genuine new multiple-File source Web queue bounded hosted PASS at 2b42a49: user 2 Files -> per-source activation & probe/official compiled v4 controlled processing -> distinct handoff, rollback-safe save retry; continued batch reuse. No false filesystem saved claim. Whole B21 remains open.",
+    "WU09 P3 bounded hosted PASS: common read-only source/reference+budget/measured-domain decision gate for Guided and Manual, with diagnostic-only when only video payload or unknown copy cost and no model-based auto adopt; existing VBR/atomic plan gate unchanged. Actual media cross-workflow/whole film evidence still pending.",
+    "WU10 root reanchor: closed WU09, discovered Web FFmpegKitNext package unbundled (only README); select executable Native Windows real-media packet integrity evidence for original P2 A02 must-preserve instead of repeating controlled Chromium.",
+    "WU10 real Windows Native source-bound audio mustCopy v4 job hosted accepted: 141/141 FLAC packet SHA256 match output, AAC a:1 reencoded, 121709 output bytes; wrong-source/recode compile negative. Scoped R19 P2 and A02 proof."
+  ],
+  "next_units": [
+    "NO WU11 AUTOMATIC AUTHORIZATION. Re-anchor full R19/R24; prioritize merge/actual product gaps.",
+    "WU08 B21 real Web encode blocked: vendor ffmpeg-kit-next-web dist/index.js/lib not present; only README. Requires reproducible provisioned core and real browser outputs before acceptance.",
+    "P2/A02 source->artifact a:0 real Native only: clip/PTS/metadata/ASS/Android/Web/real movie remain open.",
+    "P3 full Native field comparisons and B25 PR #104/#105 stacked Draft merge and release remain open."
+  ],
+  "branch": "feat/qhe-five-round-delivery-20261013",
+  "pr": 105,
+  "latest_durable_commit": "54ca3a4e2f7a8fd4222d7f31bca957577b98b539",
+  "external_validation_states": {
+    "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
+    "physical_devices": "Pending",
+    "whole_product": "Incomplete",
+    "new_whole_file_frontier": "Pending hosted browser and platform",
+    "previous_whole_file_frontier": "9/9 success at 73c9470",
+    "new_single_budget": "Pending browser and platform regression",
+    "new_guided_budget": "Source receipts: real Windows Native copied audio total and ordered packet SHA256, rejected stale/tampered/fake zero count 9/9 CI at ad917ef. Source 429de52 recovery byte receipt: pure/VM+frontend PASS, real Windows Native step PASS; whole exact-head suite pending at last observation.",
+    "b16_trim_audit": "PASS short-source real Linux FFmpeg and Windows Native completed output packet audits; still post-output only, no strict-preflight replacement; newer exact-head runs pending",
+    "b16_async_long_output": "Implementation checkpoint complete on QHE work branch; exact PR head hosted frontend/Windows long-form validation Pending",
+    "b14_observed_encode_cost": "Code/syntax and 6 isolated source-equivalent V8 logic tests passed; exact-head Node/frontend CI and Windows/real-browser UI acceptance Pending",
+    "b15_shared_manual_risk": "6 source-equivalent isolated JS pure tests passed; CI exact-head pending after branch push; Native Windows real scene probe and browser UI pending",
+    "b11_guided_manual_rendered_scope": "Seven extracted isolated V8 logic checks PASS; nine source wiring/compatibility checks PASS; Node Draft-fast/full frontend and Windows Native exact-head Pending",
+    "b11_guided_exact_native_vbr": "8 actual-module isolated V8 behavior checks PASS; main JS syntax and 16 exact source wiring gates PASS; exact-head Draft-fast Node and hosted Windows Native localhost FFmpeg acceptance Pending",
+    "b11_guided_branch_adoption": "18 extracted actual-module V8 pure behavior tests PASS, 12 static/source wiring gates PASS and main JS parse PASS. Exact-head full Node/browser and real Windows PowerShell+FFmpeg+NVENC acceptance Pending.",
+    "b12_guided_cpu_shared_compiler": "11 actual-module V8 behavior tests PASS, reference-frame reconstructed ASS before bicubic scaling PASS, all modified JS modules parsed after stripping imports; exact-head Node/Browser/FFmpeg/Windows Native acceptance Pending",
+    "b16_isolated_preencode_trim_copy": "8 actual-module extracted V8 receipt tests PASS; 13 code/source/native API/CI wiring checks PASS; PowerShell/real FFmpeg and hosted Node exact-head CI Pending. No cost replacement.",
+    "b16_trim_copy_preflight": "Nine actual-module V8 behavior/source-wiring checks PASS; source ledger/method/packet amount integrity and single-function Native structure checks PASS; Node, Windows PowerShell/FFmpeg, browser and real long-form Pending",
+    "b16_flac_multistream": "16 isolated JS tests PASS + 2 static tests PASS + front-end modules parsed; Linux FFmpeg real full+trim dual-track audio packet reproduction PASS; focused Windows Draft runtime, Native HTTP and browser field acceptance Pending",
+    "b16_windows_targeted": "Prior Windows B16 failed (run 38510258959) on PowerShell FFprobe argument loss; targeted fix submitted to work branch, next exact-head run Pending.",
+    "b16_completed_mux_parity": "9/9 isolated behavior tests PASS; Linux FFmpeg real dual FLAC with video and softsubtitle matched on 3-second fixture; exact-head Windows/long-form and browser acceptance Pending; canCertifyFutureMux=false",
+    "b16_native_final_mux_flac": "Prior 0bd2381c real Windows FLAC/copy FFmpeg workflow SUCCESS; new Native HTTP and completed mixed FLAC quality-mode audit submitted, 17 actual-module V8 behavior tests PASS; Windows real Native endpoint and browser UI on this exact new head Pending",
+    "b16_artifact_bound_output_packet_audit": "Old head c54a819 Windows B16/Frontend/UIGS PASS; new head isolated pure JS receipt tests PASS, PowerShell 182s Native async and short mixed artifact tamper real Windows CI Pending",
+    "b16_completed_byte_ledger": "Eight actual-module isolated JS behavior checks and UI/Native/worker static wiring PASS; short Native, 182-second async video FFprobe and real 1v2a1s completed Matroska packet attribution hosted Windows Pending",
+    "b16_flac_cache_reuse": "6 actual-module V8 pure behavior tests PASS; Linux 3-second real FFmpeg cached FLAC to video+softsubtitle final mux ordered per-packet size/hash equality 32/21 packet verified; exact-head Windows Draft targeted run Pending; formal Native/Browser production cache injection not implemented",
+    "route_checkpoint": "Documentation and durable task authority updated; this is not a code, browser, GPU, physical device or release acceptance.",
+    "wu01_cpu_fixture": "PASS at dcecd685 in workflow 38547044072; 3-second FFV1 synthetic libass/x264 fixture",
+    "wu01_browser_handoff": "Real Chromium controlled transport PASS at 02afa817 (workflow 38551049094); Windows same-task bridge pending.",
+    "wu01_windows_native": "OPEN not yet integrated same-task Native Bridge validation",
+    "wu02_embedded_ass": "Windows Native real hosted exact-head 1148bcda PASS, workflow 38554433547: FFV1+FLAC+AAC+ASS+TTF source, explicit ASS+font extraction, source-stamp fail-closed, x264/libass output, original FLAC 235/235 ordered packets SHA256, second AAC reencoded, distinct burned pixel, final size 251257 bytes. No user film/browser button real interaction/device completeness.",
+    "wu03_single_source_recipe_matrix": "PASS exact SHA 7cdff9d in dedicated hosted Chromium workflow 38558570169 + Test frontend 38558570086; two x264/x265 independent frozen recipes, stale source rejection, save failure stops before next, save-only retry without encode; controlled run/save backend, not real FFmpeg batch or multi-source.",
+    "wu03_full_multi_source": "MISSING PRODUCT IMPLEMENTATION; open B21 per R19 P5 and R24 §22",
+    "wu04_cut_choice": "PASS at 501974713ad6ee3fc184b20bb1fbb2ed93fc5396, run 38562833192: source-specific keyframe advisory, invalidation after source drift, deliberate user confirmation, unchanged semantic IN/OUT and official compiled v4 reencoded-trim task. B-frame/VFR real output PTS/DTS not tested.",
+    "wu02_hosted_after_wu04": "Earlier Windows WU02 product PASS run 38554433547; new exact-head reruns encountered upstream Chocolatey 503/0-of-0 FFmpeg packaging or PATH propagation. No in-scope code regression found; external CI rerun pending.",
+    "windows_b16_after_wu04": "External Chocolatey feed 503 prevented FFmpeg binary availability in most recent Windows B16; not product B16 acceptance failure at media test stage.",
+    "wu05_cut_timeline": "PASS exact-head cfed326a44412ba9a7f140ae4b39b526c4c3975b: Windows run 38568220073, Chromium/model run 38568219698, Test frontend 38568219578, UIGS Evidence Coverage 38568219823. Windows source H264 Bframes + AAC, formal Copy Trim IN2.4 OUT4.8, actual output decoded first video PTS2.000, video packet PTS/DTS2.083/2.000, audio first PTS0.005; output 58863 B. Large first-clock gap flagged for review; NOT sync verdict, NOT source packet hash or end-frame acceptance.",
+    "wu06_domain_projection": "Exact-head 0124946d6939f73a285dcf609a6a973924d44219: new WU06 Node real compiled v4 Hardsub/Transcode/Copy+source stream coverage and real Chromium source-bound inspector SUCCESS run 38575999722; frontend SUCCESS 38575999605; UIGS Evidence Coverage SUCCESS 38575999820. No real Native/Android/Web domain owner parity, no additional runtime authority, no ArtifactRecord field evidence.",
+    "wu07_audio_lock": "Exact-head 38d4b04e8b1edfac99dc3116f4931c310b075d08: WU07 official v4 audio lock unit+production Chromium PASS run 38580653413; frontend PASS 38580653495; UIGS Coverage PASS 38580653198. Real Windows/Android/Web copy packet identity and actual file/field P2 still open.",
+    "wu08_multi_source": "Exact code/test SHA 2b42a49e94ab3fbec991451807791a5b113a4892: production Playwright Chromium Web File 2-source queue, frozen preferences per file, source-specific v4 compiler and controlled execution, save failure preserved artifact/no reencode retry, clearing completed records and enqueuing next 2 files PASS run 38588049167; Test frontend PASS 38588049084; UIGS Evidence Coverage PASS 38588049025. Web WASM actual 2-file media artifacts, browser downloaded file disk writes, Native Windows/Android and multi-source ASS unverified.",
+    "wu09_shared_p3": "Exact-head 6ea0bea2b5d2e0ae467ccd9cf5310e3982f0388c: shared real Guided+Manual frontier model/unit, frontend integration and production Chromium dynamic module and UI no-Native controls CI 38592703806 SUCCESS; full frontend 38592703737 SUCCESS; UIGS coverage 38592703764 SUCCESS. Manual real Native candidate unlock and actual same-reference quality sample in field not covered; whole movie release not proven.",
+    "wu10_native_audio_packet_identity": "Exact tested SHA 54ca3a4e2f7a8fd4222d7f31bca957577b98b539; Windows actual Native Bridge mix FLAC Copy locked a:0 + reencoded AAC a:1 output 121709 B, 141/141 compressed source/output FLAC packet SHA256 identical: run 38597508774 SUCCESS. Frontend 38597508576 and UIGS 38597508191 SUCCESS. No trim, metadata, full AV sync, Android/Web or realistic feature-film acceptance."
+  },
+  "blockers": [
+    "Report requirements remain partially implemented; no full product completion claim",
+    "Physical device, provider, long-form and player acceptance lacks required environment/media evidence",
+    "PR #104 is Draft on main and PR #105 is Draft on PR #104; no main integration acceptance.",
+    "Current exact-head cross-view Guided/Manual browser+Windows Native end-to-end output acceptance is not established."
+  ],
+  "traceability_document": "docs/initial-version-report-traceability-2026-10-13.md",
+  "intake": {
+    "status": "recorded",
+    "foundry_path": "inbox/candidates/2026-10-10-measurement-identity-must-exclude-decision-and-presentation-inputs.md",
+    "foundry_commit": "c5c717caee47e3346b88e8b3afe0e755f245b579"
+  },
+  "updated_timestamp": "2026-10-15",
+  "local_verification": {
+    "passed": 245,
+    "skipped": 9,
+    "failed": 0,
+    "build": "pass"
+  },
+  "route_anchor": {
+    "id": "qhe-initial-v1-20261014",
+    "route_document": "docs/qhe-initial-version-route-reanchor-2026-10-14.md",
+    "scope_authority": "The complete supplied R19 and R24 theoretical reports remain owner-approved initial-version baseline. Optional/experimental/design language retains original force.",
+    "authoritative_ledger": "docs/initial-version-report-traceability-2026-10-13.md",
+    "audited_main_sha": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
+    "audited_pr104_sha": "0feed738042745ace6c031f726a3ad93561e56e8",
+    "audited_pr105_precheckpoint_sha": "b22f5fae2ee49d6dd3e442781729b808c89e55e8",
+    "roadmap_checkpoint_commit": "08fe6df0ccd1b4319edb1105c2ef830ea146c15d",
+    "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
+    "allowed_consecutive_units": 2,
+    "mandatory_reanchor_before_third": true,
+    "current_authorized_index": 9,
+    "completed_authorized_units": 7,
+    "review_status": "WU10_P2_A02_BOUNDED_NATIVE_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEXT_UNIT",
+    "executed_authorized_units_since_reanchor": 1
+  },
+  "authorized_next_units": [
+    {
+      "id": "WU11",
+      "requirement_ids": [
+        "B02",
+        "B04",
+        "B05",
+        "B07",
+        "B11",
+        "B12",
+        "B13",
+        "B24",
+        "A01",
+        "A05",
+        "A06"
+      ],
+      "title": "Integrate existing Guided→Manual decision and real Windows Native final-file path",
+      "source": "R19/R24 full initial version; docs/qhe-initial-version-route-reanchor-2026-10-14.md; explicit owner directive 2026-10-15; accumulated WU01-WU10",
+      "scope": "One source-bound, selected ASS/font + multi-track test task using existing candidate decision/adoption, compileTask v4, Native /api/encode, independent FFprobe/FFmpeg checks and completed output report; stale source/reference and forbidden stream mutation must fail closed.",
+      "reuse_existing": [
+        "guided-branch-adoption.js",
+        "guided-cpu-compiler-contract.js",
+        "guided-task-handoff.js",
+        "media-task.js",
+        "native-bridge.ps1",
+        "scripts/check-guided-budget-native.ps1",
+        "scripts/check-wu02-embedded-native.ps1",
+        "scripts/check-wu10-native-audio-preservation.ps1"
+      ],
+      "exit": "Independent output verification on pinned source+reference, fail-closed semantics, exact source/Native artifact identities, CI evidence separate from field status",
+      "status": "AUTHORIZED_FOR_DESIGN_AND_EXACT_FILE_PLAN; IMPLEMENTATION_NOT_STARTED",
+      "priority_reason": "Unbounded new B16 observability probe, fresh encoder implementations, new UI navigation shell, and any new task compiler."
+    },
+    {
+      "id": "WU12",
+      "requirement_ids": [
+        "B17",
+        "B21",
+        "B24",
+        "A08"
+      ],
+      "title": "Native actual multiple-output batch delivery reusing existing recipe and queue",
+      "source": "R19/R24 full initial version; docs/qhe-initial-version-route-reanchor-2026-10-14.md; explicit owner directive 2026-10-15; accumulated WU01-WU10",
+      "scope": "Two independent actual Windows Native outputs from existing compiled recipes, clear saved/failed/retry states and independent final-file validation; no borrowing prior-source evidence.",
+      "reuse_existing": [
+        "browser-source-batch.js",
+        "media-task.js",
+        "existing recipe queue and Native execution/save APIs"
+      ],
+      "exit": "Independent output verification on pinned source+reference, fail-closed semantics, exact source/Native artifact identities, CI evidence separate from field status",
+      "status": "AUTHORIZED_PLANNING_CANDIDATE; RECHECK_AFTER_WU11",
+      "priority_reason": "WebAssembly runtime rewrite without a compatible build, extra parallel queue architecture."
+    }
+  ],
+  "historical_next_units": {
+    "captured_from": "b22f5fae2ee49d6dd3e442781729b808c89e55e8",
+    "captured_at": "2026-10-14",
+    "status": "PROPOSED_HISTORY_NOT_EXECUTION_AUTHORITY",
+    "items": [
+      "Confirm exact-head Windows FLAC cache reuse ordered packet hash fixture; then implement source hash- and immutable-artifact-backed formal audio cache injection, PTS/timebase and actual output overhead bounds before any future strict-size FLAC admission.",
+      "B16 exact-head Windows real short/182s video packet and 1v2a1s residual verification, browser report UI acceptance; next reuse actual preencoded FLAC bitstream within formal mux only after source-time identity and execution parity gate.",
+      "B16 exact-head Windows 182-second real asynchronous completed mux audit, independent packet remeasure, staged output tamper invalidation and current browser end-to-end evidence UI; then determine if any FLAC packet reuse/strict target admission can be proved without extrapolation.",
+      "Confirm exact-head Windows B16 Native HTTP lifecycle + real quality-mode FLAC finished mixed-mux packet evidence, then broaden long/VFR/content-provenance acceptance; only prove reusable strict-size FLAC pricing via genuinely shared encoded packet artifact or stronger exact execution contract.",
+      "B16 exact-head Windows runtime must prove both FLAC and copied-trim worker execute; then complete end-to-end Native HTTP/workbench and actual mixed task packet parity for long content before considering strict budget FLAC admission.",
+      "B16 targeted Windows Draft runtime actual FLAC+trim tests, real Bridge/client UI acceptance and final-mux task-matched packet/cost certification; then safe bounded FLAC strict-budget adoption only after necessary parity, Android/Web transport and real long-form material.",
+      "B16 exact-head Windows PowerShell/FFmpeg isolated remux and source-owned async API runtime acceptance; add UI read-only observation then investigate actual final mixed-mux matched trim copy cost, FLAC full-stream measured preflight, Android/Web cost transports.",
+      "B12 exact-head Node frontend and real browser Guided->Manual form transaction/FFmpeg ASS reference-order acceptance; then Native GPU/Web/Android task capability adaptation and final-output source-scoped attestation.",
+      "B11 exact-head Node/browser and Windows Native/real NVENC source-paired ASS VBR adoption acceptance; then unified Manual/Guided task serialisation and final-output attestation across strategies.",
+      "B11 exact-head frontend and Windows Native localhost paired ASS VBR CI plus browser interaction acceptance; then implement true cross-branch Guided/Manual transaction with post-task result attestation, no shortcut for two-pass/strict ceiling.",
+      "B11 exact-head Node frontend and browser/Windows Native async ASS/font change rejection, Manual source-only reference export and model identity acceptance; then implement shared Guided ASS VBR adoption contract.",
+      "B15 exact-head Node/build and real Windows Native Manual paired scene probes + browser control acceptance; verify one source/risk set shared across all encoder/preset candidates; then add-on paired risk-refinement and ASS-render reference bridge remains Pending.",
+      "B14 exact-head fast/full frontend tests and real Windows Native UI/receipt acceptance; then add real final-job resource/time and strict capability coverage (NOT automatic whole-movie estimates)",
+      "B16 acceptance next: exact-head frontend and Windows PowerShell Native worker CI, actual >180s or >512MiB trim/receipt/strict-gate fixture and user report refresh; then precise pre-encode trim cost, FLAC recompression, Android/Web metering remain open.",
+      "B04/B11/B12/B15 shared guided/manual/ASS decision contract",
+      "B05/B06/B07/B08/B09/B10/B24 preservation and independent acceptance",
+      "B14/B20/B21/B22 cost/UI/batch/optional artifact exchange",
+      "B03/B18/B19/B23/B25 platform/field/benchmark/integration/release"
+    ]
+  },
+  "discovered_followups_status": "ARCHIVED_IN_historical_next_units; not independently approved; compare against original B01-B25/A01-A10 before promotion",
+  "owner_accelerated_continuation_2026_10_15": {
+    "decision": "CONTINUE_EXISTING_PR105_STACK_NO_RESTART",
+    "owner_instruction": "Continue based on the implementation from recent days, with UIGS; do not build a parallel/new engine or restart the work.",
+    "target_date": "2026-10-18",
+    "target_interpretation": "Aim for a usable core theory V1 integrated candidate, without changing or shrinking R19/R24 complete initial-version scope.",
+    "execution_authority": "This existing root task plus the main QHE PR #105 stacked upon PR #104; the separate 2026-10-15 sprint design branch is a non-authoritative checkpoint.",
+    "baseline": {
+      "main": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
+      "pr104": "0feed738042745ace6c031f726a3ad93561e56e8",
+      "pr105": "815b743f7f8137c2aa7b1c6fa06722558037c2de"
+    },
+    "reused_completed_units": [
+      "WU01 guided CPU handoff and browser/actual FFmpeg limited checks",
+      "WU02 Windows embedded ASS + font + mixed audio native output",
+      "WU03 source-bound multiple-output recipes",
+      "WU04/WU05 copy-trim strategy and observed timeline receipt",
+      "WU06 read-only delivery contract",
+      "WU07 mustCopy source-bound lock",
+      "WU08 web-source independent queue (browser orchestration, not real Web core)",
+      "WU09 shared guided/manual evidence decision gate",
+      "WU10 real Windows protected FLAC 141/141 packet hashes"
+    ],
+    "authorized_next_units": [
+      {
+        "id": "WU11",
+        "name": "Integrate existing Guided→Manual decision and real Windows Native final-file path",
+        "anchors": [
+          "B02",
+          "B04",
+          "B05",
+          "B07",
+          "B11",
+          "B12",
+          "B13",
+          "B24",
+          "A01",
+          "A05",
+          "A06"
+        ],
+        "output": "One source-bound, selected ASS/font + multi-track test task using existing candidate decision/adoption, compileTask v4, Native /api/encode, independent FFprobe/FFmpeg checks and completed output report; stale source/reference and forbidden stream mutation must fail closed.",
+        "reuse": [
+          "guided-branch-adoption.js",
+          "guided-cpu-compiler-contract.js",
+          "guided-task-handoff.js",
+          "media-task.js",
+          "native-bridge.ps1",
+          "scripts/check-guided-budget-native.ps1",
+          "scripts/check-wu02-embedded-native.ps1",
+          "scripts/check-wu10-native-audio-preservation.ps1"
+        ],
+        "status": "AUTHORIZED_FOR_DESIGN_AND_EXACT_FILE_PLAN; IMPLEMENTATION_NOT_STARTED",
+        "prioritized_over": "Unbounded new B16 observability probe, fresh encoder implementations, new UI navigation shell, and any new task compiler."
+      },
+      {
+        "id": "WU12",
+        "name": "Native actual multiple-output batch delivery reusing existing recipe and queue",
+        "anchors": [
+          "B17",
+          "B21",
+          "B24",
+          "A08"
+        ],
+        "output": "Two independent actual Windows Native outputs from existing compiled recipes, clear saved/failed/retry states and independent final-file validation; no borrowing prior-source evidence.",
+        "reuse": [
+          "browser-source-batch.js",
+          "media-task.js",
+          "existing recipe queue and Native execution/save APIs"
+        ],
+        "status": "AUTHORIZED_PLANNING_CANDIDATE; RECHECK_AFTER_WU11",
+        "prioritized_over": "WebAssembly runtime rewrite without a compatible build, extra parallel queue architecture."
+      }
+    ],
+    "gated_next_step": "Review specific WU11 reuse/integration plan on this existing stack before mutating product code; keep all draft-heavy exact-SHA CI and field evidence separate.",
+    "status_boundaries": [
+      "IMPLEMENTED",
+      "HOSTED_VERIFIED",
+      "INTEGRATION_PENDING",
+      "FIELD_PENDING",
+      "UNSUPPORTED"
+    ],
+    "do_not_claim": [
+      "10-round delivery equals full original first version",
+      "draft green means complete CI",
+      "source hash parity means all timing/meta properties preserved",
+      "WASM browser task queue success implies real Web FFmpeg encoding"
+    ]
+  },
+  "previous_authorized_units_at_2026_10_15": [
+    {
+      "id": "WU-01",
+      "requirement_ids": [
+        "B02",
+        "B04",
+        "B11",
+        "B12",
+        "A05",
+        "A06"
+      ],
+      "title": "Guided to Manual authoritative compiled task and real output acceptance",
+      "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-01--guidedmanual-单任务正式编译与结果闭环b02b04b11b12a05a06",
+      "exit": "On a pinned PR #104/#105 stack, real browser and Windows Native fixture demonstrate same source/render/audio/source-time/size, explicit VBR approval and rollback, matching compileTask FFmpeg args and verified output; separate actual PASS from pending environments.",
+      "status": "PARTIAL_GUIDED_MANUAL_HOSTED_CPU_CHROMIUM_PASS_WINDOWS_SAME_TASK_OPEN"
+    },
+    {
+      "id": "WU-02",
+      "requirement_ids": [
+        "B05",
+        "B06",
+        "B07",
+        "B24",
+        "A01",
+        "A02",
+        "A03"
+      ],
+      "title": "Rich MKV source streams, embedded ASS/fonts and audio preservation fixture",
+      "source": "docs/qhe-initial-version-route-reanchor-2026-10-14.md#wu-02--复杂-mkv-逐流保留与内封-ass-黄金样本b05b06b07b24a01a03",
+      "exit": "Windows Native MKV with video/two audio/embedded ASS/font: independent burned frame/font evidence, copied original FLAC packets, explicitly changed second audio and verified stream attributes. Field gaps stay pending; no strict-size FLAC requirement in this slice.",
+      "status": "HOSTED_ACCEPTED_FOR_SYNTHETIC_RICH_MKV_USER_FIELD_PENDING"
+    },
+    {
+      "id": "WU-03",
+      "requirement_ids": [
+        "B21",
+        "B02",
+        "B04",
+        "B24"
+      ],
+      "status": "HOSTED_ACCEPTED_SINGLE_SOURCE_MULTI_OUTPUT_MULTICODEC_UI_AND_FROZEN_TASKS",
+      "title": "Single-source multiple independent output recipes: Hardsub/Transcode/Stream Copy through existing compiler/run/save",
+      "source": "R19 P5 batch matrix; R24 section 22 batch and recipes; QHE docs/initial-version-report-traceability-2026-10-13.md",
+      "boundaries": "Do not claim multi-source batch, automatic encoder choosing, quality score or field acceptance; do not regress existing clip queue; each output separately validated and saved",
+      "exit": "Real UI can queue distinct frozen schema-v4 tasks against one source/ASS-font identity; serially execute, verify and save each separately; refuse changed source/assets; stop on failure; preserve save-only retry. Exact-head CI plus browser controlled-transport acceptance.",
+      "accepted_sha": "7cdff9dba0c12ce8c52bcd98fac43686d302b46d",
+      "acceptance_workflows": {
+        "draft_frontend": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38558570086",
+        "hosted_browser": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38558570169"
+      },
+      "unclosed": "Multi-source selection/staging, real Windows Native repeated tasks, real Web FFmpeg repeated tasks, physical user saves and device acceptance; B21 as a whole NOT COMPLETE"
+    },
+    {
+      "id": "WU-04",
+      "title": "B08/A04 explicit Stream Copy cut feasibility and user-controlled reencode alternative",
+      "requirement_ids": [
+        "B08",
+        "B09",
+        "A04",
+        "B24"
+      ],
+      "source": "R19 §06 pp6–7; R24 §09 pp12–13: quick copy vs precision cut, requested/actual boundary and VFR/B-frame constraints",
+      "scope": "Production workspace displays source-bound predicted prior-keyframe displacement or unknown; user may explicitly change copy to transcode trim with current encoder settings, never automatically. No claim of frame accuracy without packet/PTS verification.",
+      "exit": "Unit model tests, Chromium real interaction on imported source+keyframes, no stale source/keyframe evidence, exact-head frontend CI; output timing/packet A04 continues FIELD/VERIFICATION PENDING",
+      "status": "HOSTED_ACCEPTED_COPY_CUT_USER_DECISION_ACTUAL_OUTPUT_TIMESTAMPS_PENDING"
+    },
+    {
+      "id": "WU-05",
+      "requirement_ids": [
+        "B09",
+        "A04",
+        "B24"
+      ],
+      "status": "HOSTED_ACCEPTED_OUTPUT_FIRST_BOUNDARY_UI_AND_NATIVE_BFRAME_REST_OF_A04_UNVERIFIED",
+      "title": "Post-artifact Stream Copy timeline receipt from actual FFprobe decoded presentation and packet timestamps",
+      "source": "R19 §06 pp6–7 explicit requestedIn/Out, actualFirstPresentation, copiedPacketRange, audioTimeMapping, verificationStatus; R24 §09 pp12–13 explicitly distinguishes keyframe, PTS/DTS, VFR and audio priming",
+      "scope": "Windows Native completed, source-bound copy-trim job only. Read-only optional report; expose real output video decoded first PTS, packet PTS/DTS and audio first packets. No fabricated source-matched packet range, output end or universal sync correctness. No new codec or smart cut.",
+      "exit": "Native localhost endpoint + production UI optional evidence receipt; first-packet PTS/DTS and actual decoded presentation from FFprobe, output identity verified, bounded failures -> unavailable; JS contract tests plus real hosted fixture and if feasible Windows bridge. Real VFR/B-frame and per-packet source identity remain separately open."
+    },
+    {
+      "id": "WU-06",
+      "requirement_ids": [
+        "B02",
+        "B20",
+        "B24"
+      ],
+      "status": "HOSTED_ACCEPTED_READ_ONLY_P1_PROJECTION_DOES_NOT_CLOSE_FULL_B02",
+      "title": "Read-only SourceAsset/SourceStream/UserIntent/OutputPlan to executable schema-v4 delivery contract projection",
+      "source": "R19 §03 p4, §16 P1; R24 §05 p8: project old v4 compiler into read-only domain objects, do not migrate state or change executable behavior before parity",
+      "scope": "Existing schema-v4 compiler remains sole task authority. Derive read-only trace of source streams, compiler-derived user operations and stream decisions, typed OutputPlan, actual command map/filter facts and unknown verification. Present in existing task review without new config ownership or run gate.",
+      "exit": "Unit tests across all three operations incl mixed MKV, complete source plan → immutable projection, proof original task and commands unchanged; real Chromium source-bound UI acceptance; exact-head CI; no claims of full B02/ImmutableJobPlan/ArtifactRecord certification."
+    },
+    {
+      "id": "WU-07",
+      "requirement_ids": [
+        "B02",
+        "B05",
+        "B06",
+        "A02"
+      ],
+      "status": "HOSTED_ACCEPTED_COMPILER_AND_CHROMIUM_AUDIO_COPY_LOCK_PACKET_INDEPENDENT_OPEN",
+      "title": "Source-bound per-audio track must-copy preservation intent enforced by authoritative compiler",
+      "source": "R19 §03/§16 P2, R24 §05/§11: explicit must-preserve source streams; no silent drop/reencode; packet evidence remains separate",
+      "scope": "Audio stream only bounded product slice. Add explicit user opt-in lock to existing per-stream UI and schema-v4 raw task; compiler rejects drop/transcode/mismatch source rather than rewriting user choice. Existing encoder/audio actions remain authority. No arbitrary DRM/bit-exact output claims.",
+      "exit": "v4 compileTask copy/mixed/drop negative/foreign source tests, Chromium toggle and locked conflict, actual source lock shown in review, existing frontend CI; cross-platform actual packets and multi-source UI remain future work"
+    },
+    {
+      "id": "WU-08",
+      "title": "B21 web multiple user-selected source files with separately compiled transcode/copy outputs",
+      "requirement_ids": [
+        "B21",
+        "B02",
+        "B24"
+      ],
+      "status": "HOSTED_ACCEPTED_REAL_CHROMIUM_WEB_QUEUE_CONTROLLED_ENCODE_NATIVE_AND_MEDIA_PENDING",
+      "source": "R19 §16 P5 批次矩阵；R24 §22 QHE 多个独立转码/烧录/剪切任务；原 B21 追踪矩阵",
+      "scope": "Browser Web backend bounded: user selects 2–8 File objects, queue freezes current copy/transcode settings per selected source, reactivates exact File object, probes real media and uses ONLY existing compileTask/validate/run/save. Fail on stale source/unsupported locked audio/budget/hardsub instead of silently changing intent; stop on error, preserve successful files and save-retry. No native backend, embedded ASS, multi-source hardsub or shared quality certificate.",
+      "exit": "Unit source/queue validation, real production Chromium selection+distinct-source compiled runs+failure and save retry, frontend CI, any actual media encode evidence explicitly separate. Not full B21 Windows/Android/multi-source burn-in or release."
+    },
+    {
+      "id": "WU-09",
+      "title": "Shared P3 Guided/Manual evidence-to-recommendation-to-verified-adoption decision gate",
+      "requirement_ids": [
+        "B04",
+        "B11",
+        "B12",
+        "B13",
+        "B14"
+      ],
+      "status": "HOSTED_ACCEPTED_SHARED_P3_DIAGNOSIS_RECOMMENDATION_GATES_FULL_NATIVE_FIELD_PENDING",
+      "source": "R19 §16 P3 / §08–11 and R19 Supplement B; R24 §13–18 distinguish diagnosis, recommendation, commitment and prohibit cross-reference metric mixing",
+      "scope": "Pure shared read-only gate for workflow-specific reference scope, budget coordinate, measurement range and formal VBR verification; use existing frontiers & UI. No automatic encoder switch, separate execution authority, repeated sampling or predicted whole-film certification.",
+      "exit": "Real Guided+Manual caller integration, cross-reference mismatch and mismatched whole-file/video coordinate/strict policy tests, existing verified adoption guard remains; exact-head frontend+Chromium proof; no P3 all-workflows/Native end-to-end claim."
+    },
+    {
+      "id": "WU-10",
+      "title": "P2/A02 real Windows Native source-locked FLAC Copy payload identity across mixed audio transcode",
+      "requirement_ids": [
+        "B02",
+        "B05",
+        "B06",
+        "A02"
+      ],
+      "status": "HOSTED_ACCEPTED_REAL_NATIVE_SOURCE_LOCKED_FLAC_PACKET_SHA256_MIXED_OUTPUT",
+      "source": "Owner R19 §03/§16 P2; R24 §05/§11 source-track must-preserve followed through actual completed ArtifactRecord rather than controlled task compilation",
+      "scope": "Generate real mixed MKV H264 + FLAC + AAC in Windows CI, compile exact official v4 locked audio original Copy and second AAC transcode, execute through actual localhost Native bridge, and compare source/output a:0 FFprobe packet payload SHA256 and track order. Wrong-source and forced transcode compile guard negative. No whole-fidelity or every multimedia source signoff.",
+      "exit": "PowerShell parse and Node compile, exact-head actual Windows Native completed mixed audio output with independently extracted packet SHA256 hashes (count/values), runtime source identity, deliberate wrong-source refusal. Test frontend Uigs coverage. No claim of metadata language/trim/full sync/player or Web/Android."
+    }
+  ]
+}
