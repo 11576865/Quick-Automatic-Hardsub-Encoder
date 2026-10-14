@@ -152,3 +152,7 @@ R19 §16 P5 明确批次矩阵；R24 §22 的 QHE 对多个独立转码/烧录/�
 ## 2026-10-14 WU-09 P3 原报告重锚：共用推荐门禁，不混合 Guided/Manual 参考
 
 R19 §16 P3 强调共用 `EvidenceScope`/候选评价器，原报告补遗 B 明确 Manual 与 Guided 使用不同画面参考、必须同体积/同样本才可比较。R24 §13 强调诊断（观测）、推荐（可能较适合）、承诺（成品达到条件）三层不同。现有两种 UI 分别有自己的读取、VBR 短样和采用事务；本轮新增共用的只读决策门禁，检查正式参考作用域、目标体积坐标是否为可验证的完整文件预算、共同实测范围、VBR 结果能否被采用，不改变前端参数所有权、现有曲线和编码后端。禁止从跨 Guided/Manual SSIM 或 CQ 曲线直接自动采用。保留各自已有严格采用事务及全部实际成品后验验证要求。
+
+## WU-10 重锚 · P2/A02 必须 Copy 的实际 Windows Native 成品逐包证据
+
+已验证当前代码仓库 `public/vendor/ffmpeg-kit-next-web/` 仅有 README，缺少其 `dist/index.js` 核心；因此 WU-08 Web 多来源任务暂时不能凭现有仓库 CI 独立进行真正 FFmpegKitNext Web 端到端编码。此断点不得被受控浏览器 hooks 冒充关闭。R19 §03/§16 P2 和 R24 §05/§11 强调用户显式必须保留流与真实成品的关系；WU-07 只通过 `compileTask` 和受控浏览器，尚缺精确受保护任务的真实成品。授权 WU-10 在 Windows CI 创建双音轨 FLAC+AAC 合成 MKV，从 Native `/api/probe` 编译正式 v4 转码 task：原 FLAC `mustCopy`，另一条 AAC 重编码；真实 Native `/api/encode` 完成后独立使用 FFprobe `data_hash=SHA256` 检查源与成品 a:0 packet 数量/内容逐项一致，并校验 a:1 是 AAC，明确不把这种全时段单样本验收提升为所有容器/裁切/语言/播放器签收。
