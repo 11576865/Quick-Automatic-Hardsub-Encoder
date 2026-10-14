@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU04_B08_user_copy_cut_choice_hosted_accepted",
-  "current_bounded_work_unit": "WU04 B08/A04 bounded user capability delivered: source-and-stream-keyed copy-cut prediction/unknown UI and deliberate opt-in transcoded trim, semantic IN/OUT preserved, real Chromium production DOM & official v4 compiled task PASS at 5019747. Actual VFR B-frame final packet/PTS/DTS playback pending; multi-source B21 and PR integration still missing.",
+  "status": "incomplete_full_report_WU05_artifact_cut_timeline_authorized",
+  "current_bounded_work_unit": "WU05 B09/A04 actual completed-artifact timeline receipt: optional read-only Windows Native FFprobe + production UI task report; source-copy packet range and total A04 sync verification deliberately remain open.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -254,12 +254,12 @@
     "WU03 root reanchoring checkpoint: read original R19 P5, R24 section 22; selected B21 genuine new user capability instead of another WU01/WU02 test or B16 descendant. Prior two unit states and A01–A10 scope unchanged.",
     "WU03 B21 real user-facing single-source multi-output recipe panel implemented and hosted browser bounded PASS at 7cdff9; two codec variants serially executed in Chromium using controlled backend, save-only retry. NOT multi-source batch or real FFmpeg repeated runtime. Source reports unchanged.",
     "WU04 bounded implementation submitted: source-bound prediction vs unknown states and explicit user-triggered transcode trim; no silent frame-exact promise; actual A04 output verification remains open.",
-    "WU04 B08 real interface ability: native copy-cut diagnosis and user-selectable reencode trimming tested with real Chromium and official v4 compiler task at 5019747 run 38562833192; WU04 scope hosted accepted, frame-accurate PTS/DTS and real VFR/B-frame full source still open."
+    "WU04 B08 real interface ability: native copy-cut diagnosis and user-selectable reencode trimming tested with real Chromium and official v4 compiler task at 5019747 run 38562833192; WU04 scope hosted accepted, frame-accurate PTS/DTS and real VFR/B-frame full source still open.",
+    "WU05 reanchored from original R19§06/R24§09 first/actual/PTS-DTS/output cut contract; explicitly limited to actual completed-asset timing receipt, no new video codec nor generic test expansion."
   ],
   "next_units": [
-    "NO WU05 AUTHORIZED: return to full R19/R24 B01-B25/A01-A10 requirements and choose a new independently justified real product gap, rather than extend WU04 only because its CI found infrastructure issues.",
-    "Unclosed B08/B09/A04 acceptance: independent actual first presentation, copied packet range, audio time mapping, output PTS/DTS and VFR/B-frame film sample; new work requires separate root reanchor.",
-    "Remaining B21: multi-source true batch; B25: #104/#105 integration and release; WU01 same-task Windows Bridge and user-device A01–A10 field evidence pending."
+    "WU05 AUTHORIZED: actual completed-cut first presentation and packet PTS/DTS, per-audio first packet timestamps, only in explicit Native job report; accurate unknowns for source copied packet mapping and audio sync. No automatic WU06.",
+    "Full B01–B25/A01–A10 theoretical denominator remains unchanged; report's source vs output evidence levels must not be merged."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -331,10 +331,10 @@
     "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
-    "current_authorized_index": 3,
+    "current_authorized_index": 4,
     "completed_authorized_units": 1,
-    "review_status": "WU04_B08_BOUNDED_ACCEPTED_NEXT_WORK_REQUIRES_NEW_REPORT_REANCHOR",
-    "executed_authorized_units_since_reanchor": 1
+    "review_status": "ROOT_REPORT_REANCHORED_WU05_OUTPUT_TIMELINE_AUTHORIZED",
+    "executed_authorized_units_since_reanchor": 0
   },
   "authorized_next_units": [
     {
@@ -401,6 +401,19 @@
       "scope": "Production workspace displays source-bound predicted prior-keyframe displacement or unknown; user may explicitly change copy to transcode trim with current encoder settings, never automatically. No claim of frame accuracy without packet/PTS verification.",
       "exit": "Unit model tests, Chromium real interaction on imported source+keyframes, no stale source/keyframe evidence, exact-head frontend CI; output timing/packet A04 continues FIELD/VERIFICATION PENDING",
       "status": "HOSTED_ACCEPTED_COPY_CUT_USER_DECISION_ACTUAL_OUTPUT_TIMESTAMPS_PENDING"
+    },
+    {
+      "id": "WU-05",
+      "requirement_ids": [
+        "B09",
+        "A04",
+        "B24"
+      ],
+      "status": "AUTHORIZED_NOT_STARTED",
+      "title": "Post-artifact Stream Copy timeline receipt from actual FFprobe decoded presentation and packet timestamps",
+      "source": "R19 §06 pp6–7 explicit requestedIn/Out, actualFirstPresentation, copiedPacketRange, audioTimeMapping, verificationStatus; R24 §09 pp12–13 explicitly distinguishes keyframe, PTS/DTS, VFR and audio priming",
+      "scope": "Windows Native completed, source-bound copy-trim job only. Read-only optional report; expose real output video decoded first PTS, packet PTS/DTS and audio first packets. No fabricated source-matched packet range, output end or universal sync correctness. No new codec or smart cut.",
+      "exit": "Native localhost endpoint + production UI optional evidence receipt; first-packet PTS/DTS and actual decoded presentation from FFprobe, output identity verified, bounded failures -> unavailable; JS contract tests plus real hosted fixture and if feasible Windows bridge. Real VFR/B-frame and per-packet source identity remain separately open."
     }
   ],
   "historical_next_units": {
