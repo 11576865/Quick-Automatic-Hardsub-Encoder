@@ -72,7 +72,14 @@ export function createOutputPlan(task,media){
   return Object.freeze({version:1,video:task.videoStreams.map(sourceOrdinal=>({sourceOrdinal,action:task.operation==='copy'?'copy':'encode'})),
     audio:kept.map(describe),droppedAudio:Array.from({length:Number(media.audioTracks||0)},(_,sourceOrdinal)=>sourceOrdinal)
       .filter(n=>!kept.some(t=>t.sourceOrdinal===n)).map(sourceOrdinal=>({sourceOrdinal,action:'drop'})),
-    subtitles:task.keepSubtitles?(task.subtitleSelection??['all']).map(sourceOrdinal=>({sourceOrdinal,action:'copy'})):[],
-    attachments:task.keepAttachments?(task.attachmentSelection??['all']).map(sourceOrdinal=>({sourceOrdinal,action:'copy'})):[],
+    // FFmpeg's 0:s? / 0:t? mapping is stable source order. Expand "all"
+    // into verified per-source ordinals in the *reporting* projection only.
+    // The executable maps above remain untouched.
+    subtitles:task.keepSubtitles?(task.subtitleSelection??Array.from(
+      {length:Number(media.subtitleTracks??media.subtitleStreams?.length??0)},
+      (_,sourceOrdinal)=>sourceOrdinal)).map(sourceOrdinal=>({sourceOrdinal,action:'copy'})):[],
+    attachments:task.keepAttachments?(task.attachmentSelection??Array.from(
+      {length:Number(media.attachmentTracks??media.attachmentStreams?.length??0)},
+      (_,sourceOrdinal)=>sourceOrdinal)).map(sourceOrdinal=>({sourceOrdinal,action:'copy'})):[],
     metadata:!!task.keepMetadata,chapters:!!task.keepChapters});
 }
