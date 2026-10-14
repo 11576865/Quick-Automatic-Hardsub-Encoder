@@ -9,7 +9,7 @@ import {verifyFlacCachedPacketReuse as verify} from './flac-cache-reuse-contract
 
 const DIG='a'.repeat(64),MIXED='b'.repeat(64),SOURCE='c'.repeat(64);
 const fixture=()=>{
- const cache={version:1,kind:'encoded-flac-cache-v1',sourceKey:'video-source',
+ const cache={version:1,kind:'encoded-flac-cache-v1',sourceKey:SOURCE,
    measurementId:'full-ledger-id',sourceSha256:SOURCE,artifactSha256:DIG,
    artifactWriteTicks:'638960827860000000',artifactBytes:81000,start:.4,end:2.4,
    tracks:[
@@ -23,14 +23,14 @@ const fixture=()=>{
     {codec:'flac',outputOrdinal:0,packetCount:32,packetBytes:39300,orderedPacketSha256:DIG},
     {codec:'flac',outputOrdinal:1,packetCount:21,packetBytes:27599,orderedPacketSha256:MIXED}]};
  const plan={version:1,method:'cached-flac-packets-copy-v1',
-   sourceKey:'video-source',measurementId:'full-ledger-id',
+   sourceKey:SOURCE,measurementId:'full-ledger-id',
    jobId:'this-job',start:.4,end:2.4,
    container:'matroska',audioCodec:'copy',hasVideo:true,softSubtitleStreams:1,
    maps:[{sourceOrdinal:0,cacheOrdinal:0,outputOrdinal:0,range:'full',
      channels:null,sampleRate:null},
     {sourceOrdinal:1,cacheOrdinal:1,outputOrdinal:1,range:'trim',
      channels:1,sampleRate:48000}]};
- return {cache,finished,plan,sourceKey:'video-source'};
+ return {cache,finished,plan,sourceKey:SOURCE};
 };
 test('actual cached packet sequence equality is a single-job certificate, never future strict budget admission',()=>{
  const r=verify(fixture());
