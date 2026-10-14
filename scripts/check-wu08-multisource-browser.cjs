@@ -100,12 +100,12 @@ async function main(){
   if(runs.some(x=>x.task.version!==4||x.task.quality!==23||x.task.operation!=='transcode'))
     throw Error('Queue used mutated user settings or nonofficial compiler tasks');
   const items=page.locator('#taskMultiSourceList li');
-  if(!(await items.nth(0).textContent()).includes('已保存')||
+  if(!(await items.nth(0).textContent()).includes('已交浏览器下载')||
      !(await items.nth(1).textContent()).includes('待重试保存'))
     throw Error('Failed save overwrote successful file or lost second artifact');
   await items.nth(1).getByRole('button',{name:'仅重试保存'}).click();
   await page.waitForFunction(()=>document.querySelector('#taskMultiSourceList')
-    ?.textContent?.match(/已保存/g)?.length===2,null,{timeout:7000});
+    ?.textContent?.match(/已交浏览器下载/g)?.length===2,null,{timeout:7000});
   if(await page.evaluate(()=>window.batchRuns.length)!==2)
     throw Error('Retry-save redundantly re-encoded a source');
   const saved=await page.evaluate(()=>window.batchSaves);
