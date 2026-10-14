@@ -1,0 +1,138 @@
+# Source-owned, single-flight background B16 isolated auxiliary remux.
+# Loaded by native-bridge.ps1 AFTER its file ownership helpers are defined.
+$script:TrimPreflightJob=$null
+function Get-IsolatedTrimPreflightStatus {
+ $job=$script:TrimPreflightJob
+ if(-not $job){return @{ok=$true;state='not-requested'}}
+ $file=Get-SelectedPath 'video'
+ if(-not $file -or -not(Test-Path -LiteralPath $file -PathType Leaf)){
+  $job.State='unavailable';$job.Receipt=$null
+  return @{ok=$true;state='unavailable',reason='source-not-selected'}
+ }
+ $item=Get-Item -LiteralPath $file
+ if($file -ne $job.Source -or $item.Length -ne $job.Length -or
+    [string]$item.LastWriteTimeUtc.Ticks -ne [string]$job.Ticks){
+  $job.State='unavailable';$job.Receipt=$null
+  return @{ok=$true;state='unavailable';reason='source-changed'}
+ }
+ if($job.State -in @('ready','unavailable')){
+  return @{ok=$true;state=$job.State;receipt=$job.Receipt;jobId=$job.Id}
+ }
+ $proc=$job.Started.Process
+ if(-not $proc.HasExited){return @{ok=$true;state='running';jobId=$job.Id}}
+ try{
+  if($proc.ExitCode -ne 0 -or -not(Test-Path -LiteralPath $job.ReceiptPath -PathType Leaf)){
+   throw 'Bounded isolated remux failed.'
+  }
+  $receipt=Get-Content -LiteralPath $job.ReceiptPath -Raw|ConvertFrom-Json
+  if($receipt.version -ne 1 -or $receipt.scope -ne 'isolated-trim-copy-observation' -or
+     $receipt.canReplaceFullSourceBudget -ne $false -or
+     $receipt.observationOnly -ne $true -or
+     [long]$receipt.sourceLength -ne [long]$job.Length -or
+     [string]$receipt.sourceWriteTicks -ne [string]$job.Ticks -or
+     [double]$receipt.start -ne [double]$job.Start -or
+     [double]$receipt.end -ne [double]$job.End -or
+     [string]$receipt.outputFormat -ne [string]$job.Format -or
+     (@($receipt.audioOrdinals)|ConvertTo-Json -Compress) -ne
+       (@($job.AudioOrdinals)|ConvertTo-Json -Compress) -or
+     (@($receipt.subtitleOrdinals)|ConvertTo-Json -Compress) -ne
+       (@($job.SubtitleOrdinals)|ConvertTo-Json -Compress)){
+   throw 'Worker receipt does not match Native-owned source and request.'
+  }
+  if(@($receipt.audioPacketBytes).Count -ne @($job.AudioOrdinals).Count -or
+     @($receipt.subtitlePacketBytes).Count -ne @($job.SubtitleOrdinals).Count){
+   throw 'Worker auxiliary stream count differs.'
+  }
+  foreach($v in @($receipt.audioPacketBytes)+@($receipt.subtitlePacketBytes)){
+   if($null -eq $v -or [long]$v -lt 0){throw 'Worker packet evidence invalid.'}
+  }
+  # Attach only the current Windows-local source measurement reference.
+  $measured=$script:BudgetMeasurement
+  if(-not $measured -or $measured.Id -ne $job.MeasurementId -or
+     $measured.Path -ne $job.Source -or $measured.Length -ne $job.Length -or
+     [string]$measured.WriteTicks -ne [string]$job.Ticks){
+   throw 'Source packet ledger changed after preflight started.'
+  }
+  $job.Receipt=[pscustomobject]@{
+   version=1;scope='isolated-trim-copy-observation';method=[string]$receipt.method
+   observationOnly=$true;canReplaceFullSourceBudget=$false
+   measurementId=$measured.Id;sourceLength=[long]$job.Length
+   sourceWriteTicks=[string]$job.Ticks
+   start=[double]$job.Start;end=[double]$job.End;outputFormat=$job.Format
+   audioOrdinals=@($job.AudioOrdinals);subtitleOrdinals=@($job.SubtitleOrdinals)
+   audioPacketBytes=@($receipt.audioPacketBytes)
+   subtitlePacketBytes=@($receipt.subtitlePacketBytes)
+  }
+  $job.State='ready'
+ }catch{
+  $job.Receipt=$null
+  $job.State='unavailable'
+ }finally{
+  try{$proc.Dispose()}catch{}
+  try{Remove-Item -LiteralPath $job.Work -Recurse -Force -ErrorAction SilentlyContinue}catch{}
+ }
+ return @{ok=$true;state=$job.State;jobId=$job.Id;receipt=$job.Receipt}
+}
+function Start-IsolatedTrimPreflight($Body) {
+ $video=Get-SelectedPath 'video'
+ if(-not $video){throw 'No video selected.'}
+ foreach($job in $script:Jobs.Values){
+  if($job.State -in @('encoding','validating')){throw 'Cannot preflight copy packets while Native encoding is active.'}
+ }
+ if($script:TrimPreflightJob){
+  $state=Get-IsolatedTrimPreflightStatus
+  if($state.state -eq 'running'){throw 'Only one Native preflight can run at once.'}
+ }
+ $measurement=$script:BudgetMeasurement
+ $item=Get-Item -LiteralPath $video
+ if(-not $measurement -or $measurement.Path -ne $video -or
+    $measurement.Length -ne $item.Length -or
+    [string]$measurement.WriteTicks -ne [string]$item.LastWriteTimeUtc.Ticks){
+  throw 'Source whole-file packet costs must be measured before trim preflight.'
+ }
+ $req=$Body.request
+ if(-not $req -or [string]$req.mode -ne 'isolated-trim-copy' -or
+    [int]$req.version -ne 1 -or
+    [string]$req.outputFormat -notin @('matroska','mp4')){
+  throw 'Invalid isolated trim copy request.'
+ }
+ $start=[double]$req.start;$end=[double]$req.end
+ if([double]::IsNaN($start) -or [double]::IsInfinity($start) -or
+    [double]::IsNaN($end) -or [double]::IsInfinity($end) -or
+    $start -lt 0 -or $end -le $start -or $end-$start -gt 3600){
+  throw 'Invalid or unbounded trim interval.'
+ }
+ $audio=if($null -eq $req.audioOrdinals){@()}else{@($req.audioOrdinals)}
+ $sub=if($null -eq $req.subtitleOrdinals){@()}else{@($req.subtitleOrdinals)}
+ if($audio.Count+$sub.Count -lt 1 -or $audio.Count+$sub.Count -gt 32){
+  throw 'No copied auxiliary streams selected or selection too large.'
+ }
+ foreach($ordinal in @($audio)+@($sub)){
+  if([string]$ordinal -notmatch '^\d+$' -or [int]$ordinal -ge 64){
+   throw 'Invalid source auxiliary ordinal.'
+  }
+ }
+ $id=[guid]::NewGuid().ToString('N')
+ $work=New-BridgeWorkDir ('trim-copy-preflight-'+$id+'-')
+ $sourceRequest=Join-Path $work 'request.json'
+ $receiptPath=Join-Path $work 'receipt.json'
+ $payload=@{version=1;mode='isolated-trim-copy';sourcePath=$video
+   start=$start;end=$end;outputFormat=[string]$req.outputFormat
+   audioOrdinals=@($audio);subtitleOrdinals=@($sub)}
+ [IO.File]::WriteAllText($sourceRequest,($payload|ConvertTo-Json -Compress -Depth 7),
+  (New-Object Text.UTF8Encoding($false)))
+ $args='-NoProfile -NonInteractive -ExecutionPolicy Bypass -File '+
+  (Quote-NativeArg (Join-Path $PSScriptRoot 'trim-copy-preflight.ps1'))+
+  ' -Ffmpeg '+(Quote-NativeArg $script:Ffmpeg)+
+  ' -Ffprobe '+(Quote-NativeArg $script:Ffprobe)+
+  ' -RequestFile '+(Quote-NativeArg $sourceRequest)+
+  ' -ReceiptFile '+(Quote-NativeArg $receiptPath)
+ $started=Start-BridgeTool 'powershell.exe' $args $work
+ $script:TrimPreflightJob=[pscustomobject]@{
+  Id=$id;State='running';Started=$started;Work=$work;ReceiptPath=$receiptPath
+  Receipt=$null;Source=$video;Length=[long]$item.Length;Ticks=[string]$item.LastWriteTimeUtc.Ticks
+  MeasurementId=$measurement.Id;Start=$start;End=$end
+  Format=[string]$req.outputFormat;AudioOrdinals=@($audio);SubtitleOrdinals=@($sub)
+ }
+ return @{ok=$true;state='running';jobId=$id}
+}
