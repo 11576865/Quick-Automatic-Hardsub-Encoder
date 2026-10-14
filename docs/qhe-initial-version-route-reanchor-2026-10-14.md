@@ -128,3 +128,11 @@ PR #105 精确 head b22f5fae 的本次 10 条工作流：Test frontend、Windows
 **授权的有界功能**：以单个用户来源和已读取关键帧信息预测可能的提前切入或标记“未知”；明确告知这是预检查而非成品 packet/PTS 证明；用户可主动切换重编码剪切，并要求复核当前编码方案，不得自动改模式；来源变化使旧时间轴判断失效。真实 VFR/B 帧成品首尾 PTS / DTS 和音画同步仍为 B09/A04 后续验收，不因本次 UI 通过而关闭。
 
 此轮优先级高于继续 WU-03 队列细分，因为理论报告明确了终端用户容易误解的剪切能力语义；未授权新增 Smart Cut 算法、多来源批处理或其他编解码器。
+
+## 2026-10-14 WU-05 原报告重锚：成品剪切时间轴收据
+
+R19 §06 明确要求 `requestedIn/Out`、`actualFirstPresentation`、`copiedPacketRange`、`audioTimeMapping`、`verificationStatus`，R24 §09 区分 GOP、B 帧 PTS/DTS、VFR、音频编码器延迟和负时间戳。此前 WU-04 的关键帧判断仅是源端预测，不是成品实际开场。
+
+授权 WU-05：面向**已经完成且可独立 FFprobe 的 Windows Native Copy Trim 成品**，按需给出解码首视频帧时间戳、编码包 PTS/DTS、每条音轨的起始包时间、请求时间与 Native seek hint，并作为成品证据收据写入任务报告。对 source-to-output copiedPacketRange 哈希、真实 source first presentation、整片尾帧及 VFR/B 帧音画同步，不在本轮测试时自动宣布 Verified，而明确 `unverified`；此工作只读，不改变用户成品或压制计划。
+
+WU-05 的成功标准是新**用户可查询的产品能力**及对应独立 FFprobe/浏览器和 Windows 现场边界，不是扩大现有 B16 测试范围。完成后仍须新的目标重锚才能授权 WU-06。
