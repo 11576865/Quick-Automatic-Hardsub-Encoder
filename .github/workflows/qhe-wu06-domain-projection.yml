@@ -1,0 +1,31 @@
+name: QHE WU06 P1 read-only delivery contract acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/delivery-contract-projection.js'
+      - 'src/delivery-contract-projection.test.mjs'
+      - 'src/task-review.js'
+      - 'src/media-workspace.js'
+      - 'scripts/check-wu06-domain-browser.cjs'
+      - '.github/workflows/qhe-wu06-domain-projection.yml'
+  workflow_dispatch:
+jobs:
+  production-domain-inspector:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Prove schema-v4 source stream intent output projection is passive
+        run: node --test src/delivery-contract-projection.test.mjs src/task-review.test.mjs
+      - name: Prepare real Chromium and production frontend
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Review production compiled domain projection in Chromium
+        run: node scripts/check-wu06-domain-browser.cjs
