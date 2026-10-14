@@ -148,3 +148,12 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - `windows/trim-copy-preflight-bridge.ps1` 提供 Native localhost `POST/GET /api/trim-copy-preflight`：需要既有完整源流测量 ID，始终固定当前所选源，单飞异步启动与查询；来源变化取消原工作。JS `trim-copy-preflight.js` 只认可映射、起止范围、容器和来源均匹配的预演数据，并且永久保留 `observationOnly` / `canReplaceFullSourceBudget:false`，**不得**将独立辅助流预演误称完整视频混合封装的精确成本或降低现行原源流上界。
 - `src/trim-copy-preflight.test.mjs` 8 项隔离 JS 校验通过；Windows Native smoke 新增含双音轨、软字幕的真实 FFmpeg 独立测量对照、错误映射拒绝以及 localhost 异步接口测试；线上实际 Windows/Node 验收 Pending。
 - 此阶段只是下一步精确成本预测的可观测基础。真正完整任务裁切 seek/PTS、多路视频及附件交错、最终 mux 包选择、FLAC 重新编码成本以及 Android/Web 计量均未闭合。详见 `docs/b16-isolated-trim-copy-preencode-2026-10-14.md`。B16 和完整初版均未签收。
+
+
+## 2026-10-14 B16 综合批次：多轨 FLAC 真实预编码、共享工作台观测及 Draft Windows 定向实测
+
+- `windows/flac-encode-preflight.ps1` 现在能够对选定多个源音轨按 `full` / `trim` 分别保持来源区间与声道/采样率配置，实际用 FFmpeg 编出 FLAC，在独立 Matroska 辅助成品中通过现有 FFprobe 工作器逐音轨计包字节。输出不超过 1 GiB 临时文件上限，编码/扫描有界；超过有界时间不能外推为完整音轨成本。
+- `windows/flac-encode-preflight-bridge.ps1`、`native-bridge.ps1`、`windows-native-client.js`、`main.js` 构成独立的来源绑定异步 Native 预演链；保守预算工作器与正式编码排他运行，文件 stat / 精确 `FILETIME` / `measurementId` 改变使旧回执失效。
+- 共享 `media-workspace.js` 新增“实测 FLAC / 裁切复制成本”诊断入口。请求由 `auxiliary-preflight-request.js` 依据当前逐音轨计划及 IN/OUT 生成，只读展示包负载并且明确 partial/no-final-certificate 状态；`flac-encode-preflight.js` 与 `trim-copy-preflight.js` 均独立检查流映射与来源范围。**`media-planning.js::sizeBudget` 不变：未经最终混合任务证明的 FLAC 仍禁止进入严格体积预算，裁切复制继续完整源流保守预留。**
+- 单独的 `.github/workflows/windows-b16-runtime.yml` 能在 Draft PR 中运行 PowerShell 5.1 语法、两个 JS 测试集、真实双音轨 full/trim FLAC 和双音轨/软字幕复制的独立 FFprobe 对照，不启动全部 Windows/Android/VVC 矩阵。
+- 隔离模块测试 16/16 PASS，两个独立源码接线测试 PASS，`src/main.js` / `src/media-workspace.js` / `src/windows-native-client.js` 解析通过；本地 Linux FFmpeg 3 秒双 PCM 音轨真实 FLAC 命令得到 39300 和 27599 audio packet bytes。托管 Windows、浏览器和复杂实际音轨的实证仍 Pending。详细边界在 `docs/b16-flac-native-multistream-preencode-and-draft-windows-runtime-2026-10-14.md`。B16 和完整理论初版不能签收。
