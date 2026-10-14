@@ -12,8 +12,10 @@ const base=()=>({
    {sourceOrdinal:1,action:'flac',range:'trim',outputOrdinal:1,channels:1,sampleRate:48000}
   ],subtitles:[]}
  },
- completed:{verified:true,outputPacketEvidence:{version:1,scope:'completed-artifact',
-  audioPacketBytes:[39300,27599],subtitlePacketBytes:[]}},
+ completed:{verified:true,jobId:'native-b16-7',outputBytes:127000,
+  outputPacketEvidence:{version:1,scope:'completed-artifact',
+   artifactBytes:127000,artifactWriteTicks:'638960827860011111',artifactJobId:'native-b16-7',
+   audioPacketBytes:[39300,27599],subtitlePacketBytes:[]}},
  preflight:{sourceKey:source,measurementId:ledger,
   sourceStat:{length:123456,writeTicks:'638960827860000000'},
   request:{version:1,mode:'isolated-flac-encode',start:.4,end:2.4,outputFormat:'matroska',
@@ -65,8 +67,11 @@ test('no completed verified packet evidence means no final-mux comparison',()=>{
 });
 test('selected output order may differ from source order but must match actual source ordinal',()=>{
  const x=base();
- x.task.outputPlan.audio[0].outputOrdinal=1;
- x.task.outputPlan.audio[1].outputOrdinal=0;
+ // Authoritative task compiler emits ordinal per *array position*, so
+ // reverse the selected source order rather than creating a false mapping.
+ x.task.outputPlan.audio.reverse();
+ x.task.outputPlan.audio[0].outputOrdinal=0;
+ x.task.outputPlan.audio[1].outputOrdinal=1;
  x.completed.outputPacketEvidence.audioPacketBytes=[27599,39300];
  const r=check(x);assert.equal(r.status,'exact-observed-payload-match');
  assert.equal(r.rows[0].outputOrdinal,1);
@@ -88,12 +93,39 @@ test('missing, overflowed and forged negative packet data cannot match',()=>{
   assert.equal(check(x).comparable,false);
  }
 });
+test('unrelated Native job, modified output FILETIME, or wrong completed bytes cannot impersonate current artifact',()=>{
+ for(const mutate of [
+  x=>x.completed.jobId='another-task',
+  x=>x.completed.outputPacketEvidence.artifactJobId='other-job',
+  x=>x.completed.outputPacketEvidence.artifactBytes=127001,
+  x=>x.completed.outputPacketEvidence.artifactWriteTicks='',
+  x=>x.completed.outputPacketEvidence.artifactWriteTicks=638960827860011111,
+  x=>x.completed.outputBytes=127002
+ ]){
+  const x=base();mutate(x);
+  const r=check(x);
+  assert.equal(r.comparable,false);
+  assert.equal(r.reason,'finished-artifact-job-or-stat-mismatch');
+ }
+});
+test('missing, extra, reordered or forged completed audio output mapping cannot be adopted',()=>{
+ for(const mutate of [
+  x=>x.completed.outputPacketEvidence.audioPacketBytes=[39300],
+  x=>x.completed.outputPacketEvidence.audioPacketBytes.push(200),
+  x=>x.task.outputPlan.audio[1].outputOrdinal=0,
+  x=>x.task.outputPlan.audio[0].outputOrdinal=1
+ ]){
+  const x=base();mutate(x);
+  assert.equal(check(x).reason,'final-audio-stream-map-missing');
+ }
+});
 test('copy source/track binding includes preserved soft subtitle and exact output ordinals',()=>{
  const x=base();
  x.task.outputPlan={audio:[{sourceOrdinal:1,action:'copy',range:'trim',outputOrdinal:0}],
    subtitles:[{sourceOrdinal:0,action:'copy'}]};
  x.task.subtitleRange='trim';
  x.completed.outputPacketEvidence={version:1,scope:'completed-artifact',
+  artifactBytes:127000,artifactWriteTicks:'638960827860011111',artifactJobId:'native-b16-7',
   audioPacketBytes:[40000],subtitlePacketBytes:[1300]};
  x.preflight.request={version:1,mode:'isolated-trim-copy',start:.4,end:2.4,
   audioOrdinals:[1],subtitleOrdinals:[0]};
