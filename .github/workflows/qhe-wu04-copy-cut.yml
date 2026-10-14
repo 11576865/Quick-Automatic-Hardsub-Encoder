@@ -1,0 +1,31 @@
+name: QHE WU04 copy-cut user decision acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/copy-cut-feasibility.js'
+      - 'src/copy-cut-feasibility.test.mjs'
+      - 'src/media-workspace.js'
+      - 'src/media-workspace-ui.css'
+      - 'scripts/check-wu04-copy-cut-browser.cjs'
+      - '.github/workflows/qhe-wu04-copy-cut.yml'
+  workflow_dispatch:
+jobs:
+  real-copy-strategy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Run explicit Stream Copy feasibility model regressions
+        run: node --test src/copy-cut-feasibility.test.mjs
+      - name: Install production frontend and Chromium
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Click production copy-cut decision and execute shared compiler task
+        run: node scripts/check-wu04-copy-cut-browser.cjs
