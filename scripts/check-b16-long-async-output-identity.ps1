@@ -86,6 +86,17 @@ try {
  if($sum -le 0 -or $sum -ne [long]$done.outputPacketEvidence.audioPacketBytes[0]){
   throw 'Long completed FLAC packet receipt disagrees with independent FFprobe.'
  }
+  $videoBytes=0L
+ foreach($packet in @(& ffprobe -v error -select_streams v:0 -show_packets -show_entries packet=size -of csv=p=0 $output)){
+  if($packet -match '^[0-9]+$'){$videoBytes += [long]$packet}
+ }
+ if($videoBytes -le 0 -or @($done.outputPacketEvidence.videoPacketBytes).Count -ne 1 -or
+    [long]$done.outputPacketEvidence.videoPacketBytes[0] -ne $videoBytes){
+  throw 'Long Native async video packet ledger disagrees with independent FFprobe.'
+ }
+ $codecBytes=$sum+$videoBytes
+ foreach($entry in @($done.outputPacketEvidence.subtitlePacketBytes)){$codecBytes += [long]$entry}
+ if($codecBytes -gt [long]$done.outputBytes){throw 'Long packet sum exceeds actual output bytes.'}
  Write-Host ('B16 actual 182-second Native FFprobe async packet total='+$sum+'; polledRunning='+$sawRunning)
  [IO.File]::AppendAllText($output,'B16_LONG_MUTATION',(New-Object Text.UTF8Encoding($false)))
  $invalid=Invoke-RestMethod -Uri "$url/api/jobs/$($started.jobId)" -Headers $headers -TimeoutSec 5
