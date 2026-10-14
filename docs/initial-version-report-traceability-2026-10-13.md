@@ -183,3 +183,12 @@ B15 原有 Guided ASS 的 `scene-risk-selection.js` 逻辑新增 Manual 纯转�
 - `outputReport.completedMuxByteLedger` 与共享工作台短/长任务报告显示该次实际成本，不允许作用于未来预测：`canPredictFutureBytes:false`、`canAuthorizeStrictBudget:false`。
 - 新 8 项隔离行为测试 PASS，Draft fast/full 与 Windows B16 专项 CI 接线。Windows 真实短 Native、182s 异步 Native 以及 1v+2a+1s Matroska 独立 FFprobe 交叉验收已加入脚本，新精确提交的 Windows PASS Pending。
 - B16 仍需严谨的 FLAC 已编码音轨复用路径和形式化预算成本准入，且需长篇/VFR/复杂 ASS、Android/Web 与成品交付端验收。未降低 B01–B25 / A01–A10 完整理论模型分母。
+
+
+## 2026-10-14 B16 第五阶段：FLAC 已编码缓存逐包复用的真实证据和专门 Windows 运行验收
+
+- 现有实际 Windows B16 Runtime `38534906483` 在头部 `9a503bfc` 已完成且全部步骤 PASS：多轨 FLAC、复制流、Native HTTP 来源证据与 182 秒完成成品视频/音频 packet 审计均有真实 Windows FFmpeg 证据。这不等于能提前预测 FLAC 音频大小。
+- 改为用 FFmpeg **先实际编码 FLAC 一次形成缓存**，再在视频＋软字幕混合封装时用 `-c:a copy` 复用该编码结果。在本地 Linux 三秒双音轨例子中，缓存与最终 MKV 的 32 包/39,300 字节、21 包/27,599 字节均逐包有序 SHA-256 一致，不只是总字节接近。
+- `src/flac-cache-reuse-contract.js` 以源内容 SHA256、缓存/成品文件 SHA256、来源测量 ID、作业 ID、NTFS FILETIME 文本、完整音轨源/缓存/输出映射、full/trim、声道/采样率、逐包有序 SHA256、实际 packet 数/总字节和视频/软字幕存在性，拒绝错源/错流/换码器/换区间/溢出/伪造的复用。
+- 六项实际 GitHub 模块纯逻辑隔离测试 PASS；`src/flac-cache-reuse-contract.test.mjs` 增加真正的 FFmpeg 源→FLAC 缓存→完成视频和软字幕成品→FFprobe 每包哈希测试。新证据路径已加入 `Test frontend` 快速/完整 Node 和 Draft `Windows B16 runtime acceptance` 的 FFmpeg 后测试段（宿主验收 Pending）。
+- 此批是**可重复执行的缓存复用证明实验**，并非生产任务已经接入缓存作为音轨输入；此前 source-only FLAC 预算拒绝仍在，`canAuthorizeStrictBudget:false`。生产 task 缓存持有/内容不可变/PTS 实际相同/余量上界/严格大小退出验收还要单独实现。文档 `docs/b16-flac-cached-packet-reuse-2026-10-14.md`。B16 与整体 B01–B25/A01–A10 均维持未闭环。
