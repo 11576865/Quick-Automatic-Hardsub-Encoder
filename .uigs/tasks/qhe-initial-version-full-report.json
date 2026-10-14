@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_B21_single_source_recipe_matrix_hosted_accepted",
-  "current_bounded_work_unit": "WU03 targeted implementation accepted on Draft: same-source independent Hardsub/Transcode/StreamCopy frozen recipe queue, serial run, independent verified output/save with save-only retry. Hosted Chromium controlled transport and frontend build PASS at 7cdff9; real multi-source and repeated Native/Web FFmpeg still not accepted. WU01 same-task Windows open, WU02 Windows hosted PASS.",
+  "status": "incomplete_full_report_WU04_copy_cut_choice_authorized",
+  "current_bounded_work_unit": "WU04 B08/A04: explicit copy keyframe feasibility versus opt-in transcode trim, source-bound waveform evidence; no video frame-exact promise; WU03 synthetic Chromium hosted PASS; multi-source B21 still absent.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -255,8 +255,8 @@
     "WU03 B21 real user-facing single-source multi-output recipe panel implemented and hosted browser bounded PASS at 7cdff9; two codec variants serially executed in Chromium using controlled backend, save-only retry. NOT multi-source batch or real FFmpeg repeated runtime. Source reports unchanged."
   ],
   "next_units": [
-    "WU03 ACCEPTED BOUNDED: single-source multiple output recipes implementation. DO NOT keep extending as a default. Full B21 requires separately authorized multi-source selection/staging and real backend batch acceptance.",
-    "BEFORE WU04: re-anchor root B01–B25 and A01–A10; compare B08/B09 independent requested/actual stream timeline evidence, remaining B21 true multi-source, B25 integration and overall initial-version exit gates. Never auto-promote WU03 testing tasks."
+    "WU04 authorized against R19 §06, R24 §09: explicit copy-cut feasibility, source-bound timeline, human-chosen reencode alternative. No automatic mode switching or exact-frame claims.",
+    "Reanchor before authorizing successor, select other real report gaps not generated bug queue."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -325,10 +325,10 @@
     "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
-    "current_authorized_index": 2,
+    "current_authorized_index": 3,
     "completed_authorized_units": 1,
-    "review_status": "WU03_B21_BOUNDED_ACCEPTED_REANCHOR_BEFORE_NEW_UNIT",
-    "executed_authorized_units_since_reanchor": 1
+    "review_status": "OWNER_REPORT_REANCHORED_WU04_B08_A04_AUTHORIZED",
+    "executed_authorized_units_since_reanchor": 0
   },
   "authorized_next_units": [
     {
@@ -381,6 +381,20 @@
         "hosted_browser": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38558570169"
       },
       "unclosed": "Multi-source selection/staging, real Windows Native repeated tasks, real Web FFmpeg repeated tasks, physical user saves and device acceptance; B21 as a whole NOT COMPLETE"
+    },
+    {
+      "id": "WU-04",
+      "title": "B08/A04 explicit Stream Copy cut feasibility and user-controlled reencode alternative",
+      "requirement_ids": [
+        "B08",
+        "B09",
+        "A04",
+        "B24"
+      ],
+      "source": "R19 §06 pp6–7; R24 §09 pp12–13: quick copy vs precision cut, requested/actual boundary and VFR/B-frame constraints",
+      "scope": "Production workspace displays source-bound predicted prior-keyframe displacement or unknown; user may explicitly change copy to transcode trim with current encoder settings, never automatically. No claim of frame accuracy without packet/PTS verification.",
+      "exit": "Unit model tests, Chromium real interaction on imported source+keyframes, no stale source/keyframe evidence, exact-head frontend CI; output timing/packet A04 continues FIELD/VERIFICATION PENDING",
+      "status": "AUTHORIZED_NOT_STARTED"
     }
   ],
   "historical_next_units": {
