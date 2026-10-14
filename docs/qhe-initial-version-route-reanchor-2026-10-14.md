@@ -112,3 +112,11 @@ PR #105 精确 head b22f5fae 的本次 10 条工作流：Test frontend、Windows
 - R19/R24：用户提供的原始理论报告；以报告原有的可选、提案、条件限制解释要求。
 - QHE docs/initial-version-report-traceability-2026-10-13.md、docs/five-round-delivery-acceptance-2026-10-13.md、.uigs/tasks/qhe-initial-version-full-report.json、AGENTS.md（均按 #105 head 读取）。
 - GitHub PR #104、#105 元数据及 b22f5fa exact-head CI；本路线为资料审计，不是新的构建/设备验收。
+
+## 2026-10-14 第二次目标锚定：授权 WU-03 而非继续测试循环
+
+- 原始 R19《未来产品架构》P5 明确要求“批次矩阵”；R24《产品定位与压缩决策》§22 明确区分 QHE“多个独立转码/烧录/剪切任务”与软封“多个独立输出 MKV 的配对/封装计划”。这是**真实初版功能差距 B21**，不能由现有 `clip-queue.js` 的单来源、多片段 Stream Copy 代替。
+- 本轮授权 WU-03：在不建立第二任务编译器的前提下，实现同一来源保存多个硬压/纯转码/Stream Copy 的正式 schema-v4 任务方案，经原有 run/verify/save 后端逐个生成独立成品；必须绑定媒体和 ASS/字体来源，拒绝旧方案潜入新来源；遇到保存失败保留成品、只重试保存。
+- 本切片是**单来源、多输出配方矩阵**，B21 的多来源输入、多来源选择/重连与完整产品体验仍未实现。不可宣称初版 B21 完成，也不应据此新增跨平台编码器。
+- WU-01 真实 Chromium + Ubuntu CPU PASS，但 Windows 同一交接任务尚待验收；WU-02 Windows 托管的 MKV 内封 ASS/字体、双音轨输出 PASS，真实用户文件与安装仍待现场验收。这些状态都没有授权覆盖 B21。
+- WU-03 后重新执行目标锚定；不能让 WU-03 派生的技术事项自动成为 WU-04。
