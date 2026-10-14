@@ -140,3 +140,7 @@ WU-05 的成功标准是新**用户可查询的产品能力**及对应独立 FFp
 ## 2026-10-14 WU-06：按原 R19 P1/P16 和 R24 §05 领域模型重锚
 
 源报告明确提出从旧 `task schema v4` 建立**只读** `SourceAsset → SourceStream → UserIntent → OutputPlan → ImmutableJobPlan → ArtifactRecord` 投影，检查与现有执行参数及成品的一致性后才能改变状态所有权。最新源码已有 `createOutputPlan` 与 `task-review`，但只读对照尚未串联当前源流、编译衍生意图、产物/未知证明和正式 FFmpeg 参数。授权 WU-06：从唯一编译后的任务和当前来源参数推导一份不可编辑的交付合同，在现有审阅区展开并显示未证实项。执行链、编码器选择、现有工作流和存储结构不变。只读投影通过不等于已交付 `ImmutableJobPlan` / 完整 `ArtifactRecord`，亦不得顺势重构 task schema。
+
+## 2026-10-14 WU-07 重锚 · P2 实际可执行的音轨保留意图
+
+R19 §03/§16 P2、R24 §05/§11 要求用户可指明必须保留的原音轨，且不能因视频压缩或默认值静默删除/转码。WU-06 是只读投影；本次 WU-07 必须增加真正的用户操作能力：在现有逐轨音频策略旁可选“本轨必须 Copy”保留锁，锁定原来源和轨号，`compileTask` 对编码/丢弃/来源不一致/无源依据拒绝正式任务，而不是擅自修改 `OutputPlan`。范围只限音轨存在与 codec-copy 意图，单独的 FFprobe source-to-output packet 哈希、声道/时间/metadata、Windows/Android/Web 现场与完整 P2 仍需证明。以正常任务编译器为唯一权威，不能把保留 UI 做成第二任务架构。
