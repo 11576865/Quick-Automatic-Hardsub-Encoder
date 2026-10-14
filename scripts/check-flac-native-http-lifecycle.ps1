@@ -98,6 +98,14 @@ try{
  if($stages.Count -ne 1){throw 'Native FLAC completed staging directory absent.'}
  $artifact=Join-Path $stages[0].FullName 'output.mkv'
  if(-not(Test-Path -LiteralPath $artifact)){throw 'Native FLAC mixed output absent.'}
+ $outputStat=Get-Item -LiteralPath $artifact
+ if([string]$done.outputPacketEvidence.artifactJobId -ne [string]$encoded.jobId -or
+    [long]$done.outputPacketEvidence.artifactBytes -ne [long]$done.outputBytes -or
+    [long]$done.outputPacketEvidence.artifactBytes -ne [long]$outputStat.Length -or
+    [string]$done.outputPacketEvidence.artifactWriteTicks -ne
+      [string]$outputStat.LastWriteTimeUtc.Ticks){
+   throw 'Native finished-mux FLAC packet receipt is not bound to the current verified artifact and job.'
+ }
  for($track=0;$track -lt 2;$track++){
   $measured=0L
   foreach($packet in @(& ffprobe -v error -select_streams ('a:'+$track) -show_packets -show_entries packet=size -of csv=p=0 $artifact)){
