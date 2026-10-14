@@ -1,0 +1,33 @@
+name: QHE WU09 shared P3 decision gate
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/shared-evidence-decision.js'
+      - 'src/shared-evidence-decision.test.mjs'
+      - 'src/shared-evidence-decision.integration.test.mjs'
+      - 'src/main.js'
+      - 'src/manual-transcode-compare-ui.js'
+      - '.github/workflows/qhe-wu09-decision-gate.yml'
+  workflow_dispatch:
+jobs:
+  p3-both-workflows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Shared evidence gate with actual codec frontiers and candidate behavior
+        run: node --test src/shared-evidence-decision.test.mjs src/shared-evidence-decision.integration.test.mjs src/compression-decision.test.mjs src/manual-transcode-comparison.test.mjs
+      - name: Verify frontend integration imports and syntax
+        run: |
+          node --check src/main.js
+          node --check src/manual-transcode-compare-ui.js
+          node --check src/shared-evidence-decision.js
+      - name: Build current user-facing UI
+        run: |
+          npm ci
+          npm run build
