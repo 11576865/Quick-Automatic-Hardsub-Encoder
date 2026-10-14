@@ -1,0 +1,44 @@
+name: Windows WU02 embedded ASS and font Native acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'windows/native-bridge.ps1'
+      - 'src/windows-native-client.js'
+      - 'src/main.js'
+      - 'scripts/build-manual-rich-native-fixture.mjs'
+      - 'scripts/build-wu02-native-task.mjs'
+      - 'scripts/verify-wu02-native-output.mjs'
+      - 'scripts/check-wu02-embedded-native.ps1'
+      - '.github/workflows/windows-wu02-embedded-ass.yml'
+  workflow_dispatch:
+jobs:
+  native-embedded-ass:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate source PowerShell 5.1 grammar
+        shell: powershell
+        run: |
+          foreach($file in @('windows/native-bridge.ps1','scripts/check-wu02-embedded-native.ps1')){
+            $tokens=$null;$errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors)|Out-Null
+            if($errors.Count){$errors|Format-List;throw "Invalid PowerShell syntax: $file"}
+          }
+      - name: Install real FFmpeg with bounded retries
+        shell: powershell
+        run: |
+          $ready=$false
+          for($i=1;$i -le 3;$i++){
+            choco install ffmpeg --yes --no-progress
+            if($LASTEXITCODE -eq 0){$ready=$true;break}
+            if($i -lt 3){Start-Sleep -Seconds ($i*5)}
+          }
+          if(-not $ready){throw 'FFmpeg external package service unavailable'}
+      - name: Real Windows localhost MKV ASS font audio processing
+        shell: powershell
+        run: ./scripts/check-wu02-embedded-native.ps1
