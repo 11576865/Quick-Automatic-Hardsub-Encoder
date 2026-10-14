@@ -61,7 +61,7 @@ module.exports=async(browser,baseUrl)=>{
   assert.equal(await page.locator('[name="encoder"]').inputValue(),'libx265');
   assert.equal(await page.locator('[name="start"]').inputValue(),'0');
   assert.equal(await page.locator('[name="audioPlan"]').inputValue(),'');
-  assert.match(await page.locator('#taskStatus').textContent(),/CPU 参数方案.*重新验证/);
+  assert.match(await page.locator('#taskStatus').textContent(),/CPU 交接.*重新验证编码结果.*短样证据不转移/);
   assert.equal(await page.locator('#taskObjectReview').getAttribute('data-plan-checked'),'false');
   assert.equal(await page.evaluate(()=>window.budgetTest.tasks.length),runsBeforeHandoff,'handoff must not encode');
   await page.click('#taskInspect');
