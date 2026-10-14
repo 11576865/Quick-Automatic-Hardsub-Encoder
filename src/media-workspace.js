@@ -16,6 +16,7 @@ import { mountTranscodeCurves } from './transcode-calibration-panel.js';
 import {commitVerifiedManualCandidate} from './manual-transcode-adoption.js';
 import { parseMediaTime, formatMediaTimeInput } from './media-time.js';
 import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-queue.js';
+import {createOutputRecipe,validateOutputRecipe,outputRecipeFilename} from './output-recipe-matrix.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
 
@@ -121,6 +122,20 @@ export function mountMediaWorkspace(hooks) {
       <button id="taskClearClips" type="button" class="secondary" disabled>清空</button>
     </div>
   </section>
+  <details id="taskRecipeMatrixPanel" class="media-clip-queue media-recipe-matrix">
+    <summary><strong>多输出方案矩阵</strong> · 同一来源分别硬压／转码／剪切</summary>
+    <p class="note">把当前正式方案加入矩阵；每个方案独立执行、独立验证并分别保存。此版本不支持多来源输入。</p>
+    <div class="media-clip-queue-header-actions">
+      <button type="button" class="secondary" id="taskAddRecipe">加入当前方案</button>
+      <button type="button" class="secondary" id="taskClearRecipes">清空矩阵</button>
+    </div>
+    <ol id="taskRecipeMatrixList" aria-label="多输出独立任务"></ol>
+    <p id="taskRecipeMatrixStatus" role="status">尚未添加输出方案。</p>
+    <div class="media-clip-queue-actions">
+      <button type="button" id="taskRunRecipes" disabled>执行未完成方案</button>
+      <button type="button" class="secondary" id="taskStopRecipes" hidden>停止后续输出</button>
+    </div>
+  </details>
   <div id="taskFrameFullscreen" class="media-frame-lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="taskFrameFullscreenTitle">
     <div class="media-frame-lightbox-shell">
       <header class="media-frame-lightbox-header">
@@ -364,6 +379,101 @@ export function mountMediaWorkspace(hooks) {
   const clipPanel=section.querySelector('#taskClipQueuePanel');
   const clipMessage=section.querySelector('#taskClipQueueStatus');
   let clipSourceKey='',clipBatchRunning=false,clipBatchStopRequested=false,clipBatchCurrent=null,clipAwaitingSave=null,clipEditingIndex=-1;
+  const recipes=[],recipeList=section.querySelector('#taskRecipeMatrixList');
+  const recipeMessage=section.querySelector('#taskRecipeMatrixStatus');
+  let recipeSourceKey='',recipeBatchRunning=false,recipeStopRequested=false,recipeCurrent=null,recipePendingSave=null,recipeSequence=0;
+  const recipeSource=()=>hooks.videoIdentity?.()||'';
+  const recipeAsset=()=>hooks.recipeAssetIdentity?.()||'';
+  const syncRecipeMatrix=()=>{
+    const source=recipeSource();
+    const stale=!!recipeSourceKey&&recipeSourceKey!==source;
+    const locked=busy||hooks.busy()||clipBatchRunning||recipeBatchRunning||section.dataset.taskState==='saving';
+    recipeList.replaceChildren();
+    recipes.forEach((entry,index)=>{
+      const row=document.createElement('li');
+      const description=document.createElement('div');
+      const heading=document.createElement('strong');heading.textContent=entry.recipe.label;
+      const detail=document.createElement('span');
+      detail.textContent=entry.recipe.task.operation+' · '+(entry.recipe.task.encoder||'copy')+
+        ' · '+String(entry.recipe.task.outputContainer||'mkv').toUpperCase();
+      const progress=document.createElement('small');
+      progress.textContent={queued:'待执行',running:'执行中',saving:'正在保存',saved:'已保存',
+        failed:'执行失败，可重试',save_failed:'成品已验证，待重试保存'}[entry.state]||entry.state;
+      description.append(heading,detail,progress);
+      const action=document.createElement('button');action.type='button';action.className='secondary';
+      action.dataset.recipeIndex=String(index);
+      action.dataset.recipeAction=recipePendingSave===entry?'retry-save':'remove';
+      action.textContent=recipePendingSave===entry?'重试保存':'删除';
+      action.disabled=locked||(!!recipePendingSave&&recipePendingSave!==entry);
+      row.append(description,action);recipeList.append(row);
+    });
+    section.querySelector('#taskAddRecipe').disabled=locked||!!recipePendingSave||
+      !source||!hooks.mediaSnapshot?.()||recipes.length>=12||stale;
+    section.querySelector('#taskClearRecipes').disabled=locked||!!recipePendingSave||!recipes.length;
+    section.querySelector('#taskRunRecipes').disabled=locked||!!recipePendingSave||stale||
+      !source||!recipes.some(r=>r.state!=='saved');
+    section.querySelector('#taskStopRecipes').hidden=!recipeBatchRunning;
+    section.querySelector('#taskStopRecipes').disabled=!recipeBatchRunning||recipeStopRequested;
+    if(stale)recipeMessage.textContent='来源已变化；不能执行旧来源的方案。请清空后重新添加。';
+  };
+  const settlePendingRecipeSave=saved=>{
+    if(!recipePendingSave)return;
+    const entry=recipePendingSave;
+    entry.state=saved?'saved':'save_failed';
+    if(saved)recipePendingSave=null;
+    recipeMessage.textContent=saved?'上一方案成品已保存，可以继续执行剩余方案。':
+      '上一方案成品未保存；只重试保存，不要重新编码。';
+    syncRecipeMatrix();
+  };
+  section.querySelector('#taskAddRecipe').onclick=()=>{
+    try{
+      if(busy||hooks.busy()||recipeBatchRunning||clipBatchRunning||clipAwaitingSave||recipePendingSave)
+        throw Error('请先完成当前任务或保存上一个成品');
+      const source=recipeSource(),media=hooks.mediaSnapshot?.(),asset=recipeAsset();
+      if(!source||!media)throw Error('请先选择视频并读取视频参数');
+      if(recipeSourceKey&&recipeSourceKey!==source)throw Error('视频已变化，请清空旧方案矩阵');
+      const raw=read();
+      const task=compileTask({...raw,
+        budgetPolicy:raw.operation!=='copy'&&raw.rateMode==='size'?raw.budgetPolicy:'best-effort'
+      },{...media,budgetEvidence:budgetSourceIdentity===source?budgetEvidence:undefined});
+      // A queued executable hardsub task cannot silently borrow another ASS/font.
+      if(task.operation==='hardsub'&&recipes.some(entry=>
+        entry.recipe.task.operation==='hardsub'&&entry.recipe.assetKey!==asset))
+        throw Error('矩阵已有其他字幕／字体版本；先清空或执行原方案');
+      const label={
+        hardsub:'硬字幕',transcode:'纯转码',copy:'Stream Copy'
+      }[task.operation]+' · '+(task.codec||'原码流')+' · 方案 '+(recipes.length+1);
+      const recipe=createOutputRecipe({task,media,sourceKey:source,assetKey:asset,
+        name:label,index:++recipeSequence});
+      recipeSourceKey=source;
+      recipes.push({recipe,state:'queued'});
+      recipeMessage.textContent='已冻结 '+recipes.length+' 个正式任务，执行时不会读取当前表单中的新参数。';
+      syncRecipeMatrix();
+    }catch(error){recipeMessage.textContent='方案未加入：'+error.message;}
+  };
+  recipeList.addEventListener('click',event=>{
+    if(busy||recipeBatchRunning||hooks.busy())return;
+    const button=event.target.closest('button[data-recipe-action]');
+    if(!button)return;
+    const index=Number(button.dataset.recipeIndex),entry=recipes[index];
+    if(!entry)return;
+    if(button.dataset.recipeAction==='retry-save'){
+      if(entry===recipePendingSave)section.querySelector('#taskSave').click();
+      return;
+    }
+    if(recipePendingSave)return;
+    recipes.splice(index,1);
+    if(!recipes.length)recipeSourceKey='';
+    recipeMessage.textContent=recipes.length?'已删除方案。':'矩阵已清空。';
+    syncRecipeMatrix();
+  });
+  section.querySelector('#taskClearRecipes').onclick=()=>{
+    if(busy||hooks.busy()||recipeBatchRunning||recipePendingSave)return;
+    recipes.length=0;recipeSourceKey='';
+    recipeMessage.textContent='矩阵已清空；其他输出方案不受影响。';
+    syncRecipeMatrix();
+  };
+
   const clipSource=()=>hooks.videoIdentity?.()||'';
   const clipMedia=()=>hooks.mediaSnapshot?.()||null;
   const showClipMessage=text=>{clipMessage.textContent=text;};
@@ -1511,7 +1621,7 @@ export function mountMediaWorkspace(hooks) {
         : stateName==='save_failed'?'重试保存成品':stateName==='saved'?'再次保存成品':'保存成品';
     save.classList.toggle('task-primary-action',['verified','save_failed'].includes(stateName));
     save.disabled=lastReport?.deliveryAllowed===false||busy||stateName==='saving'||!completed||!['verified','save_failed','saved'].includes(stateName);
-    run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave;
+    run.disabled=busy||stateName==='saving'||!!requirement||!!clipAwaitingSave||!!recipePendingSave;
     section.dataset.completedStale=previousResult?'true':'false';
     syncTaskReview();
   };
@@ -1834,7 +1944,7 @@ export function mountMediaWorkspace(hooks) {
     if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
     syncTaskReview();
   }
-  const mediaInfoListener = () => { syncReviewSource();invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); hooks.onBudgetEvidenceChange?.(); };
+  const mediaInfoListener = () => { syncReviewSource();invalidateBudgetEvidence();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); syncRecipeMatrix(); hooks.onBudgetEvidenceChange?.(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
@@ -1933,6 +2043,98 @@ export function mountMediaWorkspace(hooks) {
       if(listener)window.removeEventListener('quick-hardsub-native-export-result',listener);
     }
   };
+
+  section.querySelector('#taskStopRecipes').onclick=()=>{
+    if(!recipeBatchRunning||recipeStopRequested)return;
+    recipeStopRequested=true;
+    recipeMessage.textContent='停止请求已记录。当前保存窗口须先完成或取消。';
+    if(recipeCurrent?.state==='running')hooks.cancel();
+    syncRecipeMatrix();
+  };
+  section.querySelector('#taskRunRecipes').onclick=async()=>{
+    if(busy||hooks.busy()||recipeBatchRunning||clipBatchRunning||clipAwaitingSave||recipePendingSave)return;
+    let current=null,phase='preflight';
+    try{
+      if(!recipes.length)throw Error('先加入至少一个输出方案');
+      if(!recipeSource()||recipeSourceKey!==recipeSource())throw Error('来源已变化，拒绝执行旧矩阵');
+      if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
+        throw Error('先保存当前已验证成品，避免覆盖');
+      busy=true;recipeBatchRunning=true;recipeStopRequested=false;
+      hooks.setBusy(true);
+      for(const element of form.elements)element.disabled=true;
+      for(const button of modeButtons)button.disabled=true;
+      setTaskState('preparing');syncRecipeMatrix();
+      const pending=recipes.map((entry,index)=>({entry,index})).filter(x=>x.entry.state!=='saved');
+      // Compile at "add" time, freeze, then validate EVERY immutable task
+      // before the first encoding step. This never reads the mutable form.
+      const jobs=[];
+      for(const {entry,index} of pending){
+        const source=recipeSource(),asset=recipeAsset();
+        const media=await hooks.prepare(entry.recipe.task.operation);
+        const task=validateOutputRecipe(entry.recipe,{sourceKey:source,assetKey:asset,media});
+        await hooks.validate?.(task);
+        jobs.push({entry,index,task,media});
+      }
+      for(const item of jobs){
+        if(recipeStopRequested)break;
+        current=item;recipeCurrent=item.entry;phase='encode';
+        validateOutputRecipe(item.entry.recipe,{
+          sourceKey:recipeSource(),assetKey:recipeAsset(),media:hooks.mediaSnapshot?.()
+        });
+        item.entry.state='running';activeTask=item.task;currentPlanTask=item.task;
+        executingSourceName=hooks.sourceName?.()||'来源';
+        taskStartedAt=performance.now();
+        section.querySelector('#taskProgress').value=0;
+        section.querySelector('#taskPercent').textContent='0%';
+        setTaskState('encoding');syncRecipeMatrix();
+        recipeMessage.textContent='正在生成独立输出 '+(item.index+1)+' / '+recipes.length+
+          '：'+item.entry.recipe.label;
+        const result=await hooks.run(item.task,item.media,(p,message,meta)=>updateTaskProgress(p,message,meta));
+        if(!result?.verified)throw Error('当前配方尚未通过后端成品验证');
+        completed={...result,name:outputRecipeFilename(result.name,item.index+1)};
+        completedStale=false;
+        lastReport=buildAuditedTaskReport(item.task,completed,(performance.now()-taskStartedAt)/1000);
+        artifactReview={source:executingSourceName,task:structuredClone(item.task),report:structuredClone(lastReport)};
+        if(lastReport.deliveryAllowed===false)throw Error('成品未通过交付预算，拒绝保存');
+        section.querySelector('#taskProgress').value=1;
+        section.querySelector('#taskPercent').textContent='100%';
+        section.querySelector('#taskReport').disabled=false;
+        setTaskState('verified');
+        phase='save';item.entry.state='saving';syncRecipeMatrix();
+        setTaskState('saving');
+        await saveQueuedResult(completed);
+        item.entry.state='saved';setTaskState('saved');
+        recipeMessage.textContent='已保存 '+recipes.filter(r=>r.state==='saved').length+
+          ' / '+recipes.length+' 个独立输出。';
+        syncRecipeMatrix();
+      }
+      if(recipeStopRequested)recipeMessage.textContent='已停止后续输出；已保存成品保持有效。';
+      else if(recipes.every(r=>r.state==='saved'))recipeMessage.textContent=
+        '全部 '+recipes.length+' 个输出已独立执行、验证并保存。';
+    }catch(err){
+      if(current){
+        if(phase==='save'&&completed?.verified){
+          current.entry.state='save_failed';
+          recipePendingSave=current.entry;
+          setTaskState('save_failed');
+        }else{
+          current.entry.state='failed';
+          setTaskState(isCancellationError(err)?'idle':'failed');
+        }
+      }else setTaskState('failed');
+      recipeMessage.textContent='矩阵在'+(current?'方案 '+(current.index+1):'预检查')+
+        '停止：'+err.message+(recipePendingSave?'；成品仍在，点击“重试保存”即可':'；已保存输出不会重做');
+      hooks.log?.(err.stack||err.message);
+    }finally{
+      recipeCurrent=null;recipeBatchRunning=false;recipeStopRequested=false;
+      busy=false;hooks.setBusy(false);
+      for(const el of form.elements)el.disabled=false;
+      for(const btn of modeButtons)btn.disabled=false;
+      section.querySelector('#taskCancel').disabled=true;
+      updateMode();updateRate();audioStreamPlan.refresh();
+      syncTaskActions();syncClipQueue();syncRecipeMatrix();
+    }
+  };
   section.querySelector('#taskStopClips').onclick=()=>{
     if(!clipBatchRunning||clipBatchStopRequested)return;
     clipBatchStopRequested=true;
@@ -1941,7 +2143,7 @@ export function mountMediaWorkspace(hooks) {
     syncClipQueue();
   };
   section.querySelector('#taskExportClips').onclick=async()=>{
-    if(clipBatchRunning||busy||hooks.busy())return;
+    if(clipBatchRunning||recipeBatchRunning||recipePendingSave||busy||hooks.busy())return;
     let current=null,phase='prepare';
     try{
       if(!clips.length)throw Error('请先加入至少一个片段');
@@ -1950,7 +2152,7 @@ export function mountMediaWorkspace(hooks) {
       const settings=read();
       validateQueuedCopySettings(settings);
       if(clipEditingIndex>=0)throw Error('请先更新或取消正在编辑的片段');
-      if(clipAwaitingSave)throw Error('先重试保存未导出的片段成品，避免重新剪切');
+      if(clipAwaitingSave||recipePendingSave)throw Error('先重试保存未导出的队列成品，避免重新压制');
       if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
         throw Error('先保存或处理上一任务的成品，避免批量剪切覆盖未保存的结果');
       // Reserve task ownership before await: no duplicate bulk runs, mode
@@ -2102,7 +2304,7 @@ export function mountMediaWorkspace(hooks) {
   section.querySelector('#taskCancel').onclick=()=>{setTaskState('cancelling');hooks.cancel();status('正在取消…');};
   section.querySelector('#taskSave').onclick=async()=>{
     if(lastReport?.deliveryAllowed===false){status('成品超限或字节数未知，禁止保存。请增大预算、降低视频码率或调整流计划后重新执行。');return;}
-    if(!completed||clipBatchRunning||busy||hooks.busy()||section.dataset.taskState==='saving')return;
+    if(!completed||clipBatchRunning||recipeBatchRunning||busy||hooks.busy()||section.dataset.taskState==='saving')return;
     setTaskState('saving');
     syncClipQueue();
     status('正在打开保存位置；取消选择不会丢失已验证成品。');
@@ -2113,17 +2315,19 @@ export function mountMediaWorkspace(hooks) {
       if(artifactReview)artifactReview.saveKind=result?.kind||'';
       setTaskState('saved');
       settlePendingClipSave(true);
-      status(result?.kind==='browser-download'?'已交给浏览器保存。':'成品已保存。');
+      settlePendingRecipeSave(true);
+      status(result?.kind='browser-download'?'已交给浏览器保存。':'成品已保存。');
     }catch(e){
       setTaskState('save_failed');
       settlePendingClipSave(false);
+      settlePendingRecipeSave(false);
       status('保存失败：'+e.message+'。已验证成品仍可直接重试保存，无需重新压制。');
       hooks.log?.(e.stack||e.message);
     }
   };
   form.onsubmit=async e=>{
     e.preventDefault();
-    if(clipAwaitingSave){status('先重试保存已验证的片段成品，避免重新剪切或覆盖。');return;}
+    if(clipAwaitingSave||recipePendingSave){status('先重试保存已验证的队列成品，避免重新编码或覆盖。');return;}
     if(busy||hooks.busy()){status('已有任务正在运行，请等待或取消。');return;}
     busy=true;completed=null;completedStale=false;lastReport=null;activeTask=null;artifactReview=null;currentPlanTask=null;revokeVerificationFrames();outputVerification.hidden=true;taskStartedAt=performance.now();
     section.querySelector('#taskReport').disabled=true;
@@ -2231,7 +2435,7 @@ export function mountMediaWorkspace(hooks) {
   outputPolicy?.addEventListener('change',event=>{if(!form.contains(event.target))invalidateCompiledPlan(event);});
   form.addEventListener('input',invalidateCompiledPlan);
   form.addEventListener('change',invalidateCompiledPlan);
-  updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');
+  updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');syncRecipeMatrix();
   initialManualSettings=read();
   return {section,runCurrent:()=>form.onsubmit({preventDefault(){}}),getActiveBudgetEvidence:()=>budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:null,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }

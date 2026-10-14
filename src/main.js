@@ -6570,6 +6570,12 @@ mediaWorkspace=mountMediaWorkspace({
   sourceName: () => state.video?.name||'',
   videoIdentity: () => state.video
     ? [state.video.name,state.video.size,state.video.lastModified].join('|') : '',
+  recipeAssetIdentity:()=>JSON.stringify({
+    ass:state.ass?[state.ass.name,state.ass.size,state.ass.lastModified??0]:null,
+    assContent:state.activeAssText||state.assText||'',
+    fonts:state.fonts.map(f=>[f.name,f.size,f.lastModified??0]),
+    fontBindings:state.fontBindings||{},autoFontFallbacks:state.autoFontFallbacks||{}
+  }),
   setBusy: value => {
     state.operationBusy=value;
     for (const id of ['video','ass','fonts','videoNativePickerBtn','assNativePickerBtn','fontsNativePickerBtn','analyze','encodeBtn','previewBtn','benchmarkBtn','calibrateQualityBtn']) if($(id)) $(id).disabled=value;
