@@ -41,7 +41,7 @@ export function reconcileAuxiliaryMuxObservation({
  const output=completed.outputPacketEvidence;
  const audio=Array.isArray(task.outputPlan?.audio)?task.outputPlan.audio:null;
  if(!audio||!Array.isArray(output.audioPacketBytes)||
-    !audio.every((track,i)=>track?.outputOrdinal===i)&&audio.length>0||
+    !audio.every((track,i)=>track?.outputOrdinal===i)||
     output.audioPacketBytes.length!==audio.length)
   return fail('final-audio-stream-map-missing');
  const request=preflight.request,receipt=preflight.receipt,rows=[];
