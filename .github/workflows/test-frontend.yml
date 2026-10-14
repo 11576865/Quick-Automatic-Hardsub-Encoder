@@ -55,6 +55,8 @@ jobs:
       - name: Run targeted model and task regressions
         run: |
           node --test src/media-task.test.mjs src/media-planning.test.mjs src/media-stream-plan.test.mjs src/manual-transcode-comparison.test.mjs src/decision-reference-scope.test.mjs src/guided-native-vbr-verification.test.mjs src/guided-branch-adoption.test.mjs src/manual-transcode-session.test.mjs src/manual-paired-risk-plan.test.mjs src/manual-time-tradeoff.test.mjs src/manual-transcode-vbr-verification.test.mjs src/manual-transcode-adoption.test.mjs src/guided-whole-file-budget.test.mjs src/guided-cpu-compiler-contract.test.mjs src/trim-copy-audit.test.mjs src/trim-copy-preflight.test.mjs src/flac-encode-preflight.test.mjs src/auxiliary-preflight-request.test.mjs src/auxiliary-mux-reconciliation.test.mjs src/completed-mux-byte-ledger.test.mjs src/flac-cache-reuse-contract.test.mjs src/whole-file-budget.test.mjs src/vvc-required-runtime.test.mjs
+      - name: Check shared Guided and Manual execution surface contracts
+        run: node --test src/media-workspace-ui.test.mjs src/shared-task-presentation.test.mjs
       - name: Install locked frontend dependencies
         run: npm ci
       - name: Build production frontend
