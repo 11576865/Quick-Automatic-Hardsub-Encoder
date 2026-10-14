@@ -6561,6 +6561,25 @@ mediaWorkspace=mountMediaWorkspace({
     return !!state.nativeBackend?.encoders?.some(e => (e.key || e.Key) === key && (e.available || e.Available));
   },
   platformKey: () => state.nativeBackend || {},
+  // WU08: only user-provided browser File objects, never synthetic native paths.
+  supportsBrowserSourceBatch:()=>!state.nativeBackend?.available,
+  activateBrowserBatchSource:async file=>{
+    if(state.nativeBackend?.available)throw Error('Native 多来源文件授权未实现');
+    if(!(file instanceof File)||file.size<=0||file.size>MAX_BYTES)
+      throw Error('无效或超限的浏览器来源');
+    if(state.video!==file){
+      $('video').value='';
+      state.video=file;state.nativeInputProbe=null;
+      state.ass=null;state.fonts=[];state.embeddedAssSourceIdentity='';
+      $('assMeta').textContent='未选择';updateFontMeta();
+      invalidateAnalysis({clearVideoMetadata:true});
+      renderSourceAdapterState(null);notifyMediaInfoChanged();
+      $('videoMeta').textContent=file.name+' · '+formatBytes(file.size)+' · 多来源队列';
+      $('videoMeta').className='';
+      if($('videoWebPicker'))$('videoWebPicker').textContent='更换视频';
+    }
+    return state.video;
+  },
   mediaSnapshot: () => {
     if (state.sourceMedia) return state.sourceMedia;
     if (state.media) return state.media;

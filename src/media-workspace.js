@@ -19,6 +19,7 @@ import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-q
 import {assessCopyCutStart} from './copy-cut-feasibility.js';
 import {normalizeCompletedCutTimeline} from './cut-timeline-evidence.js';
 import {createOutputRecipe,validateOutputRecipe,outputRecipeFilename} from './output-recipe-matrix.js';
+import {makeBrowserSourceBatch,assertBrowserBatchSource} from './browser-source-batch.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
 
@@ -142,6 +143,21 @@ export function mountMediaWorkspace(hooks) {
     <div class="media-clip-queue-actions">
       <button type="button" id="taskRunRecipes" disabled>执行未完成方案</button>
       <button type="button" class="secondary" id="taskStopRecipes" hidden>停止后续输出</button>
+    </div>
+  </details>
+  <details id="taskMultiSourcePanel" class="media-clip-queue media-browser-batch">
+    <summary><strong>多来源输出队列</strong> · Web 浏览器复制／转码</summary>
+    <p class="note">一次选择多个视频，最多 8 项。每项冻结当前设置，再分别激活真实来源、探测、生成正式任务、执行并保存。Native 多文件、跨来源硬压和共享质量证明尚未支持。</p>
+    <label>浏览器视频文件 <input id="taskBatchSources" type="file" multiple accept="video/*,.mkv,.mp4,.mov,.webm,.avi,.ts"></label>
+    <div class="media-clip-queue-header-actions">
+      <button type="button" id="taskQueueBatchSources" class="secondary">按当前设置加入所选来源</button>
+      <button type="button" id="taskClearBatchSources" class="secondary">清空未完成来源</button>
+    </div>
+    <ol id="taskMultiSourceList" aria-label="多来源独立输出任务"></ol>
+    <p id="taskMultiSourceStatus" role="status">请先选择纯转码或 Stream Copy 设置和来源视频。</p>
+    <div class="media-clip-queue-actions">
+      <button type="button" id="taskRunBatchSources" disabled>逐来源执行并保存</button>
+      <button type="button" id="taskStopBatchSources" class="secondary" hidden>停止后续来源</button>
     </div>
   </details>
   <div id="taskFrameFullscreen" class="media-frame-lightbox" hidden role="dialog" aria-modal="true" aria-labelledby="taskFrameFullscreenTitle">
@@ -396,6 +412,39 @@ export function mountMediaWorkspace(hooks) {
   const recipes=[],recipeList=section.querySelector('#taskRecipeMatrixList');
   const recipeMessage=section.querySelector('#taskRecipeMatrixStatus');
   let recipeSourceKey='',recipeBatchRunning=false,recipeStopRequested=false,recipeCurrent=null,recipePendingSave=null,recipeSequence=0;
+  const browserBatch=[],batchList=section.querySelector('#taskMultiSourceList');
+  const batchStatus=section.querySelector('#taskMultiSourceStatus');
+  let batchRunning=false,batchStop=false,batchCurrent=null,batchSavePending=null,batchSequence=0;
+  const browserBatchAvailable=()=>typeof hooks.activateBrowserBatchSource==='function'&&
+    !!hooks.supportsBrowserSourceBatch?.();
+  const syncBrowserBatch=()=>{
+    const available=browserBatchAvailable();
+    section.querySelector('#taskMultiSourcePanel').hidden=!available;
+    const locked=busy||hooks.busy()||clipBatchRunning||recipeBatchRunning||batchRunning;
+    batchList.replaceChildren();
+    browserBatch.forEach((entry,index)=>{
+      const row=document.createElement('li'),info=document.createElement('div');
+      const name=document.createElement('strong');name.textContent=entry.source.name;
+      const status=document.createElement('small');
+      status.textContent=entry.source.operation+' · '+({
+        queued:'待执行',running:'执行中',saving:'保存中',
+        saved:'已保存',failed:'执行失败',save_failed:'成品保留，待重试保存'
+      }[entry.state]||entry.state);
+      info.append(name,status);
+      const action=document.createElement('button');action.type='button';action.className='secondary';
+      action.dataset.browserBatchIndex=String(index);
+      action.dataset.browserBatchAction=batchSavePending===entry?'retry-save':'remove';
+      action.textContent=batchSavePending===entry?'仅重试保存':'删除';
+      action.disabled=locked||!!batchSavePending&&batchSavePending!==entry||entry.state==='saved';
+      row.append(info,action);batchList.append(row);
+    });
+    section.querySelector('#taskBatchSources').disabled=!available||locked||!!batchSavePending;
+    section.querySelector('#taskQueueBatchSources').disabled=!available||locked||!!batchSavePending||browserBatch.length>=8;
+    section.querySelector('#taskClearBatchSources').disabled=locked||!!batchSavePending||!browserBatch.some(e=>e.state!=='saved');
+    section.querySelector('#taskRunBatchSources').disabled=!available||locked||!!batchSavePending||!browserBatch.some(e=>e.state!=='saved');
+    section.querySelector('#taskStopBatchSources').hidden=!batchRunning;
+    section.querySelector('#taskStopBatchSources').disabled=!batchRunning||batchStop;
+  };
   const recipeSource=()=>hooks.videoIdentity?.()||'';
   const recipeAsset=()=>hooks.recipeAssetIdentity?.()||'';
   const syncRecipeMatrix=()=>{
