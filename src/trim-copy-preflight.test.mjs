@@ -91,7 +91,7 @@ test('actual Windows isolated worker, independent output oracle and CI are wired
  assert.match(worker,/trim-packet-audit\.ps1/);
  assert.match(worker,/canReplaceFullSourceBudget=\$false/);
  assert.match(worker,/sourceWriteTicks=\(\[string\]\$originalTicks\)/);
- assert.match(oracle,/ffprobe -v error -select_streams/);
+ assert.match(oracle,/\$ffprobe -v error -select_streams/);
  assert.match(oracle,/Duplicated source stream ordinal/);
  assert.match(workflow,/check-trim-copy-preflight\.ps1/);
  assert.match(budget,/copiedTrimReserveBytes \+= total/);
