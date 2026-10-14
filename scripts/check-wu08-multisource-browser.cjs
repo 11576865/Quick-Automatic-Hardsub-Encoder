@@ -79,6 +79,7 @@ async function main(){
     document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
   });
   await page.locator('[data-media-mode="transcode"]').click();
+  await page.locator('#taskMultiSourcePanel summary').click();
   const selector=page.locator('#taskBatchSources');
   await selector.setInputFiles([
     {name:'source-a.mkv',mimeType:'video/x-matroska',buffer:Buffer.from('a-source-file')},
