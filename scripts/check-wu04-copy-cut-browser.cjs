@@ -117,7 +117,11 @@ async function main(){
       end:document.querySelector('[name="end"]')?.value,
       encoder:document.querySelector('[name="encoder"]')?.value,
       bitrate:document.querySelector('[name="bitrate"]')?.value,
-      taskStage:document.querySelector('#taskStage')?.textContent
+      taskStage:document.querySelector('#taskStage')?.textContent,
+      invalid:[...document.querySelector('#mediaTaskForm').querySelectorAll(':invalid')].map(el=>({
+        name:el.name,tag:el.tagName,type:el.type,value:el.value,
+        message:el.validationMessage,hidden:el.hidden,disabled:el.disabled
+      }))
     }));
     throw Error('Official compiler refused the opted-in trim: '+JSON.stringify(diagnostics));
   }
