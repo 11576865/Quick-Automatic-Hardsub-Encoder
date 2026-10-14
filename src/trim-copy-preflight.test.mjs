@@ -99,6 +99,11 @@ test('actual Windows isolated worker, independent output oracle and CI are wired
  assert.match(bridge,/function Start-IsolatedTrimPreflight\(/);
  assert.match(bridge,/function Get-IsolatedTrimPreflightStatus\(/);
  assert.match(bridge,/Stop-StaleTrimPreflight/);
+ assert.match(bridge,/reason='measurement-replaced'/);
+ assert.match(bridge,/receipt.method -ne 'ffmpeg-isolated-auxiliary-copy-remux-then-independent-ffprobe-v1'/);
+ assert.match(bridge,/[[]long[]]::TryParse/);
+ assert.equal((bridge.match(/function Start-IsolatedTrimPreflight\(/g)||[]).length,1);
+ assert.equal((bridge.match(/function Get-IsolatedTrimPreflightStatus\(/g)||[]).length,1);
  assert.match(api,/Start-IsolatedTrimPreflight \$body/);
  assert.match(api,/Get-IsolatedTrimPreflightStatus/);
 });
