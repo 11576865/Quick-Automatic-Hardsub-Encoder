@@ -115,6 +115,20 @@ try{
    throw ('Native mixed FLAC packet receipt diverged from independent FFprobe: audio '+$track)
   }
  }
+  # Independently verify completed video codec payload, not only audio.
+ $videoBytes=0L
+ foreach($packet in @(& ffprobe -v error -select_streams v:0 -show_packets -show_entries packet=size -of csv=p=0 $artifact)){
+  if($packet -match '^[0-9]+$'){$videoBytes += [long]$packet}
+ }
+ if($videoBytes -le 0 -or @($done.outputPacketEvidence.videoPacketBytes).Count -ne 1 -or
+    [long]$done.outputPacketEvidence.videoPacketBytes[0] -ne $videoBytes){
+  throw 'Native completed-mux video packet ledger differs from independent FFprobe.'
+ }
+ $codecBytes=$videoBytes
+ foreach($entry in @($done.outputPacketEvidence.audioPacketBytes)){$codecBytes += [long]$entry}
+ foreach($entry in @($done.outputPacketEvidence.subtitlePacketBytes)){$codecBytes += [long]$entry}
+ if($codecBytes -gt [long]$done.outputBytes){throw 'Actual codec packets exceed staged mixed-mux bytes.'}
+ Write-Host ('B16 finished packet payload '+$codecBytes+'; non-packet residual '+([long]$done.outputBytes-$codecBytes)+'.')
  Write-Host 'B16 Native actual manual FLAC quality-mode job exposes independently verified completed-mux audio packets without a sizePlan.'
  # Adversarial post-audit drift: a completed short-file packet observation must
  # be revoked if the staged output is mutated before a later status request.
