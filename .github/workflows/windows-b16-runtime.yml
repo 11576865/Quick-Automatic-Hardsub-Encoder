@@ -10,6 +10,7 @@ on:
       - 'windows/native-bridge.ps1'
       - 'scripts/check-flac-encode-preflight.ps1'
       - 'scripts/check-flac-native-http-lifecycle.ps1'
+      - 'scripts/check-b16-long-async-output-identity.ps1'
       - 'src/auxiliary-mux-reconciliation.js'
       - 'src/auxiliary-mux-reconciliation.test.mjs'
       - 'scripts/check-trim-copy-preflight.ps1'
@@ -45,6 +46,7 @@ jobs:
             'windows/trim-packet-audit.ps1',
             'scripts/check-flac-encode-preflight.ps1',
             'scripts/check-flac-native-http-lifecycle.ps1',
+            'scripts/check-b16-long-async-output-identity.ps1',
             'scripts/check-trim-copy-preflight.ps1'
           )) {
             $tokens=$null; $errors=$null
@@ -77,3 +79,7 @@ jobs:
       - name: Native HTTP FLAC preview and source-ledger invalidation
         shell: powershell
         run: ./scripts/check-flac-native-http-lifecycle.ps1
+      - name: Native actual 182s async completed FLAC packet audit and artifact mutation
+        shell: powershell
+        timeout-minutes: 8
+        run: ./scripts/check-b16-long-async-output-identity.ps1
