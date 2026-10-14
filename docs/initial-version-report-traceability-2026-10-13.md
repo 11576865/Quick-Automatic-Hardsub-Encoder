@@ -222,3 +222,15 @@ WU03 完结后新的任务不得自动按照追加测试队列推进；必须再
 **回归/外部环境**：这次迭代发现“未知切点”的空偏差被状态映射表达式提前格式化，错误进入 IN/OUT 表单有效性；已经修复并通过上述浏览器验收。Windows WU02 与 B16 的新一轮 CI 部分红灯归因 Chocolatey 503、FFmpeg 未安装或 PATH 未传播，未进入产品视频测试；历史 Windows WU02 成功 run 38554433547 仍有效。后续 CI 已加强可执行文件检查，但当前最新验证必须独立读取，不得提前称 PASS。
 
 **方向门禁**：WU-04 有界产品切片完成，没有自动授权 WU-05。后续需重新按完整理论报告差距选下一条主线，保留初版范围和不合并 Draft 的身份边界。
+
+## 2026-10-14 WU-05 · 成品 Copy Trim 首界 PTS/DTS/音轨实测收据（B09/A04）
+
+**已新增并通过托管真实 Windows 验收的产品能力**：Windows Native 对已完成的 Stream Copy Trim 成品提供按需只读的 `GET /api/jobs/{jobId}/cut-timeline`，由 FFprobe 独立读取输出**解码首视频帧** PTS、首个视频编码包 PTS/DTS、每条输出音轨首包 PTS/DTS；检查成品文件字节数和写入时间，UI 将收据附入原有任务报告 JSON。原成品和交付操作不因时间轴诊断失败而被删除/禁止。前端另外在首视频帧与某音轨首包 PTS 相差超过 0.5 s 时提示需要人工复核，但这不是证明音画不同步的判定。
+
+**实际证据**：被测功能提交 `cfed326a44412ba9a7f140ae4b39b526c4c3975b`。Windows 真实 B 帧 H.264 + AAC -> 现有 schema-v4 正式 Copy Trim，源 IN=2.400 s、OUT=4.800 s，实际完成成品 **58,863 B**。独立 FFprobe 在**输出时间轴**测到首解码视频帧 PTS **2.000 s**、首视频包 PTS/DTS **2.083/2.000 s**、首音频包 PTS **0.005 s**；Bridge 收据的首视频帧 PTS 与独立探测一致。Windows Native `38568220073` SUCCESS；真实 Chromium/model `38568219698` SUCCESS；Test frontend `38568219578` 与 UIGS Coverage `38568219823` SUCCESS。
+
+**不能自动关闭**：`actualFirstPresentation` 此处是 *成品时钟* 的首解码帧，并不能从数值本身映射为 *来源时钟* 的实际第一呈现帧。`executionSeekIn` 是 Native GOP 寻址 hint；`copiedPacketRange=null`，`audioTimeMapping.sourceMappingVerified=false`；来源包 hash、成品尾端、整片 VFR/B 帧时间基、非零音频 priming 及播放器听看同步仍欠独立验收。上述首视频与音频包近 2s 的时间差值得排查，但不能仅凭两项首包数值判断播放失同步。A04/B09 **仅局部真实验收，条目整体未完成**。
+
+相关 WU-05 报告：`docs/wu05-copy-output-timeline-receipt-2026-10-14.md`。严格遵循“验证的精确提交”原则，文档后续提交不替代这些实测 SHA。
+
+防偏航：WU-05 结束后无自动 WU-06，重新以完整 B01–B25/A01–A10 对照确定新的产品能力优先级。
