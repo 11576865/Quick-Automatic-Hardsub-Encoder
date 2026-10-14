@@ -65,7 +65,7 @@ test('workbench selects Native backend and does not change strict sizeBudget sou
  ]);
  assert.match(ui,/buildAuxiliaryPreflightRequest\(/);
  assert.match(ui,/assessFlacEncodeObservation\(/);
- assert.match(ui,/canReplaceFormalBudget/); // supplied by gate, never UI inference
+ assert.match(ui,/正式体积预算保持不变/);
  assert.match(main,/auxiliaryPreflight: async request =>/);
  assert.match(client,/startFlacEncodePreflight/);
  assert.match(client,/startTrimCopyPreflight/);
