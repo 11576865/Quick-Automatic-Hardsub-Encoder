@@ -270,3 +270,15 @@ WU03 完结后新的任务不得自动按照追加测试队列推进；必须再
 **不计为关闭的内容**：这次执行端为受控 hooks，而非两段真正通过 WebAssembly FFmpeg 编码的成品。Windows Native 多文件路径、Android SAF 授权、内封 ASS+不同文件字体资源、完整多来源多输出组合、真实文件下载落盘确认、用户长片与播放器适配仍为 B21/A 系列缺口。P3 决策核和 B25/PR 合并也未因 WU08 自动完成。
 
 已授权任务完成，重新以原始报告判断下一条产品缺口，**没有自动授权 WU-09**。
+
+## 2026-10-14 WU-09 · P3 Guided / Manual 证据—推荐—采用资格共用门禁（B04/B11/B12/B13/B14）
+
+**原始依据**：R19 §16 P3（共用 EvidenceScope/候选评价器）、R19 补遗 B（同一来源窗口与同一参考、同一真实预算、CQ ≠ VBR）、R24 §13–18（诊断、推荐、交付承诺三层严格分离）。现有 Guided 与 Manual 早有各自曲线拟合和真正 Native 样本工具，本轮不是发明新拟合或补齐尚未测量的候选空间，而是统一**评价资格**。
+
+**新有界产品行为**：`src/shared-evidence-decision.js` 为 Guided ASS 渲染参考与 Manual 原始 SDR 参考分别检查独立 referenceScope，禁止把一套参考的 SSIM 当作另一套的质量；对无有效共同实测体积预算、旧来源、缺失 SSIM 或无正码率失败封闭。Manual 的“仅视频负载”坐标在比较图上仍可诊断，但共用门禁不允许其作为完整文件预算推荐或开启正式 VBR/采用；Guided 在复制音轨实测成本未知、整体体积坐标估算时不提供候选采用提案。通过的同源短样推荐仍必须完成原 Native VBR 与用户明确确认、重新编译和回滚，不自动更换实际编码方案。
+
+**实测代码/界面证据**：精确代码 SHA `6ea0bea2b5d2e0ae467ccd9cf5310e3982f0388c`，专项 https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38592703806 SUCCESS；测试包含 `createMultiBranchFrontier` + `projectWholeFileFrontier` 真实拟合及预算映射、Guided/Manual 两种 referenceScope、不同预算禁止推荐、Native VBR 身份/目标码率变更防假采用、生产 Vite/Chromium 对同一 JS 决策模块的调用以及 Manual 在无 Native 采样时采用控制保持禁用。全前端 `38592703737` 与 UIGS Coverage `38592703764` SUCCESS。
+
+**严格限制**：Chromium 检查没有运行 Windows Native FFmpeg、没有生成新的真实 CQ/VBR 对比样本，也没有测试复杂 ASS/音频的整片输出。已有不同工作流 Native 质量/预算证明不允许跨参考拼接成共同全球最优。`canCommit` 只是共用初步条件，不能替代既有事务性 `commitVerifiedGuidedBranch` / Manual codec 编译与采用。B04/B11/B12/B13/B14 和 P3 **局部闭环，不是整项完成**。
+
+方向状态：WU09 有界完成，WU10 须先从原始报告重锚，不得直接派生更多曲线或编码器研究。

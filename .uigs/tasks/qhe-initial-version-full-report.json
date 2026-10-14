@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU09_P3_shared_gate_authorized",
-  "current_bounded_work_unit": "WU09 root R19 P3/R24 §§13–18: shared evidence scope, budget coordinate and measured-range gate for diagnosis vs recommendation vs adoption; independent native VBR receipts still required and whole P3 remains open.",
+  "status": "incomplete_full_report_WU09_P3_shared_guided_manual_decision_gate_hosted_accepted",
+  "current_bounded_work_unit": "WU09 P3 shared evidence->recommendation gate exact head 6ea0bea hosted PASS. Guided ASS rendered and Manual source SDR domains never intermingle; video-only/estimated copied-audio budgets diagnostic only; only modeled whole-file inside measured budgets gets conditional recommendation and formal VBR pathway. Explicit selected plan transaction still authority. Actual Native paired cross-workflow and whole movie artifact verification open.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -264,15 +264,18 @@
     "WU07 P2 implemented source-bound user must-copy lock in existing per-track UI, official v4 compiler rejects conflicting drop or reencode, and output review displays lock; CI pending.",
     "WU07 source-bound owner-approved must-copy audio contract implemented and Chromium hosted accepted at 38d4b04: source FLAC copy + AAC reencode allowed, locked FLAC drop/AAC/Opus prohibited by authoritative compileTask, source drift and manual reset carefully handled. Physical output packet hash not inferred.",
     "Root re-anchor for WU08: P5 B21 genuine multiple-source gap selected, after seven bounded units; preserve root R19/R24 and no assumptions that WU03 same-source matrix fulfills it.",
-    "WU08 B21 genuine new multiple-File source Web queue bounded hosted PASS at 2b42a49: user 2 Files -> per-source activation & probe/official compiled v4 controlled processing -> distinct handoff, rollback-safe save retry; continued batch reuse. No false filesystem saved claim. Whole B21 remains open."
+    "WU08 B21 genuine new multiple-File source Web queue bounded hosted PASS at 2b42a49: user 2 Files -> per-source activation & probe/official compiled v4 controlled processing -> distinct handoff, rollback-safe save retry; continued batch reuse. No false filesystem saved claim. Whole B21 remains open.",
+    "WU09 P3 bounded hosted PASS: common read-only source/reference+budget/measured-domain decision gate for Guided and Manual, with diagnostic-only when only video payload or unknown copy cost and no model-based auto adopt; existing VBR/atomic plan gate unchanged. Actual media cross-workflow/whole film evidence still pending."
   ],
   "next_units": [
-    "WU09 authorized: implement shared read-only Guided/Manual decision gating using existing curves, with no automatic codec switching.",
-    "No WU10 authorized; P3 paired comparison/whole-file and actual media/device acceptance remain separate."
+    "NO WU10 AUTHORIZED: re-anchor full R19/R24 and actual product gap. Avoid chaining optional UI/candidate tests as pseudo-progress.",
+    "P3 still open: complete same-source Windows Native paired samples and follow-through final compiled task + full mux cost/quality/codec compatibility across Guided ASS-rendered vs Manual source-SDR separately. Do not compare raw SSIM across domains.",
+    "P2/B21 still open: real Web two-file encode artifacts and browser downloaded disk evidence; Windows/Android multi-source and ASS/font field, copy stream bit preservation.",
+    "B25 layered Draft PR#104/#105 merge, release and cross device independent A01-A10 acceptance remain blocked."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
-  "latest_durable_commit": "2b42a49e94ab3fbec991451807791a5b113a4892",
+  "latest_durable_commit": "6ea0bea2b5d2e0ae467ccd9cf5310e3982f0388c",
   "external_validation_states": {
     "latest_tested_implementation": "B16 7d3b784 hosted frontend PASS; Windows 451be21 local smoke PASS with real 2-track copy trim cost; code fb07c74 introduces verified-only reporting, latest exact-head CI in progress. No whole initial version acceptance.",
     "physical_devices": "Pending",
@@ -311,7 +314,8 @@
     "wu05_cut_timeline": "PASS exact-head cfed326a44412ba9a7f140ae4b39b526c4c3975b: Windows run 38568220073, Chromium/model run 38568219698, Test frontend 38568219578, UIGS Evidence Coverage 38568219823. Windows source H264 Bframes + AAC, formal Copy Trim IN2.4 OUT4.8, actual output decoded first video PTS2.000, video packet PTS/DTS2.083/2.000, audio first PTS0.005; output 58863 B. Large first-clock gap flagged for review; NOT sync verdict, NOT source packet hash or end-frame acceptance.",
     "wu06_domain_projection": "Exact-head 0124946d6939f73a285dcf609a6a973924d44219: new WU06 Node real compiled v4 Hardsub/Transcode/Copy+source stream coverage and real Chromium source-bound inspector SUCCESS run 38575999722; frontend SUCCESS 38575999605; UIGS Evidence Coverage SUCCESS 38575999820. No real Native/Android/Web domain owner parity, no additional runtime authority, no ArtifactRecord field evidence.",
     "wu07_audio_lock": "Exact-head 38d4b04e8b1edfac99dc3116f4931c310b075d08: WU07 official v4 audio lock unit+production Chromium PASS run 38580653413; frontend PASS 38580653495; UIGS Coverage PASS 38580653198. Real Windows/Android/Web copy packet identity and actual file/field P2 still open.",
-    "wu08_multi_source": "Exact code/test SHA 2b42a49e94ab3fbec991451807791a5b113a4892: production Playwright Chromium Web File 2-source queue, frozen preferences per file, source-specific v4 compiler and controlled execution, save failure preserved artifact/no reencode retry, clearing completed records and enqueuing next 2 files PASS run 38588049167; Test frontend PASS 38588049084; UIGS Evidence Coverage PASS 38588049025. Web WASM actual 2-file media artifacts, browser downloaded file disk writes, Native Windows/Android and multi-source ASS unverified."
+    "wu08_multi_source": "Exact code/test SHA 2b42a49e94ab3fbec991451807791a5b113a4892: production Playwright Chromium Web File 2-source queue, frozen preferences per file, source-specific v4 compiler and controlled execution, save failure preserved artifact/no reencode retry, clearing completed records and enqueuing next 2 files PASS run 38588049167; Test frontend PASS 38588049084; UIGS Evidence Coverage PASS 38588049025. Web WASM actual 2-file media artifacts, browser downloaded file disk writes, Native Windows/Android and multi-source ASS unverified.",
+    "wu09_shared_p3": "Exact-head 6ea0bea2b5d2e0ae467ccd9cf5310e3982f0388c: shared real Guided+Manual frontier model/unit, frontend integration and production Chromium dynamic module and UI no-Native controls CI 38592703806 SUCCESS; full frontend 38592703737 SUCCESS; UIGS coverage 38592703764 SUCCESS. Manual real Native candidate unlock and actual same-reference quality sample in field not covered; whole movie release not proven."
   },
   "blockers": [
     "Report requirements remain partially implemented; no full product completion claim",
@@ -345,9 +349,9 @@
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
     "current_authorized_index": 8,
-    "completed_authorized_units": 5,
-    "review_status": "ROOT_REPORT_REANCHORED_WU09_P3_SHARED_DECISION_GATE_AUTHORIZED",
-    "executed_authorized_units_since_reanchor": 0
+    "completed_authorized_units": 6,
+    "review_status": "WU09_P3_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEXT_UNIT",
+    "executed_authorized_units_since_reanchor": 1
   },
   "authorized_next_units": [
     {
@@ -478,7 +482,7 @@
         "B13",
         "B14"
       ],
-      "status": "AUTHORIZED_NOT_STARTED",
+      "status": "HOSTED_ACCEPTED_SHARED_P3_DIAGNOSIS_RECOMMENDATION_GATES_FULL_NATIVE_FIELD_PENDING",
       "source": "R19 §16 P3 / §08–11 and R19 Supplement B; R24 §13–18 distinguish diagnosis, recommendation, commitment and prohibit cross-reference metric mixing",
       "scope": "Pure shared read-only gate for workflow-specific reference scope, budget coordinate, measurement range and formal VBR verification; use existing frontiers & UI. No automatic encoder switch, separate execution authority, repeated sampling or predicted whole-film certification.",
       "exit": "Real Guided+Manual caller integration, cross-reference mismatch and mismatched whole-file/video coordinate/strict policy tests, existing verified adoption guard remains; exact-head frontend+Chromium proof; no P3 all-workflows/Native end-to-end claim."
