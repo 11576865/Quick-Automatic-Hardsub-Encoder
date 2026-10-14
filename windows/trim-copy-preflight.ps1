@@ -44,11 +44,11 @@ $end=[double]$r.end
 if([double]::IsNaN($start) -or [double]::IsInfinity($start) -or $start -lt 0 -or
    [double]::IsNaN($end) -or [double]::IsInfinity($end) -or
    $end -le $start -or $end-$start -gt 3600){Fail 'Trim preflight range invalid or over bounded one-hour limit.'}
-$audioOrdinals=@($r.audioOrdinals)
-$subOrdinals=@($r.subtitleOrdinals)
+$audioOrdinals=if($null -eq $r.audioOrdinals){@()}else{@($r.audioOrdinals)}
+$subOrdinals=if($null -eq $r.subtitleOrdinals){@()}else{@($r.subtitleOrdinals)}
 if($audioOrdinals.Count+$subOrdinals.Count -eq 0 -or
    $audioOrdinals.Count+$subOrdinals.Count -gt 32){Fail 'No selected auxiliary copy streams or too many.'}
-foreach($x in $audioOrdinals+$subOrdinals){
+foreach($x in @($audioOrdinals)+@($subOrdinals)){
  if($null -eq $x -or [string]$x -notmatch '^\d+$' -or [int]$x -gt 63){
   Fail 'Invalid preflight source stream ordinal.'
  }
