@@ -102,6 +102,9 @@ function Get-IsolatedTrimPreflightStatus {
  return @{ok=$true;state=$job.State;jobId=$job.Id;receipt=$job.Receipt}
 }
 function Start-IsolatedTrimPreflight($Body) {
+ if($script:FlacPreflightJob -and (Get-FlacEncodePreflightStatus).state -eq 'running'){
+  throw 'Complete the source-owned FLAC preflight before copy preflight.'
+ }
  $video=Get-SelectedPath 'video'
  if(-not $video){throw 'No video selected.'}
  foreach($job in $script:Jobs.Values){
