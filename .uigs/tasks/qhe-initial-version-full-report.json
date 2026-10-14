@@ -1,7 +1,7 @@
 {
   "goal": "Complete QHE initial version against full supplied theoretical architecture/product reports, without unapproved scope reduction",
-  "status": "incomplete_full_report_WU06_P1_compiled_domain_projection_hosted_accepted",
-  "current_bounded_work_unit": "WU06 R19 P1 bounded read-only SourceAsset/SourceStream/compiled-derived UserIntent/OutputPlan/executable-arg projection hosted PASS at 0124946: V4 hardsub/transcode/copy model + production Chromium live inspector, task unchanged, source drift hides stale contract. This is not separately owned intent, full ImmutableJobPlan, actual ArtifactRecord nor cross-device film acceptance.",
+  "status": "incomplete_full_report_WU07_P2_audio_must_copy_authorized",
+  "current_bounded_work_unit": "WU07 owner R19 P2 and R24 §05 source-bound must-copy per audio stream: explicit audio preservation lock and authoritative task-compiler fail-closed guard. No packet identity or full P2 signoff.",
   "scope_authority": "User explicitly states theoretical reports define initial version (2026-10-13 conversation)",
   "reports": [
     {
@@ -259,12 +259,12 @@
     "WU05 bounded output timeline product slice submitted: read-only FFprobe first decoded output frame and packet PTS/DTS with job bytes/stamp, UI inspect/re-export JSON; explicit source packet mapping unverified.",
     "WU05 B09/A04 product-level FIRST output timestamp observation hosted PASSED, exact-head cfed326: read-only Native FFprobe + Chrome click + report + clock-gap human review. Actual 2.0s output first video vs .005s first audio is not silently marked aligned; source time mapping and full AV sync pending.",
     "WU06 root reanchor: selected original R19 §03/§16 P1 and R24 §05 read-only domain projection. Existing task.outputPlan is partial; next unit must expose source, intent, output provenance and executable parameter trace without replacing compiler.",
-    "WU06 hosted PASS 0124946: P1 passive compiled v4 → SourceAsset/Streams/UserIntent-inferred/OutputPlan/executable map/unknown ArtifactRecord inspect; source replacement invalidates view; no changed task args or new mutable user intent."
+    "WU06 hosted PASS 0124946: P1 passive compiled v4 → SourceAsset/Streams/UserIntent-inferred/OutputPlan/executable map/unknown ArtifactRecord inspect; source replacement invalidates view; no changed task args or new mutable user intent.",
+    "WU07 owner-report reanchor: R19 P2 and R24 UserIntent must-preserve original stream. Prior P1 only inferred intent; moving ONE user-approved audio stream lock into the existing v4 compiler, not a full schema migration."
   ],
   "next_units": [
-    "NO WU07 AUTHORIZED: compare B01–B25/A01–A10 against original R19/R24; choose substantive unimplemented ability, not recursive inspector instrumentation.",
-    "Open R19 P1 full stage: independently owned explicit must-preserve UserIntent (only after evidence), immutable backend execution job identity, real ArtifactRecord verification across Windows/Android/Web, no speculative migration.",
-    "Open B21 multiple sources batch, B09 packet mapping/full AV sync, WU01 guided-to-Windows same-task, P2/P3 true ASS and manual codec decision parity and field playback, PR #104/#105 integration."
+    "WU07 authorized: source-bound audio must-copy lock in per-stream UI and official compiler, negative tests and Chromium; no second intent state engine.",
+    "No WU08 authorized; full P2 ASS fonts VFR/packet real film and multi-source batch still open."
   ],
   "branch": "feat/qhe-five-round-delivery-20261013",
   "pr": 105,
@@ -338,10 +338,10 @@
     "agents_guard_checkpoint_commit": "cfe6be37217d577147305681dc065046323cd246",
     "allowed_consecutive_units": 2,
     "mandatory_reanchor_before_third": true,
-    "current_authorized_index": 5,
+    "current_authorized_index": 6,
     "completed_authorized_units": 3,
-    "review_status": "WU06_P1_BOUNDED_HOSTED_ACCEPTED_REANCHOR_BEFORE_NEW_UNIT",
-    "executed_authorized_units_since_reanchor": 1
+    "review_status": "ROOT_REPORT_REANCHORED_WU07_P2_AUDIO_PRESERVATION_LOCK_AUTHORIZED",
+    "executed_authorized_units_since_reanchor": 0
   },
   "authorized_next_units": [
     {
@@ -434,6 +434,20 @@
       "source": "R19 §03 p4, §16 P1; R24 §05 p8: project old v4 compiler into read-only domain objects, do not migrate state or change executable behavior before parity",
       "scope": "Existing schema-v4 compiler remains sole task authority. Derive read-only trace of source streams, compiler-derived user operations and stream decisions, typed OutputPlan, actual command map/filter facts and unknown verification. Present in existing task review without new config ownership or run gate.",
       "exit": "Unit tests across all three operations incl mixed MKV, complete source plan → immutable projection, proof original task and commands unchanged; real Chromium source-bound UI acceptance; exact-head CI; no claims of full B02/ImmutableJobPlan/ArtifactRecord certification."
+    },
+    {
+      "id": "WU-07",
+      "requirement_ids": [
+        "B02",
+        "B05",
+        "B06",
+        "A02"
+      ],
+      "status": "AUTHORIZED_NOT_STARTED",
+      "title": "Source-bound per-audio track must-copy preservation intent enforced by authoritative compiler",
+      "source": "R19 §03/§16 P2, R24 §05/§11: explicit must-preserve source streams; no silent drop/reencode; packet evidence remains separate",
+      "scope": "Audio stream only bounded product slice. Add explicit user opt-in lock to existing per-stream UI and schema-v4 raw task; compiler rejects drop/transcode/mismatch source rather than rewriting user choice. Existing encoder/audio actions remain authority. No arbitrary DRM/bit-exact output claims.",
+      "exit": "v4 compileTask copy/mixed/drop negative/foreign source tests, Chromium toggle and locked conflict, actual source lock shown in review, existing frontend CI; cross-platform actual packets and multi-source UI remain future work"
     }
   ],
   "historical_next_units": {
