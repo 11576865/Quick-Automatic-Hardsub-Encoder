@@ -530,5 +530,92 @@
       "B03/B18/B19/B23/B25 platform/field/benchmark/integration/release"
     ]
   },
-  "discovered_followups_status": "ARCHIVED_IN_historical_next_units; not independently approved; compare against original B01-B25/A01-A10 before promotion"
+  "discovered_followups_status": "ARCHIVED_IN_historical_next_units; not independently approved; compare against original B01-B25/A01-A10 before promotion",
+  "owner_accelerated_continuation_2026_10_15": {
+    "decision": "CONTINUE_EXISTING_PR105_STACK_NO_RESTART",
+    "owner_instruction": "Continue based on the implementation from recent days, with UIGS; do not build a parallel/new engine or restart the work.",
+    "target_date": "2026-10-18",
+    "target_interpretation": "Aim for a usable core theory V1 integrated candidate, without changing or shrinking R19/R24 complete initial-version scope.",
+    "execution_authority": "This existing root task plus the main QHE PR #105 stacked upon PR #104; the separate 2026-10-15 sprint design branch is a non-authoritative checkpoint.",
+    "baseline": {
+      "main": "de8bfb476b7f35b952db88bcaf5b4d2c9ed44d38",
+      "pr104": "0feed738042745ace6c031f726a3ad93561e56e8",
+      "pr105": "815b743f7f8137c2aa7b1c6fa06722558037c2de"
+    },
+    "reused_completed_units": [
+      "WU01 guided CPU handoff and browser/actual FFmpeg limited checks",
+      "WU02 Windows embedded ASS + font + mixed audio native output",
+      "WU03 source-bound multiple-output recipes",
+      "WU04/WU05 copy-trim strategy and observed timeline receipt",
+      "WU06 read-only delivery contract",
+      "WU07 mustCopy source-bound lock",
+      "WU08 web-source independent queue (browser orchestration, not real Web core)",
+      "WU09 shared guided/manual evidence decision gate",
+      "WU10 real Windows protected FLAC 141/141 packet hashes"
+    ],
+    "authorized_next_units": [
+      {
+        "id": "WU11",
+        "name": "Integrate existing Guided→Manual decision and real Windows Native final-file path",
+        "anchors": [
+          "B02",
+          "B04",
+          "B05",
+          "B07",
+          "B11",
+          "B12",
+          "B13",
+          "B24",
+          "A01",
+          "A05",
+          "A06"
+        ],
+        "output": "One source-bound, selected ASS/font + multi-track test task using existing candidate decision/adoption, compileTask v4, Native /api/encode, independent FFprobe/FFmpeg checks and completed output report; stale source/reference and forbidden stream mutation must fail closed.",
+        "reuse": [
+          "guided-branch-adoption.js",
+          "guided-cpu-compiler-contract.js",
+          "guided-task-handoff.js",
+          "media-task.js",
+          "native-bridge.ps1",
+          "scripts/check-guided-budget-native.ps1",
+          "scripts/check-wu02-embedded-native.ps1",
+          "scripts/check-wu10-native-audio-preservation.ps1"
+        ],
+        "status": "AUTHORIZED_FOR_DESIGN_AND_EXACT_FILE_PLAN; IMPLEMENTATION_NOT_STARTED",
+        "prioritized_over": "Unbounded new B16 observability probe, fresh encoder implementations, new UI navigation shell, and any new task compiler."
+      },
+      {
+        "id": "WU12",
+        "name": "Native actual multiple-output batch delivery reusing existing recipe and queue",
+        "anchors": [
+          "B17",
+          "B21",
+          "B24",
+          "A08"
+        ],
+        "output": "Two independent actual Windows Native outputs from existing compiled recipes, clear saved/failed/retry states and independent final-file validation; no borrowing prior-source evidence.",
+        "reuse": [
+          "browser-source-batch.js",
+          "media-task.js",
+          "existing recipe queue and Native execution/save APIs"
+        ],
+        "status": "AUTHORIZED_PLANNING_CANDIDATE; RECHECK_AFTER_WU11",
+        "prioritized_over": "WebAssembly runtime rewrite without a compatible build, extra parallel queue architecture."
+      }
+    ],
+    "gated_next_step": "Review specific WU11 reuse/integration plan on this existing stack before mutating product code; keep all draft-heavy exact-SHA CI and field evidence separate.",
+    "status_boundaries": [
+      "IMPLEMENTED",
+      "HOSTED_VERIFIED",
+      "INTEGRATION_PENDING",
+      "FIELD_PENDING",
+      "UNSUPPORTED"
+    ],
+    "do_not_claim": [
+      "10-round delivery equals full original first version",
+      "draft green means complete CI",
+      "source hash parity means all timing/meta properties preserved",
+      "WASM browser task queue success implies real Web FFmpeg encoding"
+    ]
+  }
 }
