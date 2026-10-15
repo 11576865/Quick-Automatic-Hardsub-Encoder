@@ -1,0 +1,144 @@
+{
+  "revision": "v3",
+  "fileKey": "FPHdsXxN7xNniLKjZQcVKd",
+  "pageId": "0:1",
+  "screens": [
+    {
+      "id": "3:2",
+      "name": "D01 · 桌面 / ASS 硬字幕",
+      "width": 1440,
+      "height": 876,
+      "mainSections": [
+        "拟输出文件  /  OutputPlan",
+        "目标与编码决策",
+        "画面预览 / 折叠状态"
+      ],
+      "texts": 76
+    },
+    {
+      "id": "3:130",
+      "name": "D02 · 桌面 / 纯视频转码",
+      "width": 1440,
+      "height": 851,
+      "mainSections": [
+        "拟输出文件  /  OutputPlan",
+        "目标与编码决策",
+        "画面预览 / 折叠状态"
+      ],
+      "texts": 74
+    },
+    {
+      "id": "3:255",
+      "name": "D03 · 桌面 / 无损剪切",
+      "width": 1440,
+      "height": 765,
+      "mainSections": [
+        "切点与实际边界",
+        "拟输出文件  /  OutputPlan"
+      ],
+      "texts": 64
+    },
+    {
+      "id": "3:365",
+      "name": "D04 · 桌面 / 候选比较与显式采用",
+      "width": 1440,
+      "height": 1068,
+      "mainSections": [
+        "质量—完整体积  /  候选比较",
+        "拟输出文件  /  OutputPlan"
+      ],
+      "texts": 73
+    },
+    {
+      "id": "3:500",
+      "name": "D05 · 桌面 / 成品与差异验证",
+      "width": 1440,
+      "height": 832,
+      "mainSections": [
+        "成品与差异验证",
+        "拟输出文件  /  OutputPlan"
+      ],
+      "texts": 78
+    },
+    {
+      "id": "3:632",
+      "name": "T01 · 平板横屏 / ASS 硬字幕",
+      "width": 1194,
+      "height": 876,
+      "mainSections": [
+        "拟输出文件  /  OutputPlan",
+        "目标与编码决策",
+        "画面预览 / 折叠状态"
+      ],
+      "texts": 76
+    },
+    {
+      "id": "3:760",
+      "name": "T02 · 平板横屏 / 纯视频转码",
+      "width": 1194,
+      "height": 879,
+      "mainSections": [
+        "拟输出文件  /  OutputPlan",
+        "目标与编码决策",
+        "画面预览 / 折叠状态"
+      ],
+      "texts": 74
+    },
+    {
+      "id": "3:885",
+      "name": "T03 · 平板竖屏 / 无损剪切",
+      "width": 834,
+      "height": 1184,
+      "texts": 63
+    },
+    {
+      "id": "24:510",
+      "name": "D06 · 桌面 / 按源画幅预览",
+      "width": 1440,
+      "height": 932.25,
+      "mainSections": [
+        "画面预览 / 独立视图"
+      ],
+      "texts": 59
+    },
+    {
+      "id": "24:706",
+      "name": "T04 · 平板横屏 / 按源画幅预览",
+      "width": 1194,
+      "height": 862,
+      "mainSections": [
+        "画面预览 / 独立视图"
+      ],
+      "texts": 59
+    }
+  ],
+  "overflow": [],
+  "previews": [
+    {
+      "screen": "24:510",
+      "width": 772,
+      "height": 434.25,
+      "ratio": 1.7777777777777777
+    },
+    {
+      "screen": "24:706",
+      "width": 596,
+      "height": 335.25,
+      "ratio": 1.7777777777777777
+    }
+  ],
+  "saveDisabled": [
+    {
+      "id": "3:582",
+      "opacity": 0.550000011920929,
+      "componentName": "QHE/Button/Disabled"
+    },
+    {
+      "id": "3:629",
+      "opacity": 0.550000011920929,
+      "componentName": "QHE/Button/Disabled"
+    }
+  ],
+  "images": 0
+}
+
