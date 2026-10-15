@@ -1,0 +1,99 @@
+{
+  "fileKey": "FPHdsXxN7xNniLKjZQcVKd",
+  "pageId": "0:1",
+  "screens": [
+    {
+      "id": "3:2",
+      "name": "D01 · 桌面 / ASS 硬字幕",
+      "width": 1440,
+      "height": 1129,
+      "editableTexts": 76,
+      "instances": 21
+    },
+    {
+      "id": "3:130",
+      "name": "D02 · 桌面 / 纯视频转码",
+      "width": 1440,
+      "height": 1100,
+      "editableTexts": 74,
+      "instances": 21
+    },
+    {
+      "id": "3:255",
+      "name": "D03 · 桌面 / 无损剪切",
+      "width": 1440,
+      "height": 988,
+      "editableTexts": 65,
+      "instances": 17
+    },
+    {
+      "id": "3:365",
+      "name": "D04 · 桌面 / 候选比较与显式采用",
+      "width": 1440,
+      "height": 1291,
+      "editableTexts": 74,
+      "instances": 19
+    },
+    {
+      "id": "3:500",
+      "name": "D05 · 桌面 / 成品与差异验证",
+      "width": 1440,
+      "height": 1071,
+      "editableTexts": 79,
+      "instances": 19
+    },
+    {
+      "id": "3:632",
+      "name": "T01 · 平板横屏 / ASS 硬字幕",
+      "width": 1194,
+      "height": 1129,
+      "editableTexts": 76,
+      "instances": 21
+    },
+    {
+      "id": "3:760",
+      "name": "T02 · 平板横屏 / 纯视频转码",
+      "width": 1194,
+      "height": 1100,
+      "editableTexts": 74,
+      "instances": 21
+    },
+    {
+      "id": "3:885",
+      "name": "T03 · 平板竖屏 / 无损剪切",
+      "width": 834,
+      "height": 1416,
+      "editableTexts": 65,
+      "instances": 17
+    }
+  ],
+  "totalText": 589,
+  "components": [
+    {
+      "id": "2:32",
+      "name": "QHE/Button/Primary"
+    },
+    {
+      "id": "2:34",
+      "name": "QHE/Button/Secondary"
+    },
+    {
+      "id": "2:36",
+      "name": "QHE/Button/Disabled"
+    },
+    {
+      "id": "2:38",
+      "name": "QHE/Field/Select"
+    },
+    {
+      "id": "2:40",
+      "name": "QHE/Badge/Pending"
+    },
+    {
+      "id": "2:42",
+      "name": "QHE/Badge/Measured"
+    }
+  ],
+  "imageFills": 0,
+  "rootOverflows": []
+}

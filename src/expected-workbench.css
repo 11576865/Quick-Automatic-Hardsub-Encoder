@@ -65,8 +65,12 @@ body.expected-workbench{--ew-bg:#101416;--ew-panel:#191e21;--ew-border:#30383b;-
  body.expected-workbench.ui-desktop .support-rail{position:static;}
 }
 @media(min-width:821px) and (max-width:1180px){
- .expected-workbench .support-rail{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;}
+ .expected-workbench.ui-tablet .support-rail{display:contents;}
  .expected-workbench .platform-rail{grid-column:1/-1;}
+}
+@media(min-width:920px) and (max-width:1180px){
+ .expected-workbench.ui-tablet .workspace-layout{grid-template-areas:"runtime runtime" "main intent" "main overview";}
+ .expected-workbench.ui-tablet .expected-inspector{grid-area:intent;}
 }
 @media(max-width:820px){
  .expected-workbench .app-shell{width:calc(100% - 24px);}

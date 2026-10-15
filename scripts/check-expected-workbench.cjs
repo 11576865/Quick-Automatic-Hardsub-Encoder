@@ -12,13 +12,22 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   }
   assert.ok(ready,'Vite must start');
   browser=await chromium.launch({headless:true,...(process.env.QHE_CHROMIUM_PATH?{executablePath:process.env.QHE_CHROMIUM_PATH,args:['--no-sandbox']}:{})});
-  for(const width of [1440,1280,820,390,320]){
+  for(const width of [1440,1280,1180,1024,920,820,390,320]){
    const page=await browser.newPage({viewport:{width,height:960}}),errors=[];
    page.on('pageerror',e=>errors.push(e.message));
    await page.goto('http://127.0.0.1:4186');
    await page.locator('#expectedIntentInspector').waitFor();
    const inspector=page.locator('#expectedIntentInspector');
    assert.match(await inspector.textContent(),/尚未接入执行/);
+   if(width>=920&&width<=1180){
+    const layout=await page.evaluate(()=>{
+     const rect=s=>document.querySelector(s).getBoundingClientRect();
+     const main=rect('.workflow-main'),overview=rect('#taskOverviewRail'),runtime=rect('.platform-rail');
+     return {mainRight:main.right,mainTop:main.top,overviewLeft:overview.left,runtimeTop:runtime.top};
+    });
+    assert.ok(layout.overviewLeft>=layout.mainRight-5,`Wide tablet overview must remain beside main: ${JSON.stringify(layout)}`);
+    assert.ok(layout.runtimeTop<=layout.mainTop+1,'Tablet runtime must precede main');
+   }
    for(const operation of ['hardsub','transcode','copy']){
     await page.locator(`[data-media-mode="${operation}"]`).click();
     await page.waitForFunction(op=>document.body.dataset.mediaOperation===op,operation);
@@ -66,6 +75,6 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
    if(process.env.QHE_SCREENSHOT_DIR)await page.screenshot({path:`${process.env.QHE_SCREENSHOT_DIR}/expected-${width}.png`,fullPage:true});
    await page.close();
   }
-  console.log('EXPECTED_WORKBENCH_BROWSER_PASS: 5 widths x 3 workflows; draft isolation, keyboard and reset');
+  console.log('EXPECTED_WORKBENCH_BROWSER_PASS: 8 widths x 3 workflows; wide-tablet geometry, draft isolation, keyboard and reset');
  }finally{await browser?.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
