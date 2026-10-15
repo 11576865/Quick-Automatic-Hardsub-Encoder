@@ -64,8 +64,10 @@ jobs:
           while IFS=$'\t' read -r branch protected; do
             [[ -z "$branch" || "$branch" == "$default_branch" ]] && continue
 
+            # Keep the durable UIGS packet transport branch independent of product main.
+            # An ancestry-only mainline reconciliation must not disable this outbox.
             case "$branch" in
-              gh-pages|develop|dev|staging|release/*|releases/*|version/*|maintenance/*|integration/*)
+              gh-pages|develop|dev|staging|uigs-outbox|release/*|releases/*|version/*|maintenance/*|integration/*)
                 retained=$((retained + 1))
                 continue
                 ;;
