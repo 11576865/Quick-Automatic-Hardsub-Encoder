@@ -8,6 +8,7 @@ import './style.css';
 import './focused-workbench.css';
 import './studio-v2.css';
 import './studio-v3.css';
+import {mountExpectedWorkbench} from './expected-workbench.js';
 import { parseAss, rewriteAssFonts, shiftAssForPreview, findGlyphRiskPreviewTimes, mergePreviewTimes } from './ass.js';
 import { inspectFontFile, matchRequestedFonts, analyzeFontUsageCoverage } from './fonts.js';
 import { listSavedFonts, saveFonts as persistFonts, deleteSavedFont, clearSavedFonts, requestPersistentFontStorage, getFontStorageEstimate } from './font-store.js';
@@ -7033,3 +7034,5 @@ mediaWorkspace=mountMediaWorkspace({
     return {task,blob:result.blob,name,verified:true,actualStart:task.start};
   }
 });
+
+mountExpectedWorkbench({source:()=>state.video});
