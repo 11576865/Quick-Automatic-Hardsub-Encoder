@@ -1,7 +1,7 @@
 {
   "goal": "按用户授权以预期模型UI覆盖硬压当前UI，允许未完成能力的设计界面",
-  "status": "WORK_UNIT_COMPLETE_LOCAL_ONLY",
-  "current_bounded_work_unit": "B20/R24§19–20 工作台对象导航、视觉覆盖与预期输出意图检查器",
+  "status": "MAIN_UI_MERGED_FIGMA_DESKTOP_TABLET_COMPLETE",
+  "current_bounded_work_unit": "授权合并 #113；8 张桌面/平板 Figma 图；一轮宽平板 CSS 回归修复与交接",
   "authorization": {
     "source": "用户 2026-10-16 本轮请求；R24 §19–20，B20/B02/B05",
     "acceptance": "默认加载新外观，三类任务正确区分，未接入控件可编辑且不污染执行状态",
@@ -13,29 +13,35 @@
     "新工作台外观及可编辑预期意图草稿",
     "五尺寸三工作流真实浏览器验收",
     "中文桌面/手机视觉复查",
-    "既有浏览器失败在未改基准复现"
+    "既有浏览器失败在未改基准复现",
+    "PR #113 已合入 main@6bd0ac6",
+    "Figma 8 张桌面/平板图均完成可编辑图层与逐图视觉复查",
+    "宽平板侧栏命名网格回归先红后绿，8宽度×3工作流通过"
   ],
-  "authorized_next_units": [
-    "获得远程发布授权后推送当前分支并创建草稿 PR"
-  ],
+  "authorized_next_units": [],
   "discovered_followups": [
     "逐能力接入真实计划",
     "完整多分支主图视觉统一"
   ],
   "branch": "feat/expected-model-ui-20261016",
-  "pr": null,
-  "latest_durable_commit": "adb4505 + 本记录所属的本地验收提交",
+  "pr": 113,
+  "latest_durable_commit": "6bd0ac6dd38323620a812262b60dcb1fce6c680c；修复与设计交接见本记录所属提交",
   "external_validation_states": {
     "local_node": "422_PASS_12_SKIPPED_0_FAIL",
     "local_build": "PASS",
-    "local_expected_browser": "PASS_5_WIDTHS_3_WORKFLOWS",
+    "local_expected_browser": "PASS_8_WIDTHS_3_WORKFLOWS_AND_WIDE_TABLET_GEOMETRY",
     "legacy_browser_suite": "BASELINE_FAIL_review_must_fit_phone",
-    "hosted_ci": "NOT_STARTED_PUSH_BLOCKED",
+    "hosted_ci": "INITIAL_HEAD_FAILED_WIDE_TABLET_LAYOUT; REPAIR_CI_PENDING_NO_POLL",
     "physical_devices": "FIELD_PENDING",
-    "uigs_intake": "PENDING"
+    "uigs_intake": "WRITTEN_FOUNDRY_739d5655_BUG_OBSERVATION_NO_CANONICAL_CHANGE"
   },
-  "blockers": [
-    "自动审批拒绝远程推送；需用户明确授权发布到 GitHub"
-  ],
-  "updated_at": "2026-10-15T18:28:35.046909+00:00"
+  "blockers": [],
+  "updated_at": "2026-10-15T18:47:39.140414+00:00",
+  "repair_branch": "fix/expected-model-tablet-grid-20261016",
+  "figma": {
+    "url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=3-2",
+    "scope": "desktop_and_tablet_only",
+    "screen_count": 8,
+    "handoff": "docs/ui/desktop-tablet-figma-handoff-2026-10-16.md"
+  }
 }
