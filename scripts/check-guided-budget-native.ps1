@@ -46,6 +46,7 @@ try {
   [IO.File]::WriteAllText($assPath,$subtitle,$utf8)
   $sha=(Get-FileHash -LiteralPath $assPath -Algorithm SHA256).Hash.ToLowerInvariant()
   $receipts=@()
+  $realSamples=@()
   foreach($start in @(0.0,1.0)){
     $options=@{sampleExact=$true;guidedRenderedReference=$true;withSubtitles=$true
       measureSsim=$true;codec='h264';encoder='libx264';preset='medium'
@@ -58,6 +59,9 @@ try {
        $e.requestedRate -ne 650000 -or $actual.ssim -le 0.8 -or
        $actual.totalVideoBytes -le 0){throw 'Real Native ASS-rendered VBR receipt rejected.'}
     $receipts+=,$e
+    $realSamples+=,[pscustomobject]@{
+      window=@{start=$start;duration=0.8};assTextSha256=$sha;sample=$actual
+    }
   }
   if($receipts[0].sourceToken -ne $receipts[1].sourceToken -or
      $receipts[0].runtimeToken -ne $receipts[1].runtimeToken -or
@@ -65,6 +69,13 @@ try {
     throw 'Paired Guided rendered VBR provenance drift.'
   }
   Write-Host 'B11 Native paired ASS VBR FFmpeg source and digest checks passed.'
+  # WU11: use the SAME two real observations for the production verifier and
+  # an explicit opt-in branch transaction. No duplicate encodes or extra CI.
+  $pairedPath=Join-Path $work 'guided-real-paired-vbr.json'
+  $pair=@{samples=$realSamples;assTextSha256=$sha}
+  [IO.File]::WriteAllText($pairedPath,($pair|ConvertTo-Json -Depth 20),$utf8)
+  & node './scripts/check-wu11-guided-vbr-explicit-adoption.mjs' $pairedPath
+  if($LASTEXITCODE -ne 0){throw 'WU11 real Guided VBR admission/explicit adoption failed'}
   # Manual and guided jobs share the completed/export byte guard.
   $cost=Invoke-RestMethod -Method Post -Uri "$hostUrl/api/source-budget" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 80
   if($cost.scope -ne 'full-source' -or @($cost.audioPacketBytes).Count -ne 2 -or [long]$cost.audioPacketBytes[0] -le 0){throw 'Native whole-source cost evidence is incomplete.'}
