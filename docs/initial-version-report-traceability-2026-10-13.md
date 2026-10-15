@@ -1,5 +1,10 @@
 # QHE 初版：理论报告要求—实现—验收追踪
 
+> **2026-10-15 当前主干核查（覆盖下文 10 月 13–14 日的 Git 状态，不覆盖其原始测试证据）**：已核对 `main=c66b0658fe2e62259322b4b2e0b6fbd1e797fde1`。PR #102/#103/#104/#105 全部已进入主干；#105 精确 HEAD 21/21、#103 精确 HEAD 9/9、合并后 `main` Push CI 4/4 成功，见 [收敛 #106](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/issues/106)。因此下文旧的“#104/#105 Draft / 尚未合并”仅是历史快照，**不再代表当前仓库状态**。初版要求 B01–B25 与 A01–A10 未获整体验收，见 [Initial Version Acceptance 001 / WU11 精确实施计划 #107](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/issues/107)。
+>
+> **已核实阻断**：正式 `src/engine.js` 引用的 Web `ffmpeg-kit-next-web/dist/index.js` 在当前仓库缺失（只存 README）；浏览器队列的受控执行不等于 Web 真编码。WU11 已授权设计与文件级计划，**未开始代码实施或完成正式跨视图 Windows Native 成品验收**。以下每项 Bxx 的局部证据仍仅绑定它原来的 SHA、环境和素材；不能用主干绿灯自动关闭任何 Bxx/Axx。
+
+
 核对日期：2026-10-13。审查分支：PR #105，head `ba10fb966ee63168e03526afd09c02140c6aa04c`；执行代码验证身份为 `bbec19d5f6f537838ffe99e7d6127f7307831061`。本次修改只恢复范围和追踪，未新增产品能力。
 
 ## 完成标准与批准来源
