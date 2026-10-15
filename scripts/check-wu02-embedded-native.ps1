@@ -46,7 +46,10 @@ try {
   $requestPath=Join-Path $work 'job.json'
   [IO.File]::WriteAllText($importPath,($imported|ConvertTo-Json -Depth 15),[Text.UTF8Encoding]::new($false))
   [IO.File]::WriteAllText($probePath,($probe|ConvertTo-Json -Depth 15),[Text.UTF8Encoding]::new($false))
-  & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath
+  # Pin exact fixture bytes to the official mustCopy audio compiler intent.
+  # Bridge independently binds the selected embedded ASS/font to source stat.
+  $sourceKey='sha256:'+(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+  & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath $sourceKey
   if($LASTEXITCODE -ne 0){throw 'Formal shared task compiler failed'}
   $formal=Get-Content -Raw -LiteralPath $requestPath | ConvertFrom-Json
   $assText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($imported.ass.base64))
