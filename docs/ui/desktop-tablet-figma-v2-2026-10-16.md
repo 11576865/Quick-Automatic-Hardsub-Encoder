@@ -1,5 +1,7 @@
 # QHE 桌面与平板 Figma 设计 v2
 
+> v2 历史记录。当前 Figma 优化记录见 [v3 交接](desktop-tablet-figma-v3-2026-10-16.md)，仍为设计更新。
+
 日期：2026-10-16。范围：改善现有 Figma 设计；本轮未更改应用运行时代码。
 
 [工作台](https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=3-2) · [图标语义与密度状态图](https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=16-470)

@@ -1,7 +1,7 @@
 {
   "goal": "按用户授权以预期模型UI覆盖硬压当前UI，允许未完成能力的设计界面",
-  "status": "FIGMA_V2_DESKTOP_TABLET_COMPLETE_RUNTIME_UNCHANGED",
-  "current_bounded_work_unit": "按用户参考图改善四类图标语义、区域标签密度、上下文说明及桌面/平板构图；仅 Figma 与设计文档",
+  "status": "FIGMA_V3_DESKTOP_TABLET_COMPLETE_RUNTIME_UNCHANGED",
+  "current_bounded_work_unit": "输出计划优先、按需预览及正确画幅、候选决策检查器、执行前检查与成品必需检查保存状态",
   "authorization": {
     "source": "用户 2026-10-16 本轮请求；R24 §19–20，B20/B02/B05",
     "acceptance": "默认加载新外观，三类任务正确区分，未接入控件可编辑且不污染执行状态",
@@ -9,7 +9,8 @@
     "priority": "用户要求优先UI，后端扩展本轮不进入",
     "v2_source": "用户 2026-10-16 再改进一下；两张参考图强调对象/动作/状态/解释与标准/紧凑/自动密度",
     "v2_acceptance": "8 张桌面/平板界面原位更新；1 张状态与密度交互图；身份、当前值、主动作和阻断原因不被隐藏",
-    "v2_gap": "静态设计完成；自适应密度、tooltip、辅助技术及后端接入尚未由本轮实现或验证"
+    "v2_gap": "静态设计完成；自适应密度、tooltip、辅助技术及后端接入尚未由本轮实现或验证",
+    "v3_source": "用户 2026-10-16 优化一下；承接只绘制桌面和平板"
   },
   "completed_units": [
     "基线与来源报告核对",
@@ -20,7 +21,8 @@
     "PR #113 已合入 main@6bd0ac6",
     "Figma 8 张桌面/平板图均完成可编辑图层与逐图视觉复查",
     "宽平板侧栏命名网格回归先红后绿，8宽度×3工作流通过",
-    "Figma v2：8 界面 + 1 图标/密度状态图，9 图视觉复查及自动布局边界检查通过"
+    "Figma v2：8 界面 + 1 图标/密度状态图，9 图视觉复查及自动布局边界检查通过",
+    "Figma v3：原 8 视图更新，新增桌面/平板展开预览 2 视图；10 视图视觉复查、布局边界/画幅/禁用保存组件核对通过"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -30,7 +32,7 @@
   ],
   "branch": "docs/qhe-figma-v2-20261016",
   "pr": 113,
-  "latest_durable_commit": "应用最后整合 main@298653f09dfd24cd74f44503bee9585844b91607；v2 设计记录见本任务文件所属提交",
+  "latest_durable_commit": "运行时 main@298653f；v2 docs e56f9e7；v3 交接为本记录所属提交",
   "external_validation_states": {
     "local_node": "422_PASS_12_SKIPPED_0_FAIL",
     "local_build": "PASS",
@@ -38,20 +40,23 @@
     "legacy_browser_suite": "BASELINE_FAIL_review_must_fit_phone",
     "hosted_ci": "INITIAL_HEAD_FAILED_WIDE_TABLET_LAYOUT; REPAIR_CI_PENDING_NO_POLL",
     "physical_devices": "FIELD_PENDING",
-    "uigs_intake": "DEDUP_EXISTING_CANDIDATE_UPDATED_2acd8e5d_NO_CANONICAL_CHANGE",
+    "uigs_intake": "DEDUP_VERIFY_BEFORE_PUBLICATION_CANDIDATE_UI_CASE_06c032df_NO_CANONICAL_CHANGE",
     "figma_v2": "9_BOARDS_VISUALLY_REVIEWED_ZERO_HORIZONTAL_FRAME_CHILD_OVERFLOW",
-    "v2_runtime": "UNCHANGED_NO_NEW_RUNTIME_TEST_OR_IMPLEMENTATION_CLAIM"
+    "v2_runtime": "UNCHANGED_NO_NEW_RUNTIME_TEST_OR_IMPLEMENTATION_CLAIM",
+    "figma_v3": "10_APPLICATION_VIEWS_REVIEWED_ZERO_HORIZONTAL_OVERFLOW_16_9_PREVIEW_AND_SAVE_DISABLED_DESIGN_CONFIRMED"
   },
   "blockers": [],
-  "updated_at": "2026-10-15T19:05:38.116158+00:00",
+  "updated_at": "2026-10-15T19:39:34.142937+00:00",
   "repair_branch": "fix/expected-model-tablet-grid-20261016",
   "figma": {
     "url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=3-2",
     "scope": "desktop_and_tablet_only",
-    "screen_count": 8,
-    "handoff": "docs/ui/desktop-tablet-figma-v2-2026-10-16.md",
-    "revision": "v2",
+    "screen_count": 10,
+    "handoff": "docs/ui/desktop-tablet-figma-v3-2026-10-16.md",
+    "revision": "v3",
     "interaction_board_count": 1,
-    "interaction_url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=16-470"
+    "interaction_url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=16-470",
+    "desktop_preview_url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=24-510",
+    "tablet_preview_url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=24-706"
   }
 }
