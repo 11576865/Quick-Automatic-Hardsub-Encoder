@@ -3,20 +3,21 @@
 import {mountWorkbenchAudioControls} from './workbench-audio-controls.js';
 import {mountWorkbenchStreamControls} from './workbench-stream-controls.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fields={codec:'编码格式',encoder:'编码器',preset:'编码速度',rateMode:'质量 / 码率方式',quality:'质量值 CRF / CQ',bitrate:'视频码率（bit/s）',targetSize:'目标成品体积',sizeUnit:'体积单位',budgetPolicy:'体积交付策略',audio:'音频策略',keepSubtitles:'保留内封软字幕',keepAttachments:'保留附件 / 字体',keepChapters:'保留章节',keepMetadata:'保留元数据'};
+const pictureFields=new Set(['width','height','scaleAlgorithm','fpsMode','fps']);
+const fields={width:'输出宽度 px',height:'输出高度 px',scaleAlgorithm:'缩放算法',fpsMode:'帧率策略',fps:'目标帧率',codec:'编码格式',encoder:'编码器',preset:'编码速度',rateMode:'质量 / 码率方式',quality:'质量值 CRF / CQ',bitrate:'视频码率（bit/s）',targetSize:'目标成品体积',sizeUnit:'体积单位',budgetPolicy:'体积交付策略',audio:'音频策略',keepSubtitles:'保留内封软字幕',keepAttachments:'保留附件 / 字体',keepChapters:'保留章节',keepMetadata:'保留元数据'};
 export function mountWorkbenchBasicControls({shell,source,media,showEditor,showHelp,schedule}){
   const $=s=>document.querySelector(s),q=s=>shell.querySelector(s),form=$('#mediaTaskForm');
   const actual=name=>form.elements.namedItem(name);
   const disabled=control=>control.matches(':disabled');
   const markup=name=>{
     const original=actual(name);
-    return `<label class="v3-basic-field" data-basic-label="${name}"><span>${fields[name]||'输出容器'}</span>${original.tagName==='SELECT'?`<select data-basic-field="${name}" aria-label="${fields[name]||'输出容器'}"></select>`:original.type==='checkbox'?`<input type="checkbox" data-basic-field="${name}">`:`<input data-basic-field="${name}" inputmode="decimal" autocomplete="off">`}</label>`;
+    return `<label class="v3-basic-field" data-basic-label="${name}"><span>${fields[name]||'输出容器'}</span>${original.tagName==='SELECT'?`<select data-basic-field="${name}" aria-label="${fields[name]||'输出容器'}"></select>`:original.type==='checkbox'?`<input type="checkbox" data-basic-field="${name}">`:`<input data-basic-field="${name}" inputmode="${name==='fps'?'text':pictureFields.has(name)?'numeric':'decimal'}" placeholder="${escape(original.placeholder)}" autocomplete="off">`}</label>`;
   };
   const container=q('[data-v3-container]'),select=document.createElement('select');
   select.dataset.v3Container='';select.dataset.basicField='outputContainer';select.setAttribute('aria-label','输出容器');container.replaceWith(select);
   const strategy=q('[data-v3-strategy]'),choice=document.createElement('select');
   choice.dataset.basicStrategy='';choice.dataset.v3Strategy='';choice.setAttribute('aria-label','形成计划');choice.innerHTML='<option value="guided">引导目标</option><option value="manual">手动参数</option>';strategy.replaceWith(choice);
-  q('.v3-decisions').insertAdjacentHTML('beforeend',`<section class="v3-basic-video"><h3>正式视频参数</h3><div class="v3-basic-grid">${['codec','encoder','preset','rateMode','quality','bitrate','targetSize','sizeUnit','budgetPolicy'].map(markup).join('')}</div><p>修改会使已检查的计划失效，开始前重新检查；预期意图草稿单独保留。</p></section><p class="v3-basic-guided">引导模式使用已有目标探索与正式采用流程。切换到手动参数后，可在这里直接编辑编码设置。</p>`);
+  q('.v3-decisions').insertAdjacentHTML('beforeend',`<section class="v3-basic-video"><h3>正式视频参数</h3><div class="v3-basic-grid">${['codec','encoder','preset','rateMode','quality','bitrate','targetSize','sizeUnit','budgetPolicy'].map(markup).join('')}</div><details class="v3-basic-picture"><summary>画幅与帧率</summary><div class="v3-basic-grid">${['width','height','scaleAlgorithm','fpsMode','fps'].map(markup).join('')}</div><p>宽高均留空时不主动缩放；只填一项时，另一项按比例计算并对齐编码所需尺寸。目标帧率支持 24000/1001 等分数，填写时须选择恒定帧率 CFR；留空由所选帧率策略决定。</p><p>画幅与帧率会影响画面和时间参考，原有测量结果不代表修改后的输出质量。字幕叠加次序沿用正式计划。</p></details><p>修改会使已检查的计划失效，开始前重新检查；预期意图草稿单独保留。</p></section><p class="v3-basic-guided">引导模式使用已有目标探索与正式采用流程。切换到手动参数后，可在这里直接编辑编码设置。</p>`);
   q('.v3-output').insertAdjacentHTML('beforeend',`<div class="v3-basic-audio">${markup('audio')}</div><details class="v3-basic-streams"><summary>音轨、字幕与附件去向</summary><div class="v3-basic-checks">${['keepSubtitles','keepAttachments','keepChapters','keepMetadata'].map(markup).join('')}</div><p>软字幕时间范围及更多流设置可在完整正式参数中调整。</p></details>`);
   q('.v3-footer').insertAdjacentHTML('beforeend','<button type="button" data-basic-action="cancel" hidden>取消任务</button>');
   q('.v3-footer').insertAdjacentHTML('beforebegin','<section class="v3-basic-progress" hidden aria-label="实际任务进度"><div><strong data-basic-stage></strong><span data-basic-percent></span></div><progress max="1" value="0"></progress><p data-basic-progress-note></p></section>');
@@ -41,7 +42,7 @@ export function mountWorkbenchBasicControls({shell,source,media,showEditor,showH
   function refresh(){
     const busy=locked(),operation=document.body.dataset.mediaOperation||'hardsub',guided=operation==='hardsub'&&document.body.dataset.hardsubStrategy==='guided';
     for(const proxy of shell.querySelectorAll('[data-basic-field]')){
-      const original=actual(proxy.dataset.basicField);proxy.disabled=busy||disabled(original);
+      const original=actual(proxy.dataset.basicField);proxy.disabled=busy||disabled(original)||(guided&&pictureFields.has(proxy.dataset.basicField));
       if(original.tagName==='SELECT'){
         const options=[...original.options],signature=JSON.stringify(options.map(o=>[o.value,o.disabled,o.textContent]));
         if(optionSignatures.get(proxy)!==signature){proxy.innerHTML=options.map(o=>`<option value="${escape(o.value)}" ${o.disabled?'disabled':''}>${escape(o.textContent)}</option>`).join('');optionSignatures.set(proxy,signature);}
@@ -68,7 +69,7 @@ export function mountWorkbenchBasicControls({shell,source,media,showEditor,showH
     const proxy=event.target,name=proxy.dataset.basicField;
     if(name){
       const original=actual(name);
-      if(locked()||disabled(original)){schedule();return;}
+      if(locked()||disabled(original)||(pictureFields.has(name)&&document.body.dataset.mediaOperation==='hardsub'&&document.body.dataset.hardsubStrategy==='guided')){schedule();return;}
       if(original.tagName==='SELECT'&&![...original.options].some(o=>o.value===proxy.value&&!o.disabled)){schedule();return;}
       if(original.type==='checkbox'?original.checked===proxy.checked:original.value===proxy.value)return;
       if(original.type==='checkbox')original.checked=proxy.checked;else original.value=proxy.value;
