@@ -20,7 +20,9 @@
     "验证树e8dea6975e178ef4e13a77c8d5c4b824c20555e2经PR121合入main@2e70ec9"
   ],
   "authorized_next_units": [],
-  "discovered_followups": [],
+  "discovered_followups": [
+    "CI range projection timing repaired in PR122; see qhe-workbench-range-ci-repair-20261017.json"
+  ],
   "branch": "feat/workbench-time-range-20261017",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/121",
   "latest_durable_commit": "main@2e70ec967425e284e35e799753069fb7dcae6e6f",
@@ -33,9 +35,9 @@
     "full_browser": "PASS: check-media-ui.cjs full + check-expected-workbench.cjs 11 widths x 3 workflows",
     "review": "PASS independent static review, no Critical/Important",
     "uigs_intake": "DEDUP_EXISTING: inbox/candidates/2026-10-03-human-friendly-media-time-input-normalization.md; no new cross-project rule or Canonical change",
-    "hosted": "PENDING at single immediate read: Test frontend 38929527049 in_progress; UIGS Evidence 38929526804 in_progress",
+    "hosted": "Original frontend38929527049 FAIL at Copy details.open assertion; test-only repairPR122 mergedmain@611c654; repaired hosted validation PENDING, not polled",
     "deployment": "PENDING / not verified"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T16:08:28.378576+00:00"
+  "updated_at": "2026-10-16T16:14:24.449593+00:00"
 }

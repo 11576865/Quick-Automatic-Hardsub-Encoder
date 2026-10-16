@@ -21,3 +21,9 @@
 ## UIGS Intake
 
 已查询并读取既有 `inbox/candidates/2026-10-02-presentation-regression-isolation-semantic-sync.md`，本次提供一个Web投影刷新案例，拟以Test记录补充可复现的同事件轮反例及条件等待，保持Candidate/Test级，不修改Canonical。
+
+## 集成与Intake结果
+
+[PR122](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/122) 已从 `fdd3945c7242946a257b35af7c810077b374449f` 合入 `main@611c6547533abce207cb864cd39c8c3d360f7b4f`。独立审查确认未降低测试力度。修复后托管结果按一次有界修复协议保持Pending，不轮询新一代CI或宣称上线。
+
+Foundry Test `inbox/tests/2026-10-17-qhe-copy-range-animation-frame-readiness.md` 已写入，提交 `8349345482e1bbdf9ce71d0066f6805e87ca4db6`，关联既有语义完成等待Candidate，无Canonical变更。

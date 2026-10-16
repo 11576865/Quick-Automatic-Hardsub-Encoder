@@ -1,6 +1,6 @@
 {
   "goal": "修复PR121时间范围专项的托管异步竞态断言",
-  "status": "IN_PROGRESS",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "仅修复Copy模式投影断言时序，不改变产品行为",
   "authorization": {
     "source": "用户继续；AGENTS允许上一单元直接失败的一次有界修复；B20/B24及PR121验收",
@@ -13,23 +13,26 @@
     "读取失败job日志确认其他步骤成功",
     "同一事件轮触发Copy并立即断言open，确定性复现原false!==true",
     "追踪MutationObserver→requestAnimationFrame→basic.refresh；以条件等待替代立即读取",
-    "修复后完整basic专项通过；Node427通过12跳过0失败"
+    "修复后完整basic专项通过；Node427通过12跳过0失败",
+    "独立审查无必要问题，确认仅测试时序问题",
+    "远程验证树一致，PR122合入main@611c654",
+    "Foundry Test已写入8349345482e1bbdf9ce71d0066f6805e87ca4db6"
   ],
-  "authorized_next_units": [
-    "专项修复验证与主线集成"
-  ],
+  "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "fix/workbench-range-ci-20261017",
-  "pr": null,
-  "latest_durable_commit": "main@4d08052",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/122",
+  "latest_durable_commit": "main@611c6547533abce207cb864cd39c8c3d360f7b4f",
   "external_validation_states": {
     "prior_frontend": "FAIL 38929527049, Copy opens its primary range controls",
     "real_media": "FIELD_PENDING",
     "local_basic": "PASS entire check-workbench-basic.cjs incl same-turn Copy transition",
     "local_node": "427 passed / 12 skipped / 0 failed",
     "product_diff": "NONE: only browser regression timing changed",
-    "review": "IN_PROGRESS"
+    "review": "PASS no necessary issues",
+    "hosted": "PENDING: not polled after one bounded repair per AGENTS",
+    "uigs_intake": "WRITTEN: inbox/tests/2026-10-17-qhe-copy-range-animation-frame-readiness.md, commit8349345482e1bbdf9ce71d0066f6805e87ca4db6; no Canonical change"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T16:13:17.283732+00:00"
+  "updated_at": "2026-10-16T16:14:24.449593+00:00"
 }
