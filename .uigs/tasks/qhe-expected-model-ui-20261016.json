@@ -1,7 +1,7 @@
 {
   "goal": "按用户授权以预期模型UI覆盖硬压当前UI，允许未完成能力的设计界面",
-  "status": "FIGMA_V3_DESKTOP_TABLET_COMPLETE_RUNTIME_UNCHANGED",
-  "current_bounded_work_unit": "输出计划优先、按需预览及正确画幅、候选决策检查器、执行前检查与成品必需检查保存状态",
+  "status": "RUNTIME_V3_IMPLEMENTING",
+  "current_bounded_work_unit": "按已审阅 Figma v3 布置桌面和平板实际 UI，功能入口允许后补",
   "authorization": {
     "source": "用户 2026-10-16 本轮请求；R24 §19–20，B20/B02/B05",
     "acceptance": "默认加载新外观，三类任务正确区分，未接入控件可编辑且不污染执行状态",
@@ -10,7 +10,14 @@
     "v2_source": "用户 2026-10-16 再改进一下；两张参考图强调对象/动作/状态/解释与标准/紧凑/自动密度",
     "v2_acceptance": "8 张桌面/平板界面原位更新；1 张状态与密度交互图；身份、当前值、主动作和阻断原因不被隐藏",
     "v2_gap": "静态设计完成；自适应密度、tooltip、辅助技术及后端接入尚未由本轮实现或验证",
-    "v3_source": "用户 2026-10-16 优化一下；承接只绘制桌面和平板"
+    "v3_source": "用户 2026-10-16 优化一下；承接只绘制桌面和平板",
+    "runtime_v3": {
+      "source": "用户：现在把UI照设计图布置，功能入口实际上没实现也没关系，后面再补",
+      "anchors": "R24 §19–20 / B20，关联 B02/B05；docs/qhe-initial-version-route-reanchor-2026-10-14.md",
+      "acceptance": "桌面三栏、平板适配、计划优先、按需预览、密度/帮助/待接入反馈；保留现有执行与保存合同",
+      "gap": "设计已完成，实际界面尚为 v1 外壳",
+      "priority": "用户明确优先 UI；B21 批次及后端扩展延后"
+    }
   },
   "completed_units": [
     "基线与来源报告核对",
@@ -30,8 +37,8 @@
     "完整多分支主图视觉统一",
     "按 v2 设计实施实际工具栏、密度偏好、上下文帮助及无障碍行为，须单独作为后续工作单元"
   ],
-  "branch": "docs/qhe-figma-v2-20261016",
-  "pr": 113,
+  "branch": "feat/figma-v3-workbench-20261016",
+  "pr": null,
   "latest_durable_commit": "运行时 main@298653f；v2 docs e56f9e7；v3 交接为本记录所属提交",
   "external_validation_states": {
     "local_node": "422_PASS_12_SKIPPED_0_FAIL",
@@ -46,7 +53,7 @@
     "figma_v3": "10_APPLICATION_VIEWS_REVIEWED_ZERO_HORIZONTAL_OVERFLOW_16_9_PREVIEW_AND_SAVE_DISABLED_DESIGN_CONFIRMED"
   },
   "blockers": [],
-  "updated_at": "2026-10-15T19:39:34.142937+00:00",
+  "updated_at": "2026-10-16T03:31:14.445037+00:00",
   "repair_branch": "fix/expected-model-tablet-grid-20261016",
   "figma": {
     "url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=3-2",
