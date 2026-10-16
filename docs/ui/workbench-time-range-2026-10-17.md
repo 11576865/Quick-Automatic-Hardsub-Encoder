@@ -16,6 +16,8 @@ start/end 移至统一 basic projection 事件路径，复用原表单 input/cha
 
 专项先以缺失 videoRange 中央控件失败，实施后通过。受控浏览器通过真实 compileTask，验证 0.5–1.5 秒截取映射到 trim 输入、视频/软字幕时长 1 秒而完整音频 2 秒；独立 Copy full 视频仍映射源输入，同时 trim 软字幕映射裁切输入。手动 ASS 保持原渲染顺序与 setpts 正负0.5秒源时钟补偿。非法 end≤start 拒绝执行，原时间格式化/编辑器回投/Guided与运行锁通过。此前逐轨/逐对象/保存失败重试等专项仍通过。
 
-1440/1194/834/768 专项无溢出，中文平板截图复查可读。Node 439项：427通过、12跳过、0失败；构建通过，保留既有 bundle 大小提示。完整旧浏览器回归、11尺寸工作台与独立审查收尾中。上述媒体传输是模拟，不等于真实VFR/B帧、ASS像素、音画同步或保存提供者验收。
+1440/1194/834/768 专项无溢出，中文平板截图复查可读。Node 439项：427通过、12跳过、0失败；构建通过，保留既有 bundle 大小提示。完整 check-media-ui.cjs 回归与 check-expected-workbench.cjs 的11宽度×3工作流均退出0；独立静态审查无Critical/Important。上述媒体传输是模拟，不等于真实VFR/B帧、ASS像素、音画同步或保存提供者验收。
 
 PR120 前端托管回归38894004555 completed/success；部署尚未在本轮确认。
+
+UIGS Intake 已查询并读取既有 Candidate `inbox/candidates/2026-10-03-human-friendly-media-time-input-normalization.md`，本次复用中央解析及规范化原则，未产生新的跨项目结论，不修改 Canonical。远程 checkpoint `83e04a82fd5fb8d77b03c70c406cf40164eb637c` 的树 `620da26288a84cebfab8c6f78e436cf830351773` 与本地验证树一致。

@@ -1,6 +1,6 @@
 {
   "goal": "中央工作台统一起止范围及逐类时间策略入口",
-  "status": "IN_PROGRESS",
+  "status": "WORK_UNIT_COMPLETE_READY_FOR_INTEGRATION",
   "current_bounded_work_unit": "三工作流共享start/end/videoRange/audioRange/subtitleRange正式控件",
   "authorization": {
     "source": "用户继续实现；R19 §05/06/07/12；R24 §06/09/11/19；B03/B04/B08/B09/B20",
@@ -13,24 +13,26 @@
     "读取前一任务、main和原报告/路线/追踪矩阵",
     "专项先因缺失videoRange中央控件失败，实施后通过",
     "正式任务验证trim视频/字幕与full音频、Copy独立full视频、ASS源时钟补偿、非法范围拒绝及锁保护",
-    "4宽度专项与中文834截图通过；427Node通过12跳过；构建通过"
+    "4宽度专项与中文834截图通过；427Node通过12跳过；构建通过",
+    "完整旧界面回归与11宽度×3工作流检查通过",
+    "独立静态审查无Critical/Important；中文平板截图复查通过",
+    "远程checkpoint83e04a82与本地树620da262完全一致"
   ],
-  "authorized_next_units": [
-    "中央时间范围接入及验证"
-  ],
+  "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-time-range-20261017",
   "pr": null,
-  "latest_durable_commit": "main@d9f4daf6aac31eb3f1bca592451e1b71313690ff",
+  "latest_durable_commit": "83e04a82fd5fb8d77b03c70c406cf40164eb637c",
   "external_validation_states": {
     "previous_frontend": "38894004555 completed/success",
     "real_media": "FIELD_PENDING",
     "local_basic": "PASS media transport simulated; three workflows/time policy maps/ASS-clock/normalization/locks/invalid range",
     "local_node": "427 passed / 12 skipped / 0 failed",
     "local_build": "PASS existing bundle size warning",
-    "full_browser": "PENDING",
-    "review": "IN_PROGRESS"
+    "full_browser": "PASS: check-media-ui.cjs full + check-expected-workbench.cjs 11 widths x 3 workflows",
+    "review": "PASS independent static review, no Critical/Important",
+    "uigs_intake": "DEDUP_EXISTING: inbox/candidates/2026-10-03-human-friendly-media-time-input-normalization.md; no new cross-project rule or Canonical change"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T16:06:36.231958+00:00"
+  "updated_at": "2026-10-16T16:07:46.802198+00:00"
 }
