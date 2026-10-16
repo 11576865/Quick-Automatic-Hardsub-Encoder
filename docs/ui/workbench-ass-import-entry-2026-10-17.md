@@ -14,6 +14,8 @@
 
 新增basic入口断言先以缺失明确入口失败，实施后完整basic专项通过。新增check-source-import-entry.cjs纳入完整浏览器套件，使用真实main与Windows client、模拟Bridge HTTP：原外置ASS/字体选择器回填，内封字幕序号1请求与源名/大小，原导入失败后重试，素材状态更新，打开菜单不自动提取，保留选项未被导入改写。更换来源期间probe pending、无ASS、运行锁及非硬字幕禁用通过。另以Web真实filechooser选择外置ASS验证用户激活链；1440/1194/834/768无溢出。
 
-Node439项：427通过/12跳过/0失败；构建成功，既有bundle提示保留。独立审查发现外置文件选择后焦点落到已隐藏菜单；新增断言先复现失败，再修复为调用原选择器前聚焦可见工具栏入口。Native取消选择保持原ASS和焦点、Web filechooser完成后焦点均通过；完整浏览器回归收尾中。Bridge响应和字体样本为模拟，未重新执行真实提取/字体解析/libass渲染，不关闭A01或真实设备验收。既有Windows hosted证据仍仅绑定其原SHA和合成素材，见wu02-windows-embedded-ass-source-import-2026-10-14.md。
+Node439项：427通过/12跳过/0失败；构建成功，既有bundle提示保留。独立审查发现外置文件选择后焦点落到已隐藏菜单；新增断言先复现失败，再修复为调用原选择器前聚焦可见工具栏入口。Native取消选择保持原ASS和焦点、Web filechooser完成后焦点均通过；完整check-media-ui（包含新增真实来源导入专项）、check-expected-workbench的11宽度×3工作流、basic及最终Node/构建均通过；独立复查已关闭焦点Minor，无必要问题。中文平板菜单截图复看可读。Bridge响应和字体样本为模拟，未重新执行真实提取/字体解析/libass渲染，不关闭A01或真实设备验收。既有Windows hosted证据仍仅绑定其原SHA和合成素材，见wu02-windows-embedded-ass-source-import-2026-10-14.md。
 
 PR122的frontend38930278715、UIGS38930278785及Branch hygiene38930315328均已核实success。
+
+UIGS Intake 查询picker focus，关联既有QHE functional UI Case中的隐形file input焦点与取消语义观察，本轮将补充菜单关闭/Native按钮临时禁用的窄Test证据，不提升Canonical。

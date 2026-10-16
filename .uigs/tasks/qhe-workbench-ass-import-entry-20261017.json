@@ -1,6 +1,6 @@
 {
   "goal": "将工具栏预留入口接通真实ASS与字体选择/内封导入",
-  "status": "IN_PROGRESS",
+  "status": "WORK_UNIT_COMPLETE_READY_FOR_INTEGRATION",
   "current_bounded_work_unit": "来源导入菜单复用原文件选择器及Windows内封ASS/字体导入控件",
   "authorization": {
     "source": "用户继续实现；重新核对R19§05/07/12与R24§07；B07/A01/B18/B20；重读初版根范围/路线矩阵",
@@ -15,15 +15,17 @@
     "basic入口先失败后通过",
     "真实main+Windows client模拟HTTP验证外置选择、原ordinal1显式导入/失败重试、来源就绪/无ASS/锁/工作流门禁、保留不变",
     "Web真实filechooser选择ASS通过；4宽度无溢出",
-    "Node427通过12跳过0失败；构建通过"
+    "Node427通过12跳过0失败；构建通过",
+    "焦点Minor先红后绿修复；Native完成/取消与Web文件选择后焦点通过",
+    "完整check-media-ui含真实来源导入专项、11宽度×3工作流、basic、最终Node/构建均通过",
+    "独立复查无必要问题；中文平板菜单截图已复查",
+    "远程checkpointbb85dce3的tree与本地已验证tree一致"
   ],
-  "authorized_next_units": [
-    "来源导入菜单与真实main/Native mock浏览器验证"
-  ],
+  "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-ass-import-entry-20261017",
   "pr": null,
-  "latest_durable_commit": "main@140e9e7",
+  "latest_durable_commit": "bb85dce39c268a796944e68cf601ec7d15e4dafa",
   "external_validation_states": {
     "previous_frontend": "38930278715 success",
     "previous_uigs": "38930278785 success",
@@ -32,9 +34,10 @@
     "local_source_import": "PASS actual main/client mocked Native transport + real Web filechooser; no media encode",
     "local_node": "427 passed / 12 skipped / 0 failed",
     "local_build": "PASS existing bundle warning",
-    "review": "IN_PROGRESS",
-    "full_browser": "PENDING"
+    "review": "PASS minor focus finding fixed with red/green proof, independent re-review closed",
+    "full_browser": "PASS full check-media-ui incl new Native client/main integration; 11 widths x3 workflows; basic",
+    "uigs_intake": "DEDUP searched picker focus; narrow Test record to append existing Case evidence; no Canonical change"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T16:23:07.925739+00:00"
+  "updated_at": "2026-10-16T16:26:35.525464+00:00"
 }
