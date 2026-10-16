@@ -1,0 +1,40 @@
+{
+  "goal": "接通桌面和平板中央画幅与帧率正式设置",
+  "status": "PUBLICATION_AUTHORIZED_IN_PROGRESS",
+  "current_bounded_work_unit": "width/height/scaleAlgorithm/fpsMode/fps 投影至唯一正式任务",
+  "authorization": {
+    "source": "用户继续推进UI功能实现；R19 §05 纯转码可改变分辨率/帧率；R24 §08/16 几何变换与参考条件；B03/B04/B20，B12仅涉及手动尺寸入口",
+    "acceptance": "中央编辑输出宽高、缩放算法和帧率进入正式编译器；保留单轴按比例计算、CFR分数帧率与编译拒绝；Copy/Guided/运行期间禁止误写",
+    "gap": "正式编辑器已支持，中央面板不可达；本轮仅补操作入口和状态同步",
+    "priority": "落实已设计工作台的基础视频参数，优先于高级色彩和通用提取；不改候选参考域或新增编码后端",
+    "integration": "2026-10-16 用户明确回复“授权合并”，授权将本轮提交推送GitHub并合入main"
+  },
+  "completed_units": [
+    "读取main、前一任务记录、原始R19/R24与路线/追踪矩阵",
+    "专项先因中央width控件缺失失败，实施后通过",
+    "4宽度专项、编译参数/拒绝/渲染次序/锁保护通过；Node427通过12跳过；构建通过",
+    "完整check-media-ui与11宽度×3工作流check-expected-workbench通过",
+    "独立审查未发现Critical/Important；中文平板截图已复查",
+    "本地代码提交69ed5b5；远程推送被自动审批拒绝，无PR/主线集成"
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [],
+  "branch": "feat/workbench-picture-controls-20261016",
+  "pr": null,
+  "latest_durable_commit": "local@cdffde9",
+  "external_validation_states": {
+    "previous_frontend": "38892556660 success",
+    "previous_build_deploy": "38892556679 success",
+    "real_media": "FIELD_PENDING",
+    "local_basic": "PASS: geometry/fractional CFR/invalid settings/Copy-Guided-execution locks/ASS order; media transport simulated",
+    "local_node": "427 passed / 12 skipped / 0 failed",
+    "local_build": "PASS; existing bundle size warning",
+    "previous_hosted": "PR119 frontend and build/deploy success",
+    "full_browser": "PASS: full legacy + 11 widths x 3 workflows",
+    "review": "PASS: independent static review; no Critical/Important",
+    "hosted": "PENDING: authorized publication in progress",
+    "uigs_intake": "DEDUP_EXISTING_CASE_NO_NEW_CROSS_PROJECT_CLAIM: inbox/cases/2026-10-11-qhe-functional-ui-rebuild-low-copy-workbench.md; no Canonical change"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-16T11:27:31.315585+00:00"
+}
