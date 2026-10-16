@@ -118,6 +118,17 @@
  .v3-basic-checks label{display:flex;align-items:center;gap:8px;flex-direction:row-reverse;justify-content:flex-end;min-height:44px}
  .v3-basic-checks input{width:18px;min-height:18px;flex:none;accent-color:#b8df9c}
  .v3-basic-streams>summary{cursor:pointer;font-size:12px;color:#d6e9c6;min-height:32px}
+ .v3-audio-plan{margin-top:16px;padding-top:14px;border-top:1px solid #30383b}
+ .v3-audio-plan>summary{cursor:pointer;font-size:12px;color:#d6e9c6;min-height:32px}
+ .v3-audio-rows{display:grid;gap:12px}
+ .v3-audio-rows .media-audio-plan-row{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px;border:1px solid #30383b;border-radius:8px}
+ .v3-audio-rows .media-audio-plan-row>span{grid-column:1/-1;font-size:12px;overflow-wrap:anywhere}
+ .v3-audio-rows .media-audio-plan-row label{display:flex;align-items:center;gap:8px;font-size:12px}
+ .v3-audio-rows .media-audio-plan-row .v3-audio-field{display:grid;align-items:start;font-size:11px;color:#a2afaf}
+ .v3-audio-field>span{min-height:16px}
+ .v3-audio-rows input[type=checkbox]{width:18px;min-height:18px;accent-color:#b8df9c}
+ .v3-audio-rows :is(input,select){font-size:12px}
+ .v3-audio-plan>[data-audio-reset]{margin-top:12px;width:100%;font-size:12px}
  .v3-basic-progress{padding:16px;background:#191e21;border-radius:8px;margin-top:16px}
  .v3-basic-progress>div{display:flex;justify-content:space-between;gap:12px;font-size:12px}
  .v3-basic-progress progress{width:100%;height:8px;accent-color:#b8df9c;margin:12px 0 0}

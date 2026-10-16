@@ -1,5 +1,6 @@
 // The existing form remains the only authority. These unnamed controls are views
 // of that form: all writes pass through its original input/change handlers.
+import {mountWorkbenchAudioControls} from './workbench-audio-controls.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fields={codec:'编码格式',encoder:'编码器',preset:'编码速度',rateMode:'质量 / 码率方式',quality:'质量值 CRF / CQ',bitrate:'视频码率（bit/s）',targetSize:'目标成品体积',sizeUnit:'体积单位',budgetPolicy:'体积交付策略',audio:'音频策略',keepSubtitles:'保留内封软字幕',keepAttachments:'保留附件 / 字体',keepChapters:'保留章节',keepMetadata:'保留元数据'};
 export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,schedule}){
@@ -27,6 +28,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
   const optionSignatures=new WeakMap();
   const cancelTarget=()=>!$('#taskCancel').disabled?$('#taskCancel'):$('#cancelEncodeBtn')&&!$('#cancelEncodeBtn').classList.contains('hidden')&&!$('#cancelEncodeBtn').disabled?$('#cancelEncodeBtn'):null;
   const locked=()=>!!cancelTarget()||['preparing','encoding','verifying','cancelling','saving'].includes(taskState())||!!$('#video')?.disabled;
+  const audioControls=mountWorkbenchAudioControls({shell,source,locked,schedule});
   const closeMenu=()=>{q('.v3-source-menu').hidden=true;more.setAttribute('aria-expanded','false');};
   function probe(){
     closeMenu();const button=$('#analyze');
@@ -57,6 +59,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
     const native=document.body.dataset.runtimeBackend&&document.body.dataset.runtimeBackend!=='web';
     location.textContent=$('#taskSave').disabled?(native?'验证后由系统选择位置…':'验证后交给浏览器下载'):`${$('#taskSave').textContent}…`;
     location.disabled=busy;
+    audioControls.refresh();
   }
   shell.addEventListener('change',event=>{
     const proxy=event.target,name=proxy.dataset.basicField;
