@@ -118,6 +118,11 @@
  .v3-basic-checks label{display:flex;align-items:center;gap:8px;flex-direction:row-reverse;justify-content:flex-end;min-height:44px}
  .v3-basic-checks input{width:18px;min-height:18px;flex:none;accent-color:#b8df9c}
  .v3-basic-streams>summary{cursor:pointer;font-size:12px;color:#d6e9c6;min-height:32px}
+ .v3-object-selection{margin-top:14px;padding-top:12px;border-top:1px solid #30383b}
+ .v3-object-selection h4{font-size:12px;font-weight:500;margin:0 0 8px}
+ .v3-object-options{display:grid;gap:6px}
+ .v3-object-options label{display:flex;align-items:center;gap:10px;min-height:44px;font-size:12px;overflow-wrap:anywhere}
+ .v3-object-options input[type=checkbox]{flex:none;width:18px;min-height:18px;padding:0;accent-color:#b8df9c}
  .v3-audio-plan{margin-top:16px;padding-top:14px;border-top:1px solid #30383b}
  .v3-audio-plan>summary{cursor:pointer;font-size:12px;color:#d6e9c6;min-height:32px}
  .v3-audio-rows{display:grid;gap:12px}

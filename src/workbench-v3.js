@@ -176,6 +176,6 @@ export function mountWorkbenchV3({source,media}) {
   document.addEventListener('quick-hardsub-media-info-changed',schedule);
   document.addEventListener('qhe-workbench-reveal',event=>showEditor(event.detail==='artifact'?'#taskReviewDetails':'#taskPlanSummary'));
   document.addEventListener('change',schedule);window.addEventListener('resize',adapt);
-  basic=mountWorkbenchBasicControls({shell,source,showEditor,showHelp:pending,schedule});
+  basic=mountWorkbenchBasicControls({shell,source,media,showEditor,showHelp:pending,schedule});
   adapt();
 }

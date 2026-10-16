@@ -1,0 +1,26 @@
+{
+  "goal": "桌面和平板中央面板选择保留的软字幕与附件",
+  "status": "IMPLEMENTING",
+  "current_bounded_work_unit": "逐对象软字幕/附件选择接入现有正式计划",
+  "authorization": {
+    "source": "用户继续补基础功能；重新读取R19 §03/07和R24 §04/05；B02/B04/B05/B20",
+    "acceptance": "选择软字幕/附件子集或全部排除进入唯一正式任务与输出计划；来源和运行锁保护；不把保留当作烧录/提取",
+    "gap": "中央只有保留类型开关，具体subtitleStreams/attachmentStreams仍藏在完整参数",
+    "priority": "补齐基础保留动作；高级色彩/通用提取/目录预授权不进本单元"
+  },
+  "completed_units": [
+    "重新核对根报告、追踪矩阵、原正式选择编译协议"
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [],
+  "branch": "feat/workbench-stream-selection-20261016",
+  "pr": null,
+  "latest_durable_commit": "main@9f621e81ac0b98771c236887627cec5c62d08117",
+  "external_validation_states": {
+    "local": "NOT_RUN",
+    "hosted": "NOT_STARTED",
+    "real_media": "FIELD_PENDING"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-16T11:10:10.154619+00:00"
+}
