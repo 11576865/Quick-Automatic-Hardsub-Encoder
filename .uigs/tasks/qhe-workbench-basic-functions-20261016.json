@@ -1,6 +1,6 @@
 {
   "goal": "把新工作台的基础操作接到现有正式任务与执行保存链路",
-  "status": "IMPLEMENTING",
+  "status": "WORK_UNIT_COMPLETE_PENDING_INTEGRATION",
   "current_bounded_work_unit": "中央正式参数、来源操作、取消和保存方式反馈",
   "authorization": {
     "source": "用户 2026-10-16 接下来实现基础功能；延续已批准 Figma 布局",
@@ -11,21 +11,33 @@
   },
   "completed_units": [
     "读取现有任务/执行/保存实现与R24基础成本门槛",
-    "新基础任务闭环浏览器测试先行"
+    "新基础任务闭环浏览器测试先行",
+    "正式参数代理与来源检查/依赖入口接通",
+    "共享任务进度、取消、验证后保存与保存重试接通",
+    "剪切继承禁用字段、不可用编码器门槛与卸载刷新回归",
+    "本地专项/完整浏览器/单元测试和构建通过；独立复查无 Critical/Important"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
     "高级意图逐项接入",
     "通用逐对象提取",
-    "执行前目录授权"
+    "执行前目录授权",
+    "旧版 Native 恢复任务的进度/保存投影仍沿用旧控件；本单元不改恢复协议"
   ],
   "branch": "feat/workbench-basic-controls-20261016",
   "pr": null,
-  "latest_durable_commit": "main@26275e3d30cafab7cbebedd19fbe86c997f04ca7",
+  "latest_durable_commit": "feature checkpoint remote@8e88a3b5d19bbd16a3717e6df3c7f4306e6e461a",
   "external_validation_states": {
-    "local_basic_browser": "RED_EXPECTED_NO_BASIC_CONTROLS",
-    "hosted": "NOT_STARTED"
+    "local_basic_browser": "PASS simulated media transport; formal compiler/execution/save lifecycle; 4 widths",
+    "local_expected_browser": "PASS 11 widths x 3 workflows",
+    "local_media_ui": "PASS full suite; simulated Native/media",
+    "local_node": "427 pass / 12 skipped / 0 failed (439 total)",
+    "local_build": "PASS existing bundle warning",
+    "review": "PASS no Critical/Important; recovered legacy projection tracked separately",
+    "hosted": "PENDING_NOT_YET_PUBLISHED",
+    "real_device": "NOT_VERIFIED",
+    "uigs_intake": "EXISTING_CANDIDATE_PRODUCT_CASE_NO_CANONICAL_CHANGE"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T06:39:55.657426+00:00"
+  "updated_at": "2026-10-16T06:57:17.122871+00:00"
 }

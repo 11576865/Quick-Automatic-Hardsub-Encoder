@@ -71,6 +71,7 @@ export function mountWorkbenchV3({source,media}) {
   let basic,queued=false,lastObjects='',lastRows='',lastOperation='';
   function refresh() {
     queued=false;
+    if(!shell.isConnected||!$('#mediaTaskForm'))return;
     const operation=document.body.dataset.mediaOperation||'hardsub',file=source(),m=media(),form=$('#mediaTaskForm');
     if(lastOperation&&lastOperation!==operation)showView('plan');lastOperation=operation;
     const field=name=>form.elements.namedItem(name);

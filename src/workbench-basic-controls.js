@@ -5,6 +5,7 @@ const fields={codec:'编码格式',encoder:'编码器',preset:'编码速度',rat
 export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,schedule}){
   const $=s=>document.querySelector(s),q=s=>shell.querySelector(s),form=$('#mediaTaskForm');
   const actual=name=>form.elements.namedItem(name);
+  const disabled=control=>control.matches(':disabled');
   const markup=name=>{
     const original=actual(name);
     return `<label class="v3-basic-field" data-basic-label="${name}"><span>${fields[name]||'输出容器'}</span>${original.tagName==='SELECT'?`<select data-basic-field="${name}" aria-label="${fields[name]||'输出容器'}"></select>`:original.type==='checkbox'?`<input type="checkbox" data-basic-field="${name}">`:`<input data-basic-field="${name}" inputmode="decimal" autocomplete="off">`}</label>`;
@@ -36,7 +37,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
   function refresh(){
     const busy=locked(),operation=document.body.dataset.mediaOperation||'hardsub',guided=operation==='hardsub'&&document.body.dataset.hardsubStrategy==='guided';
     for(const proxy of shell.querySelectorAll('[data-basic-field]')){
-      const original=actual(proxy.dataset.basicField);proxy.disabled=busy||original.disabled;
+      const original=actual(proxy.dataset.basicField);proxy.disabled=busy||disabled(original);
       if(original.tagName==='SELECT'){
         const options=[...original.options],signature=JSON.stringify(options.map(o=>[o.value,o.disabled,o.textContent]));
         if(optionSignatures.get(proxy)!==signature){proxy.innerHTML=options.map(o=>`<option value="${escape(o.value)}" ${o.disabled?'disabled':''}>${escape(o.textContent)}</option>`).join('');optionSignatures.set(proxy,signature);}
@@ -47,7 +48,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
     }
     choice.value=guided?'guided':'manual';choice.disabled=busy||operation!=='hardsub';
     q('.v3-basic-video').hidden=guided||operation==='copy';q('.v3-basic-guided').hidden=!guided;q('.v3-basic-streams').hidden=guided;
-    for(const name of ['quality','bitrate','targetSize','sizeUnit','budgetPolicy'])q(`[data-basic-label="${name}"]`).hidden=actual(name).disabled;
+    for(const name of ['quality','bitrate','targetSize','sizeUnit','budgetPolicy'])q(`[data-basic-label="${name}"]`).hidden=disabled(actual(name));
     const cancel=cancelTarget(),cancelButton=q('[data-basic-action="cancel"]');cancelButton.hidden=!cancel;cancelButton.disabled=taskState()==='cancelling';
     const state=taskState(),progress=q('.v3-basic-progress');progress.hidden=['idle','failed'].includes(state);
     progress.querySelector('progress').value=Number($('#taskProgress').value)||0;
@@ -61,7 +62,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
     const proxy=event.target,name=proxy.dataset.basicField;
     if(name){
       const original=actual(name);
-      if(locked()||original.disabled){schedule();return;}
+      if(locked()||disabled(original)){schedule();return;}
       if(original.tagName==='SELECT'&&![...original.options].some(o=>o.value===proxy.value&&!o.disabled)){schedule();return;}
       if(original.type==='checkbox'?original.checked===proxy.checked:original.value===proxy.value)return;
       if(original.type==='checkbox')original.checked=proxy.checked;else original.value=proxy.value;
