@@ -1,6 +1,6 @@
 {
   "goal": "中央工作台统一起止范围及逐类时间策略入口",
-  "status": "WORK_UNIT_COMPLETE_READY_FOR_INTEGRATION",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "三工作流共享start/end/videoRange/audioRange/subtitleRange正式控件",
   "authorization": {
     "source": "用户继续实现；R19 §05/06/07/12；R24 §06/09/11/19；B03/B04/B08/B09/B20",
@@ -16,13 +16,14 @@
     "4宽度专项与中文834截图通过；427Node通过12跳过；构建通过",
     "完整旧界面回归与11宽度×3工作流检查通过",
     "独立静态审查无Critical/Important；中文平板截图复查通过",
-    "远程checkpoint83e04a82与本地树620da262完全一致"
+    "远程checkpoint83e04a82与本地树620da262完全一致",
+    "验证树e8dea6975e178ef4e13a77c8d5c4b824c20555e2经PR121合入main@2e70ec9"
   ],
   "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-time-range-20261017",
-  "pr": null,
-  "latest_durable_commit": "83e04a82fd5fb8d77b03c70c406cf40164eb637c",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/121",
+  "latest_durable_commit": "main@2e70ec967425e284e35e799753069fb7dcae6e6f",
   "external_validation_states": {
     "previous_frontend": "38894004555 completed/success",
     "real_media": "FIELD_PENDING",
@@ -31,8 +32,10 @@
     "local_build": "PASS existing bundle size warning",
     "full_browser": "PASS: check-media-ui.cjs full + check-expected-workbench.cjs 11 widths x 3 workflows",
     "review": "PASS independent static review, no Critical/Important",
-    "uigs_intake": "DEDUP_EXISTING: inbox/candidates/2026-10-03-human-friendly-media-time-input-normalization.md; no new cross-project rule or Canonical change"
+    "uigs_intake": "DEDUP_EXISTING: inbox/candidates/2026-10-03-human-friendly-media-time-input-normalization.md; no new cross-project rule or Canonical change",
+    "hosted": "PENDING at single immediate read: Test frontend 38929527049 in_progress; UIGS Evidence 38929526804 in_progress",
+    "deployment": "PENDING / not verified"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T16:07:46.802198+00:00"
+  "updated_at": "2026-10-16T16:08:28.378576+00:00"
 }

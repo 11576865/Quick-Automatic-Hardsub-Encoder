@@ -21,3 +21,9 @@ start/end 移至统一 basic projection 事件路径，复用原表单 input/cha
 PR120 前端托管回归38894004555 completed/success；部署尚未在本轮确认。
 
 UIGS Intake 已查询并读取既有 Candidate `inbox/candidates/2026-10-03-human-friendly-media-time-input-normalization.md`，本次复用中央解析及规范化原则，未产生新的跨项目结论，不修改 Canonical。远程 checkpoint `83e04a82fd5fb8d77b03c70c406cf40164eb637c` 的树 `620da26288a84cebfab8c6f78e436cf830351773` 与本地验证树一致。
+
+## 主线集成
+
+[PR #121](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/121) 已以 head `ce88913d0857be8457cfd9befb3364d9f43f825e` 合入 `main@2e70ec967425e284e35e799753069fb7dcae6e6f`。发布前远程树 `e8dea6975e178ef4e13a77c8d5c4b824c20555e2` 与本地验证树一致。
+
+唯一一次即时状态读取：Frontend 38929527049、UIGS Evidence 38929526804 均 in_progress。托管验证与部署保持 Pending External Validation，不等待后续CI或宣称上线；真实切点、音画同步与提供者仍为 Field Pending。
