@@ -174,7 +174,8 @@ const {spawn}=require('node:child_process');
   // central stage empty. The real editor must use the central work surface.
   for(const mode of ['transcode','copy']){
     await viewportPage.locator('.media-mode-switcher [data-media-mode="'+mode+'"]').click();
-    await viewportPage.locator('[data-v3-action="parameters"]').first().click();
+    await viewportPage.locator('[data-v3-action="source-more"]').click();
+    await viewportPage.locator('[data-basic-action="parameters"]').click();
     const modeGeometry=await viewportPage.evaluate(()=>{
       const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect();return r?{left:r.left,right:r.right,width:r.width,top:r.top}:null;};
       const editor=document.querySelector('#mediaWorkspace');

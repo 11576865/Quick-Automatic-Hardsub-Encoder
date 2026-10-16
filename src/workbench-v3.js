@@ -1,5 +1,6 @@
 import {previewAspect,toolbarDensity,sourceObjects} from './workbench-v3-model.js';
 import './workbench-v3.css';
+import {mountWorkbenchBasicControls} from './workbench-basic-controls.js';
 
 const icon=name=>`<img class="v3-icon" src="${import.meta.env.BASE_URL}ui-icons/${name}.svg" alt="" aria-hidden="true">`;
 const action=(name,label,command)=>`<button type="button" class="v3-action" data-v3-action="${command}" aria-label="${label}" title="${label}">${icon(name)}<span>${label}</span></button>`;
@@ -46,7 +47,7 @@ export function mountWorkbenchV3({source,media}) {
     q('[data-v3-action="preview"]').setAttribute('aria-expanded',String(view==='preview'));
   }
   showView('plan');
-  const setText=(selector,value)=>{const el=q(selector);if(el.textContent!==String(value))el.textContent=String(value);};
+  const setText=(selector,value)=>{const el=q(selector);if(el&&el.tagName!=='SELECT'&&el.textContent!==String(value))el.textContent=String(value);};
   const read=selector=>$(selector)?.textContent?.trim()||'';
   const pref=q('.v3-density select');try{pref.value=localStorage.getItem('qhe-toolbar-density')||'auto';}catch{}
   if(!pref.value)pref.value='auto';
@@ -67,9 +68,10 @@ export function mountWorkbenchV3({source,media}) {
     if(ready&&img.getAttribute('src')!==frame.getAttribute('src'))img.src=frame.getAttribute('src');
     if(!ready)img.removeAttribute('src');
   }
-  let queued=false,lastObjects='',lastRows='',lastOperation='';
+  let basic,queued=false,lastObjects='',lastRows='',lastOperation='';
   function refresh() {
     queued=false;
+    if(!shell.isConnected||!$('#mediaTaskForm'))return;
     const operation=document.body.dataset.mediaOperation||'hardsub',file=source(),m=media(),form=$('#mediaTaskForm');
     if(lastOperation&&lastOperation!==operation)showView('plan');lastOperation=operation;
     const field=name=>form.elements.namedItem(name);
@@ -101,7 +103,7 @@ export function mountWorkbenchV3({source,media}) {
     const run=$(guided?'#encodeBtn':'#taskRun');
     const saving=shell.dataset.view==='artifact',save=$('#taskSave');
     q('[data-v3-action="run"]').disabled=saving?save.disabled:!!file&&!!run?.disabled;
-    setText('[data-v3-action="run"]',saving?'保存成品':`检查并开始${operation==='hardsub'?'压制':modeNames[operation]}`);
+    setText('[data-v3-action="run"]',saving?save.textContent:`检查并开始${operation==='hardsub'?'压制':modeNames[operation]}`);
     const saveReason=save.disabled?`${read('[data-review="artifact-status"]')||'尚无可保存成品'} · 请查看实际检查状态与报告`:'已有保存许可，可调用当前成品保存流程。';
     setText('[data-v3-footer-state]',saving?saveReason:!file?'请先选择来源，再检查依赖与正式计划':run?.disabled?'来源或依赖尚未就绪，请读取参数并完成正式计划检查':read('#taskStatus')==='未开始'?'执行前将检查来源、依赖与正式计划':read('#taskStatus'));
     setText('[data-v3-audit-status]',read('[data-review="artifact-status"]')||'尚无成品');
@@ -109,11 +111,13 @@ export function mountWorkbenchV3({source,media}) {
     setText('[data-v3-audit-evidence]',read('[data-review="artifact-evidence"]')||'尚无验证结果');
     setText('[data-v3-save-reason]',saveReason);
     q('[data-v3-action="save-artifact"]').disabled=save.disabled;
+    setText('[data-v3-action="save-artifact"]',save.textContent);
     q('[data-v3-action="report"]').disabled=$('#taskReport').disabled;
     q('[data-v3-action="verify-frames"]').disabled=$('#taskOutputVerification').hidden||$('#taskVerifyFrames').disabled;
     setText('[data-v3-compare-codec]',read('#taskPlanEncoder')||'尚未检查');
     setText('[data-v3-compare-rate]',read('#taskPlanRate')||'尚未检查');
     shell.dataset.density=toolbarDensity(pref.value,q('.v3-source').clientWidth);actualPreview();
+    basic?.refresh();
   }
   const schedule=()=>{if(!queued){queued=true;requestAnimationFrame(refresh);}};
   let desktopMode;
@@ -172,5 +176,6 @@ export function mountWorkbenchV3({source,media}) {
   document.addEventListener('quick-hardsub-media-info-changed',schedule);
   document.addEventListener('qhe-workbench-reveal',event=>showEditor(event.detail==='artifact'?'#taskReviewDetails':'#taskPlanSummary'));
   document.addEventListener('change',schedule);window.addEventListener('resize',adapt);
+  basic=mountWorkbenchBasicControls({shell,source,showEditor,showHelp:pending,schedule});
   adapt();
 }

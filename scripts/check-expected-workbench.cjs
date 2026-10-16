@@ -54,7 +54,7 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
     assert.equal(await page.locator('.v3-source-toolbar button span').first().isVisible(),true);
     await page.locator('[data-v3-action="location"]').click();
     assert.equal(await page.locator('.v3-help').isVisible(),true);
-    assert.match(await page.locator('.v3-help').textContent(),/待接入/);
+    assert.match(await page.locator('.v3-help').textContent(),/保存方式/);
     await page.keyboard.press('Escape');
     await page.locator('[data-v3-action="artifact"]').click();
     assert.equal(await page.locator('.v3-artifact').isVisible(),true,'Artifact audit must have a composed view');

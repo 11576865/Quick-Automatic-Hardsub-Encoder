@@ -13,6 +13,7 @@ on:
       - '.github/workflows/test-frontend.yml'
       - 'scripts/check-media-ui.cjs'
       - 'scripts/check-expected-workbench.cjs'
+      - 'scripts/check-workbench-basic.cjs'
       - 'scripts/check-curve-design.cjs'
       - 'scripts/check-calibration-lifecycle.cjs'
       - 'scripts/check-vvc-ui.cjs'
@@ -31,6 +32,7 @@ on:
       - '.github/workflows/test-frontend.yml'
       - 'scripts/check-media-ui.cjs'
       - 'scripts/check-expected-workbench.cjs'
+      - 'scripts/check-workbench-basic.cjs'
       - 'scripts/check-curve-design.cjs'
       - 'scripts/check-calibration-lifecycle.cjs'
       - 'scripts/check-vvc-ui.cjs'
@@ -116,6 +118,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node scripts/check-media-ui.cjs
       - run: node scripts/check-expected-workbench.cjs
+      - run: node scripts/check-workbench-basic.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
