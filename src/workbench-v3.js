@@ -25,7 +25,7 @@ export function mountWorkbenchV3({source,media}) {
   <div class="v3-mode-row"><div data-v3-mode-slot></div><label class="v3-density">标签密度 <select aria-label="标签密度"><option value="auto">自动</option><option value="standard">标准</option><option value="compact">紧凑</option></select></label></div>
   <nav class="v3-path" aria-label="工作台对象导航"><button data-v3-action="source">${icon('video')}来源 · <span data-v3-source-state>未选择</span></button><span>›</span><button data-v3-action="plan">${icon('sliders')}输出计划 · <span data-v3-plan-state>未检查</span></button><span>›</span><button data-v3-action="artifact">${icon('unknown')}成品 · <span data-v3-artifact-state>未生成</span></button></nav>
   <div class="v3-grid"><aside class="v3-source"><h2>来源与依赖</h2><div data-v3-source-slot></div><section class="v3-objects"><h3>轨道与附件</h3><div data-v3-objects>读取视频参数后显示真实对象。</div><p>来源对象只读；去向见输出计划。</p></section></aside>
-  <main class="v3-main"><div class="v3-plan-view"><section class="v3-card v3-cut" hidden><h2>切点与实际边界</h2><div class="v3-cut-fields"><label>请求切入<input data-v3-time="start" value="0" aria-label="请求切入时间"></label><span>→</span><label>请求切出<input data-v3-time="end" placeholder="片尾" aria-label="请求切出时间"></label></div><p data-v3-cut-state>关键帧位置尚未探测；实际切入、切出与偏差须在探测及成品审计后确认。</p><button data-v3-action="timeline">探测可实现切点</button></section>
+  <main class="v3-main"><div class="v3-plan-view"><section class="v3-card v3-cut"><details class="v3-time-range"><summary>处理时间范围</summary><p class="v3-range-guided">引导模式使用自己的范围与采用流程；切换到手动参数后，可在这里编辑正式任务时间。</p><div class="v3-range-controls"><div class="v3-cut-fields"><label>请求切入<input data-v3-time="start" data-basic-field="start" aria-describedby="v3TimeHelp" value="0" aria-label="请求切入时间"></label><span>→</span><label>请求切出<input data-v3-time="end" data-basic-field="end" aria-describedby="v3TimeHelp" placeholder="片尾" aria-label="请求切出时间"></label></div><div class="v3-basic-grid" data-v3-range-policies></div><p id="v3TimeHelp">时间按来源时间轴输入，支持秒数或 时:分:秒；切出留空表示片尾。视频、音频和软字幕的范围策略彼此独立；逐音轨设置优先于音频默认策略。软字幕策略不控制烧入画面的 ASS。</p><div data-v3-copy-boundary><p data-v3-cut-state>关键帧位置尚未探测；实际切入、切出与偏差须在探测及成品审计后确认。</p><button data-v3-action="timeline">探测可实现切点</button></div></div></details></section>
   <section class="v3-card v3-output"><h2>拟输出文件</h2><p class="v3-filename" data-v3-output-name>选择来源后形成输出计划</p><div class="v3-targets"><label>输出容器<button data-v3-action="container" data-v3-container>Auto · 按正式参数选择</button></label><label>保存位置 · 待接入<button data-v3-action="location">执行前选择…</button></label></div><dl class="v3-output-rows" data-v3-output-rows><div><dt>来源对象</dt><dd>尚未读取</dd></div><div><dt>正式计划</dt><dd>检查后显示逐流去向</dd></div></dl></section>
   <section class="v3-card v3-decisions"><h2>目标与编码决策</h2><div class="v3-targets"><label>形成计划<button data-v3-action="parameters" data-v3-strategy>手动参数 / 引导目标</button></label><label>体积约束<button data-v3-action="budget" data-v3-budget>按正式参数配置</button></label></div><p data-v3-current-plan>当前正式参数尚未检查。</p><div class="v3-button-pair"><button data-v3-action="compare">比较编码器</button><button data-v3-action="parameters">检查正式参数</button></div></section>
   <section class="v3-preview-entry"><button data-v3-action="preview" aria-expanded="false" aria-controls="v3Preview">展开画面预览 · 按源画幅显示</button></section></div>
@@ -84,11 +84,7 @@ export function mountWorkbenchV3({source,media}) {
     setText('[data-v3-strategy]',operation==='hardsub'&&document.body.dataset.hardsubStrategy==='guided'?'引导目标':'手动参数');
     setText('[data-v3-budget]',field('rateMode').value==='size'?`${field('targetSize').value} ${field('sizeUnit').value} · ${field('budgetPolicy').selectedOptions[0].textContent}`:'按正式质量 / 码率参数');
     setText('[data-v3-current-plan]',read('#taskPlanNote')||'当前正式参数尚未检查。');
-    q('.v3-cut').hidden=operation!=='copy';q('.v3-decisions').hidden=operation==='copy';
-    for(const control of shell.querySelectorAll('[data-v3-time]')){
-      const actual=field(control.dataset.v3Time);control.disabled=actual.disabled;
-      if(document.activeElement!==control||actual.disabled)control.value=actual.value;
-    }
+    q('[data-v3-copy-boundary]').hidden=operation!=='copy';q('.v3-decisions').hidden=operation==='copy';
     const boundary=read('#taskCopyStrategyDescription');if(boundary)setText('[data-v3-cut-state]',boundary);
     const aspect=previewAspect(m);q('.v3-viewport').style.aspectRatio=aspect?String(aspect):'16 / 9';
     q('.v3-viewport').style.setProperty('--v3-aspect',String(aspect||16/9));
@@ -165,8 +161,6 @@ export function mountWorkbenchV3({source,media}) {
     if(command==='verify-frames'){showEditor('#taskOutputVerification');if(!q('[data-v3-action="verify-frames"]').disabled)$('#taskVerifyFrames').click();return;}
     showEditor(command==='container'?'#taskOutputPolicy':command==='budget'?'#taskEncoding':command==='validate'?'#preflightCard':'#mediaWorkspace');
   });
-  shell.addEventListener('input',event=>{const name=event.target.dataset.v3Time;if(!name)return;const field=$('#mediaTaskForm').elements.namedItem(name);if(field.disabled){schedule();return;}field.value=event.target.value;field.dispatchEvent(new Event('input',{bubbles:true}));});
-  shell.addEventListener('change',event=>{const name=event.target.dataset.v3Time;if(!name)return;const field=$('#mediaTaskForm').elements.namedItem(name);if(!field.disabled)field.dispatchEvent(new Event('change',{bubbles:true}));});
   pref.addEventListener('change',()=>{try{localStorage.setItem('qhe-toolbar-density',pref.value);}catch{}refresh();});
   const toolbar=document.createElement('div');toolbar.className='v3-source-toolbar';toolbar.innerHTML=action('eye','检查来源','source-inspect')+action('download','提取对象','extract')+action('shield','验证依赖','validate')+action('more','更多操作','parameters');
   q('.v3-objects').before(toolbar);
