@@ -178,7 +178,10 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   const filters=hardTask.outputArgs[hardTask.outputArgs.indexOf('-vf')+1];
   assert.ok(filters.includes('scale=160:-2:flags=bicubic')&&filters.indexOf('ass=')>filters.indexOf('scale='),'Manual hardsub preserves declared render order');
   assert.ok(filters.includes('setpts=PTS+0.5/TB')&&filters.includes('setpts=PTS-0.5/TB'),'Trimmed ASS retains source-clock compensation');
-  await page.locator('[data-media-mode="copy"]').click();
+  // Exercise a same-turn mode change: the projection is scheduled for the next
+  // animation frame, so wait for its user-visible contract, not click timing.
+  await page.evaluate(()=>document.querySelector('[data-media-mode="copy"]').click());
+  await page.waitForFunction(()=>document.body.dataset.mediaOperation==='copy'&&document.querySelector('.v3-time-range').open&&!document.querySelector('.v3-range-controls').hidden&&!document.querySelector('[data-v3-copy-boundary]').hidden);
   assert.equal(await page.locator('.v3-time-range').evaluate(el=>el.open),true,'Copy opens its primary range controls');
   assert.equal(await page.locator('[data-v3-copy-boundary]').isVisible(),true,'Copy keeps boundary warning visible');
   await control('videoRange').selectOption('full');
