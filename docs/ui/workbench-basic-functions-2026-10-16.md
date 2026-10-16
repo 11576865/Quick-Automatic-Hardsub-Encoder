@@ -35,3 +35,16 @@
 [PR #117](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/117) 已 squash 合入 `main@0de2b875ca20c27ff950ea80d9afb54e5c885735`。发布前远端树 `cf35f29f7cff1dfc234c1f0f4d59ef221bec69ea` 与本地通过验证的树完全一致。
 
 合入后唯一一次即时状态读取：[前端测试](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38864304743)、[Android 构建与前端部署](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38864304714)、[UIGS Evidence Coverage](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38864304806) 均排队；Intake 为预期跳过。按仓库协议停止等待，标记 Pending External Validation，不宣称新版本已上线。
+
+## 部署后验收（2026-10-16 18:05 起，Asia/Shanghai）
+
+本次“继续”核销上一单元的外部验证待办，锚点 B20/B25，不自动提升 discovered_followups 为新功能授权单元。
+
+- 前端测试 `38864304743`、Android 构建与部署 `38864304714`、UIGS Evidence Coverage `38864304806` 均为 completed/success，head 为 `0de2b875ca20c27ff950ea80d9afb54e5c885735`。
+- 部署工作流的 APK 身份/签名/16 KiB 检查、原生 ELF 对齐、发布和 Pages Deploy 步骤成功。
+- [线上工作台](https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/) 返回 HTTP 200。独立云浏览器实际加载 `assets/index-CU6P5UuY.js`，显示已接入的基础控件。
+- 1363px 视口下将正式输出改为 MKV、H.265、质量 25，读取原表单确认 `outputContainer=mkv`、`codec=h265`、`encoder=libx265`、`quality=25`；页面无横向溢出。
+- 切换复制模式，正式 operation 为 copy，视频参数代理禁用且隐藏；再回硬字幕模式，引导目标界面恢复。无成品时实际保存按钮禁用。
+- 浏览器日志中可见云浏览器扩展自身的 metadata 通信错误，来源为 chrome-extension；未将其计为产品错误或掩盖成零条控制台错误。未执行用户媒体编码、上传或成品保存。
+
+据此关闭本单元 Hosted CI/部署待验证状态。本轮线上交互仅覆盖桌面宽度；上一轮托管测试保留 11 宽度 × 3 工作流证据，不将本次桌面观察冒充物理平板验收。真实媒体/Native 提供者与物理设备状态保持 FIELD-PENDING。

@@ -1,7 +1,7 @@
 {
   "goal": "把新工作台的基础操作接到现有正式任务与执行保存链路",
-  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
-  "current_bounded_work_unit": "中央正式参数、来源操作、取消和保存方式反馈",
+  "status": "EXTERNAL_VALIDATION_COMPLETE_FIELD_PENDING",
+  "current_bounded_work_unit": "基础功能部署后验收（B20/B25；不扩展功能范围）",
   "authorization": {
     "source": "用户 2026-10-16 接下来实现基础功能；延续已批准 Figma 布局",
     "anchors": "R24 基础使用成本/三类工作流；B03/B04/B17/B20，docs/qhe-initial-version-route-reanchor-2026-10-14.md",
@@ -16,7 +16,8 @@
     "共享任务进度、取消、验证后保存与保存重试接通",
     "剪切继承禁用字段、不可用编码器门槛与卸载刷新回归",
     "本地专项/完整浏览器/单元测试和构建通过；独立复查无 Critical/Important",
-    "PR #117 已合入 main；远端集成树与本地验证树一致"
+    "PR #117 已合入 main；远端集成树与本地验证树一致",
+    "2026-10-16 部署后验收：三条托管作业成功；线上正式参数同步、工作流切换、禁用与保存门槛检查通过"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -27,7 +28,7 @@
   ],
   "branch": "feat/workbench-basic-controls-20261016",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/117",
-  "latest_durable_commit": "main@0de2b875ca20c27ff950ea80d9afb54e5c885735",
+  "latest_durable_commit": "main@2e0766b0af465c5b43f907e554fc2788d2533185",
   "external_validation_states": {
     "local_basic_browser": "PASS simulated media transport; formal compiler/execution/save lifecycle; 4 widths",
     "local_expected_browser": "PASS 11 widths x 3 workflows",
@@ -35,10 +36,11 @@
     "local_node": "427 pass / 12 skipped / 0 failed (439 total)",
     "local_build": "PASS existing bundle warning",
     "review": "PASS no Critical/Important; recovered legacy projection tracked separately",
-    "hosted": "PENDING: Test frontend 38864304743, Deploy 38864304714, UIGS Evidence 38864304806 queued; immediate single read only",
+    "hosted": "PASS main@0de2b875: Test frontend 38864304743, Deploy 38864304714, UIGS Evidence 38864304806",
     "real_device": "NOT_VERIFIED",
-    "uigs_intake": "EXISTING_CANDIDATE_PRODUCT_CASE_NO_CANONICAL_CHANGE"
+    "uigs_intake": "EXISTING_CANDIDATE_PRODUCT_CASE_NO_CANONICAL_CHANGE",
+    "live_browser": "PASS public deployed UI 1363px: formal h265/libx265/MKV/quality25 sync; copy mode disables video; no artifact save disabled; page overflow false. No real media run."
   },
   "blockers": [],
-  "updated_at": "2026-10-16T06:58:57.649731+00:00"
+  "updated_at": "2026-10-16T10:08:00.629894+00:00"
 }
