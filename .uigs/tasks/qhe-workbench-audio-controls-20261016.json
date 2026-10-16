@@ -1,0 +1,26 @@
+{
+  "goal": "桌面和平板中央面板直接编辑逐音轨正式计划",
+  "status": "IMPLEMENTING",
+  "current_bounded_work_unit": "正式逐音轨参数投影及保留锁接入",
+  "authorization": {
+    "source": "用户继续基础功能；R24 §11（逐音轨动作）/R19 §07；B04/B05/B06/B20",
+    "acceptance": "中央面板独立设置各音轨动作/码率/范围/声道/采样率与必须Copy；进入原正式编译器；修改使检查失效；运行锁和模式边界不变",
+    "gap": "逐音轨编辑器已实现，但隐藏在完整正式参数，中央仅有全局音频代理",
+    "priority": "补齐基础音频操作；高级色彩、通用提取和目录预授权暂不进入本单元"
+  },
+  "completed_units": [
+    "核对R24逐音轨要求与现有audio-stream-plan-ui.js权威状态"
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [],
+  "branch": "feat/workbench-audio-controls-20261016",
+  "pr": null,
+  "latest_durable_commit": "main@39b4a852ab3970f9950b8f3c922afc7e6b33be36",
+  "external_validation_states": {
+    "local": "NOT_RUN",
+    "hosted": "NOT_STARTED",
+    "real_media": "NOT_VERIFIED"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-16T10:38:56.455124+00:00"
+}
