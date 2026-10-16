@@ -29,3 +29,9 @@
 本轮关闭的是 B03/B04/B17/B20 中“新工作台可达现有基础任务链路”的代码与本地 UI 验证缺口，不关闭这些需求的全部验收。真实媒体编码、Native 实机与提供者保存、物理平板触控、线上新版本验证仍需独立证据。
 
 产品证据保留在本仓库；复用既有 UIGS Candidate，不新增或提升 Canonical。Hosted CI 与部署状态由对应任务记录追踪，未同步等待外部作业。
+
+## 主线集成与外部验证
+
+[PR #117](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/117) 已 squash 合入 `main@0de2b875ca20c27ff950ea80d9afb54e5c885735`。发布前远端树 `cf35f29f7cff1dfc234c1f0f4d59ef221bec69ea` 与本地通过验证的树完全一致。
+
+合入后唯一一次即时状态读取：[前端测试](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38864304743)、[Android 构建与前端部署](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38864304714)、[UIGS Evidence Coverage](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38864304806) 均排队；Intake 为预期跳过。按仓库协议停止等待，标记 Pending External Validation，不宣称新版本已上线。
