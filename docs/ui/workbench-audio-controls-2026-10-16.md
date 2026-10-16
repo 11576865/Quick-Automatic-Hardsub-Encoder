@@ -23,3 +23,7 @@
 本轮补齐 B06 的新界面可达性与正式任务接入，不能据此关闭复杂多轨媒体、语言/default/延迟属性、真实提供者保存和物理设备验收。其他高级意图、通用提取、预先选目录保持独立缺口。UIGS 复用既有产品案例，不提升 Canonical。
 
 本地最终结果：`node --test src/*.test.mjs` 427 通过/12 跳过/0 失败；`npm run build` 通过；`check-workbench-basic.cjs`、`check-media-ui.cjs` 与 `check-expected-workbench.cjs`（11 宽度 × 3 工作流）均退出 0。
+
+## 主线集成
+
+[PR #118](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/118) 已合入 `main@217ebf8338e6b639d9b5c1ecffbfeafe740efa9c`；发布前远端树 `dc6cae1fe0c95bdd87af736dac3ac842bec19529` 与本地验证树完全一致。唯一一次即时外部状态读取：[Test frontend](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38889408123)、[Build Android and Deploy Frontend](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38889407994)、[UIGS Evidence Coverage](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38889408124) 均运行中，Intake 预期跳过。按仓库协议标记 Pending External Validation，不等待下一轮或宣称已上线。

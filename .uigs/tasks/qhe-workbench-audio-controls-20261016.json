@@ -1,6 +1,6 @@
 {
   "goal": "桌面和平板中央面板直接编辑逐音轨正式计划",
-  "status": "WORK_UNIT_COMPLETE_PENDING_INTEGRATION",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "正式逐音轨参数投影及保留锁接入",
   "authorization": {
     "source": "用户继续基础功能；R24 §11（逐音轨动作）/R19 §07；B04/B05/B06/B20",
@@ -13,13 +13,14 @@
     "中央逐音轨操作代理原编辑器并进入正式编译/执行",
     "运行锁/隐藏引导门槛/重置与来源绑定；竞态先失败后修复",
     "独立代码复查无Critical/Important；Minor显示问题修复",
-    "本地全部验证通过"
+    "本地全部验证通过",
+    "PR #118 squash 合入 main；集成树与本地验证树一致"
   ],
   "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-audio-controls-20261016",
-  "pr": null,
-  "latest_durable_commit": "remote feature@0dedcd9203f56699f2626bc3e1911b740bb23e03",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/118",
+  "latest_durable_commit": "main@217ebf8338e6b639d9b5c1ecffbfeafe740efa9c",
   "external_validation_states": {
     "local_basic": "PASS formal two-track compile, must Copy, AAC96k mono, plan invalidation, execution lock, reset, source rebind/race, 4 widths and phone visibility; simulated media transport",
     "local_expected": "PASS 11 widths x 3 workflows",
@@ -27,10 +28,10 @@
     "local_node": "427 passed / 12 skipped / 0 failed (439 total)",
     "local_build": "PASS existing bundle warning",
     "review": "PASS no Critical/Important; narrow source guard reviewed",
-    "hosted": "PENDING_NOT_YET_FINAL_PUSHED",
+    "hosted": "PENDING: Test frontend 38889408123, Deploy 38889407994, UIGS Evidence 38889408124 in_progress at single immediate read; Intake expected skipped",
     "real_media": "FIELD_PENDING",
     "uigs_intake": "EXISTING_PRODUCT_CASE_NO_CANONICAL_CHANGE"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T10:45:33.115534+00:00"
+  "updated_at": "2026-10-16T10:46:35.254931+00:00"
 }
