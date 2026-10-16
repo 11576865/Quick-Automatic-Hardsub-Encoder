@@ -1,0 +1,31 @@
+{
+  "goal": "把新工作台的基础操作接到现有正式任务与执行保存链路",
+  "status": "IMPLEMENTING",
+  "current_bounded_work_unit": "中央正式参数、来源操作、取消和保存方式反馈",
+  "authorization": {
+    "source": "用户 2026-10-16 接下来实现基础功能；延续已批准 Figma 布局",
+    "anchors": "R24 基础使用成本/三类工作流；B03/B04/B17/B20，docs/qhe-initial-version-route-reanchor-2026-10-14.md",
+    "acceptance": "新工作台直接设置容器/编码/质量体积/音频/保留字段，经现有编译器执行；取消、保存重试可达；保留锁和验证门槛",
+    "gap": "当前部分按钮仅跳转、来源检查仅聚焦，实际参数仍藏在编辑器中",
+    "priority": "用户明确转入基础功能；高级色彩/候选算法/逐对象提取/预选保存目录不进入本单元"
+  },
+  "completed_units": [
+    "读取现有任务/执行/保存实现与R24基础成本门槛",
+    "新基础任务闭环浏览器测试先行"
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [
+    "高级意图逐项接入",
+    "通用逐对象提取",
+    "执行前目录授权"
+  ],
+  "branch": "feat/workbench-basic-controls-20261016",
+  "pr": null,
+  "latest_durable_commit": "main@26275e3d30cafab7cbebedd19fbe86c997f04ca7",
+  "external_validation_states": {
+    "local_basic_browser": "RED_EXPECTED_NO_BASIC_CONTROLS",
+    "hosted": "NOT_STARTED"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-16T06:39:55.657426+00:00"
+}
