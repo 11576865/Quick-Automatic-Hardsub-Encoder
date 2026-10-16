@@ -1,9 +1,10 @@
 // The existing form remains the only authority. These unnamed controls are views
 // of that form: all writes pass through its original input/change handlers.
 import {mountWorkbenchAudioControls} from './workbench-audio-controls.js';
+import {mountWorkbenchStreamControls} from './workbench-stream-controls.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fields={codec:'编码格式',encoder:'编码器',preset:'编码速度',rateMode:'质量 / 码率方式',quality:'质量值 CRF / CQ',bitrate:'视频码率（bit/s）',targetSize:'目标成品体积',sizeUnit:'体积单位',budgetPolicy:'体积交付策略',audio:'音频策略',keepSubtitles:'保留内封软字幕',keepAttachments:'保留附件 / 字体',keepChapters:'保留章节',keepMetadata:'保留元数据'};
-export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,schedule}){
+export function mountWorkbenchBasicControls({shell,source,media,showEditor,showHelp,schedule}){
   const $=s=>document.querySelector(s),q=s=>shell.querySelector(s),form=$('#mediaTaskForm');
   const actual=name=>form.elements.namedItem(name);
   const disabled=control=>control.matches(':disabled');
@@ -16,7 +17,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
   const strategy=q('[data-v3-strategy]'),choice=document.createElement('select');
   choice.dataset.basicStrategy='';choice.dataset.v3Strategy='';choice.setAttribute('aria-label','形成计划');choice.innerHTML='<option value="guided">引导目标</option><option value="manual">手动参数</option>';strategy.replaceWith(choice);
   q('.v3-decisions').insertAdjacentHTML('beforeend',`<section class="v3-basic-video"><h3>正式视频参数</h3><div class="v3-basic-grid">${['codec','encoder','preset','rateMode','quality','bitrate','targetSize','sizeUnit','budgetPolicy'].map(markup).join('')}</div><p>修改会使已检查的计划失效，开始前重新检查；预期意图草稿单独保留。</p></section><p class="v3-basic-guided">引导模式使用已有目标探索与正式采用流程。切换到手动参数后，可在这里直接编辑编码设置。</p>`);
-  q('.v3-output').insertAdjacentHTML('beforeend',`<div class="v3-basic-audio">${markup('audio')}</div><details class="v3-basic-streams"><summary>音轨、字幕与附件去向</summary><div class="v3-basic-checks">${['keepSubtitles','keepAttachments','keepChapters','keepMetadata'].map(markup).join('')}</div><p>具体轨道选择和独立时间范围仍可在正式参数中设置。</p></details>`);
+  q('.v3-output').insertAdjacentHTML('beforeend',`<div class="v3-basic-audio">${markup('audio')}</div><details class="v3-basic-streams"><summary>音轨、字幕与附件去向</summary><div class="v3-basic-checks">${['keepSubtitles','keepAttachments','keepChapters','keepMetadata'].map(markup).join('')}</div><p>软字幕时间范围及更多流设置可在完整正式参数中调整。</p></details>`);
   q('.v3-footer').insertAdjacentHTML('beforeend','<button type="button" data-basic-action="cancel" hidden>取消任务</button>');
   q('.v3-footer').insertAdjacentHTML('beforebegin','<section class="v3-basic-progress" hidden aria-label="实际任务进度"><div><strong data-basic-stage></strong><span data-basic-percent></span></div><progress max="1" value="0"></progress><p data-basic-progress-note></p></section>');
   const more=q('.v3-source-toolbar [data-v3-action="parameters"]');more.dataset.v3Action='source-more';more.setAttribute('aria-expanded','false');more.setAttribute('aria-controls','v3SourceMenu');
@@ -29,6 +30,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
   const cancelTarget=()=>!$('#taskCancel').disabled?$('#taskCancel'):$('#cancelEncodeBtn')&&!$('#cancelEncodeBtn').classList.contains('hidden')&&!$('#cancelEncodeBtn').disabled?$('#cancelEncodeBtn'):null;
   const locked=()=>!!cancelTarget()||['preparing','encoding','verifying','cancelling','saving'].includes(taskState())||!!$('#video')?.disabled;
   const audioControls=mountWorkbenchAudioControls({shell,source,locked,schedule});
+  const streamControls=mountWorkbenchStreamControls({shell,form,source,media,locked,schedule});
   const closeMenu=()=>{q('.v3-source-menu').hidden=true;more.setAttribute('aria-expanded','false');};
   function probe(){
     closeMenu();const button=$('#analyze');
@@ -60,6 +62,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
     location.textContent=$('#taskSave').disabled?(native?'验证后由系统选择位置…':'验证后交给浏览器下载'):`${$('#taskSave').textContent}…`;
     location.disabled=busy;
     audioControls.refresh();
+    streamControls.refresh();
   }
   shell.addEventListener('change',event=>{
     const proxy=event.target,name=proxy.dataset.basicField;
