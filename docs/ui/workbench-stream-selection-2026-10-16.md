@@ -26,3 +26,7 @@
 媒体传输仍是模拟，不能据此关闭真实多轨保留、字体哈希/字幕字节、时间映射或设备播放器验收。仅补齐这些 Bxx 需求的中央 UI 可达性和正式任务接入。UIGS 复用既有产品案例，不提升 Canonical。
 
 上一逐音轨 PR #118 的三项托管检查（38889408123/38889407994/38889408124）本轮确认 completed/success，实机状态保持 Field Pending。
+
+## 主线集成
+
+[PR #119](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/119) 已合入 `main@95f0fc10ce2d77884bec2beb34054f00c995b7ef`；发布前树 `d2e2aad22dd09e413f474cf776adf95328229829` 与本地验证树一致。唯一一次即时外部状态读取：[Test frontend](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38892556660)、[Android Build/Deploy](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38892556679)、[UIGS Evidence](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38892556616) 均 queued。按仓库协议标记 Pending External Validation，不同步等待或宣称已上线。

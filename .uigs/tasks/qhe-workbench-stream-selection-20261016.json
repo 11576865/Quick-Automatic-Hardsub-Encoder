@@ -1,6 +1,6 @@
 {
   "goal": "桌面和平板中央面板选择保留的软字幕与附件",
-  "status": "WORK_UNIT_COMPLETE_PENDING_INTEGRATION",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "逐对象软字幕/附件选择接入现有正式计划",
   "authorization": {
     "source": "用户继续补基础功能；重新读取R19 §03/07和R24 §04/05；B02/B04/B05/B20",
@@ -13,13 +13,14 @@
     "逐对象字幕/附件保留与原正式选择及编译器接通",
     "子集/空选择/来源与库存保护；不完整清单先失败后修复",
     "本地专项、完整浏览器、单元测试和构建通过",
-    "独立复查无Critical/Important"
+    "独立复查无Critical/Important",
+    "PR #119 合入main；发布前远端树与本地验证树一致"
   ],
   "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-stream-selection-20261016",
-  "pr": null,
-  "latest_durable_commit": "remote feature@68251edcbdd8e732bd81c7bd2d5430adaeafa3bf",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/119",
+  "latest_durable_commit": "main@95f0fc10ce2d77884bec2beb34054f00c995b7ef",
   "external_validation_states": {
     "local_basic": "PASS subset1/0 and FFmpeg ordinal maps, none/reselect, plan invalidation, lock/guided/source guards, invalid selection and incomplete inventory, 4 widths; media transport simulated",
     "local_expected": "PASS 11 widths x 3 workflows",
@@ -27,10 +28,10 @@
     "local_node": "427 passed / 12 skipped / 0 failed (439 total)",
     "local_build": "PASS existing bundle warning",
     "review": "PASS no Critical/Important",
-    "hosted": "PENDING_NOT_YET_FINAL_PUSHED",
+    "hosted": "PENDING: Test frontend 38892556660, Deploy 38892556679, UIGS Evidence 38892556616 queued at single immediate read",
     "real_media": "FIELD_PENDING",
     "uigs_intake": "EXISTING_PRODUCT_CASE_NO_CANONICAL_CHANGE"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T11:14:39.950574+00:00"
+  "updated_at": "2026-10-16T11:15:36.836090+00:00"
 }
