@@ -1,8 +1,10 @@
 /* Figma v3: desktop / tablet composition. Existing phone stage layout is retained. */
 .v3-shell{display:none}
-@media(min-width:821px){
+.v3-dependencies{display:none}
+@media(max-width:767px){.expected-inspector-head>.v3-action{display:none}}
+@media(min-width:768px){
  body.workbench-v3{font-family:Inter,'Noto Sans SC','Microsoft YaHei',sans-serif;font-size:13px;line-height:1.5}
- .workbench-v3 .app-shell{width:calc(100% - 64px);max-width:1800px;padding:32px 0}
+ body.workbench-v3 .app-shell{width:calc(100% - 64px);max-width:1800px;padding:32px 0}
  .workbench-v3 .app-shell>.app-header,.workbench-v3 .app-shell>#runtimeModeBanner,.workbench-v3 #studioModeDock,.workbench-v3 .expected-context,.workbench-v3 .app-shell>.mobile-runtime-help{display:none!important}
  .workbench-v3 .v3-shell{display:block}
  .v3-shell *{box-sizing:border-box;min-width:0}
@@ -32,8 +34,17 @@
  .v3-path{display:flex;gap:16px;align-items:center;min-height:28px;margin-bottom:12px;color:#a2afaf}
  .v3-path button{display:flex;align-items:center;gap:8px;border:0;background:none;min-height:28px;padding:0;text-align:left;color:#a2afaf;font-size:11px;max-width:31%;overflow-wrap:anywhere}
  .v3-grid{display:grid;grid-template-columns:240px minmax(0,1fr) 300px;gap:16px;align-items:start}
+ .v3-grid>.v3-inspector,.v3-inspector>.expected-inspector{margin:0}
  .v3-main{display:grid;gap:16px}
  .v3-plan-view{display:grid;gap:16px}
+ .v3-artifact,.v3-comparison{display:grid;gap:16px}
+ .v3-comparison-empty{display:grid;justify-items:center;gap:12px;text-align:center;min-height:220px;align-content:center;background:#111819;border-radius:8px;padding:24px;margin:16px 0;color:#a2afaf;font-size:12px}
+ .v3-comparison-empty strong{color:#e5ece9;font-weight:500}
+ .v3-audit-facts{font-size:12px;display:grid;gap:16px;margin:16px 0}
+ .v3-audit-facts>div{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px}
+ .v3-audit-facts dt{color:#a2afaf}
+ .v3-audit-facts dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap}
+ .v3-shell .v3-audit-status{color:#e5c68d;background:#312b20;border-radius:6px;padding:12px;font-size:13px}
  .v3-card,.v3-source,.v3-shell .expected-inspector{background:#191e21;border:0;border-radius:8px;padding:16px}
  .v3-shell h2,.v3-shell h3{font-size:12px;font-weight:500;line-height:1.5;margin:0 0 10px;color:#e5ece9}
  .v3-shell p{font-size:11px;color:#a2afaf;line-height:1.6;margin:8px 0}
@@ -49,14 +60,19 @@
  .v3-preview-entry{background:#13191b;padding:12px;border-radius:8px}
  .v3-preview-entry button{width:100%;background:#191e21;font-size:12px}
  .v3-source #inputCard{padding:0;border:0;background:none}
- .v3-source #inputCard .card-heading{margin:0 0 12px}
+ .v3-source #inputCard .card-heading{display:none}
  .v3-source #inputCard .card-heading h2{font-size:12px}
  .v3-source #inputCard .card-heading p,.v3-source #inputCard .step-no,.v3-source .input-engine,.v3-source #videoLabel{display:none}
  .v3-source #inputCard>.grid.two{display:flex;flex-direction:column;gap:6px}
  .v3-source #inputCard .file-row{padding:6px 0;border:0;border-bottom:1px solid #30383b;background:none;display:flex;flex-direction:column;gap:6px}
  .v3-source #inputCard .file-row small{font-size:11px;line-height:1.6;white-space:normal;overflow-wrap:anywhere;max-width:100%}
  .v3-source #inputCard .file-picker-trigger,.v3-source #inputCard .native-picker-button{min-width:0;width:100%;padding:10px;min-height:44px;background:#191e21;border-color:#30383b;font-size:12px}
- .v3-source #inputCard #analyze{width:100%;min-width:0;background:#303e32;color:#d6e9c6;border-color:#485a43;font-size:12px}
+ .v3-source #inputCard #analyze{width:100%;min-width:0;background:#303e32!important;color:#d6e9c6!important;border-color:#485a43!important;font-size:12px}
+ .v3-source .input-video #videoMeta{order:-1;color:#e5ece9;font-size:13px}
+ .v3-source .input-video{border:0!important}
+ .v3-source .v3-dependencies{display:block;margin-top:12px;font-size:11px;color:#a2afaf}
+ .v3-source .v3-dependencies>summary{cursor:pointer;min-height:36px;padding-block:8px}
+ .v3-source .v3-dependencies:not([open]) .file-row{display:none!important}
  .v3-source #inputCard #fontPersistCheck{font-size:11px;line-height:1.5;display:flex;gap:6px}
  .v3-source #inputCard #fontPersistCheck input{min-height:0;flex:none}
  .v3-source #fontLibraryDetails{font-size:11px}
@@ -97,7 +113,7 @@
  .v3-section-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:12px}
  .v3-section-head h2{margin:0}
  .v3-section-head button{font-size:12px;background:#191e21}
- .v3-viewport{background:#111819;border-radius:8px;display:grid;place-items:center;overflow:hidden;margin:12px 0;max-height:70vh}
+ .v3-viewport{background:#111819;border-radius:8px;display:grid;place-items:center;overflow:hidden;margin:12px auto;width:100%;max-width:min(100%,calc(70vh * var(--v3-aspect,1.777778)))}
  .v3-viewport>[data-v3-frame-empty]{display:grid;justify-items:center;gap:16px;color:#a2afaf;font-size:12px}
  .v3-viewport .v3-icon{width:30px;height:30px}
  .v3-viewport>[data-v3-frame]{width:100%;height:100%;object-fit:contain}
@@ -128,8 +144,8 @@
  .v3-help p{font-size:13px;line-height:1.9}
  .v3-feedback{position:fixed;bottom:24px;left:32px;max-width:500px;padding:12px 16px;background:#303e32;border-radius:8px;z-index:20}
 }
-@media(min-width:821px) and (max-width:1279px){
- .workbench-v3 .app-shell{width:calc(100% - 48px);padding-block:24px}
+@media(min-width:768px) and (max-width:1279px){
+ body.workbench-v3 .app-shell{width:calc(100% - 48px);padding-block:24px}
  .v3-grid{grid-template-columns:200px minmax(0,1fr) 270px;gap:16px}
  .v3-source{padding:16px}
  .v3-density{gap:8px}
@@ -138,7 +154,7 @@
  .v3-app-actions{gap:8px}
  .v3-source-toolbar .v3-action[data-v3-action="validate"]{display:none}
 }
-@media(min-width:821px) and (max-width:1050px){
+@media(min-width:768px) and (max-width:1050px){
  .v3-grid{grid-template-columns:210px minmax(0,1fr);gap:16px}
  .v3-source{grid-column:1;grid-row:1 / span 2}
  .v3-main{grid-column:2;grid-row:1}

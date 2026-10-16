@@ -243,6 +243,7 @@ class NativeBridge(
                             .put("bitRate", stream.getBitrate()?.toLongOrNull() ?: 0L)
                             .put("width", stream.getWidth() ?: 0)
                             .put("height", stream.getHeight() ?: 0)
+                            .put("sar", streamProps?.optString("sample_aspect_ratio", "") ?: "")
                             .put("fps", stream.getAverageFrameRate() ?: "")
                             .put("pixelFormat", streamPixel)
                             .put("bitDepth", depth)

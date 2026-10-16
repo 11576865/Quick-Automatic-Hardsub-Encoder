@@ -8,3 +8,12 @@ export function previewAspect(media) {
 export function toolbarDensity(preference,width) {
   return preference==='compact'||preference==='auto'&&width<1280?'compact':'standard';
 }
+export function sourceObjects(media) {
+  const objects=[];
+  for(const [key,glyph,label] of [['videoStreams','video','视频'],['audioStreams','music','音轨'],['subtitleStreams','type','字幕'],['attachmentStreams','paperclip','附件']]){
+    for(const [i,stream] of (Array.isArray(media?.[key])?media[key]:[]).entries()){
+      objects.push({glyph,name:stream.title||stream.filename||stream.name||stream.tags?.title||stream.tags?.filename||`${label} ${i+1}`,properties:[stream.codec||stream.codec_name,stream.language||stream.tags?.language,stream.width&&stream.height?`${stream.width}×${stream.height}`:''].filter(Boolean).join(' · ')||'属性未提供'});
+    }
+  }
+  return objects;
+}

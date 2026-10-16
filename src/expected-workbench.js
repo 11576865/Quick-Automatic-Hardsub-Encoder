@@ -69,6 +69,9 @@ export function mountExpectedWorkbench({source=()=>null,media=()=>null}={}) {
   }
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(refresh);};
   function reveal(target) {
+    if(document.body.classList.contains('workbench-v3')){
+      document.dispatchEvent(new CustomEvent('qhe-workbench-reveal',{detail:target}));return;
+    }
     // Use the existing mobile stage controller so hidden stages become reachable.
     const mobile=document.querySelector(`[data-mobile-stage-target="${target==='source'?'prepare':'produce'}"]`);
     if(mobile&&!mobile.disabled)mobile.click();
