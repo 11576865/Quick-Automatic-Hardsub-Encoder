@@ -25,3 +25,9 @@ PR119 的托管 frontend 38892556660 与 build/deploy 38892556679 已核实成�
 UIGS Intake 已查询并读取 Foundry 既有 `inbox/cases/2026-10-11-qhe-functional-ui-rebuild-low-copy-workbench.md`。此次应用已有“单一状态权威、渐进披露、浏览器证据分层”模式，没有新增足以另立跨项目结论的观察，复用既有 Case，不修改 Canonical。
 
 2026-10-16 用户明确回复“授权合并”，上述发布阻断解除。本轮继续将已验收代码推送并经 PR 合入 main，托管状态单独记录。
+
+## 集成结果
+
+用户“授权合并”后，合并前 check-workbench-basic.cjs 再次退出 0。Git 推送遇代理 CONNECT 403，改用 GitHub 连接器提交；远程树 `5f562ac0b04ecc3ef21a481ada60f870cb483573` 与本地验证树完全一致。
+
+[PR #120](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/120) 已从 `7c77891aa346893c15202e751014cf8016fea0ef` 合入 `main@262b25cfb7a4559062cd2c1e7497ee36c202a8d7`。唯一一次即时状态读取：Frontend 38894004555 与 UIGS 38894004728 为 in_progress，Branch hygiene 38894015577 queued。托管验证及部署保持 Pending External Validation；不宣称已上线，真实设备编码保持 Field Pending。

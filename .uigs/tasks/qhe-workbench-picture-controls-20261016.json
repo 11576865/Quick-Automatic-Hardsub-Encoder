@@ -1,6 +1,6 @@
 {
   "goal": "接通桌面和平板中央画幅与帧率正式设置",
-  "status": "PUBLICATION_AUTHORIZED_IN_PROGRESS",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "width/height/scaleAlgorithm/fpsMode/fps 投影至唯一正式任务",
   "authorization": {
     "source": "用户继续推进UI功能实现；R19 §05 纯转码可改变分辨率/帧率；R24 §08/16 几何变换与参考条件；B03/B04/B20，B12仅涉及手动尺寸入口",
@@ -15,13 +15,16 @@
     "4宽度专项、编译参数/拒绝/渲染次序/锁保护通过；Node427通过12跳过；构建通过",
     "完整check-media-ui与11宽度×3工作流check-expected-workbench通过",
     "独立审查未发现Critical/Important；中文平板截图已复查",
-    "本地代码提交69ed5b5；远程推送被自动审批拒绝，无PR/主线集成"
+    "本地代码提交69ed5b5；远程推送被自动审批拒绝，无PR/主线集成",
+    "用户明确授权合并，合并前专项再次通过",
+    "Git网络代理403；GitHub连接器提交同一树5f562ac0b04ecc3ef21a481ada60f870cb483573",
+    "PR120以head7c77891aa346893c15202e751014cf8016fea0ef合入main@262b25c"
   ],
   "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-picture-controls-20261016",
-  "pr": null,
-  "latest_durable_commit": "local@cdffde9",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/120",
+  "latest_durable_commit": "main@262b25cfb7a4559062cd2c1e7497ee36c202a8d7",
   "external_validation_states": {
     "previous_frontend": "38892556660 success",
     "previous_build_deploy": "38892556679 success",
@@ -32,9 +35,10 @@
     "previous_hosted": "PR119 frontend and build/deploy success",
     "full_browser": "PASS: full legacy + 11 widths x 3 workflows",
     "review": "PASS: independent static review; no Critical/Important",
-    "hosted": "PENDING: authorized publication in progress",
-    "uigs_intake": "DEDUP_EXISTING_CASE_NO_NEW_CROSS_PROJECT_CLAIM: inbox/cases/2026-10-11-qhe-functional-ui-rebuild-low-copy-workbench.md; no Canonical change"
+    "hosted": "PENDING at single immediate read: Test frontend 38894004555 in_progress; UIGS 38894004728 in_progress; Branch hygiene 38894015577 queued",
+    "uigs_intake": "DEDUP_EXISTING_CASE_NO_NEW_CROSS_PROJECT_CLAIM: inbox/cases/2026-10-11-qhe-functional-ui-rebuild-low-copy-workbench.md; no Canonical change",
+    "deployment": "PENDING / not verified"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T11:27:31.315585+00:00"
+  "updated_at": "2026-10-16T11:28:57.204879+00:00"
 }
