@@ -42,3 +42,7 @@
 初始代码恢复点：`ca50a62df26ffa1f2505fe3db846dae1507bf697`，分支 `feat/figma-v3-workbench-20261016`。当前交接属于后续修正/验收提交。原 docs Draft PR 不作为本轮自动合并目标。
 
 本轮是既有“来源/计划/成品分离”和“验证后交付”规则的产品落地案例，复用既有 Candidate，不新增或提升跨项目 Canonical；本仓库是运行时与测试事实的权威来源。
+
+## 主线集成
+
+[PR #116](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/116) 已 squash 合入 `main@9a3493a63786c448cf42190b248cf944205a432b`。集成前远端 Git tree `b690e8650ee804b1edac1441e880cf9a530df44f` 与通过本地验证的工作树完全一致。Hosted CI / Native 编译与实机验收仍独立待验证；没有同步等待外部任务。

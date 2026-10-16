@@ -1,6 +1,6 @@
 {
   "goal": "按用户授权以预期模型UI覆盖硬压当前UI，允许未完成能力的设计界面",
-  "status": "RUNTIME_V3_LOCAL_VERIFIED_READY_FOR_INTEGRATION",
+  "status": "RUNTIME_V3_INTEGRATED_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "Figma v3 实际桌面/平板界面落实及回归验收",
   "authorization": {
     "source": "用户 2026-10-16 本轮请求；R24 §19–20，B20/B02/B05",
@@ -30,7 +30,8 @@
     "宽平板侧栏命名网格回归先红后绿，8宽度×3工作流通过",
     "Figma v2：8 界面 + 1 图标/密度状态图，9 图视觉复查及自动布局边界检查通过",
     "Figma v3：原 8 视图更新，新增桌面/平板展开预览 2 视图；10 视图视觉复查、布局边界/画幅/禁用保存组件核对通过",
-    "运行时 v3：计划优先、自适应桌面/平板、预览/候选/成品视图、真实控件入口与执行保存门槛；本地 Node/构建/两组浏览器回归通过"
+    "运行时 v3：计划优先、自适应桌面/平板、预览/候选/成品视图、真实控件入口与执行保存门槛；本地 Node/构建/两组浏览器回归通过",
+    "PR #116 已 squash 合入 main@9a3493a；远端 Git tree 与本地通过测试版本一致"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -39,14 +40,14 @@
     "按 v2 设计实施实际工具栏、密度偏好、上下文帮助及无障碍行为，须单独作为后续工作单元"
   ],
   "branch": "feat/figma-v3-workbench-20261016",
-  "pr": null,
-  "latest_durable_commit": "ca50a62df26ffa1f2505fe3db846dae1507bf697（已发布初始恢复点；最终修正和验收见本记录所属后续提交）",
+  "pr": 116,
+  "latest_durable_commit": "main@9a3493a63786c448cf42190b248cf944205a432b",
   "external_validation_states": {
     "local_node": "427_PASS_12_SKIPPED_0_FAIL",
     "local_build": "PASS",
     "local_expected_browser": "PASS_11_WIDTHS_3_WORKFLOWS_PREVIEW_DENSITY_HELP_DRAFT_LOCKS_SAVE_GATES_BREAKPOINT_ROUNDTRIP",
     "legacy_browser_suite": "PASS_FULL_SUITE_WITH_UPDATED_V3_LAYOUT_ASSERTIONS",
-    "hosted_ci": "NOT_YET_REQUESTED_FOR_FINAL_CHECKPOINT",
+    "hosted_ci": "PENDING_EXTERNAL_VALIDATION_AFTER_INTEGRATION_NO_SYNCHRONOUS_WAIT",
     "physical_devices": "FIELD_PENDING",
     "uigs_intake": "EXISTING_CANDIDATE_PRODUCT_CASE_RECORDED_IN_RUNTIME_V3_HANDOFF_NO_CANONICAL_CHANGE",
     "figma_v2": "9_BOARDS_VISUALLY_REVIEWED_ZERO_HORIZONTAL_FRAME_CHILD_OVERFLOW",
@@ -56,7 +57,7 @@
     "runtime_v3": "CODE_COMPLETE_LOCAL_VERIFIED; NO_REAL_MEDIA_OR_DEVICE_COMPLETION_CLAIM"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T03:53:28.892138+00:00",
+  "updated_at": "2026-10-16T03:56:19.808284+00:00",
   "repair_branch": "fix/expected-model-tablet-grid-20261016",
   "figma": {
     "url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=3-2",
@@ -75,5 +76,6 @@
     "new_view_delta": "NO_NEW_CRITICAL_OR_IMPORTANT",
     "extra_regression": "保留跨断点编辑器披露状态；避免同区间 resize 重复迁移节点"
   },
-  "handoff": "docs/ui/desktop-tablet-runtime-v3-2026-10-16.md"
+  "handoff": "docs/ui/desktop-tablet-runtime-v3-2026-10-16.md",
+  "pr_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/116"
 }
