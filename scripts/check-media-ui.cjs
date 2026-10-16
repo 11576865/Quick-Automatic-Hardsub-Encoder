@@ -101,7 +101,17 @@ const {spawn}=require('node:child_process');
     });
     if(layout.scrollWidth>width+1)
       throw Error('Horizontal overflow at '+width+'px: '+JSON.stringify(layout));
-    if(width<=640) {
+    if(width>=768) {
+      const composition=await viewportPage.evaluate(()=>{
+        const rect=s=>document.querySelector(s).getBoundingClientRect();
+        const source=rect('.v3-source'),main=rect('.v3-main'),inspector=rect('.v3-inspector');
+        return {display:getComputedStyle(document.querySelector('.v3-grid')).display,source,main,inspector};
+      });
+      if(composition.display!=='grid'||composition.main.left<composition.source.right)
+        throw Error('Figma v3 source/plan grid was lost: '+JSON.stringify(composition));
+      if(width>1050?composition.inspector.left<composition.main.right-1:composition.inspector.top<=composition.main.top)
+        throw Error('Figma v3 adaptive inspector misplaced: '+JSON.stringify(composition));
+    }else if(width<=640) {
       if(layout.shell!=='phone')throw Error('Phone shell mismatch at '+width+': '+layout.shell);
       const studio=await viewportPage.evaluate(()=>{
         const rect=el=>el?.getBoundingClientRect();
@@ -143,18 +153,19 @@ const {spawn}=require('node:child_process');
       return r?{left:r.left,right:r.right,top:r.top,bottom:r.bottom,width:r.width}:null;
     };
     const stage=document.querySelector('#studioEmptyStage');
-    return {mode:rect('#studioModeDock'),asset:rect('#inputCard'),
-      viewer:rect('#studioEmptyStage'),inspector:rect('#taskOverviewRail'),
-      modeCount:document.querySelectorAll('#studioModeDock [data-media-mode]').length,
-      placeholderVisible:!!stage&&getComputedStyle(stage).display!=='none'};
+    return {mode:rect('.v3-mode-row'),asset:rect('.v3-source'),
+      viewer:rect('.v3-main'),inspector:rect('.v3-inspector'),
+      modeCount:document.querySelectorAll('.media-mode-switcher [data-media-mode]').length,
+      planVisible:document.querySelector('.v3-output').getClientRects().length>0,
+      placeholderVisible:!!stage&&stage.getClientRects().length>0};
   });
   if(professionalLayout.modeCount!==3||
      professionalLayout.mode.bottom>professionalLayout.asset.top+1)
     throw Error('Work mode dock is not ahead of source shelf: '+JSON.stringify(professionalLayout));
-  if(!professionalLayout.placeholderVisible||
+  if(!professionalLayout.planVisible||professionalLayout.placeholderVisible||
      professionalLayout.viewer.left<professionalLayout.asset.right+8||
      professionalLayout.viewer.width<410)
-    throw Error('Large video stage is not beside source shelf: '+JSON.stringify(professionalLayout));
+    throw Error('Output plan is not first beside source shelf: '+JSON.stringify(professionalLayout));
   if(professionalLayout.inspector.left<professionalLayout.viewer.right+7)
     throw Error('Inspector overlaps the media workspace: '+JSON.stringify(professionalLayout));
   await viewportPage.screenshot({path:'media-workspace-studio-v3-desktop.png',fullPage:true});
@@ -162,7 +173,8 @@ const {spawn}=require('node:child_process');
   // editor had been reparented under the 250px source shelf, leaving the
   // central stage empty. The real editor must use the central work surface.
   for(const mode of ['transcode','copy']){
-    await viewportPage.locator('#studioModeDock [data-media-mode="'+mode+'"]').click();
+    await viewportPage.locator('.media-mode-switcher [data-media-mode="'+mode+'"]').click();
+    await viewportPage.locator('[data-v3-action="parameters"]').first().click();
     const modeGeometry=await viewportPage.evaluate(()=>{
       const rect=selector=>{const r=document.querySelector(selector)?.getBoundingClientRect();return r?{left:r.left,right:r.right,width:r.width,top:r.top}:null;};
       const editor=document.querySelector('#mediaWorkspace');
@@ -175,7 +187,7 @@ const {spawn}=require('node:child_process');
       throw Error('Desktop '+mode+' editor collapsed into source shelf: '+JSON.stringify(modeGeometry));
     await viewportPage.screenshot({path:'media-workspace-studio-v3-'+mode+'-desktop.png',fullPage:true});
   }
-  await viewportPage.locator('#studioModeDock [data-media-mode="hardsub"]').click();
+  await viewportPage.locator('.media-mode-switcher [data-media-mode="hardsub"]').click();
 
 
   await viewportPage.setViewportSize({width:320,height:720});
@@ -246,25 +258,18 @@ const {spawn}=require('node:child_process');
   if(await page.locator('#mediaWorkspace').isVisible())throw Error('Guided hardsub still exposes the precise parameter workspace');
   // The focused desktop composition is not just an imported stylesheet:
   // verify the actual browser's layout and the task rail's footprint.
-  const focusedDesktop=await page.locator('.workspace-layout').evaluate(el=>{
+  const focusedDesktop=await page.locator('.v3-grid').evaluate(el=>{
     const layout=getComputedStyle(el);
-    const rail=document.querySelector('.task-overview-rail');
+    const rail=document.querySelector('.v3-inspector');
     return {display:layout.display,columns:layout.gridTemplateColumns,
       railWidth:rail?.getBoundingClientRect().width||0};
   });
-  if(focusedDesktop.display!=='grid'||focusedDesktop.columns.split(' ').length!==2)
-    throw Error('Focused desktop workspace did not resolve to a two-column workbench: '+JSON.stringify(focusedDesktop));
+  if(focusedDesktop.display!=='grid'||focusedDesktop.columns.split(' ').length!==3)
+    throw Error('Figma v3 desktop workspace did not resolve to three columns: '+JSON.stringify(focusedDesktop));
   if(focusedDesktop.railWidth<190||focusedDesktop.railWidth>300)
     throw Error('Focused desktop overview rail is outside intended compact width: '+focusedDesktop.railWidth);
-  const supportStack=await page.evaluate(()=>{
-    const overview=document.querySelector('#taskOverviewRail').getBoundingClientRect();
-    const runtime=document.querySelector('.platform-rail').getBoundingClientRect();
-    return {gap:runtime.top-overview.bottom,overviewRight:overview.right,runtimeRight:runtime.right};
-  });
-  if(supportStack.gap<0||supportStack.gap>26)
-    throw Error('Desktop runtime entry is stranded below an empty grid row: '+JSON.stringify(supportStack));
-  if(Math.abs(supportStack.overviewRight-supportStack.runtimeRight)>3)
-    throw Error('Supporting cards are misaligned: '+JSON.stringify(supportStack));
+  if(await page.locator('.v3-editor').evaluate(el=>el.open))throw Error('Detailed editor must initially be collapsed');
+  await page.locator('.v3-editor>summary').click();
   if(await page.locator('.media-workflow-notes').count()!==1)
     throw Error('Manual task architecture must remain available in a single disclosure');
 
@@ -295,8 +300,10 @@ const {spawn}=require('node:child_process');
   await page.selectOption('[name=audio]','copy');
   if(await page.locator('#taskAudioPlaybackWarning').isHidden())throw Error('Guided copied-audio warning does not return after selecting copy');
   await page.screenshot({path:'media-workspace-hardsub-goal-desktop.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="manual"]').click());
-  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace');
+  // This section is a synthetic production-layout fixture, not a media probe.
+  // Audio edits legitimately invalidate its artificial readiness above.
+  await page.evaluate(()=>{['subtitleCard','planCard','encodeCard'].forEach(id=>document.getElementById(id).classList.remove('hidden'));document.querySelector('button[data-hardsub-strategy="manual"]').click();});
+  if(!await page.locator('#mediaWorkspace').isVisible())throw Error('Parameter-controlled hardsub did not reveal the parameter workspace: '+JSON.stringify(await page.locator('#mediaWorkspace').evaluate(el=>{const out=[];for(let n=el;n;n=n.parentElement)out.push({id:n.id,className:n.className,display:getComputedStyle(n).display,open:n.open});return out;})));
   if(await page.locator('.media-workflow-notes').evaluate(el=>el.open))
     throw Error('Verbose task architecture is expanded in the default manual editor');
   await page.locator('.media-workflow-notes > summary').click();
@@ -306,7 +313,7 @@ const {spawn}=require('node:child_process');
 
   if(await page.locator('#planCard').isVisible() || await page.locator('#encodeCard').isVisible())throw Error('Parameter-controlled hardsub exposes the goal execution surface on desktop');
   await page.screenshot({path:'media-workspace-hardsub-parameters-desktop.png',fullPage:true});
-  await page.evaluate(()=>document.querySelector('button[data-hardsub-strategy="guided"]').click());
+  await page.evaluate(()=>{['subtitleCard','planCard','encodeCard'].forEach(id=>document.getElementById(id).classList.remove('hidden'));document.querySelector('button[data-hardsub-strategy="guided"]').click();});
   if(!await page.locator('#mediaWorkspace').isVisible() ||
      !await page.locator('#taskEncoding').isHidden() ||
      !await page.locator('#planCard').isVisible())

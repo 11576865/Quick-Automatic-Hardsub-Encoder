@@ -15,6 +15,8 @@ module.exports=async function checkVvcUi(browser,baseUrl){
       await page.goto(baseUrl+'/?windowsNative=http%3A%2F%2F127.0.0.1%3A9351&token=vvc-browser-test');
       await page.waitForFunction(()=>document.body.dataset.runtimeBackend==='windows-native');
       await page.locator('[data-media-mode="transcode"]').click();
+      // The plan-first workspace exposes detailed controls through its real entry.
+      if(await page.locator('.v3-shell').isVisible())await page.locator('[data-v3-action="parameters"]').first().click();
       const option=page.locator('[name="codec"] option[value="h266"]');
       assert.equal(await option.count(),1,'H.266 must be visible as an explicit capability');
       await page.waitForFunction(expected=>document.querySelector('[name="codec"] option[value="h266"]').disabled===!expected,available);

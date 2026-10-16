@@ -774,6 +774,7 @@ function Get-ProbeMedia {
             codec=[string]$stream.codec_name
             bitRate=if($adapterApplied){0L}elseif($stream.bit_rate){[long]$stream.bit_rate}else{0L}
             width=[int]$stream.width; height=[int]$stream.height; fps=[string]$stream.avg_frame_rate
+            sar=[string]$stream.sample_aspect_ratio
             pixelFormat=$streamPix; bitDepth=$streamDepth; colorTransfer=$streamTransfer
             colorPrimaries=$streamPrimaries; colorSpace=[string]$stream.color_space
             hdr=$streamHdr; unsafeColorPipeline=($streamHdr -or $streamDepth -gt 8)

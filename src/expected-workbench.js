@@ -1,10 +1,11 @@
 import {INTENT_FIELDS,expectedIntent,restoreExpectedIntent,updateExpectedIntent} from './expected-workbench-model.js';
 import './expected-workbench.css';
+import {mountWorkbenchV3} from './workbench-v3.js';
 
 const MODES={hardsub:['ASS 硬字幕','把字幕正确渲染进画面，明确保留哪些原始对象。'],transcode:['纯视频转码','改变视频编码，让音轨、字幕与附件各有明确去向。'],copy:['无损剪切','保留压缩视频包，核对请求切点与实际输出边界。']};
 const GROUPS={media:['媒体与保留',['subtitle','color','preservation']],decision:['决策与成本',['goal','sampling','comparison','cut']],delivery:['成品与验证',['verification']]};
 
-export function mountExpectedWorkbench({source=()=>null}={}) {
+export function mountExpectedWorkbench({source=()=>null,media=()=>null}={}) {
   const dock=document.querySelector('#studioModeDock');
   const workspace=document.querySelector('#mediaWorkspace');
   if(!dock||!workspace)return;
@@ -68,6 +69,9 @@ export function mountExpectedWorkbench({source=()=>null}={}) {
   }
   const schedule=()=>{if(!frame)frame=requestAnimationFrame(refresh);};
   function reveal(target) {
+    if(document.body.classList.contains('workbench-v3')){
+      document.dispatchEvent(new CustomEvent('qhe-workbench-reveal',{detail:target}));return;
+    }
     // Use the existing mobile stage controller so hidden stages become reachable.
     const mobile=document.querySelector(`[data-mobile-stage-target="${target==='source'?'prepare':'produce'}"]`);
     if(mobile&&!mobile.disabled)mobile.click();
@@ -115,4 +119,5 @@ export function mountExpectedWorkbench({source=()=>null}={}) {
   new MutationObserver(schedule).observe(workspace,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['data-task-state']});
   document.addEventListener('quick-hardsub-media-info-changed',schedule);
   refresh();
+  mountWorkbenchV3({source,media});
 }

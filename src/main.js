@@ -5840,6 +5840,7 @@ function mediaFromNativeProbe(p) {
           bitRate:Number(stream.bitRate||stream.bit_rate||0),
           width:Number(stream.width||0),
           height:Number(stream.height||0),
+          sar:stream.sar||stream.sampleAspectRatio||stream.sample_aspect_ratio||'',
           fps:parseFpsText(stream.fps||stream.avg_frame_rate),
           pixelFormat:stream.pixelFormat||stream.pix_fmt||'',
           bitDepth,
@@ -5853,7 +5854,7 @@ function mediaFromNativeProbe(p) {
       })
     : [{
         ordinal:0,index:0,codec:p.videoCodec||'unknown',bitRate:Number(p.videoBitRate||0),
-        width:Number(p.width||0),height:Number(p.height||0),fps:parseFpsText(p.fps),
+        width:Number(p.width||0),height:Number(p.height||0),sar:p.sar||p.sampleAspectRatio||p.sample_aspect_ratio||'',fps:parseFpsText(p.fps),
         pixelFormat:p.pixelFormat||'',bitDepth:Number(p.bitDepth||8),
         colorTransfer:p.colorTransfer||'',colorPrimaries:p.colorPrimaries||'',colorSpace:p.colorSpace||'',
         hdr:!!p.hdr,highBitDepth:Number(p.bitDepth||8)>8,unsafeColorPipeline:!!p.unsafeColorPipeline
@@ -5886,6 +5887,7 @@ function mediaFromNativeProbe(p) {
     videoBitRate: Number(primary.bitRate || 0),
     width: Number(primary.width || 0),
     height: Number(primary.height || 0),
+    sar: primary.sar || '',
     fps: Number(primary.fps || 0),
     pixelFormat: primary.pixelFormat || '',
     bitDepth: Number(primary.bitDepth || 8),
@@ -7035,4 +7037,4 @@ mediaWorkspace=mountMediaWorkspace({
   }
 });
 
-mountExpectedWorkbench({source:()=>state.video});
+mountExpectedWorkbench({source:()=>state.video,media:()=>state.sourceMedia||state.media});
