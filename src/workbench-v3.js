@@ -137,7 +137,6 @@ export function mountWorkbenchV3({source,media}) {
     if(command==='plan'){showView('plan');refresh();return;}
     if(command==='location')return pending('保存位置 · 待接入','此入口预留执行前选择位置。当前版本仍在实际执行与保存流程中选择或下载成品；尚未取得目录权限。');
     if(command==='help')return pending('工作台帮助','左侧添加来源与依赖，中央确认拟输出文件及正式参数，右侧配置预期意图草稿。标有“待接入”的设置尚未应用到执行；实际执行与保存以正式计划和已有验证结果为准。');
-    if(command==='extract')return pending('提取对象 · 待接入','通用逐对象提取入口预留。内封 ASS 与附件字体可在左侧的现有导入控件中显式选择。');
     if(command==='settings'){showEditor('.platform-rail');return;}
     if(command==='run'){
       if(shell.dataset.view==='artifact'){if(!$('#taskSave').disabled)$('#taskSave').click();return;}
@@ -166,7 +165,7 @@ export function mountWorkbenchV3({source,media}) {
   q('.v3-objects').before(toolbar);
   inspector.querySelector('.expected-inspector-head').insertAdjacentHTML('beforeend',action('info','输出意图帮助','help'));
   new MutationObserver(schedule).observe(layout,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','hidden','src','disabled','data-task-state']});
-  new MutationObserver(schedule).observe(document.body,{attributes:true,attributeFilter:['data-media-operation','data-hardsub-strategy']});
+  new MutationObserver(schedule).observe(document.body,{attributes:true,attributeFilter:['data-media-operation','data-hardsub-strategy','data-runtime-backend']});
   document.addEventListener('quick-hardsub-media-info-changed',schedule);
   document.addEventListener('qhe-workbench-reveal',event=>showEditor(event.detail==='artifact'?'#taskReviewDetails':'#taskPlanSummary'));
   document.addEventListener('change',schedule);window.addEventListener('resize',adapt);

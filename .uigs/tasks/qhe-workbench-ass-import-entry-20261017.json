@@ -1,0 +1,40 @@
+{
+  "goal": "将工具栏预留入口接通真实ASS与字体选择/内封导入",
+  "status": "IN_PROGRESS",
+  "current_bounded_work_unit": "来源导入菜单复用原文件选择器及Windows内封ASS/字体导入控件",
+  "authorization": {
+    "source": "用户继续实现；重新核对R19§05/07/12与R24§07；B07/A01/B18/B20；重读初版根范围/路线矩阵",
+    "acceptance": "工具栏明确命名导入ASS与字体；显式选择外置ASS/字体或打开原内封轨选择器；真实main/client收到用户导入并更新素材状态；能力/运行/来源门禁",
+    "gap": "工具栏提取对象仅弹待接入说明，原Windows导入能力隐藏在依赖区域；来源导入不等于通用提取或保留",
+    "priority": "修复后托管检查已成功，补ASS旗舰基础操作，优先于新增编码器/通用提取/HDR",
+    "integration": "沿用明确的发布和主线集成授权"
+  },
+  "completed_units": [
+    "PR122所有托管检查success",
+    "重读根报告、路线、B07/A01与Windows导入既有证据",
+    "basic入口先失败后通过",
+    "真实main+Windows client模拟HTTP验证外置选择、原ordinal1显式导入/失败重试、来源就绪/无ASS/锁/工作流门禁、保留不变",
+    "Web真实filechooser选择ASS通过；4宽度无溢出",
+    "Node427通过12跳过0失败；构建通过"
+  ],
+  "authorized_next_units": [
+    "来源导入菜单与真实main/Native mock浏览器验证"
+  ],
+  "discovered_followups": [],
+  "branch": "feat/workbench-ass-import-entry-20261017",
+  "pr": null,
+  "latest_durable_commit": "main@140e9e7",
+  "external_validation_states": {
+    "previous_frontend": "38930278715 success",
+    "previous_uigs": "38930278785 success",
+    "real_media": "FIELD_PENDING",
+    "local_basic": "PASS full basic regression incl unsupported import menu",
+    "local_source_import": "PASS actual main/client mocked Native transport + real Web filechooser; no media encode",
+    "local_node": "427 passed / 12 skipped / 0 failed",
+    "local_build": "PASS existing bundle warning",
+    "review": "IN_PROGRESS",
+    "full_browser": "PENDING"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-16T16:23:07.925739+00:00"
+}

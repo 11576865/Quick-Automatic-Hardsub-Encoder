@@ -26,6 +26,13 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   });
   if(process.env.QHE_QA_FONT_DIR){await page.addStyleTag({url:'/__qa-font/index.css'});await page.evaluate(()=>document.fonts.ready)}
   const control=name=>page.locator(`[data-basic-field="${name}"]`);
+  assert.equal(await page.getByRole('button',{name:'导入 ASS 与字体',exact:true}).count(),1,'Source toolbar must expose the real import entry');
+  await page.getByRole('button',{name:'导入 ASS 与字体',exact:true}).click();
+  assert.equal(await page.locator('.v3-import-menu').isVisible(),true);
+  assert.match(await page.locator('[data-import-status]').textContent(),/Windows Native/,'Unsupported backend is explained');
+  assert.equal(await page.locator('[data-import-action=embedded]').isDisabled(),true);
+  await page.keyboard.press('Escape');assert.equal(await page.locator('.v3-import-menu').isVisible(),false);
+
   assert.equal(await control('outputContainer').count(),1,'New workspace must expose a real container setting');
   assert.equal(await control('width').count(),1,'Central workspace must expose output geometry');
   assert.equal(await control('videoRange').count(),1,'Central workspace must expose independent time policies');

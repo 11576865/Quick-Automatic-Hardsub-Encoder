@@ -13,6 +13,7 @@ const {spawn}=require('node:child_process');
   await require('./check-vvc-ui.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-whole-budget-ui.cjs')(browser,'http://127.0.0.1:4179');
   await require('./check-audio-plan-ui.cjs')(browser,'http://127.0.0.1:4179');
+  await require('./check-source-import-entry.cjs')(browser,'http://127.0.0.1:4179');
   // Review disclosure must shorten a fresh phone view without hiding terminal states.
   const compactPage=await browser.newPage({viewport:{width:320,height:800}});
   await compactPage.goto('http://127.0.0.1:4179');
