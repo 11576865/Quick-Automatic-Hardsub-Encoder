@@ -46,3 +46,14 @@
 ## 主线集成
 
 [PR #116](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/116) 已 squash 合入 `main@9a3493a63786c448cf42190b248cf944205a432b`。集成前远端 Git tree `b690e8650ee804b1edac1441e880cf9a530df44f` 与通过本地验证的工作树完全一致。Hosted CI / Native 编译与实机验收仍独立待验证；没有同步等待外部任务。
+
+## 部署后验收（2026-10-16）
+
+本次“继续”完成部署闭环，授权锚点仍为 B20 / R24 §19–20，不扩展到新后端能力。
+
+- [Build Android and Deploy Frontend](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38847961589) 成功，APK 构建/身份检查和 Pages 部署步骤成功。部署日志标明 `pages_build_version=9a3493a63786c448cf42190b248cf944205a432b`，于 2026-10-16 03:58:10 UTC 报告成功。
+- [Test frontend](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38847961446)、Compile Android media tasks、Windows local smoke、Windows Stream Plan v4 runtime acceptance、Android Stream Plan v4 emulator runtime acceptance、UIGS Evidence Coverage 均成功。两个 UIGS Intake Adapter 记录为预期跳过，不计为测试通过或失败。
+- [线上工作台](https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/) 返回 HTTP 200；实际 HTML 引用 `assets/index-DJp9779F.js` / `assets/index-eJWrwavW.css`，资源包含 v3 工作台、拟输出文件、按需预览和成品审计。
+- 直接访问线上地址的独立 Chromium 检查：1440、1194、834、768 四个宽度，每个宽度切换硬字幕/转码/复制；页面不横向溢出，横屏三栏/竖屏检查器位置正确，预览展开/返回可用，无成品时保存禁用，页面 JavaScript 异常为 0。检查不选择用户媒体，也不启动压制或保存。
+
+该证据确认 UI 已经部署并可从线上入口访问，关闭上一轮的 hosted CI 与部署 Pending。物理桌面/平板的触控、辅助技术、实际媒体输入和完整产品验收仍未被这些 CI/无头浏览器结果代替；未接入功能的边界不变。

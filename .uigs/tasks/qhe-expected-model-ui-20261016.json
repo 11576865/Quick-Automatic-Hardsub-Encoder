@@ -1,7 +1,7 @@
 {
   "goal": "按用户授权以预期模型UI覆盖硬压当前UI，允许未完成能力的设计界面",
-  "status": "RUNTIME_V3_INTEGRATED_PENDING_EXTERNAL_VALIDATION",
-  "current_bounded_work_unit": "Figma v3 实际桌面/平板界面落实及回归验收",
+  "status": "RUNTIME_V3_DEPLOYED_HOSTED_AND_LIVE_UI_VERIFIED",
+  "current_bounded_work_unit": "部署后验收：核对主线 CI、发布身份、线上 UI 资源及桌面/平板可达性",
   "authorization": {
     "source": "用户 2026-10-16 本轮请求；R24 §19–20，B20/B02/B05",
     "acceptance": "默认加载新外观，三类任务正确区分，未接入控件可编辑且不污染执行状态",
@@ -17,6 +17,13 @@
       "acceptance": "桌面三栏、平板适配、计划优先、按需预览、密度/帮助/待接入反馈；保留现有执行与保存合同",
       "gap": "设计已完成，实际界面尚为 v1 外壳",
       "priority": "用户明确优先 UI；B21 批次及后端扩展延后"
+    },
+    "deployment_acceptance": {
+      "source": "用户 2026-10-16 14:23 继续；承接 UI 已合入、部署待确认",
+      "anchors": "B20 / R24 §19–20；docs/qhe-initial-version-route-reanchor-2026-10-14.md",
+      "acceptance": "确认已部署版本与已验收 UI 一致，记录外部检查结果并提供实际入口",
+      "gap": "原记录 hosted CI 与部署 Pending，需用当前证据关闭",
+      "priority": "完成用户当前 UI 发布闭环；B21/后端扩展不进入本单元"
     }
   },
   "completed_units": [
@@ -31,7 +38,8 @@
     "Figma v2：8 界面 + 1 图标/密度状态图，9 图视觉复查及自动布局边界检查通过",
     "Figma v3：原 8 视图更新，新增桌面/平板展开预览 2 视图；10 视图视觉复查、布局边界/画幅/禁用保存组件核对通过",
     "运行时 v3：计划优先、自适应桌面/平板、预览/候选/成品视图、真实控件入口与执行保存门槛；本地 Node/构建/两组浏览器回归通过",
-    "PR #116 已 squash 合入 main@9a3493a；远端 Git tree 与本地通过测试版本一致"
+    "PR #116 已 squash 合入 main@9a3493a；远端 Git tree 与本地通过测试版本一致",
+    "部署后验收：7 个相关 hosted workflow 成功；部署提交9a3493a；线上1440/1194/834/768×3工作流、预览、空成品保存门槛和布局通过"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -41,23 +49,27 @@
   ],
   "branch": "feat/figma-v3-workbench-20261016",
   "pr": 116,
-  "latest_durable_commit": "main@9a3493a63786c448cf42190b248cf944205a432b",
+  "latest_durable_commit": "main@422bfb2f1411d955fbb05973c0b5ac95a14fbece（部署后验收记录见本记录所属提交）",
   "external_validation_states": {
     "local_node": "427_PASS_12_SKIPPED_0_FAIL",
     "local_build": "PASS",
     "local_expected_browser": "PASS_11_WIDTHS_3_WORKFLOWS_PREVIEW_DENSITY_HELP_DRAFT_LOCKS_SAVE_GATES_BREAKPOINT_ROUNDTRIP",
     "legacy_browser_suite": "PASS_FULL_SUITE_WITH_UPDATED_V3_LAYOUT_ASSERTIONS",
-    "hosted_ci": "PENDING_EXTERNAL_VALIDATION_AFTER_INTEGRATION_NO_SYNCHRONOUS_WAIT",
-    "physical_devices": "FIELD_PENDING",
+    "hosted_ci": "SUCCESS_7_RELEVANT_WORKFLOWS_2_EXPECTED_INTAKE_SKIPS",
+    "physical_devices": "FIELD_PENDING_NOT_CLOSED_BY_CI_OR_HEADLESS_BROWSER",
     "uigs_intake": "EXISTING_CANDIDATE_PRODUCT_CASE_RECORDED_IN_RUNTIME_V3_HANDOFF_NO_CANONICAL_CHANGE",
     "figma_v2": "9_BOARDS_VISUALLY_REVIEWED_ZERO_HORIZONTAL_FRAME_CHILD_OVERFLOW",
     "v2_runtime": "UNCHANGED_NO_NEW_RUNTIME_TEST_OR_IMPLEMENTATION_CLAIM",
     "figma_v3": "10_APPLICATION_VIEWS_REVIEWED_ZERO_HORIZONTAL_OVERFLOW_16_9_PREVIEW_AND_SAVE_DISABLED_DESIGN_CONFIRMED",
-    "native_compile": "PENDING_FOR_OPTIONAL_SAR_METADATA_PROPAGATION",
-    "runtime_v3": "CODE_COMPLETE_LOCAL_VERIFIED; NO_REAL_MEDIA_OR_DEVICE_COMPLETION_CLAIM"
+    "native_compile": "SUCCESS_ANDROID_COMPILE_AND_APK_BUILD",
+    "runtime_v3": "CODE_COMPLETE_LOCAL_VERIFIED; NO_REAL_MEDIA_OR_DEVICE_COMPLETION_CLAIM",
+    "windows_runtime": "SUCCESS_WINDOWS_SMOKE_AND_STREAM_PLAN_V4_ACCEPTANCE",
+    "android_emulator": "SUCCESS_STREAM_PLAN_V4_RUNTIME_ACCEPTANCE",
+    "deployment": "SUCCESS_PAGES_9a3493a_2026-10-16T03:58:10Z",
+    "live_ui": "HTTP_200_AND_HEADLESS_BROWSER_PASS_4_WIDTHS_3_OPERATIONS_ZERO_PAGE_ERRORS"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T03:56:19.808284+00:00",
+  "updated_at": "2026-10-16T06:28:28.167671+00:00",
   "repair_branch": "fix/expected-model-tablet-grid-20261016",
   "figma": {
     "url": "https://www.figma.com/design/FPHdsXxN7xNniLKjZQcVKd?node-id=3-2",
@@ -77,5 +89,19 @@
     "extra_regression": "保留跨断点编辑器披露状态；避免同区间 resize 重复迁移节点"
   },
   "handoff": "docs/ui/desktop-tablet-runtime-v3-2026-10-16.md",
-  "pr_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/116"
+  "pr_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/116",
+  "validation_evidence": {
+    "app": "https://11576865.github.io/Quick-Automatic-Hardsub-Encoder/",
+    "deployment_run": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38847961589",
+    "frontend_run": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/38847961446",
+    "live_js": "assets/index-DJp9779F.js",
+    "live_css": "assets/index-eJWrwavW.css",
+    "live_widths": [
+      1440,
+      1194,
+      834,
+      768
+    ],
+    "scope": "Read-only live UI and workflow results; no real media encoding or physical touchscreen acceptance"
+  }
 }
