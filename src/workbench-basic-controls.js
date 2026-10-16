@@ -1,6 +1,7 @@
 // The existing form remains the only authority. These unnamed controls are views
 // of that form: all writes pass through its original input/change handlers.
 import {mountWorkbenchAudioControls} from './workbench-audio-controls.js';
+import {mountWorkbenchImportControls} from './workbench-import-controls.js';
 import {mountWorkbenchStreamControls} from './workbench-stream-controls.js';
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const timeFields=new Set(['start','end','videoRange','audioRange','subtitleRange']);
@@ -35,6 +36,7 @@ export function mountWorkbenchBasicControls({shell,source,media,showEditor,showH
   const guarded=name=>guided()&&(pictureFields.has(name)||timeFields.has(name));
   const cancelTarget=()=>!$('#taskCancel').disabled?$('#taskCancel'):$('#cancelEncodeBtn')&&!$('#cancelEncodeBtn').classList.contains('hidden')&&!$('#cancelEncodeBtn').disabled?$('#cancelEncodeBtn'):null;
   const locked=()=>!!cancelTarget()||['preparing','encoding','verifying','cancelling','saving'].includes(taskState())||!!$('#video')?.disabled;
+  const importControls=mountWorkbenchImportControls({shell,source,media,locked,feedback});
   const audioControls=mountWorkbenchAudioControls({shell,source,locked,schedule});
   const streamControls=mountWorkbenchStreamControls({shell,form,source,media,locked,schedule});
   const closeMenu=()=>{q('.v3-source-menu').hidden=true;more.setAttribute('aria-expanded','false');};
@@ -70,6 +72,7 @@ export function mountWorkbenchBasicControls({shell,source,media,showEditor,showH
     const native=document.body.dataset.runtimeBackend&&document.body.dataset.runtimeBackend!=='web';
     location.textContent=$('#taskSave').disabled?(native?'验证后由系统选择位置…':'验证后交给浏览器下载'):`${$('#taskSave').textContent}…`;
     location.disabled=busy;
+    importControls.refresh();
     audioControls.refresh();
     streamControls.refresh();
   }
