@@ -1,6 +1,6 @@
 {
   "goal": "桌面和平板中央面板选择保留的软字幕与附件",
-  "status": "IMPLEMENTING",
+  "status": "WORK_UNIT_COMPLETE_PENDING_INTEGRATION",
   "current_bounded_work_unit": "逐对象软字幕/附件选择接入现有正式计划",
   "authorization": {
     "source": "用户继续补基础功能；重新读取R19 §03/07和R24 §04/05；B02/B04/B05/B20",
@@ -9,18 +9,28 @@
     "priority": "补齐基础保留动作；高级色彩/通用提取/目录预授权不进本单元"
   },
   "completed_units": [
-    "重新核对根报告、追踪矩阵、原正式选择编译协议"
+    "重新核对根报告、追踪矩阵、原正式选择编译协议",
+    "逐对象字幕/附件保留与原正式选择及编译器接通",
+    "子集/空选择/来源与库存保护；不完整清单先失败后修复",
+    "本地专项、完整浏览器、单元测试和构建通过",
+    "独立复查无Critical/Important"
   ],
   "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-stream-selection-20261016",
   "pr": null,
-  "latest_durable_commit": "main@9f621e81ac0b98771c236887627cec5c62d08117",
+  "latest_durable_commit": "remote feature@68251edcbdd8e732bd81c7bd2d5430adaeafa3bf",
   "external_validation_states": {
-    "local": "NOT_RUN",
-    "hosted": "NOT_STARTED",
-    "real_media": "FIELD_PENDING"
+    "local_basic": "PASS subset1/0 and FFmpeg ordinal maps, none/reselect, plan invalidation, lock/guided/source guards, invalid selection and incomplete inventory, 4 widths; media transport simulated",
+    "local_expected": "PASS 11 widths x 3 workflows",
+    "local_media_ui": "PASS full suite",
+    "local_node": "427 passed / 12 skipped / 0 failed (439 total)",
+    "local_build": "PASS existing bundle warning",
+    "review": "PASS no Critical/Important",
+    "hosted": "PENDING_NOT_YET_FINAL_PUSHED",
+    "real_media": "FIELD_PENDING",
+    "uigs_intake": "EXISTING_PRODUCT_CASE_NO_CANONICAL_CHANGE"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T11:10:10.154619+00:00"
+  "updated_at": "2026-10-16T11:14:39.950574+00:00"
 }
