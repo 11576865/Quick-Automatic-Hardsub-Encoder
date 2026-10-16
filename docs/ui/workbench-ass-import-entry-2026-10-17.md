@@ -19,3 +19,11 @@ Node439项：427通过/12跳过/0失败；构建成功，既有bundle提示保�
 PR122的frontend38930278715、UIGS38930278785及Branch hygiene38930315328均已核实success。
 
 UIGS Intake 查询picker focus，关联既有QHE functional UI Case中的隐形file input焦点与取消语义观察，本轮将补充菜单关闭/Native按钮临时禁用的窄Test证据，不提升Canonical。
+
+## 主线与Intake结果
+
+[PR123](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/123) 已从 `c0957e7b195f71fd5eae628d152615f1f6e035cc` 合入 `main@e85b8a28ae09d36b66641e67922c7d4fd4507d25`，发布前树与本地验证树一致。
+
+唯一一次即时读取：Frontend38932013113 in_progress，UIGS38932013175 completed/success。托管验证与部署保持Pending External Validation，不同步等待或宣称上线。
+
+Foundry Test `inbox/tests/2026-10-17-qhe-import-menu-file-picker-focus.md` 已写入提交 `d64c8404eeac9acbf162906f66c8d905760a9888`，记录焦点反例及Native取消/Web选择的有界证据，不修改Canonical。

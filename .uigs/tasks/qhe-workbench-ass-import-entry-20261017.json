@@ -1,6 +1,6 @@
 {
   "goal": "将工具栏预留入口接通真实ASS与字体选择/内封导入",
-  "status": "WORK_UNIT_COMPLETE_READY_FOR_INTEGRATION",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "来源导入菜单复用原文件选择器及Windows内封ASS/字体导入控件",
   "authorization": {
     "source": "用户继续实现；重新核对R19§05/07/12与R24§07；B07/A01/B18/B20；重读初版根范围/路线矩阵",
@@ -19,13 +19,15 @@
     "焦点Minor先红后绿修复；Native完成/取消与Web文件选择后焦点通过",
     "完整check-media-ui含真实来源导入专项、11宽度×3工作流、basic、最终Node/构建均通过",
     "独立复查无必要问题；中文平板菜单截图已复查",
-    "远程checkpointbb85dce3的tree与本地已验证tree一致"
+    "远程checkpointbb85dce3的tree与本地已验证tree一致",
+    "PR123以c0957e7b合入main@e85b8a2；发布树与本地验证树一致",
+    "Foundry窄Test记录已写入d64c8404eeac9acbf162906f66c8d905760a9888"
   ],
   "authorized_next_units": [],
   "discovered_followups": [],
   "branch": "feat/workbench-ass-import-entry-20261017",
-  "pr": null,
-  "latest_durable_commit": "bb85dce39c268a796944e68cf601ec7d15e4dafa",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/123",
+  "latest_durable_commit": "main@e85b8a28ae09d36b66641e67922c7d4fd4507d25",
   "external_validation_states": {
     "previous_frontend": "38930278715 success",
     "previous_uigs": "38930278785 success",
@@ -36,8 +38,10 @@
     "local_build": "PASS existing bundle warning",
     "review": "PASS minor focus finding fixed with red/green proof, independent re-review closed",
     "full_browser": "PASS full check-media-ui incl new Native client/main integration; 11 widths x3 workflows; basic",
-    "uigs_intake": "DEDUP searched picker focus; narrow Test record to append existing Case evidence; no Canonical change"
+    "uigs_intake": "WRITTEN inbox/tests/2026-10-17-qhe-import-menu-file-picker-focus.md commitd64c8404eeac9acbf162906f66c8d905760a9888; no Canonical change",
+    "hosted": "PENDING at single immediate read: Test frontend38932013113 in_progress; UIGS38932013175 completed/success",
+    "deployment": "PENDING / not verified"
   },
   "blockers": [],
-  "updated_at": "2026-10-16T16:26:35.525464+00:00"
+  "updated_at": "2026-10-16T16:27:29.365545+00:00"
 }
