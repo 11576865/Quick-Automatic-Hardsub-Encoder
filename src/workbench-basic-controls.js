@@ -28,7 +28,7 @@ export function mountWorkbenchBasicControls({shell,source,showEditor,showHelp,sc
   const optionSignatures=new WeakMap();
   const cancelTarget=()=>!$('#taskCancel').disabled?$('#taskCancel'):$('#cancelEncodeBtn')&&!$('#cancelEncodeBtn').classList.contains('hidden')&&!$('#cancelEncodeBtn').disabled?$('#cancelEncodeBtn'):null;
   const locked=()=>!!cancelTarget()||['preparing','encoding','verifying','cancelling','saving'].includes(taskState())||!!$('#video')?.disabled;
-  const audioControls=mountWorkbenchAudioControls({shell,locked,schedule});
+  const audioControls=mountWorkbenchAudioControls({shell,source,locked,schedule});
   const closeMenu=()=>{q('.v3-source-menu').hidden=true;more.setAttribute('aria-expanded','false');};
   function probe(){
     closeMenu();const button=$('#analyze');
