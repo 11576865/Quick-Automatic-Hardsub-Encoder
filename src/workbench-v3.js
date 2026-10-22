@@ -1,4 +1,4 @@
-import {previewAspect,toolbarDensity,sourceObjects} from './workbench-v3-model.js';
+import {previewAspect,toolbarDensity,sourceObjects,previewFrameReady} from './workbench-v3-model.js';
 import './workbench-v3.css';
 import {mountWorkbenchBasicControls} from './workbench-basic-controls.js';
 
@@ -61,12 +61,29 @@ export function mountWorkbenchV3({source,media}) {
     node?.scrollIntoView({block:'start',behavior:'instant'});
     node?.setAttribute('tabindex','-1');node?.focus({preventScroll:true});
   }
+  // A frame decoded for the previous File must not be presented as the new source.
+  // Compare actual File object identity, not name/size/mtime metadata.
+  let previewSource=source(),oldHardsubFrame=null,oldSourceFrame=null;
   function actualPreview() {
-    const frame=document.body.dataset.mediaOperation==='hardsub'?$('#preview img'):$('#taskFramePreviewImage');
-    const ready=frame?.getAttribute('src')&&!frame.hidden;
-    const img=q('[data-v3-frame]');img.hidden=!ready;q('[data-v3-frame-empty]').hidden=!!ready;
-    if(ready&&img.getAttribute('src')!==frame.getAttribute('src'))img.src=frame.getAttribute('src');
-    if(!ready)img.removeAttribute('src');
+    const currentSource=source(),operation=document.body.dataset.mediaOperation;
+    if(currentSource!==previewSource){
+      oldHardsubFrame=$('#preview img')?.getAttribute('src')||null;
+      oldSourceFrame=$('#taskFramePreviewImage')?.getAttribute('src')||null;
+      previewSource=currentSource;
+    }
+    const hardsub=operation==='hardsub';
+    const frame=hardsub?$('#preview img'):$('#taskFramePreviewImage');
+    const src=frame?.getAttribute('src')||null;
+    const ready=previewFrameReady(src,frame?.hidden,hardsub?oldHardsubFrame:oldSourceFrame);
+    const img=q('[data-v3-frame]');
+    img.hidden=!ready;q('[data-v3-frame-empty]').hidden=ready;
+    if(ready&&img.getAttribute('src')!==src)img.src=src;
+    if(!ready){
+      img.removeAttribute('src');
+      const status=hardsub?'':read('#taskWaveformStatus');
+      const message=!currentSource?'请先选择视频':!media()?'请先检查来源参数':status.includes('失败')?status:'尚未加载当前来源的预览帧';
+      setText('[data-v3-frame-empty] span',message);
+    }
   }
   let basic,queued=false,lastObjects='',lastRows='',lastOperation='';
   function refresh() {
@@ -145,7 +162,13 @@ export function mountWorkbenchV3({source,media}) {
     }
     if(command==='inspect'){showEditor('#taskPlanSummary');$('#taskInspect').click();return;}
     if(command==='generate-preview'){
-      if(document.body.dataset.mediaOperation!=='hardsub'){showEditor('#taskWaveformPanel');return;}
+      if(document.body.dataset.mediaOperation!=='hardsub'){
+        if(!source()||!media()){showEditor('#analyze');return pending('源视频帧预览','请先选择视频并检查来源参数，再生成当前时间轴的实际解码帧。');}
+        const load=$('#taskWaveformLoad');
+        if(!load||load.disabled)return pending('源视频帧预览','时间轴分析正在执行，或当前后端暂不可用；请在正式时间轴检查状态。');
+        setText('[data-v3-frame-empty] span','正在分析时间轴并提取实际源视频帧…');
+        load.click();schedule();return;
+      }
       if(!$('#previewBtn').disabled){$('#previewBtn').click();return;}showEditor('#analyze');return;
     }
     if(command==='timeline'){showEditor('#taskWaveformPanel');return;}
