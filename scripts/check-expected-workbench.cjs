@@ -44,6 +44,15 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
     await page.locator('[data-v3-action="preview"]').click();
     assert.equal(await page.locator('#v3Preview').isVisible(),true);
     assert.equal(await page.locator('.v3-output').isVisible(),false);
+    if(width===1440){
+     await page.locator('[data-media-mode="transcode"]').click();
+     await page.locator('[data-v3-action="preview"]').click();
+     await page.locator('[data-v3-action="generate-preview"]').click();
+     assert.match(await page.locator('.v3-help').textContent(),/先选择视频并检查来源参数/,'No-source frame requests must not silently run');
+     await page.keyboard.press('Escape');
+     await page.locator('[data-media-mode="hardsub"]').click();
+     await page.locator('[data-v3-action="preview"]').click();
+    }
     if(process.env.QHE_SCREENSHOT_DIR&&[1440,1194].includes(width))await page.screenshot({path:`${process.env.QHE_SCREENSHOT_DIR}/v3-preview-${width}.png`,fullPage:true});
     await page.locator('[data-v3-action="close-preview"]').click();
     assert.equal(await page.locator('.v3-output').isVisible(),true);
@@ -136,8 +145,20 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
    await pick('aaaa');await page.waitForTimeout(50);
    await inspector.locator('[data-intent-tab="media"]').click();
    await inspector.locator('[data-intent-control="subtitle"]').selectOption('embedded');
+   if(width===1440){
+    await page.locator('[data-v3-action="preview"]').click();
+    await page.evaluate(()=>{
+     const image=document.createElement('img');image.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"><title>old-source-frame</title></svg>';
+     image.dataset.qaOldSource='true';document.querySelector('#preview').prepend(image);
+    });
+    await page.waitForFunction(()=>document.querySelector('[data-v3-frame]')?.getAttribute('src')?.includes('old-source-frame'));
+   }
    await pick('bbbb');await page.waitForTimeout(50);
    assert.equal(await inspector.locator('[data-intent-control="subtitle"]').inputValue(),'external');
+   if(width===1440){
+    assert.equal(await page.locator('[data-v3-frame]').getAttribute('src'),null,'A new File object must not inherit the previous source frame');
+    assert.equal(await page.locator('[data-v3-frame]').isHidden(),true);
+   }
    await page.locator(width>=768?'[data-v3-action="source"]':'[data-expected-jump="source"]').click();
    assert.equal(await page.locator('#inputCard').evaluate(el=>el===document.activeElement),true);
    assert.deepEqual(errors,[]);
