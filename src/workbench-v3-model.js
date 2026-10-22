@@ -17,3 +17,9 @@ export function sourceObjects(media) {
   }
   return objects;
 }
+
+// The old frame may still be present in the underlying timeline when a source
+// changes. A new source cannot inherit that decoded-image evidence.
+export function previewFrameReady(src,hidden,previousSourceSrc=null) {
+  return Boolean(src&&!hidden&&(previousSourceSrc===null||src!==previousSourceSrc));
+}
