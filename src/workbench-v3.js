@@ -80,8 +80,9 @@ export function mountWorkbenchV3({source,media}) {
     if(ready&&img.getAttribute('src')!==src)img.src=src;
     if(!ready){
       img.removeAttribute('src');
-      const status=hardsub?'':read('#taskWaveformStatus');
-      const message=!currentSource?'请先选择视频':!media()?'请先检查来源参数':status.includes('失败')?status:'尚未加载当前来源的预览帧';
+      const frameStatus=hardsub?'':read('#taskFramePreviewStatus');
+      const status=frameStatus.includes('失败')?frameStatus:read('#taskWaveformStatus');
+      const message=!currentSource?'请先选择视频':!media()?'请先检查来源参数':status.includes('失败')||status.includes('正在')?status:'尚未加载当前来源的预览帧';
       setText('[data-v3-frame-empty] span',message);
     }
   }
