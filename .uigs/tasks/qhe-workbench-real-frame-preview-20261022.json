@@ -1,6 +1,6 @@
 {
   "goal": "使QHE桌面/平板工作台的转码/剪切预览真正触发既有源帧分析并防止旧来源画面误认",
-  "status": "BRANCH_COMMITTED_PENDING_HOSTED_VALIDATION",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
   "current_bounded_work_unit": "中央预览取帧桥接 + 来源隔离 + 前端回归",
   "authorization": {
     "source": "用户继续硬压实现；R19/R24与 docs/qhe-initial-version-route-reanchor-2026-10-14.md",
@@ -19,7 +19,9 @@
     "核对 main@4df6c594 与 PR117–123/AGENTS/原需求",
     "编写预览触发/来源身份视觉守门/失败反馈",
     "编写纯函数及Playwright回归断言",
-    "源码提交到独立功能分支"
+    "源码提交到独立功能分支",
+    "Draft PR #124 submitted; independent hosted validation pending",
+    "UIGS-Foundry narrow Test committed at 1dfcfd4d3adca1e574bd96ca860dd7d9aa3606c9; deduped existing preview Candidates"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -27,14 +29,14 @@
     "复杂VFR/B帧源视频与实际剪切成品对照仍为A04"
   ],
   "branch": "feat/workbench-real-frame-preview-20261022",
-  "pr": null,
-  "latest_durable_commit": "209440d74d2b8fa8f484c17066371ce7c1a81f6f",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/124",
+  "latest_durable_commit": "c505364635b02b8551b3305d996a71c551689407",
   "external_validation_states": {
     "local_node": "NOT_RUN_NO_REPOSITORY_RUNTIME",
     "local_playwright": "NOT_RUN_NO_REPOSITORY_RUNTIME",
     "hosted_ci": "PENDING",
     "native_field": "FIELD_PENDING",
-    "uigs_intake": "PENDING_DEDUP"
+    "uigs_intake": "WRITTEN inbox/tests/2026-10-22-qhe-central-preview-source-frame-gate.md @ 1dfcfd4d3adca1e574bd96ca860dd7d9aa3606c9; no Canonical change"
   },
   "blockers": [],
   "updated_at": "2026-10-22"
