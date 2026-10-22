@@ -24,3 +24,11 @@
 ## UIGS Intake
 
 本轮候选复用范围：异步画面结果与来源对象身份隔离；不凭一次 UI 测试修改 Canonical。Foundry 去重和窄证据记录单独追踪。
+
+## 2026-10-22 继续验证补强
+
+核查到 PR #124 的 GitHub Actions `Test frontend` 工作流总体 Success 时，实际只有 `draft-fast` 作业成功；完整 `frontend` 作业为 Skipped（Draft PR 策略）。不能用工作流绿色误报为完整 Playwright 回归通过。
+
+因此扩展 `scripts/check-source-import-entry.cjs` 的真实前端 + Windows Native Client **模拟 HTTP** 验证：同一个 mock 来源的转码与 Copy 从中央按钮触发唯一 `/api/frame`，回执的 `requestId`、视频流 ordinal、720px 解码宽度保持；后台旧编辑器为唯一帧所有者，中央展示其结果。另在桥返回 `ok:false` 时要求中央清除旧帧、显示失败原因、用户再次点击可重试。这里的 PNG 是测试固定像素，不是 FFmpeg 生成的真实媒体产物。
+
+下一步解除 Draft 以触发完整 `frontend` 作业（其脚本链包含 `check-media-ui.cjs` → `check-source-import-entry.cjs`），在本轮事务提交后仅读取一次任务状态；不把 Pending 当 PASS。真实 GPU、长片、VFR/B 帧与用户设备仍属于 FIELD-PENDING。
