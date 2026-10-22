@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {previewAspect,toolbarDensity,sourceObjects} from './workbench-v3-model.js';
+import {previewAspect,toolbarDensity,sourceObjects,previewFrameReady} from './workbench-v3-model.js';
 
 test('preview follows display aspect including non-square pixels without inventing metadata',()=>{
   assert.equal(previewAspect({width:720,height:576,sar:'16:15'}),4/3);
@@ -20,4 +20,12 @@ test('source projection includes actual attachmentStreams and preserves ffprobe 
   assert.equal(objects[1].name,'日语原声');
   assert.match(objects[1].properties,/jpn/);
   assert.equal(objects[2].name,'NotoSans.ttf');
+});
+
+test('central preview fails closed on frames from a previous source',()=>{
+  assert.equal(previewFrameReady('blob:old',false,'blob:old'),false);
+  assert.equal(previewFrameReady('blob:new',false,'blob:old'),true);
+  assert.equal(previewFrameReady('data:image/png;base64,AA',false,null),true);
+  assert.equal(previewFrameReady(null,false,null),false);
+  assert.equal(previewFrameReady('blob:ready',true,null),false);
 });
