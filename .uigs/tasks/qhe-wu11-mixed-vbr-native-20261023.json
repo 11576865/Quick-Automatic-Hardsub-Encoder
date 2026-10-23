@@ -1,0 +1,52 @@
+{
+  "goal": "QHE WU11 首次同一正式 VBR 作业保留 FLAC 并重新编码第二 AAC：源绑定 Guided→Manual→Native 实际成品",
+  "status": "BRANCH_IMPLEMENTED_PENDING_EXACT_HEAD_HOSTED_VALIDATION",
+  "current_bounded_work_unit": "mixed-audio source lock + recomputed whole-file VBR candidate + same-source Native sampling + real completed v4 output, packet oracle",
+  "authorization": {
+    "source": "R19/R24 B02/B04/B05/B06/B07/B11/B12/B13/B24 A01/A02/A03/A05/A06；issue #107 WU11 精确实施计划 PR126，用户当前继续实施",
+    "requirements": [
+      "B02",
+      "B04",
+      "B05",
+      "B06",
+      "B07",
+      "B11",
+      "B12",
+      "B13",
+      "B24",
+      "A01",
+      "A02",
+      "A03",
+      "A05",
+      "A06"
+    ],
+    "user_facing_acceptance": "相同 Windows Native rich MKV + ASS/font/source SHA，在用户明确锁定的 FLAC Copy+Aac 转码意图下以当前实测 FLAC packet 成本+96kbps AAC 全片估算推导 VBR，经过同一正式 Guided CPU 编译和生产 Native 编码后独立复验第一轨 packet SHA identical、第二轨重新编码、ASS 烧录像素",
+    "implemented_vs_verified": "之前 PR128 Native VBR 成品双 Copy；另一个 WU02 CRF23 成品一 Copy 一 AAC-encode，二者不能拼同一 VBR 混合流。当前代码提出同一 VBR 成品兼具两者，尚无此分支 CI 证明。",
+    "critical_path": "A02/A03 B05/B06 在同一用户认可的交付策略下的预算/轨道与实际 output mapping 是初版旗舰链的核心功能",
+    "deprioritized": "真实浏览器 Guided 点击与用户设备/高复杂场景仍独立，不以自动 fixture 模拟替代"
+  },
+  "completed_units": [
+    "核对 main@4448cd7d6a9e3339440312722e8f486b56e2bf71，PR128 exact-head frontend+Windows WU02+UIGS all SUCCESS；main-push Android/UIGS success",
+    "共享 guidedTaskSettings 只在明确 per-stream intent 时接纳 audioPlan 和 sourceLocked mustCopy ordinals；旧 Guided 无逐轨意图仍原样运行",
+    "共享 compileGuidedCpuHandoff 拒绝未批准、旧来源、缺 copy 轨锁和混合轨成本缺失；提交给同一正式 compileTask 并重编译对照逐音轨执行参数、FLAC锁定、VBR视频码率及大小/音轨成本",
+    "WU11 Native builder 使用真实 /api/source-budget 的当前 a:0 Copy 负载和 a:1 AAC 96kbps 编码成本重新求视频 bitrate；当前 Native 两窗同一个 bitrate 实测，并在同一 Bridge 真实 /api/encode",
+    "独立成品审计器从同一实际 VBR 产物核对 FLAC a:0 packet SHA complete match、AAC a:1 packet SHA differs、真实 ASS burn-in 像素和来源/字幕/字体/正式参数/输出哈希",
+    "添加混合音轨合法、失效/未授权、旧预算、VBR 码率不一致和事务回滚 Node 行为回归；Windows 专项 workflow 追踪修改文件"
+  ],
+  "discovered_followups": [
+    "真实 UI 中 Guided per-stream 选择与显式确认、同次浏览器与 Native 证据桥接尚未实现，不能报告为真用户已点击",
+    "所有 Native/Node/浏览器外部 CI 未运行前不能签收本切片；若分支红灯一次修复并保留证据",
+    "真正 strict byte ceiling / VFR / player devices / Android/Web 仍属于独立初版开放项"
+  ],
+  "branch": "feat/wu11-source-locked-mixed-vbr-20261023",
+  "pr": null,
+  "base_main_sha": "4448cd7d6a9e3339440312722e8f486b56e2bf71",
+  "external_validation_states": {
+    "hosted_windows": "PENDING",
+    "hosted_frontend": "PENDING",
+    "uigs_coverage": "PENDING",
+    "field": "FIELD_PENDING",
+    "uigs_intake": "PENDING_DEDUP"
+  },
+  "updated_at": "2026-10-23"
+}
