@@ -49,6 +49,37 @@ try {
   # Pin exact fixture bytes to the official mustCopy audio compiler intent.
   # Bridge independently binds the selected embedded ASS/font to source stat.
   $sourceKey='sha256:'+(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+  # WU11 bounded real-source link: Native Guided VBR MUST use the same
+  # selected rich MKV and the embedded ASS/font already imported above.
+  # Existing WU02 formal output stays CRF23: this step does not yet claim
+  # a selected VBR plan reached that final artifact.
+  $assText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($imported.ass.base64))
+  $utf8=New-Object Text.UTF8Encoding($false)
+  $assSha=[Security.Cryptography.SHA256]::Create()
+  try{
+    $sha=[BitConverter]::ToString($assSha.ComputeHash($utf8.GetBytes($assText))).Replace('-','').ToLowerInvariant()
+  }finally{$assSha.Dispose()}
+  $realSamples=@()
+  foreach($start in @(0.0,1.0)){
+    $options=@{sampleExact=$true;guidedRenderedReference=$true;withSubtitles=$true
+      measureSsim=$true;codec='h264';encoder='libx264';preset='medium'
+      multipass='disabled';targetVideoBitrate=650000;start=$start;duration=0.8;timeoutSeconds=45}
+    $payload=@{requestId=[guid]::NewGuid().ToString('N');options=$options;assText=$assText}|ConvertTo-Json -Depth 10
+    $sample=Invoke-RestMethod -Method Post -Uri "$root/api/sample" -Headers $headers -ContentType 'application/json; charset=utf-8' -Body $payload -TimeoutSec 90
+    if(-not $sample.ok -or $sample.nativeEvidence.method -ne 'windows-native-exact-guided-ass-vbr-v1'){
+      throw 'WU11 Native rich-MKV Guided rendered VBR sample was not returned'
+    }
+    $realSamples+=,[pscustomobject]@{window=@{start=$start;duration=0.8};assTextSha256=$sha;sample=$sample}
+  }
+  $afterSourceKey='sha256:'+(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash.ToLowerInvariant()
+  if($sourceKey -ne $afterSourceKey){throw 'WU11 rich MKV changed while collecting Native VBR evidence'}
+  $paired=Join-Path $work 'wu11-rich-source-guided-paired-vbr.json'
+  $pair=@{samples=$realSamples;assTextSha256=$sha
+    sourceSha256Before=$sourceKey;sourceSha256After=$afterSourceKey}
+  [IO.File]::WriteAllText($paired,($pair|ConvertTo-Json -Depth 20),$utf8)
+  & node './scripts/check-wu11-guided-vbr-explicit-adoption.mjs' $paired $importPath $sourceKey
+  if($LASTEXITCODE -ne 0){throw 'WU11 imported ASS/font and Guided VBR evidence identity verification failed'}
+  Write-Host 'WU11 REAL NATIVE SAME-RICH-MKV PASS: source SHA, selected ASS and staged font agree in paired Guided VBR (not yet final VBR job).'
   & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath $sourceKey
   if($LASTEXITCODE -ne 0){throw 'Formal shared task compiler failed'}
   $formal=Get-Content -Raw -LiteralPath $requestPath | ConvertFrom-Json

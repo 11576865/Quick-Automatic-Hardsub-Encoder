@@ -1,0 +1,51 @@
+{
+  "goal": "QHE WU11 真实 Native 证据分母统一：同一复杂 MKV 的导入 ASS/附件字体能用于两个 Guided VBR 实测窗口并经生产验签器检查",
+  "status": "BRANCH_IMPLEMENTED_PENDING_EXTERNAL_VALIDATION",
+  "current_bounded_work_unit": "在现有 WU02 Windows Native 同一进程加入带 ASS/font asset stamp 的 Guided VBR 双窗口与生产验证器，而非直接宣称 VBR 正式输出",
+  "authorization": {
+    "source": "R19 P1/P2/P3、R24 §05/§11/§13–18；#107 WU11 与 docs/qhe-initial-version-route-reanchor-2026-10-14.md；owner 当前‘继续’授权继续实施",
+    "requirements": [
+      "B02",
+      "B04",
+      "B07",
+      "B11",
+      "B12",
+      "B24",
+      "A01",
+      "A05"
+    ],
+    "user_facing_acceptance": "同一现实 FFmpeg/Windows Native 会话，使用 WU02 复杂 MKV + 实际选中的内封 ASS/字体生成 Guided ASS-rendered 2 个 Native VBR 参考窗口；独立验签两窗 Native token 和导入资产字节 SHA；原 WU02 CRF 正式成品流程仍运行",
+    "implemented_vs_verified": "原 Guided Windows 测试用独立 2s testsrc2/PCM/ASS 和真实 VBR; WU02 rich MKV 真实 Native 输出源不同，不能拼装成一次源绑定验收。此提交首次把真实 Guided 窗口放在 WU02 rich MKV 单 Session，尚未执行 hosted CI",
+    "critical_path": "跨任务证据不能混用；先证明来源/ASS/字体一致后才能接真正采用与新的 v4 VBR 正式成品",
+    "deprioritized": "B16 FLAC strict 成本、Web 缺失 WASM、B21 跨端批次、图形 UI 新控件"
+  },
+  "completed_units": [
+    "核对 PR125 exact-head 11 项相关 hosted 工作流成功且并入 main@da4833a7；WU11 设计 PR126 CI pending，不越界合并",
+    "对比 WU02 rich MKV 源/内封 ASS/字体与旧 Guided two-window 独立素材、旧 CRF23 Manual 输出",
+    "在 WU02 Windows Native 同一选源+已 import 时调用 /api/sample 两次（0s/1s，各0.8s）生成真实 ass-rendered VBR 原生证据",
+    "用原生产 verifyGuidedNativeVbr + commitVerifiedGuidedBranch 测试，并新增导入 ASS UTF8 SHA/附件 TTF staged aggregate hash 与两窗 Native stamp 的独立断言",
+    "脚本同时核对源文件 SHA before/after，不把 Native stat token 当 cryptographic digest",
+    "工作流 path trigger 追踪新检测脚本",
+    "PR #127 non-Draft created with real Windows WU02 Native source/ASS/font VBR regression; exact-head CI pending",
+    "Foundry Intake dedup existing scoped-CI-vs-complete-case; record real same-source sample only, not simulated adoption or full output"
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [
+    "WU11 剩余关键环节：经明确用户确认的 VBR 提案必须经过既有 Guided CPU handoff 和实际 v4 Manual 编译进 Native Output；目前 WU02 仍是另一次 CRF23 正式执行",
+    "人工点击的真实 UI 与实际 Native 证据仍是两个测试域，不能把模拟 approvedByUser=true 说成真实用户交互",
+    "Windows hosted 成功后还需独立 source/output packet/hash/ASS 字体完整证书与现场播放器/设备验证"
+  ],
+  "branch": "feat/wu11-rich-mkv-native-guided-evidence-20261023",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/127",
+  "base_main_sha": "da4833a78f188c2bbd1e9628158c874b3f749530",
+  "latest_durable_commit": "f916d8c646399d4a469fc3e025d6920364e0aecf",
+  "external_validation_states": {
+    "local_node": "NOT_RUN_NO_PROJECT_CHECKOUT",
+    "windows_native": "PENDING EXACT_HEAD_PR127",
+    "test_frontend": "PENDING EXACT_HEAD_PR127",
+    "field": "FIELD_PENDING",
+    "uigs_intake": "WRITTEN dedup existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ 42149c39525e4d3c682875ebd02e6d42cc2149be; no Canonical promotion"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-23"
+}
