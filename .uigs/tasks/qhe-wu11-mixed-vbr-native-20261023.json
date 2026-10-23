@@ -31,7 +31,8 @@
     "共享 compileGuidedCpuHandoff 拒绝未批准、旧来源、缺 copy 轨锁和混合轨成本缺失；提交给同一正式 compileTask 并重编译对照逐音轨执行参数、FLAC锁定、VBR视频码率及大小/音轨成本",
     "WU11 Native builder 使用真实 /api/source-budget 的当前 a:0 Copy 负载和 a:1 AAC 96kbps 编码成本重新求视频 bitrate；当前 Native 两窗同一个 bitrate 实测，并在同一 Bridge 真实 /api/encode",
     "独立成品审计器从同一实际 VBR 产物核对 FLAC a:0 packet SHA complete match、AAC a:1 packet SHA differs、真实 ASS burn-in 像素和来源/字幕/字体/正式参数/输出哈希",
-    "添加混合音轨合法、失效/未授权、旧预算、VBR 码率不一致和事务回滚 Node 行为回归；Windows 专项 workflow 追踪修改文件"
+    "添加混合音轨合法、失效/未授权、旧预算、VBR 码率不一致和事务回滚 Node 行为回归；Windows 专项 workflow 追踪修改文件",
+    "PR #129 opened non-Draft; exact-head Windows WU02 real FFmpeg, full frontend and UIGS Coverage are external merge gates"
   ],
   "discovered_followups": [
     "真实 UI 中 Guided per-stream 选择与显式确认、同次浏览器与 Native 证据桥接尚未实现，不能报告为真用户已点击",
@@ -39,7 +40,7 @@
     "真正 strict byte ceiling / VFR / player devices / Android/Web 仍属于独立初版开放项"
   ],
   "branch": "feat/wu11-source-locked-mixed-vbr-20261023",
-  "pr": null,
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/129",
   "base_main_sha": "4448cd7d6a9e3339440312722e8f486b56e2bf71",
   "external_validation_states": {
     "hosted_windows": "PENDING",
