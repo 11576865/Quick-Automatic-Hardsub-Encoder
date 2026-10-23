@@ -6642,6 +6642,9 @@ mediaWorkspace=mountMediaWorkspace({
     return null;
   },
   sourceName: () => state.video?.name||'',
+  // Runtime-only object identity for preventing cross-source timeline reuse.
+  // Unlike the persisted media fingerprint, it distinguishes equal-metadata File selections.
+  sourceAsset: () => state.video,
   videoIdentity: () => state.video
     ? [state.video.name,state.video.size,state.video.lastModified].join('|') : '',
   recipeAssetIdentity:()=>JSON.stringify({

@@ -20,7 +20,7 @@ module.exports=async(browser,base)=>{
   if(path.startsWith('/api/pick/')){
    const role=path.split('/').pop();picks[role]++;
    if(role==='ass'&&cancelNextAss){cancelNextAss=false;return reply({role,count:0,files:[]});}
-   return reply({role,count:1,files:role==='video'?[{name:'source.mkv',size:8,lastModified:picks.video}]:[role==='ass'?ass:font]});
+   return reply({role,count:1,files:role==='video'?[{name:'source.mkv',size:8,lastModified:777}]:[role==='ass'?ass:font]});
   }
   if(path==='/api/probe'){
    if(holdProbe){pendingProbe=()=>reply(probe());return;}
@@ -93,6 +93,35 @@ module.exports=async(browser,base)=>{
     composed&&!composed.hidden&&composed.getAttribute('src')===owner.getAttribute('src');
   });
   assert.match(await page.locator('[data-v3-frame]').getAttribute('src'),/^data:image\/png;base64,/);
+  // A *different* Native source with exactly the same name/size/mtime can
+  // decode to identical PNG bytes. Source identity, not URL inequality,
+  // determines whether the central view can show the new generation.
+  const sameMetadataProbe=page.waitForResponse(response=>
+   new URL(response.url()).pathname==='/api/probe'&&response.request().method()==='POST');
+  await page.locator('#videoNativePickerBtn').click();
+  await sameMetadataProbe;
+  await page.waitForFunction(()=>document.querySelector('#taskFramePreviewImage').hidden&&
+   !document.querySelector('#taskFramePreviewImage').getAttribute('src')&&
+   !document.querySelector('[data-v3-frame]').getAttribute('src'));
+  assert.equal(await page.locator('#taskWaveformImage').getAttribute('src'),null,
+   'The old waveform must not survive a same-metadata source replacement');
+  assert.match(await page.locator('#taskWaveformStatus').textContent(),/来源已更换/,
+   'Source-object replacement must explicitly invalidate stale timeline evidence');
+  await page.waitForFunction(()=>!document.querySelector('#sourceVideoSummary').classList.contains('hidden'));
+  if(!await page.locator('#v3Preview').isVisible())await page.locator('[data-v3-action=preview]').click();
+  const replacementResponse=page.waitForResponse(response=>
+   new URL(response.url()).pathname==='/api/frame'&&response.request().method()==='POST');
+  await page.locator('[data-v3-action=generate-preview]').click();
+  await replacementResponse;
+  assert.equal(frames.length,5,'New source must request a new frame despite identical metadata');
+  await page.waitForFunction(()=>{
+   const frame=document.querySelector('#taskFramePreviewImage');
+   const central=document.querySelector('[data-v3-frame]');
+   return !frame.hidden&&!central.hidden&&!!frame.getAttribute('src')&&
+    frame.getAttribute('src')===central.getAttribute('src');
+  });
+  assert.match(await page.locator('[data-v3-frame]').getAttribute('src'),/^data:image\/png;base64,/,
+   'Identical decoded bytes for a new source must still be visible');
   await page.locator('[data-media-mode=hardsub]').click();
   await open();assert.equal(imports.length,0,'Opening import choices never extracts automatically');
   await page.locator('[data-import-action=embedded]').click();
