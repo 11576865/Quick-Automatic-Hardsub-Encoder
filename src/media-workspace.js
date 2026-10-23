@@ -1992,7 +1992,7 @@ export function mountMediaWorkspace(hooks) {
     '明确采用当前逐音轨方案（必须 Copy 锁与重新编码）；交接将按当前来源成本重算视频码率，旧短样证据不会转移'));
   const guidedMixedAudioHelp=document.createElement('p');
   guidedMixedAudioHelp.className='note';
-  guidedMixedAudioHelp.textContent='在下方「逐音轨输出计划」选择各轨动作，勾选必须 Copy 的原音轨，并先测量当前完整来源的流成本。未勾选时保持原 Guided 全局音频交接。';
+  guidedMixedAudioHelp.textContent='在下方「逐音轨输出计划」选择各轨动作，将保留轨及编码轨的时间范围均设为「完整音轨」，勾选必须 Copy 的原音轨，并先测量当前完整来源的流成本。未勾选时保持原 Guided 全局音频交接。';
   guidedHandoffButton?.after(guidedMixedAudioLabel,guidedMixedAudioHelp);
   // A prior checkbox confirmation is not consent to *later* edited tracks.
   // The fields are the existing authoritative Manual form's audio owner.
