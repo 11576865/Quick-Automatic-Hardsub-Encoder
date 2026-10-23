@@ -11,6 +11,8 @@ on:
       - 'scripts/verify-wu02-native-output.mjs'
       - 'scripts/check-wu02-embedded-native.ps1'
       - 'scripts/check-wu11-guided-vbr-explicit-adoption.mjs'
+      - 'scripts/build-wu11-native-vbr-task.mjs'
+      - 'scripts/verify-wu11-native-vbr-output.mjs'
       - '.github/workflows/windows-wu02-embedded-ass.yml'
   workflow_dispatch:
 jobs:
