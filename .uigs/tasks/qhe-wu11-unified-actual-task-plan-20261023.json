@@ -28,7 +28,8 @@
     "确认两种真实 Native 证据与 WU02 正式编译运行属于不同来源、字幕资产与码率模式",
     "形成每个生产/测试模块的文件精确实施步骤、同源 hash/ASS/fonts/Native runtime/提案/正式任务/成品对照、失败和 Field Pending 门禁",
     "计划阶段不修改 codec/renderer/compiler/runtime，实现工作未获本阶段授权不自动开展",
-    "UIGS Foundry narrowed to existing baseline-versus-scoped-CI Case; added exact real-source/CRF-VBR separation observation"
+    "UIGS Foundry narrowed to existing baseline-versus-scoped-CI Case; added exact real-source/CRF-VBR separation observation",
+    "PR #126 opened for documentation-only WU11 file-exact plan checkpoint; production execution has not started"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -37,9 +38,9 @@
     "WU12 Native multiple-output batch 属候选，必须在 WU11 reanchor 后单独确认"
   ],
   "branch": "docs/wu11-unified-actual-task-file-plan-20261023",
-  "pr": null,
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/126",
   "base_main_sha": "da4833a78f188c2bbd1e9628158c874b3f749530",
-  "latest_durable_commit": "3c779e852e072397fa43a6598babfb14017f652f",
+  "latest_durable_commit": "e97d61a3b83a3b62d8be22ec36e96a9537c3f1bb",
   "external_validation_states": {
     "hosted_checks": "PLAN_ONLY_NO_NEW_EXECUTION_TEST",
     "main_post_pr125": "MAIN_PUSH_CI_PENDING_AT_FIRST_READ (frontend/windows/android); exact head PR125 full PASS",
