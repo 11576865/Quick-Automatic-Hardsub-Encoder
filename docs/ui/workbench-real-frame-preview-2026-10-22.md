@@ -38,3 +38,10 @@
 - 正式非 Draft Frontend run [39754507684](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/39754507684) **failed** at `scripts/check-source-import-entry.cjs:81`。其余 Node、FFmpeg 集成、npm build 进入浏览器前已通过；失败具体是 Copy 预期 4 次 Native frame HTTP 请求，断言时记录为 3。失败日志在已有 Transcode 成功图像仍在中央 `img.src` 时即可被满足这一竞态上吻合，尚不足以判定实际 Copy 取帧缺失。
 - 仅修复测试同步：点击 Copy 中央取帧前注册 `page.waitForResponse`，必须真正看到本次 `POST /api/frame` 回应后才断言累计 4 次请求；保留旧的响应/图像有效性要求和实际测试覆盖。不添加固定 sleep、不删功能断言，不改运行产品代码。
 - 本修复按 `AGENTS.md` 仅进行一次。新一代完整 CI 尚**Pending External Validation**；不因旧 run 失败或修复提交而合并到 main，且不轮询到通过为止。Windows Native 响应为模拟，真实媒体/设备验收仍需独立证据。
+
+## 2026-10-23 修复后第二次完整 CI 结果与本次交接
+
+- 前次修复生成 `98d2b05a` 的正式 CI [39877054900](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/39877054900) 完整前端 FAILED，确切位置是 `scripts/check-source-import-entry.cjs:88`。此时新增的 Copy `POST /api/frame` 响应已被 Playwright 观察并且请求数达标，但立即读取中央 `img.src` 是 `null`。该证据尚不能区分真正的应用同步错误与 HTTP 响应→Native Callback→原始 img 更新→requestAnimationFrame 中央投影的多个异步阶段。
+- 本次有界修复 `75c78e5c` 将测试通过条件改为：本轮 HTTP 响应已到，原有帧所有者 `#taskFramePreviewImage` 非 hidden 且拥有真实响应的 PNG URL，然后中央 `[data-v3-frame]` 非 hidden 且拥有同一 URL。保留请求总数和响应断言，没有固定 sleep，也没有修改产品代码。若条件仍不能满足，完整 CI 会明确失败而不是伪绿。
+- 单元性质：测试完成判定与视觉投影同步，B20 用户可见取帧入口。真实媒体、设备、VFR 与成品帧准确性仍未验证；不宣称整个 B20/A04 完成。
+- 根据仓库执行协议，分支新提交后检查一次外部状态；不等待或反复重试。主线合并门槛仍是完整 frontend PASS。
