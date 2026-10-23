@@ -20,7 +20,8 @@
     "为正式 media-workspace hooks 增加源对象身份 sourceAsset()，避免只依赖 name/size/mtime",
     "源对象切换时清除唯一解码所有者的帧缓存/波形/关键帧/边界状态，旧请求按 generation 失效",
     "source switch while waveform pending 以源实例拒绝旧结果；旧请求失败不覆盖新来源状态",
-    "扩展 Windows Native mocked HTTP 浏览器用例：相同来源元数据、相同 PNG 字节，在换源后清旧画面并重新显示新帧"
+    "扩展 Windows Native mocked HTTP 浏览器用例：相同来源元数据、相同 PNG 字节，在换源后清旧画面并重新显示新帧",
+    "PR #125 created as non-Draft so complete frontend job, not draft-fast, can verify the new browser assertion"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -29,13 +30,13 @@
     "hardsub legacy preview 的源实例标记仍依赖现有守门；本切片不改硬字幕预览所有权"
   ],
   "branch": "fix/preview-source-instance-boundary-20261023",
-  "pr": null,
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/125",
   "base_main_sha": "d804e5fc4a3e5907c01c620862351020c4d67c3d",
-  "latest_durable_commit": "af590985204cae558edcd6fa255803c4bb91ef0a",
+  "latest_durable_commit": "42dae09373d0ad47d3021f59b052db989d1c390a",
   "external_validation_states": {
     "local_node": "NOT_RUN_NO_REPOSITORY_RUNTIME",
     "local_playwright": "NOT_RUN_NO_REPOSITORY_RUNTIME",
-    "hosted_ci": "PENDING_AFTER_PR",
+    "hosted_ci": "PENDING_EXACT_HEAD_PR125",
     "physical_media": "FIELD_PENDING",
     "uigs_intake": "NEEDS_DEDUP_AND_TEST_APPEND"
   },
