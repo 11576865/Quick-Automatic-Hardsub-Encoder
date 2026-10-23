@@ -84,7 +84,14 @@ module.exports=async(browser,base)=>{
   const copyResponse=await copyFrameResponse;
   assert.equal(copyResponse.ok(),true,'Copy frame transport must complete');
   assert.equal(frames.length,4,'Copy mode must reuse the existing frame decoder with an untrimmed source');
-  await page.waitForFunction(()=>!document.querySelector('#taskFramePreviewImage').hidden);
+  await page.waitForFunction(()=>{
+   const owner=document.querySelector('#taskFramePreviewImage');
+   const composed=document.querySelector('[data-v3-frame]');
+   // An HTTP response arrives before the original decoder-owner callback
+   // and the composed workbench requestAnimationFrame projection settle.
+   return owner&&!owner.hidden&&owner.getAttribute('src')?.startsWith('data:image/png;base64,')&&
+    composed&&!composed.hidden&&composed.getAttribute('src')===owner.getAttribute('src');
+  });
   assert.match(await page.locator('[data-v3-frame]').getAttribute('src'),/^data:image\/png;base64,/);
   await page.locator('[data-media-mode=hardsub]').click();
   await open();assert.equal(imports.length,0,'Opening import choices never extracts automatically');
