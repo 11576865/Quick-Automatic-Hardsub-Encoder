@@ -1636,7 +1636,9 @@ export function mountMediaWorkspace(hooks) {
       waveformStatus.textContent=waveText+keyText+' · '+formatMediaTimeInput(waveformDuration,3);
       syncWaveformMarkers();
     }catch(error){
-      waveformStatus.textContent='时间轴分析失败：'+error.message;
+      // An old source request may fail after the user has already changed files.
+      // Its failure must not overwrite the new source's empty-state guidance.
+      if(requestedSourceAsset===(hooks.sourceAsset?.()??null))waveformStatus.textContent='时间轴分析失败：'+error.message;
     }finally{button.disabled=false;}
   };
   const runButtonLabel = () => get('operation').value==='hardsub'?'使用当前参数开始硬压':get('operation').value==='transcode'?'开始视频转码':'开始视频流复制 / 剪辑';
