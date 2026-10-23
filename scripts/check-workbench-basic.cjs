@@ -57,18 +57,9 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   assert.equal(JSON.parse(guidedEditedAudio)[0].action,'flac','Guided selection retains the explicitly chosen source track');
   assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,'Editing tracks cannot silently approve a Guided-to-Manual transaction');
   assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,'Guided per-track editing does not execute a task');
-  // The following Copy/Transcode cases are *independent* global-audio
-  // scenarios. Restore through the existing production editor rather than
-  // silently inheriting this now-visible Guided per-track edit into them.
-  const guidedEditor=page.locator('details.media-audio-plan');
-  await guidedEditor.locator('summary').click();
-  await guidedEditor.getByRole('button',{name:'恢复全局音频策略'}).click();
-  await page.waitForFunction(()=>document.querySelector('[name=audioPlan]').value==='');
-  assert.equal(await page.locator('[name=mustCopyAudioOrdinals]').inputValue(),'');
-  assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,
-    'Reset never creates implicit Guided handoff approval');
-  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,
-    'Resetting a Guided audio edit must not execute a task');
+  // Keep the explicit Guided edit until we enter the *visible* Transcode
+  // audio editor. Its form-owned details projection is hidden in Guided,
+  // so clicking the underlying hidden panel here would never be a real action.
   await page.locator('[data-media-mode="copy"]').click();await page.waitForTimeout(50);
   assert.equal(await control('codec').isDisabled(),true,'Copy inherits disabled video fieldset');
   for(const name of ['width','height','scaleAlgorithm','fpsMode','fps'])assert.equal(await control(name).isDisabled(),true,`Copy locks ${name}`);
@@ -78,6 +69,19 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   await control('codec').evaluate(el=>{el.value='av1';el.dispatchEvent(new Event('change',{bubbles:true}))});
   assert.equal(await page.locator('#mediaTaskForm [name="codec"]').inputValue(),copyCodec,'Copy cannot mutate disabled encoding settings');
   await page.locator('[data-media-mode="transcode"]').click();
+  // The following Transcode scene uses independent global audio settings.
+  // Reset through the visible V3-owned projection, not the hidden underlying
+  // details panel. Keep the 2s full-audio / 1s trimmed-video assertion later.
+  const separateAudioEditor=page.locator('.v3-audio-plan');
+  await separateAudioEditor.locator('summary').click();
+  await separateAudioEditor.locator('[data-audio-reset]').click();
+  await page.waitForFunction(()=>document.querySelector('[name=audioPlan]').value==='');
+  assert.equal(await page.locator('[name=mustCopyAudioOrdinals]').inputValue(),'');
+  assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,
+    'Reset must not create implicit Guided handoff approval');
+  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,
+    'Resetting a Guided audio edit cannot start a task');
+  await separateAudioEditor.locator('summary').click();
   await control('outputContainer').selectOption('mkv');
   await control('codec').selectOption('h265');await control('preset').selectOption('fast');await control('quality').fill('25');await control('quality').blur();
   await page.waitForTimeout(50);
