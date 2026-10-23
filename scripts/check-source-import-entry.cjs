@@ -76,9 +76,16 @@ module.exports=async(browser,base)=>{
   await page.locator('[data-media-mode=copy]').click();
   await page.evaluate(()=>{const el=document.querySelector('#mediaTaskForm [name=videoRange]');el.value='full';el.dispatchEvent(new Event('change',{bubbles:true}));});
   await page.locator('[data-v3-action=preview]').click();
+  // The preceding Transcode image may already have the same data URL.
+  // Wait for the *new* Copy /api/frame response, not an old populated img.src.
+  const copyFrameResponse=page.waitForResponse(response=>
+   new URL(response.url()).pathname==='/api/frame'&&response.request().method()==='POST');
   await page.locator('[data-v3-action=generate-preview]').click();
-  await page.waitForFunction(()=>document.querySelector('[data-v3-frame]')?.getAttribute('src')?.startsWith('data:image/png;base64,'));
+  const copyResponse=await copyFrameResponse;
+  assert.equal(copyResponse.ok(),true,'Copy frame transport must complete');
   assert.equal(frames.length,4,'Copy mode must reuse the existing frame decoder with an untrimmed source');
+  await page.waitForFunction(()=>!document.querySelector('#taskFramePreviewImage').hidden);
+  assert.match(await page.locator('[data-v3-frame]').getAttribute('src'),/^data:image\/png;base64,/);
   await page.locator('[data-media-mode=hardsub]').click();
   await open();assert.equal(imports.length,0,'Opening import choices never extracts automatically');
   await page.locator('[data-import-action=embedded]').click();
