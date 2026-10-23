@@ -1,0 +1,53 @@
+{
+  "goal": "QHE 初版 WU11：建立同一真实 Windows Native 来源/ASS/字体/Guided VBR/Manual 编译/混合音轨成品的验收链",
+  "status": "AGENT_EXECUTION_COMPLETE_DESIGN_CHECKPOINT",
+  "current_bounded_work_unit": "按 issue #107 已授权范围完成 WU11 精确源码文件/原始来源/FFmpeg 验收链的实施计划，不修改产品执行代码",
+  "authorization": {
+    "source": "R19 P1/P2/P3、R24 §05/§11/§13–18；docs/qhe-initial-version-route-reanchor-2026-10-14.md；GitHub issue #107",
+    "requirements": [
+      "B02",
+      "B04",
+      "B05",
+      "B07",
+      "B11",
+      "B12",
+      "B13",
+      "B24",
+      "A01",
+      "A05",
+      "A06"
+    ],
+    "user_facing_acceptance": "一次真实 Windows Native 任务将同源 Guided ASS 渲染证据、显式用户采用、CPU Manual 编译与 FLAC copy/AAC 转码的成品实际证据接成一个证据链",
+    "gap": "现有 check-guided-budget-native 使用独立 2s testsrc2/手写 ASS/650kbps VBR；WU02 使用 5s FFV1/FLAC/AAC/ASS/TTF-rich-MKV 并从 CRF23 Guided snapshot 正式编译。分别成功不能构成同一次 VBR→Manual 输出验证。",
+    "why_now": "PR124/125 已并入主干且 bounded CI PASS；原初版审计的下一关键路径是 B02/B04/P3 跨视图到实际 Artifact，不应循环补局部 UI 检查",
+    "deprioritized": "B16 strict FLAC 预算估算、B21 跨平台批次、Web 缺失的 WASM 分发核心与新编码器不是本次 WU11 链路前置"
+  },
+  "completed_units": [
+    "核对并合并 PR125，main@da4833a78f188c2bbd1e9628158c874b3f749530；其精确 head frontend/Windows smoke/UIGS 与 WU03–09 全 PASS",
+    "复核 #107 与 R19/R24 路线及已合并的 WU01/WU02/WU10 实测脚本",
+    "确认两种真实 Native 证据与 WU02 正式编译运行属于不同来源、字幕资产与码率模式",
+    "形成每个生产/测试模块的文件精确实施步骤、同源 hash/ASS/fonts/Native runtime/提案/正式任务/成品对照、失败和 Field Pending 门禁",
+    "计划阶段不修改 codec/renderer/compiler/runtime，实现工作未获本阶段授权不自动开展",
+    "UIGS Foundry narrowed to existing baseline-versus-scoped-CI Case; added exact real-source/CRF-VBR separation observation",
+    "PR #126 opened for documentation-only WU11 file-exact plan checkpoint; production execution has not started"
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [
+    "WU11 实施需要下一单元独立授权；优先同一 WU02 rich MKV 来源下的 Native 同参考 Guided VBR + 真实 Manual v4 成品桥接",
+    "若实际 Native 样本无法绑定来源内封字体 staged hash，报告 BLOCKED: staged-font-provenance 并局部修复，不借系统字体替代",
+    "WU12 Native multiple-output batch 属候选，必须在 WU11 reanchor 后单独确认"
+  ],
+  "branch": "docs/wu11-unified-actual-task-file-plan-20261023",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/126",
+  "base_main_sha": "da4833a78f188c2bbd1e9628158c874b3f749530",
+  "latest_durable_commit": "e97d61a3b83a3b62d8be22ec36e96a9537c3f1bb",
+  "external_validation_states": {
+    "hosted_checks": "PLAN_ONLY_NO_NEW_EXECUTION_TEST",
+    "main_post_pr125": "MAIN_PUSH_CI_PENDING_AT_FIRST_READ (frontend/windows/android); exact head PR125 full PASS",
+    "user_media": "FIELD_PENDING",
+    "uigs_intake": "DEDUPED_AND_WRITTEN Foundry inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ 2899735322c7651776e440103686e44b57f07393; no Canonical changes",
+    "native_wu11_single_source": "NOT_EXECUTED"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-23"
+}

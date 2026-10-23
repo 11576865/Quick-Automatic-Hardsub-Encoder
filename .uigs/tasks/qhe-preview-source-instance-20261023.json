@@ -1,6 +1,6 @@
 {
   "goal": "阻止不同来源但同名/同大小/同mtime的视频共用旧时间轴或源帧，同时允许新来源内容相同的解码画面正常显示",
-  "status": "BRANCH_IMPLEMENTED_PENDING_EXTERNAL_VALIDATION",
+  "status": "INTEGRATED_EXACT_HEAD_HOSTED_VERIFIED_FIELD_PENDING",
   "current_bounded_work_unit": "QHE 时间轴源实例守门 + 切换时旧波形/关键帧/帧缓存失效 + HTTP 模拟 Native 浏览器回归",
   "authorization": {
     "source": "R19/R24 原始初版；docs/qhe-initial-version-route-reanchor-2026-10-14.md B09/B20/A04，接续主干 PR #124",
@@ -21,7 +21,8 @@
     "源对象切换时清除唯一解码所有者的帧缓存/波形/关键帧/边界状态，旧请求按 generation 失效",
     "source switch while waveform pending 以源实例拒绝旧结果；旧请求失败不覆盖新来源状态",
     "扩展 Windows Native mocked HTTP 浏览器用例：相同来源元数据、相同 PNG 字节，在换源后清旧画面并重新显示新帧",
-    "PR #125 created as non-Draft so complete frontend job, not draft-fast, can verify the new browser assertion"
+    "PR #125 created as non-Draft so complete frontend job, not draft-fast, can verify the new browser assertion",
+    "PR #125 exact-head bd079a01: full frontend + Windows smoke + UIGS coverage and focused WU checks success; squash-merged to main@da4833a78f188c2bbd1e9628158c874b3f749530"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -32,13 +33,14 @@
   "branch": "fix/preview-source-instance-boundary-20261023",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/125",
   "base_main_sha": "d804e5fc4a3e5907c01c620862351020c4d67c3d",
-  "latest_durable_commit": "42dae09373d0ad47d3021f59b052db989d1c390a",
+  "latest_durable_commit": "da4833a78f188c2bbd1e9628158c874b3f749530",
   "external_validation_states": {
     "local_node": "NOT_RUN_NO_REPOSITORY_RUNTIME",
     "local_playwright": "NOT_RUN_NO_REPOSITORY_RUNTIME",
-    "hosted_ci": "PENDING_EXACT_HEAD_PR125",
+    "hosted_ci": "PASS exact PR125 head bd079a017c5fc749c10327c9549e71a0db9fc8f0 (Test frontend full, Windows smoke, UIGS, WU03-09 checks); merged main da4833a7",
     "physical_media": "FIELD_PENDING",
-    "uigs_intake": "NEEDS_DEDUP_AND_TEST_APPEND"
+    "uigs_intake": "WRITTEN; dedup reused inbox/tests/2026-10-22-qhe-central-preview-source-frame-gate.md @ 887b121bb9cf0b1e1d886e2369693ca159a22bb5; no Canonical",
+    "main_push": "PENDING frontend/Windows/Android at first read after merge; UIGS coverage PASS"
   },
   "blockers": [],
   "updated_at": "2026-10-23"
