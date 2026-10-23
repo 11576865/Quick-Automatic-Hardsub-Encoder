@@ -32,3 +32,9 @@
 因此扩展 `scripts/check-source-import-entry.cjs` 的真实前端 + Windows Native Client **模拟 HTTP** 验证：同一个 mock 来源的转码与 Copy 从中央按钮触发唯一 `/api/frame`，回执的 `requestId`、视频流 ordinal、720px 解码宽度保持；后台旧编辑器为唯一帧所有者，中央展示其结果。另在桥返回 `ok:false` 时要求中央清除旧帧、显示失败原因、用户再次点击可重试。这里的 PNG 是测试固定像素，不是 FFmpeg 生成的真实媒体产物。
 
 下一步解除 Draft 以触发完整 `frontend` 作业（其脚本链包含 `check-media-ui.cjs` → `check-source-import-entry.cjs`），在本轮事务提交后仅读取一次任务状态；不把 Pending 当 PASS。真实 GPU、长片、VFR/B 帧与用户设备仍属于 FIELD-PENDING。
+
+## 2026-10-23 已观察到完整 CI 失败及一次有界修复
+
+- 正式非 Draft Frontend run [39754507684](https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/39754507684) **failed** at `scripts/check-source-import-entry.cjs:81`。其余 Node、FFmpeg 集成、npm build 进入浏览器前已通过；失败具体是 Copy 预期 4 次 Native frame HTTP 请求，断言时记录为 3。失败日志在已有 Transcode 成功图像仍在中央 `img.src` 时即可被满足这一竞态上吻合，尚不足以判定实际 Copy 取帧缺失。
+- 仅修复测试同步：点击 Copy 中央取帧前注册 `page.waitForResponse`，必须真正看到本次 `POST /api/frame` 回应后才断言累计 4 次请求；保留旧的响应/图像有效性要求和实际测试覆盖。不添加固定 sleep、不删功能断言，不改运行产品代码。
+- 本修复按 `AGENTS.md` 仅进行一次。新一代完整 CI 尚**Pending External Validation**；不因旧 run 失败或修复提交而合并到 main，且不轮询到通过为止。Windows Native 响应为模拟，真实媒体/设备验收仍需独立证据。
