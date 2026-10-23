@@ -13,6 +13,9 @@ on:
       - 'scripts/check-wu11-guided-vbr-explicit-adoption.mjs'
       - 'scripts/build-wu11-native-vbr-task.mjs'
       - 'scripts/verify-wu11-native-vbr-output.mjs'
+      - 'src/guided-task-handoff.js'
+      - 'src/guided-cpu-compiler-contract.js'
+      - 'src/guided-cpu-compiler-contract.test.mjs'
       - '.github/workflows/windows-wu02-embedded-ass.yml'
   workflow_dispatch:
 jobs:
