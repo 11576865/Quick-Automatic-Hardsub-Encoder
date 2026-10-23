@@ -26,12 +26,13 @@
     "Added scripts/check-wu11-browser-native-session.cjs: real Chromium with production media-workspace and Windows Native JS client; live Bridge probe, embedded ASS/font, actual source budget; real user-equivalent clicks to source-locked schema-v4 Manual task; real Native /api/encode job poll and receipt",
     "Added scripts/verify-wu11-browser-native-output.mjs: FFprobe independently validates same clicked job output FLAC packets unchanged, AAC reencoded, ASS font source bytes and burnt pixel difference, proper target/cost/source/current measurement",
     "Updated scripts/check-wu02-embedded-native.ps1 to run this browser acceptance while original live Native Bridge still owns the rich MKV source, before independent WU02 CRF verification",
-    "Updated Windows WU02 workflow to install Chromium and run same-session scenario (35 minute bounded job)"
+    "Updated Windows WU02 workflow to install Chromium and run same-session scenario (35 minute bounded job)",
+    "PR #131 opened non-Draft for real Chromium Windows Native session; exact-head hosted CI is a hard merge gate"
   ],
   "next_units": [],
   "branch": "feat/wu11-real-browser-native-session-20261024",
-  "pr": null,
-  "latest_durable_commit": "07e6ee4cd8bbec714868fe97e89898257c76497e",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/131",
+  "latest_durable_commit": "4ca038ddebec804e9b5c229bf2314a8550a96471",
   "base_main_sha": "4e4e5e1cb71289959082d150031cdd69ab46ef01",
   "external_validation_states": {
     "windows_chromium_native": "PENDING",
