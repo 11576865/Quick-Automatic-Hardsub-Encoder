@@ -7,6 +7,10 @@ on:
       - 'src/guided-cpu-compiler-contract.test.mjs'
       - 'src/guided-cpu-compiler-contract.integration.test.mjs'
       - 'scripts/check-wu01-browser.cjs'
+      - 'scripts/check-wu11-guided-mixed-audio-ui.cjs'
+      - 'src/guided-explicit-audio-handoff.js'
+      - 'src/guided-explicit-audio-handoff.test.mjs'
+      - 'src/media-workspace.js'
       - 'src/media-task.js'
       - 'src/media-verification.js'
       - '.github/workflows/qhe-wu01-guided-cpu-handoff.yml'
@@ -29,7 +33,7 @@ jobs:
       - name: Run source-bound handoff and real FFmpeg tests
         env:
           QHE_WU01_REAL_FFMPEG: '1'
-        run: node --test src/guided-cpu-compiler-contract.test.mjs src/guided-cpu-compiler-contract.integration.test.mjs
+        run: node --test src/guided-cpu-compiler-contract.test.mjs src/guided-cpu-compiler-contract.integration.test.mjs src/guided-explicit-audio-handoff.test.mjs
 
   real-browser-handoff:
     runs-on: ubuntu-latest
@@ -46,4 +50,6 @@ jobs:
           npm install --no-save playwright
           npx playwright install --with-deps chromium
       - name: Exercise actual Guided to Manual DOM and compiled execution request
-        run: node scripts/check-wu01-browser.cjs
+        run: |
+          node scripts/check-wu01-browser.cjs
+          node scripts/check-wu11-guided-mixed-audio-ui.cjs
