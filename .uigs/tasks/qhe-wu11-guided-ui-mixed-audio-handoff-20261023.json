@@ -1,7 +1,7 @@
 {
   "goal": "QHE WU11 actual Guided user per-stream audio action and explicit confirmation -> Manual CPU shared compiler executable task",
-  "status": "BRANCH_IMPLEMENTED_PENDING_HOSTED_VALIDATION",
-  "current_bounded_work_unit": "Reuse production audio stream editor in Guided, require explicit click, recompile current source whole-file audio budget, verify real Chromium DOM and controlled output task",
+  "status": "BOUNDED_REPAIR_PUSHED_PENDING_NEXT_EXACT_HEAD_FRONTEND",
+  "current_bounded_work_unit": "Repair PR130 old Guided hidden-projection browser assumption now that explicit per-track editor is intentionally user-operable; preserve no-auto-approval guard",
   "authorization": {
     "source": "R19 P1/P2/P3, R24 §05/§11/§13-18; route docs/qhe-initial-version-route-reanchor-2026-10-14.md B02/B04/B05/B06/B11/B13, A01-A03; issue #107, PR #126 exact-file plan",
     "requirements": [
@@ -31,25 +31,30 @@
     "Add targeted model negative tests and real Chromium DOM with controlled source/Native transport, requiring actual select/click/confirmation followed by executable schema-v4 mixed task",
     "Update WU01 browser/CPU workflow for exact user UI tests",
     "PR #130 created non-Draft to trigger actual Chromium DOM + CPU unit, complete frontend and UIGS exact-head acceptance",
-    "UIGS Intake appended existing scoped-acceptance Case, clearly separating real Guided DOM interaction from mocked transport and separate Native output"
+    "UIGS Intake appended existing scoped-acceptance Case, clearly separating real Guided DOM interaction from mocked transport and separate Native output",
+    "PR130 previous exact head e3c328f49affbf0f48efb9bc7748de9d718d7319: 9/10 hosted workflows SUCCESS, including WU01 real Chromium+CPU, Windows smoke, all scoped matrix/UIGS. Test frontend 39912565784 FAILED only check-workbench-basic.cjs line 50 old assumption that Guided audio proxy is hidden/no-op.",
+    "One bounded repair commit 2a14d882cb6184d7538b9da1ca2cfc6e474d32b5: change only stale basic browser assertion to require explicit user-selected audio plan reaches single formal owner while no separate approval, no task execution. Does not relax Copy/approval/recompile test."
   ],
   "authorized_next_units": [],
   "discovered_followups": [
     "Same browser session needs real Windows Native bridge/device artifact; current Chromium uses simulated source/transport and cannot substantiate physical Native user interaction",
     "Guided selected VBR recommendation after a different audio plan has a new computed bitrate; previous short sample must be measured again, no automated adoption from old sample",
-    "File-provider/long-form/VFR/P2 language/disposition and strict ceiling remain independently open"
+    "File-provider/long-form/VFR/P2 language/disposition and strict ceiling remain independently open",
+    "Do not repeat CI checks within this bounded work unit; next turn check exact-head after one repair generation and merge only if complete"
   ],
   "branch": "feat/wu11-guided-real-ui-mixed-audio-handoff-20261023",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/130",
   "base_main_sha": "c31f2ee6b61bb76341dba9b1527befc4420916fb",
-  "latest_durable_commit": "1236c793fb3cc2e0b8b1c59b8c48eb95af2ae13a",
+  "latest_durable_commit": "2a14d882cb6184d7538b9da1ca2cfc6e474d32b5",
   "external_validation_states": {
-    "node_unit": "PENDING PR130",
-    "actual_chromium": "PENDING PR130",
-    "full_frontend": "PENDING PR130",
+    "node_unit": "PASS previous head WU01 and frontend unit before failed basic script; new head PENDING",
+    "actual_chromium": "PASS previous head WU01 run 39912565730; new head PENDING",
+    "full_frontend": "PREVIOUS_HEAD_FAILURE run 39912565784 (obsolete Guided hidden-audio assertion); new repair head PENDING",
     "native_real": "EXISTING_PR129_ONLY_NOT_THIS_UI",
     "field": "FIELD_PENDING",
-    "uigs_intake": "WRITTEN deduplicated existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ cca0be1277cecdf97964667e791074144aa0799c; no Canonical promotion"
+    "uigs_intake": "WRITTEN deduplicated existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ cca0be1277cecdf97964667e791074144aa0799c; no Canonical promotion",
+    "uigs_coverage": "PASS previous head run 39912565828; new head PENDING",
+    "pr_merge": "BLOCKED until all required exact-head after repair PASS"
   },
   "updated_at": "2026-10-23"
 }
