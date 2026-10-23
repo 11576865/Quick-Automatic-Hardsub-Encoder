@@ -29,7 +29,8 @@
     "In production guidedToManual handler recompile and apply current source + frozen audio, reject malformed/trim/unknown audio plans and old evidence",
     "Fix real applyConfig mustCopyAudioOrdinals array serialized as JSON, preserving production compiler lock",
     "Add targeted model negative tests and real Chromium DOM with controlled source/Native transport, requiring actual select/click/confirmation followed by executable schema-v4 mixed task",
-    "Update WU01 browser/CPU workflow for exact user UI tests"
+    "Update WU01 browser/CPU workflow for exact user UI tests",
+    "PR #130 created non-Draft to trigger actual Chromium DOM + CPU unit, complete frontend and UIGS exact-head acceptance"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -38,13 +39,13 @@
     "File-provider/long-form/VFR/P2 language/disposition and strict ceiling remain independently open"
   ],
   "branch": "feat/wu11-guided-real-ui-mixed-audio-handoff-20261023",
-  "pr": null,
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/130",
   "base_main_sha": "c31f2ee6b61bb76341dba9b1527befc4420916fb",
-  "latest_durable_commit": "2821ebd76d5e7d6b306a3c792ea84f6d98f01381",
+  "latest_durable_commit": "1236c793fb3cc2e0b8b1c59b8c48eb95af2ae13a",
   "external_validation_states": {
-    "node_unit": "PENDING_HOSTED",
-    "actual_chromium": "PENDING_HOSTED",
-    "full_frontend": "PENDING_HOSTED",
+    "node_unit": "PENDING PR130",
+    "actual_chromium": "PENDING PR130",
+    "full_frontend": "PENDING PR130",
     "native_real": "EXISTING_PR129_ONLY_NOT_THIS_UI",
     "field": "FIELD_PENDING",
     "uigs_intake": "PENDING_DEDUP"
