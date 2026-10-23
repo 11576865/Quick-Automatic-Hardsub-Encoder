@@ -218,6 +218,7 @@ test('WU11 mixed FLAC Copy + AAC encode uses only explicitly source-locked Guide
  const wrongAudio={...audio,audioPlan:[{sourceOrdinal:0,action:'aac',bitrate:96000},
   {sourceOrdinal:1,action:'copy',range:'full'}]};
  assert.equal(fail({a:wrongAudio}).reason,'invalid-or-stale-guided-mixed-audio-intent');
+ form={...defaults(),codec:'h265',rateMode:'quality'};
  const previous={...form};
  const changed=commitGuidedCpuHandoff({contract:c,media:m,evidence,
   expectedSourceIdentity:source,sourceIdentity:()=>source,
