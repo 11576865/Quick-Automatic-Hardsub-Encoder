@@ -27,7 +27,8 @@
     "New build-wu11-native-vbr-task.mjs obtains official v4 size-plan and source-bound Native whole-file copy-audio packet cost; derives bitrate and freezes same Guided plan; compiles and rechecks original source v4 CPU handoff; negative old-budget identity",
     "Native Windows WU02 session now measures /api/source-budget, runs two ASS-rendered Guided VBR windows at computed same-source video bitrate, passes receipts to production verifier and explicit simulated transaction",
     "Same session /api/encode runs formal budget-v4 VBR full source job and existing WU02 CRF mixed-audio job separately; independent verifier compares real FFprobe video/output, both audio packet SHA, source SHA/ASS/font stamps, subtitle-pixel difference and output bytes",
-    "Workflow file path triggers new scripts; owner denominator and nontransferable certificate explicitly preserved"
+    "Workflow file path triggers new scripts; owner denominator and nontransferable certificate explicitly preserved",
+    "PR #128 created non-Draft for full Windows Native WU02, frontend, UIGS exact-head checks"
   ],
   "discovered_followups": [
     "Native final output may exceed targetBytes: best-effort VBR is not strict output-size proof; collect exact actualBytes in receipt, no completion claim on A07",
@@ -35,12 +36,12 @@
     "Windows CI may uncover differences in PowerShell/Budget/Native worker; fix one bounded verified blocker before merging"
   ],
   "branch": "feat/wu11-guided-vbr-formal-native-output-20261023",
-  "pr": null,
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/128",
   "base_main_sha": "f9178961765d6c6387db7c72b21fdfae70b61f25",
   "external_validation_states": {
-    "hosted_windows": "PENDING EXACT HEAD",
-    "full_frontend": "PENDING EXACT HEAD",
-    "uigs_coverage": "PENDING EXACT HEAD",
+    "hosted_windows": "PENDING_EXACT_HEAD_PR128",
+    "full_frontend": "PENDING_EXACT_HEAD_PR128",
+    "uigs_coverage": "PENDING_EXACT_HEAD_PR128",
     "local": "NOT_RUN_NO_CHECKOUT",
     "field": "FIELD_PENDING",
     "foundry": "PENDING_DEDUP"
