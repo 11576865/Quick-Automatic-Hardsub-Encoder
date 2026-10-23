@@ -29,6 +29,12 @@ test('timeline source-frame preview is wired across Web, Windows Native and Andr
   assert.match(engine, /force_original_aspect_ratio=decrease/);
   assert.match(engine, /0:v:\$\{videoStream\}/);
 
+  // Runtime source instance identity is distinct from a file metadata fingerprint.
+  // This static wiring check complements the Native HTTP Playwright same-metadata test.
+  assert.match(main, /sourceAsset:\s*\(\)\s*=>\s*state\.video/);
+  assert.match(workspace, /function resetTimelineForChangedSource\(\)/);
+  assert.match(workspace, /const mediaInfoListener = \(\) => \{ resetTimelineForChangedSource\(\)/);
+  assert.match(workspace, /requestedSourceAsset!==\(hooks\.sourceAsset\?\.\(\)\?\?null\)/);
   assert.match(client, /renderNativeFrame\(requestId, timeSeconds, width, videoStream = 0\)/);
   assert.match(client, /'\/api\/frame'/);
   assert.match(windows, /function Invoke-Frame\(\$Body\)/);
