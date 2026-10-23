@@ -1,7 +1,7 @@
 {
   "goal": "QHE WU11 actual Guided user per-stream audio action and explicit confirmation -> Manual CPU shared compiler executable task",
-  "status": "BOUNDED_REPAIR_PUSHED_PENDING_NEXT_EXACT_HEAD_FRONTEND",
-  "current_bounded_work_unit": "Repair PR130 old Guided hidden-projection browser assumption now that explicit per-track editor is intentionally user-operable; preserve no-auto-approval guard",
+  "status": "AGENT_EXECUTION_COMPLETE_BOUNDED_FIXTURE_REPAIR_PENDING_EXACT_HEAD_CI",
+  "current_bounded_work_unit": "Repair second PR130 check-workbench-basic failure: minimal fixture omitted #guidedToManual so its confirmation checkbox could never be generated",
   "authorization": {
     "source": "R19 P1/P2/P3, R24 §05/§11/§13-18; route docs/qhe-initial-version-route-reanchor-2026-10-14.md B02/B04/B05/B06/B11/B13, A01-A03; issue #107, PR #126 exact-file plan",
     "requirements": [
@@ -33,28 +33,31 @@
     "PR #130 created non-Draft to trigger actual Chromium DOM + CPU unit, complete frontend and UIGS exact-head acceptance",
     "UIGS Intake appended existing scoped-acceptance Case, clearly separating real Guided DOM interaction from mocked transport and separate Native output",
     "PR130 previous exact head e3c328f49affbf0f48efb9bc7748de9d718d7319: 9/10 hosted workflows SUCCESS, including WU01 real Chromium+CPU, Windows smoke, all scoped matrix/UIGS. Test frontend 39912565784 FAILED only check-workbench-basic.cjs line 50 old assumption that Guided audio proxy is hidden/no-op.",
-    "One bounded repair commit 2a14d882cb6184d7538b9da1ca2cfc6e474d32b5: change only stale basic browser assertion to require explicit user-selected audio plan reaches single formal owner while no separate approval, no task execution. Does not relax Copy/approval/recompile test."
+    "One bounded repair commit 2a14d882cb6184d7538b9da1ca2cfc6e474d32b5: change only stale basic browser assertion to require explicit user-selected audio plan reaches single formal owner while no separate approval, no task execution. Does not relax Copy/approval/recompile test.",
+    "PR130 repaired exact-head 1b09c5ac7838febdbaba189f03c0d3068f185423: frontend run 39953246427 FAILED at scripts/check-workbench-basic.cjs:58; Playwright waited 30s for missing #guidedMixedAudioConfirm because reduced test fixture lacked #guidedToManual. WU01 CPU success; real-browser and WU06 job still in progress at inspection.",
+    "One bounded follow-up repair ffa1ade0de442a4aa6536b0a9fee570342479a4b adds actual #guidedToManual to reduced basic browser fixture, keeping assertions that explicitly edited plan exists, consent is unchecked, no executable task dispatched."
   ],
   "authorized_next_units": [],
   "discovered_followups": [
     "Same browser session needs real Windows Native bridge/device artifact; current Chromium uses simulated source/transport and cannot substantiate physical Native user interaction",
     "Guided selected VBR recommendation after a different audio plan has a new computed bitrate; previous short sample must be measured again, no automated adoption from old sample",
     "File-provider/long-form/VFR/P2 language/disposition and strict ceiling remain independently open",
-    "Do not repeat CI checks within this bounded work unit; next turn check exact-head after one repair generation and merge only if complete"
+    "Do not repeat CI checks within this bounded work unit; next turn check exact-head after one repair generation and merge only if complete",
+    "After next exact-head CI result, distinguish 3 outcomes: full success -> merge; failed assertion -> bounded repair with log; browser dependency stuck -> external pending, not automatically success."
   ],
   "branch": "feat/wu11-guided-real-ui-mixed-audio-handoff-20261023",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/130",
   "base_main_sha": "c31f2ee6b61bb76341dba9b1527befc4420916fb",
-  "latest_durable_commit": "2a14d882cb6184d7538b9da1ca2cfc6e474d32b5",
+  "latest_durable_commit": "ffa1ade0de442a4aa6536b0a9fee570342479a4b",
   "external_validation_states": {
     "node_unit": "PASS previous head WU01 and frontend unit before failed basic script; new head PENDING",
-    "actual_chromium": "PASS previous head WU01 run 39912565730; new head PENDING",
-    "full_frontend": "PREVIOUS_HEAD_FAILURE run 39912565784 (obsolete Guided hidden-audio assertion); new repair head PENDING",
+    "actual_chromium": "PREVIOUS HEAD WU01 run 39953246462 real-cpu-handoff SUCCESS, real-browser-handoff IN_PROGRESS; NEW HEAD PENDING",
+    "full_frontend": "PREVIOUS HEAD FAILURE 39953246427 reduced fixture missing handoff button; NEW HEAD PENDING",
     "native_real": "EXISTING_PR129_ONLY_NOT_THIS_UI",
     "field": "FIELD_PENDING",
-    "uigs_intake": "WRITTEN deduplicated existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ cca0be1277cecdf97964667e791074144aa0799c; no Canonical promotion",
+    "uigs_intake": "PENDING DEDUP for observed missing-#guidedToManual test-fixture defect",
     "uigs_coverage": "PASS previous head run 39912565828; new head PENDING",
-    "pr_merge": "BLOCKED until all required exact-head after repair PASS"
+    "pr_merge": "BLOCKED until all exact-head checks pass; do not repeat status polling in this work unit"
   },
   "updated_at": "2026-10-23"
 }
