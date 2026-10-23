@@ -105,6 +105,8 @@ module.exports=async(browser,base)=>{
    !document.querySelector('[data-v3-frame]').getAttribute('src'));
   assert.equal(await page.locator('#taskWaveformImage').getAttribute('src'),null,
    'The old waveform must not survive a same-metadata source replacement');
+  assert.match(await page.locator('#taskWaveformStatus').textContent(),/来源已更换/,
+   'Source-object replacement must explicitly invalidate stale timeline evidence');
   await page.waitForFunction(()=>!document.querySelector('#sourceVideoSummary').classList.contains('hidden'));
   if(!await page.locator('#v3Preview').isVisible())await page.locator('[data-v3-action=preview]').click();
   const replacementResponse=page.waitForResponse(response=>
