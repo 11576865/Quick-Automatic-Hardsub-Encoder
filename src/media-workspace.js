@@ -668,6 +668,7 @@ export function mountMediaWorkspace(hooks) {
   let waveformUrl=null,waveformDuration=0,waveformCursor=0,waveformDragging=null,waveformScrubbing=false;
   let timelineKeyframes=[],timelineKeyframesTruncated=false;
   let timelineSourceKey='',timelineVideoOrdinal=-1;
+  let timelineSourceAsset=hooks.sourceAsset?.()??null;
   let timelineFrameTimer=null,timelineFrameRequestSeq=0,boundaryFrameTimer=null,boundaryFrameRequestSeq=0,lastBoundaryPreviewKey='',timelineFrameGeneration=0;
   const timelineFrameCache=new Map();
   const timelineFramePending=new Map();
@@ -1285,6 +1286,28 @@ export function mountMediaWorkspace(hooks) {
     requestedFrameTime.textContent='—';
     actualFrameTime.textContent='—';
   }
+  // A reused filename/size/mtime is not a reused media selection. Invalidate
+  // the single frame owner on source-object change, even if the next decoded
+  // frame has *identical PNG bytes* (and therefore an identical data URL).
+  function resetTimelineForChangedSource(){
+    const next=hooks.sourceAsset?.()??null;
+    if(next===timelineSourceAsset)return;
+    timelineSourceAsset=next;
+    clearTimelineFrameCache();
+    if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
+    waveformUrl=null;waveformDuration=0;waveformCursor=0;
+    timelineKeyframes=[];timelineKeyframesTruncated=false;
+    timelineSourceKey='';timelineVideoOrdinal=-1;
+    waveformImage.removeAttribute('src');waveformImage.hidden=true;
+    waveformPlaceholder.hidden=false;
+    waveformPlaceholder.textContent='更换视频后请重新读取时间轴';
+    waveformRuler.replaceChildren();
+    keyframeLane.replaceChildren();
+    waveformStartEl.hidden=true;waveformEndEl.hidden=true;
+    waveformCursorEl.hidden=true;waveformSelection.hidden=true;
+    boundaryFrameInspector.hidden=true;
+    waveformStatus.textContent='来源已更换；旧时间轴与源帧已失效，请重新读取';
+  }
   const primaryVideoStream=()=>{
     const raw=String(get('videoStreams')?.value||'0').trim().toLowerCase();
     if(raw==='all')return 0;
@@ -1567,6 +1590,7 @@ export function mountMediaWorkspace(hooks) {
     const copy=get('operation').value==='copy';
     const videoTrim=copy&&get('videoRange').value==='trim';
     const requestedSourceKey=hooks.videoIdentity?.()||'';
+    const requestedSourceAsset=hooks.sourceAsset?.()??null;
     const requestedVideoOrdinal=primaryVideoStream();
     waveformStatus.textContent=videoTrim?'正在分析时间范围、波形与主选视频关键帧…':'正在分析时间范围与音频波形…';
     try{
@@ -1574,7 +1598,7 @@ export function mountMediaWorkspace(hooks) {
       const audioTrack=audioValue==='all'?0:Math.max(0,Number(audioValue)||0);
       const result=await hooks.waveform({audioTrack,videoStream:primaryVideoStream(),width:2400,height:160,includeKeyframes:videoTrim,maxKeyframes:12000,allowNoWaveform:true});
       if(!(Number(result?.duration)>0))throw Error('时间轴结果缺少有效时长');
-      if(requestedSourceKey!==(hooks.videoIdentity?.()||'')||requestedVideoOrdinal!==primaryVideoStream())throw Error('来源或视频流在时间轴分析期间改变；丢弃旧关键帧');
+      if(requestedSourceAsset!==(hooks.sourceAsset?.()??null)||requestedSourceKey!==(hooks.videoIdentity?.()||'')||requestedVideoOrdinal!==primaryVideoStream())throw Error('来源或视频流在时间轴分析期间改变；丢弃旧关键帧');
       if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);
       waveformUrl=result.url||null;
       waveformDuration=Number(result.duration);
@@ -2067,7 +2091,7 @@ export function mountMediaWorkspace(hooks) {
     if(identity!==reviewSourceIdentity){reviewSourceIdentity=identity;markCompletedAsPrevious('source');activeTask=null;syncOutputVerificationAvailability();}
     syncTaskReview();
   }
-  const mediaInfoListener = () => { syncBrowserBatch();syncReviewSource();invalidateBudgetEvidence();syncCopyStrategy();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); syncRecipeMatrix(); hooks.onBudgetEvidenceChange?.(); };
+  const mediaInfoListener = () => { resetTimelineForChangedSource();syncBrowserBatch();syncReviewSource();invalidateBudgetEvidence();syncCopyStrategy();audioStreamPlan.refresh();syncAudioPlaybackWarning(); syncVideoStreamInfo(); syncTaskActions(); clearClipQueueOnSourceChange(); syncClipQueue(); syncRecipeMatrix(); hooks.onBudgetEvidenceChange?.(); };
   document.addEventListener('change',handleSharedAudioChange);
   document.addEventListener('quick-hardsub-media-info-changed',mediaInfoListener);
   const invalidateCurvesOnMediaChange = () => transcodeCurves.invalidate();
