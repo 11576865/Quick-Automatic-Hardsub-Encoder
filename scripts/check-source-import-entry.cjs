@@ -7,7 +7,7 @@ module.exports=async(browser,base)=>{
   await page.route('**/__qa-font/**',async route=>{const relative=new URL(route.request().url()).pathname.split('/__qa-font/')[1];await route.fulfill({body:await fs.readFile(path.join(process.env.QHE_QA_FONT_DIR,relative)),contentType:relative.endsWith('.css')?'text/css':'font/woff2'})});
  }
 
- let picks={ass:0,fonts:0,video:0},imports=[],importFailure=true,hasAss=true,pendingProbe=null,holdProbe=false,cancelNextAss=false;
+ let picks={ass:0,fonts:0,video:0},imports=[],frames=[],frameFailure=false,importFailure=true,hasAss=true,pendingProbe=null,holdProbe=false,cancelNextAss=false;
  const asset=(name,text)=>({name,size:Buffer.byteLength(text),base64:Buffer.from(text).toString('base64')});
  const ass=asset('dialogue.ass','[Script Info]\nTitle: import fixture\n'),font=asset('fixture.ttf','FONT');
  const probe=()=>({ok:true,width:320,height:180,duration:2,fps:24,videoCodec:'h264',pixelFormat:'yuv420p',bitDepth:8,seekable:true,audioTracks:0,subtitleTracks:hasAss?2:0,subtitleStreams:hasAss?[{codec_name:'subrip'},{codec_name:'ass',tags:{language:'jpn',title:'Dialogue'}}]:[]});
@@ -25,6 +25,12 @@ module.exports=async(browser,base)=>{
   if(path==='/api/probe'){
    if(holdProbe){pendingProbe=()=>reply(probe());return;}
    return reply(probe());
+  }
+  if(path==='/api/frame'){
+   const request=route.request().postDataJSON();frames.push(request);
+   if(frameFailure)return reply({requestId:request.requestId,ok:false,error:'fixture frame decode failed'});
+   return reply({requestId:request.requestId,ok:true,time:Number(request.timeSeconds||0),width:request.width,
+    url:'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII='});
   }
   if(path==='/api/embedded-ass'){
    imports.push(route.request().postDataJSON());
@@ -48,6 +54,46 @@ module.exports=async(browser,base)=>{
   await open();await page.locator('[data-import-action=fonts]').click();await page.waitForFunction(()=>document.querySelector('#fontMeta').textContent.includes('本次选择 1 个字体'));assert.equal(picks.fonts,1);
   await page.locator('#videoNativePickerBtn').click();
   await page.waitForFunction(()=>document.querySelector('#embeddedAssStream').options.length===1);
+  // Full real main/client/Bridge HTTP path. No media is decoded by this fixture,
+  // but the central action must reach the sole existing Native frame owner.
+  await page.locator('[data-media-mode=transcode]').click();
+  await page.locator('[data-v3-action=preview]').click();
+  await page.locator('[data-v3-action=generate-preview]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-v3-frame]')?.getAttribute('src')?.startsWith('data:image/png;base64,'));
+  assert.equal(frames.length,1,'Central transcode preview must issue one native frame request');
+  assert.equal(frames[0].videoStream,0,'Central preview must preserve the primary selected source stream');
+  assert.equal(frames[0].width,720,'Central preview must use the established bounded decoder width');
+  assert.equal(await page.locator('#taskFramePreviewImage').isHidden(),true,'Collapsed original editor stays hidden but owns the frame result');
+  frameFailure=true;
+  await page.locator('[data-v3-action=generate-preview]').click();
+  await page.waitForFunction(()=>document.querySelector('#taskFramePreviewStatus').textContent.includes('fixture frame decode failed'));
+  await page.waitForFunction(()=>document.querySelector('[data-v3-frame-empty] span').textContent.includes('fixture frame decode failed'));
+  assert.equal(await page.locator('[data-v3-frame]').getAttribute('src'),null,'Failed re-decode must clear previous visual proof');
+  frameFailure=false;
+  await page.locator('[data-v3-action=generate-preview]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-v3-frame]')?.getAttribute('src')?.startsWith('data:image/png;base64,'));
+  assert.equal(frames.length,3,'Failed preview must remain retryable without changing task parameters');
+  await page.locator('[data-media-mode=copy]').click();
+  await page.evaluate(()=>{const el=document.querySelector('#mediaTaskForm [name=videoRange]');el.value='full';el.dispatchEvent(new Event('change',{bubbles:true}));});
+  await page.locator('[data-v3-action=preview]').click();
+  // The preceding Transcode image may already have the same data URL.
+  // Wait for the *new* Copy /api/frame response, not an old populated img.src.
+  const copyFrameResponse=page.waitForResponse(response=>
+   new URL(response.url()).pathname==='/api/frame'&&response.request().method()==='POST');
+  await page.locator('[data-v3-action=generate-preview]').click();
+  const copyResponse=await copyFrameResponse;
+  assert.equal(copyResponse.ok(),true,'Copy frame transport must complete');
+  assert.equal(frames.length,4,'Copy mode must reuse the existing frame decoder with an untrimmed source');
+  await page.waitForFunction(()=>{
+   const owner=document.querySelector('#taskFramePreviewImage');
+   const composed=document.querySelector('[data-v3-frame]');
+   // An HTTP response arrives before the original decoder-owner callback
+   // and the composed workbench requestAnimationFrame projection settle.
+   return owner&&!owner.hidden&&owner.getAttribute('src')?.startsWith('data:image/png;base64,')&&
+    composed&&!composed.hidden&&composed.getAttribute('src')===owner.getAttribute('src');
+  });
+  assert.match(await page.locator('[data-v3-frame]').getAttribute('src'),/^data:image\/png;base64,/);
+  await page.locator('[data-media-mode=hardsub]').click();
   await open();assert.equal(imports.length,0,'Opening import choices never extracts automatically');
   await page.locator('[data-import-action=embedded]').click();
   await page.waitForFunction(()=>document.activeElement===document.querySelector('#embeddedAssStream'));

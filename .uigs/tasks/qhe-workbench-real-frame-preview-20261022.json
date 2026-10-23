@@ -1,0 +1,50 @@
+{
+  "goal": "使QHE桌面/平板工作台的转码/剪切预览真正触发既有源帧分析并防止旧来源画面误认",
+  "status": "AGENT_EXECUTION_COMPLETE_PENDING_EXTERNAL_VALIDATION",
+  "current_bounded_work_unit": "PR124 CI failure repair: await original decoded image AND composed central preview projection after Native /api/frame response",
+  "authorization": {
+    "source": "用户继续硬压实现；R19/R24与 docs/qhe-initial-version-route-reanchor-2026-10-14.md",
+    "requirements": [
+      "B03",
+      "B08",
+      "B09",
+      "B20",
+      "A04"
+    ],
+    "user_facing_acceptance": "中央点击生成实际预览调用原时间轴取帧；无来源明确提示；旧来源帧不进入新来源中央视图",
+    "implemented_vs_verified": "历史正式时间轴可读取源帧；中央仅打开时间轴；本轮代码接通但 hosted/field 未验收",
+    "priority": "高于新编码器或通用文件系统权限：直接补既有Figma v3核心入口"
+  },
+  "completed_units": [
+    "核对 main@4df6c594 与 PR117–123/AGENTS/原需求",
+    "编写预览触发/来源身份视觉守门/失败反馈",
+    "编写纯函数及Playwright回归断言",
+    "源码提交到独立功能分支",
+    "Draft PR #124 submitted; independent hosted validation pending",
+    "UIGS-Foundry narrow Test committed at 1dfcfd4d3adca1e574bd96ca860dd7d9aa3606c9; deduped existing preview Candidates",
+    "Audit: PR124 draft-fast success but full frontend job skipped, so not a full browser pass",
+    "Extend real main + Windows Native client mocked HTTP regression: transcode/copy central preview frame request, decoder failure and retry without re-encoding",
+    "Full frontend run 39754507684 failed at check-source-import-entry.cjs:81: old frame src satisfied wait before Copy /api/frame request was observed (3 !== 4)",
+    "One bounded test timing repair: await HTTP /api/frame response following Copy action, retain exact 4 request assertion; no media-runtime product-code mutation",
+    "Full exact-head CI 39877054900 failed at check-source-import-entry.cjs:88: /api/frame returned but central img.src was still null at immediate read",
+    "Bounded repair 75c78e5c: wait for owner image ready and same URL projected into visible central image; preserve new HTTP response and exact frame request assertions"
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [
+    "用真实Web和Windows Native源测量首帧渲染时间和取消/换源",
+    "复杂VFR/B帧源视频与实际剪切成品对照仍为A04"
+  ],
+  "branch": "feat/workbench-real-frame-preview-20261022",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/124",
+  "latest_durable_commit": "75c78e5c0ecdf27f1af5c9092717dc4dc0044daf",
+  "external_validation_states": {
+    "local_node": "NOT_RUN_NO_REPOSITORY_RUNTIME",
+    "local_playwright": "NOT_RUN_NO_REPOSITORY_RUNTIME",
+    "hosted_ci": "Previous 39877054900 frontend FAIL at test line 88; repaired generation PENDING exact-head full CI",
+    "native_field": "FIELD_PENDING",
+    "uigs_intake": "Existing narrow Test to update with first full frontend failure and async wait fix; no Canonical change.",
+    "draft_fast": "SUCCESS at 6e778cc8; full frontend SKIPPED because draft"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-23"
+}
