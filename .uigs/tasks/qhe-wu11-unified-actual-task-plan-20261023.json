@@ -27,7 +27,8 @@
     "复核 #107 与 R19/R24 路线及已合并的 WU01/WU02/WU10 实测脚本",
     "确认两种真实 Native 证据与 WU02 正式编译运行属于不同来源、字幕资产与码率模式",
     "形成每个生产/测试模块的文件精确实施步骤、同源 hash/ASS/fonts/Native runtime/提案/正式任务/成品对照、失败和 Field Pending 门禁",
-    "计划阶段不修改 codec/renderer/compiler/runtime，实现工作未获本阶段授权不自动开展"
+    "计划阶段不修改 codec/renderer/compiler/runtime，实现工作未获本阶段授权不自动开展",
+    "UIGS Foundry narrowed to existing baseline-versus-scoped-CI Case; added exact real-source/CRF-VBR separation observation"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -43,7 +44,7 @@
     "hosted_checks": "PLAN_ONLY_NO_NEW_EXECUTION_TEST",
     "main_post_pr125": "MAIN_PUSH_CI_PENDING_AT_FIRST_READ (frontend/windows/android); exact head PR125 full PASS",
     "user_media": "FIELD_PENDING",
-    "uigs_intake": "PENDING_DEDUP_REVIEW",
+    "uigs_intake": "DEDUPED_AND_WRITTEN Foundry inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ 2899735322c7651776e440103686e44b57f07393; no Canonical changes",
     "native_wu11_single_source": "NOT_EXECUTED"
   },
   "blockers": [],
