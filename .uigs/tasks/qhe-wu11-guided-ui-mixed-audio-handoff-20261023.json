@@ -30,7 +30,8 @@
     "Fix real applyConfig mustCopyAudioOrdinals array serialized as JSON, preserving production compiler lock",
     "Add targeted model negative tests and real Chromium DOM with controlled source/Native transport, requiring actual select/click/confirmation followed by executable schema-v4 mixed task",
     "Update WU01 browser/CPU workflow for exact user UI tests",
-    "PR #130 created non-Draft to trigger actual Chromium DOM + CPU unit, complete frontend and UIGS exact-head acceptance"
+    "PR #130 created non-Draft to trigger actual Chromium DOM + CPU unit, complete frontend and UIGS exact-head acceptance",
+    "UIGS Intake appended existing scoped-acceptance Case, clearly separating real Guided DOM interaction from mocked transport and separate Native output"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -48,7 +49,7 @@
     "full_frontend": "PENDING PR130",
     "native_real": "EXISTING_PR129_ONLY_NOT_THIS_UI",
     "field": "FIELD_PENDING",
-    "uigs_intake": "PENDING_DEDUP"
+    "uigs_intake": "WRITTEN deduplicated existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ cca0be1277cecdf97964667e791074144aa0799c; no Canonical promotion"
   },
   "updated_at": "2026-10-23"
 }
