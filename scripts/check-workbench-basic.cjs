@@ -57,6 +57,18 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   assert.equal(JSON.parse(guidedEditedAudio)[0].action,'flac','Guided selection retains the explicitly chosen source track');
   assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,'Editing tracks cannot silently approve a Guided-to-Manual transaction');
   assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,'Guided per-track editing does not execute a task');
+  // The following Copy/Transcode cases are *independent* global-audio
+  // scenarios. Restore through the existing production editor rather than
+  // silently inheriting this now-visible Guided per-track edit into them.
+  const guidedEditor=page.locator('details.media-audio-plan');
+  await guidedEditor.locator('summary').click();
+  await guidedEditor.getByRole('button',{name:'恢复全局音频策略'}).click();
+  await page.waitForFunction(()=>document.querySelector('[name=audioPlan]').value==='');
+  assert.equal(await page.locator('[name=mustCopyAudioOrdinals]').inputValue(),'');
+  assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,
+    'Reset never creates implicit Guided handoff approval');
+  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,
+    'Resetting a Guided audio edit must not execute a task');
   await page.locator('[data-media-mode="copy"]').click();await page.waitForTimeout(50);
   assert.equal(await control('codec').isDisabled(),true,'Copy inherits disabled video fieldset');
   for(const name of ['width','height','scaleAlgorithm','fpsMode','fps'])assert.equal(await control(name).isDisabled(),true,`Copy locks ${name}`);
