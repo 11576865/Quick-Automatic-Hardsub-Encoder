@@ -65,6 +65,9 @@ let browser;
     throw Error('Live Native embedded ASS/font binding failed');
    const assBytes=Uint8Array.from(atob(imported.ass.base64),c=>c.charCodeAt(0));
    const assText=new TextDecoder().decode(assBytes);
+   const initialBudget=JSON.parse(await bridge.measureSourceBudget());
+   if(initialBudget.version!==1||initialBudget.scope!=='full-source'||
+      initialBudget.audioPacketBytes?.length!==2)throw Error('Current real-source audio ledger unavailable');
    const media={
     duration:Number(probe.duration),fps:12,videoTracks:probe.videoTracks,
     videoStreams:probe.videoStreams,audioTracks:probe.audioTracks,
@@ -79,7 +82,7 @@ let browser;
     nativeProbe:probe,imported,jobId:null,task:null,verifiedStatus:null,errors:[]
    };
    globalThis.alert=message=>wu11Session.errors.push(String(message));
-   const copyAllBytes=init.originalCopyBytes;
+   const copyAllBytes=initialBudget.audioPacketBytes.reduce((n,x)=>n+Number(x),0);
    globalThis.wu11Guided={
     plan:{codec:'h264',mode:'budget-rate',goal:'sizeBudget',preset:'medium',
      sizeBudgetPolicy:'best-effort',sizeCeiling:1000000,
@@ -95,7 +98,11 @@ let browser;
     mediaSnapshot:()=>wu11Session.media,videoIdentity:()=>wu11Session.sourceKey,
     sourceName:()=>wu11Session.selected.name,
     guidedSnapshot:()=>globalThis.wu11Guided,
-    measureBudget:async()=>JSON.parse(await bridge.measureSourceBudget()),
+    measureBudget:async()=>{
+     const measured=JSON.parse(await bridge.measureSourceBudget());
+     wu11Session.budgetMeasurementId=measured.measurementId;
+     return measured;
+    },
     prepare:async()=>wu11Session.media,
     run:async(task,liveMedia,progress)=>{
      wu11Session.task=task;
@@ -142,9 +149,9 @@ let browser;
    document.dispatchEvent(new Event('quick-hardsub-media-info-changed'));
    return {selectedName:selected.name,sourceBytes:selected.size,
     duration:media.duration,sourceAudioCodecs:probe.audioCodecs,
-    fontCount:imported.fontCount,bridgeDiscovered:discovered};
-  },{sourceName:'source.mkv',sourceSize:sourceStat.size,sourceKey:key,
-     originalCopyBytes:psProbe.audioTracks===2?null:0});
+    fontCount:imported.fontCount,bridgeDiscovered:discovered,
+    originalCopyBytes:copyAllBytes};
+  },{sourceName:'source.mkv',sourceSize:sourceStat.size,sourceKey:key});
   assert.equal(bootstrap.bridgeDiscovered,true);
   assert.equal(bootstrap.sourceBytes,sourceStat.size);
   assert.ok(bootstrap.duration>4&&bootstrap.duration<6);
@@ -184,7 +191,8 @@ let browser;
    importedAssBase64:wu11Session.imported.ass.base64,
    importedFontBase64:wu11Session.imported.fonts[0].base64,
    errors:wu11Session.errors.filter(x=>!x.startsWith('log:')),
-   oldGuidedCopyRate:wu11Guided.plan.targetVideoBitrate
+   oldGuidedCopyRate:wu11Guided.plan.targetVideoBitrate,
+   browserBudgetMeasurementId:wu11Session.budgetMeasurementId
   }));
   assert.match(receipt.jobId,/^[a-zA-Z0-9]+$/);
   assert.equal(receipt.nativeResult.state,'completed');
@@ -196,7 +204,11 @@ let browser;
   assert.notEqual(receipt.task.bitrate,receipt.oldGuidedCopyRate);
   assert.deepEqual(receipt.task.audioPlan.map(x=>x.action),['copy','aac']);
   assert.deepEqual(receipt.task.mustCopyAudioOrdinals,[0]);
-  assert.equal(receipt.task.budgetEvidence.measurementId,formal.measurementId);
+  assert.equal(receipt.task.budgetEvidence.measurementId,receipt.browserBudgetMeasurementId,
+   'Browser must actually measure fresh full-source costs and freeze that identity');
+  assert.match(receipt.browserBudgetMeasurementId,/^[a-f0-9]{32}$/i);
+  assert.equal(receipt.task.sizePlan.fixedPayloadBytes,formal.fixedPayloadBytes);
+  assert.equal(receipt.task.sizePlan.encodedAudioBytes,formal.encodedAudioBytes);
   assert.equal(receipt.task.nativeVbrCertificate,undefined);
   assert.equal(receipt.task.subtitleRenderOrder,'before-scale');
   assert.deepEqual(errors,[],'Production client and Guided DOM must not log browser page errors');
@@ -204,7 +216,7 @@ let browser;
   console.log(JSON.stringify({result:'PASS',kind:receipt.kind,
    sourceSha256:receipt.sourceKey,jobId:receipt.jobId,
    actualNativeState:receipt.nativeResult.state,
-   formalVideoBitrate:receipt.task.bitrate,planBudgetMeasurement:formal.measurementId,
+   formalVideoBitrate:receipt.task.bitrate,browserBudgetMeasurement:receipt.browserBudgetMeasurementId,
    uiClickObserved:true,browserTransportMocked:false,nativeFfmpegActual:true}));
  }finally{await browser?.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1});
