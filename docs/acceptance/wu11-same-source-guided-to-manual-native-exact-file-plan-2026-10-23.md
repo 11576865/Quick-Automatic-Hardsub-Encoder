@@ -10,7 +10,7 @@
 
 ## 2. 授权后续执行必须冻结的唯一测试身份
 建立 **一个** 可复现 MKV fixture，优先复用 WU02 源生成器而不是另起一套媒体：
-`scripts/build-manual-rich-native-fixture.mjs` → `source.mkv`（含 H.264/视频、FLAC a:0、待 AAC 编码 a:1、内封 ASS、字体附件）。由 Windows 同一 `native-bridge.ps1` 进程完成所有步骤。开始和成品检查前分别独立记录：
+`scripts/build-manual-rich-native-fixture.mjs` → `source.mkv`（源视频编码为 FFV1，另有 FLAC a:0、源 AAC a:1、内封 ASS、字体附件及两章；最终视频需由正式任务输出 H.264）。由 Windows 同一 `native-bridge.ps1` 进程完成所有步骤。开始和成品检查前分别独立记录：
 1. **Input**：源码 SHA256、字节数/mtime 与 `/api/probe` 全部轨道序号；Native evidence 的 sourceToken 作为该 Session 内取证键，**不能把 file-stat token 冒充 SHA256**。
 2. **Subtitle & font**：`/api/embedded-ass` 选择的精确 ASS 轨序号、UTF-8 字节 SHA256；真实字体 attachment 字节 SHA256，核对 Native 样本的 staged `assTextSha256` / `fontContentSha256` 与正式任务引用的素材一致。字体内容散列定义须复用 `windows/guided-rendered-sample-evidence.ps1`，不可仅对文件名求 hash。
 3. **Decision**：固定 `guided-ass-rendered` 参考标识、同一 Bridge runtimeToken、同一 outputWidth/Height、codec/preset、两窗起止、bitrate、音频/容器和 `budgetEvidence.measurementId`。**不移植** Manual SDR SSIM；短样不宣称全片大小或画质。
