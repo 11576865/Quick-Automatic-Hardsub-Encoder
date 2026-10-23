@@ -120,6 +120,28 @@ try {
   & node './scripts/verify-wu11-native-vbr-output.mjs' $source $wu11Output $importPath $wu11TaskPath $wu11PlanPath $wu11AcceptedPath $work
   if($LASTEXITCODE -ne 0){throw 'WU11 independent Native formal VBR artifact verification failed'}
   Write-Host 'WU11 BOUNDED NATIVE MIXED VBR ARTIFACT PASS: same source/ASS/fonts, source-owned FLAC Copy plus AAC re-encode cost, formal bitrate, FLAC packet hashes, re-encoded AAC packets and burned pixels. Browser click not claimed.'
+  # WU11: do NOT combine independent Chromium mocked transport and separately
+  # encoded Native jobs into a single-session receipt. The same still-running
+  # physical localhost Native Bridge is now accessed by one real Chromium page
+  # through src/windows-native-client.js. Actual UI clicks must create ANOTHER
+  # schema-v4 job; FFmpeg must finish and independently pass packet/pixel checks.
+  $uiReceiptPath=Join-Path $work 'wu11-browser-native-receipt.json'
+  & node './scripts/check-wu11-browser-native-session.cjs' $source $probePath $importPath $wu11PlanPath $uiReceiptPath
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $uiReceiptPath)){
+    throw 'WU11 real Chromium Guided approval -> same-session Native job failed'
+  }
+  $uiReceipt=Get-Content -Raw -LiteralPath $uiReceiptPath | ConvertFrom-Json
+  if($uiReceipt.kind -ne 'wu11-real-chromium-to-windows-native-v1' -or
+     -not $uiReceipt.browserExplicitClicksObserved -or
+     $uiReceipt.nativeResult.state -ne 'completed' -or
+     -not $uiReceipt.jobId){throw 'Real Chromium-to-Native completion receipt is invalid'}
+  $uiStage=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ('quick-media-job-'+$uiReceipt.jobId+'-*'))
+  if($uiStage.Count -ne 1){throw 'Real clicked-session Native FFmpeg output staging folder missing'}
+  $uiOutput=Join-Path $uiStage[0].FullName 'output.mkv'
+  if(-not(Test-Path -LiteralPath $uiOutput)){throw 'Real clicked-session Native output.mkv missing'}
+  & node './scripts/verify-wu11-browser-native-output.mjs' $source $uiOutput $uiReceiptPath $importPath $wu11PlanPath $work
+  if($LASTEXITCODE -ne 0){throw 'WU11 real Chromium-to-Native artifact independent audit FAILED'}
+  Write-Host 'WU11 REAL CHROMIUM TO WINDOWS NATIVE SAME-SESSION ARTIFACT PASS: clicked audio policy, genuine localhost Bridge job, source-locked FLAC packets, AAC re-encode, ASS font pixels and fresh source-budget transaction.'
   & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath $sourceKey
   if($LASTEXITCODE -ne 0){throw 'Formal shared task compiler failed'}
   $formal=Get-Content -Raw -LiteralPath $requestPath | ConvertFrom-Json
