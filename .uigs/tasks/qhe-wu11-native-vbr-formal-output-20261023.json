@@ -1,0 +1,49 @@
+{
+  "goal": "QHE WU11: same rich-MKV Native ASS-rendered Guided VBR evidence -> authoritative budget/CPU handoff -> actual Windows completed v4 output",
+  "status": "BRANCH_IMPLEMENTED_PENDING_EXTERNAL_VALIDATION",
+  "current_bounded_work_unit": "same-source two-copy-audio full-file VBR job from official full-source budget, with actual Native encode and FFprobe independent verification",
+  "authorization": {
+    "source": "R19/R24 initial version P1/P2/P3 / B02 B04 B05 B07 B11 B12 B13 B24 A01 A05 A06; issue #107 and approved WU11 exact-file plan #126; user continued implementation",
+    "requirements": [
+      "B02",
+      "B04",
+      "B05",
+      "B07",
+      "B11",
+      "B12",
+      "B13",
+      "B24",
+      "A01",
+      "A05",
+      "A06"
+    ],
+    "user_facing_acceptance": "One source.mkv / embedded ASS+font / Windows Native Bridge: source-owned audio budget -> exact Guided 2-window VBR proof -> automated fixture explicit adoption -> same plan formal Guided CPU handoff/v4 compileTask -> real Native encode -> independent two audio Copy packet SHA and ASS burn-in pixel difference",
+    "scope_limit": "Both original audio streams are Copy in this VBR plan so whole-file budget/bitrate/stream meaning matches the sample. Existing WU02 CRF23 output separately demonstrates FLAC Copy + AAC re-encode; do not mix acceptance results or claim one job satisfies both.",
+    "reason": "After PR127, same-source source/ASS/font Native samples are proven; still missing actual production target with same bitrate and budget. This joins a real output without changing compiler or encoder.",
+    "deprioritized": "Web WASM runtime missing; real user GUI click and field device; Native mixed FLAC Copy/AAC reencode under same VBR budget requires a separate explicit per-stream intent and re-verification"
+  },
+  "completed_units": [
+    "PR127 exact-head frontend, Windows WU02 real Native, UIGS PASS; merged main@f9178961765d6c6387db7c72b21fdfae70b61f25",
+    "New build-wu11-native-vbr-task.mjs obtains official v4 size-plan and source-bound Native whole-file copy-audio packet cost; derives bitrate and freezes same Guided plan; compiles and rechecks original source v4 CPU handoff; negative old-budget identity",
+    "Native Windows WU02 session now measures /api/source-budget, runs two ASS-rendered Guided VBR windows at computed same-source video bitrate, passes receipts to production verifier and explicit simulated transaction",
+    "Same session /api/encode runs formal budget-v4 VBR full source job and existing WU02 CRF mixed-audio job separately; independent verifier compares real FFprobe video/output, both audio packet SHA, source SHA/ASS/font stamps, subtitle-pixel difference and output bytes",
+    "Workflow file path triggers new scripts; owner denominator and nontransferable certificate explicitly preserved"
+  ],
+  "discovered_followups": [
+    "Native final output may exceed targetBytes: best-effort VBR is not strict output-size proof; collect exact actualBytes in receipt, no completion claim on A07",
+    "Automated test simulates approval but not an actual browser click; real source-selected approval and mixed audio plan still open",
+    "Windows CI may uncover differences in PowerShell/Budget/Native worker; fix one bounded verified blocker before merging"
+  ],
+  "branch": "feat/wu11-guided-vbr-formal-native-output-20261023",
+  "pr": null,
+  "base_main_sha": "f9178961765d6c6387db7c72b21fdfae70b61f25",
+  "external_validation_states": {
+    "hosted_windows": "PENDING EXACT HEAD",
+    "full_frontend": "PENDING EXACT HEAD",
+    "uigs_coverage": "PENDING EXACT HEAD",
+    "local": "NOT_RUN_NO_CHECKOUT",
+    "field": "FIELD_PENDING",
+    "foundry": "PENDING_DEDUP"
+  },
+  "updated_at": "2026-10-23"
+}
