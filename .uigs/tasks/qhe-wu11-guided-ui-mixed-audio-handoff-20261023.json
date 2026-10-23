@@ -1,0 +1,68 @@
+{
+  "goal": "QHE WU11 actual Guided user per-stream audio action and explicit confirmation -> Manual CPU shared compiler executable task",
+  "status": "BOUNDED_HIDDEN_PROJECTION_TEST_REPAIR_COMMITTED_PENDING_EXACT_HEAD_CI",
+  "current_bounded_work_unit": "PR130 visible Transcode projection reset after observed hidden underlying Guided details click failure",
+  "authorization": {
+    "source": "R19 P1/P2/P3, R24 §05/§11/§13-18; route docs/qhe-initial-version-route-reanchor-2026-10-14.md B02/B04/B05/B06/B11/B13, A01-A03; issue #107, PR #126 exact-file plan",
+    "requirements": [
+      "B02",
+      "B04",
+      "B05",
+      "B06",
+      "B11",
+      "B13",
+      "B24",
+      "A01",
+      "A02",
+      "A03"
+    ],
+    "user_facing_acceptance": "In actual Guided UI owner selects individual audio actions, locks original FLAC Copy, explicitly confirms mixed plan and cost rebudget; Manual form compiles schema-v4 mixed audio task without old Native sample certificate or silently inherited prior Manual plan",
+    "implemented_vs_verified": "PR #129 hosted Windows Native passed single output with mixed audio but adoption was automated-fixture-only, no real Guided user actions. Existing Manual audio editor hidden in Guided and Guided snapshot reads only global audio.",
+    "critical_path": "Owner action and source-locked provenance must be connected to the *production* task form to fulfill WU11 UI boundary; same-source Windows artifact alone did not prove user-facing task identity.",
+    "deprioritized": "B21 full multi-source batches, long media/VFR/GPU, Web WASM and strict A07 are independent and not needed for this direct WU11 Guided UI admission."
+  },
+  "completed_units": [
+    "PR129 exact head frontend, WU01 browser+CPU, Windows Native, UIGS PASS; merged main@c31f2ee6b61bb76341dba9b1527befc4420916fb",
+    "Reuse same audio-stream-plan-ui DOM in Guided; no duplicated task or new audio/encoder state owner",
+    "Add explicit Guided per-stream adoption checkbox; no silent handoff if per-stream plan exists but consent unchecked; changing source or plan resets approval",
+    "Add source/measurement scoped helper that independently re-derives best-effort VBR bitrate and audio cost from the authoritative schema-v4 compileTask, never carries old Native VBR certificate",
+    "In production guidedToManual handler recompile and apply current source + frozen audio, reject malformed/trim/unknown audio plans and old evidence",
+    "Fix real applyConfig mustCopyAudioOrdinals array serialized as JSON, preserving production compiler lock",
+    "Add targeted model negative tests and real Chromium DOM with controlled source/Native transport, requiring actual select/click/confirmation followed by executable schema-v4 mixed task",
+    "Update WU01 browser/CPU workflow for exact user UI tests",
+    "PR #130 created non-Draft to trigger actual Chromium DOM + CPU unit, complete frontend and UIGS exact-head acceptance",
+    "UIGS Intake appended existing scoped-acceptance Case, clearly separating real Guided DOM interaction from mocked transport and separate Native output",
+    "PR130 previous exact head e3c328f49affbf0f48efb9bc7748de9d718d7319: 9/10 hosted workflows SUCCESS, including WU01 real Chromium+CPU, Windows smoke, all scoped matrix/UIGS. Test frontend 39912565784 FAILED only check-workbench-basic.cjs line 50 old assumption that Guided audio proxy is hidden/no-op.",
+    "One bounded repair commit 2a14d882cb6184d7538b9da1ca2cfc6e474d32b5: change only stale basic browser assertion to require explicit user-selected audio plan reaches single formal owner while no separate approval, no task execution. Does not relax Copy/approval/recompile test.",
+    "PR130 repaired exact-head 1b09c5ac7838febdbaba189f03c0d3068f185423: frontend run 39953246427 FAILED at scripts/check-workbench-basic.cjs:58; Playwright waited 30s for missing #guidedMixedAudioConfirm because reduced test fixture lacked #guidedToManual. WU01 CPU success; real-browser and WU06 job still in progress at inspection.",
+    "One bounded follow-up repair ffa1ade0de442a4aa6536b0a9fee570342479a4b adds actual #guidedToManual to reduced basic browser fixture, keeping assertions that explicitly edited plan exists, consent is unchecked, no executable task dispatched.",
+    "PR130 exact-head 60d3f7548d185ad9986f8896454c298113510064: 9/10 CI success, full frontend run 39953955003 FAIL in check-workbench-basic.cjs:156: 'Full audio is independent of trimmed video', observed 1 versus expected 2. Cause: test explicitly edited shared Guided audioPlan earlier (now allowed), then continued Copy/Transcode fixture assuming untouched global audio, so audio track range remained trim.",
+    "Committed repair 6779608fb04b6aaf6ce1c517fbd681e8cdf75c7a: after asserting Guided explicit audio edit propagates to shared formal owner without approval/execution, click production '恢复全局音频策略' in real browser and assert audio plan + lock empty and no approval/task before independent Copy/Transcode timing tests. Preserve later `expectedAudioDuration==2` and packet/time assertions unchanged.",
+    "PR130 exact head 47fddd33ae4012ce94fe9594e70b56d3c1b9ab13: all other nine scoped workflows SUCCESS, frontend run 39970406401 FAIL at check-workbench-basic.cjs:64 Playwright timeout clicking details.media-audio-plan summary not visible in Guided layout.",
+    "Repair e9e74295f12b37854ce12c51b04b0e5677f51726: retain Guided per-track edit assertions; after switching to Transcode use the actually visible `.v3-audio-plan` summary and existing [data-audio-reset], assert audioPlan/lock empty, no approval, zero run, then keep original full-audio 2s video-trim 1s assertions.",
+    "UIGS Intake appended existing Test with exact failing frontend run, hidden form-owner DOM vs visible V3 projection, repair SHA and pending post-repair validation; deduplicated, no Canonical promotion."
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [
+    "Same browser session needs real Windows Native bridge/device artifact; current Chromium uses simulated source/transport and cannot substantiate physical Native user interaction",
+    "Guided selected VBR recommendation after a different audio plan has a new computed bitrate; previous short sample must be measured again, no automated adoption from old sample",
+    "File-provider/long-form/VFR/P2 language/disposition and strict ceiling remain independently open",
+    "Do not repeat CI checks within this bounded work unit; next turn check exact-head after one repair generation and merge only if complete",
+    "After next exact-head CI result, distinguish 3 outcomes: full success -> merge; failed assertion -> bounded repair with log; browser dependency stuck -> external pending, not automatically success."
+  ],
+  "branch": "feat/wu11-guided-real-ui-mixed-audio-handoff-20261023",
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/130",
+  "base_main_sha": "c31f2ee6b61bb76341dba9b1527befc4420916fb",
+  "latest_durable_commit": "e9e74295f12b37854ce12c51b04b0e5677f51726",
+  "external_validation_states": {
+    "node_unit": "PASS previous head WU01 and frontend unit before failed basic script; new head PENDING",
+    "actual_chromium": "PR130 previous head WU01 SUCCESS run 39970406363; new head PENDING",
+    "full_frontend": "PREVIOUS_HEAD FAIL run 39970406401 hidden source-owned details reset; repaired head PENDING",
+    "native_real": "EXISTING_PR129_ONLY_NOT_THIS_UI",
+    "field": "FIELD_PENDING",
+    "uigs_intake": "WRITTEN Foundry existing Test inbox/tests/2026-10-23-guided-visible-audio-edit-vs-separate-approval-gate.md @ ae873b63cd14468fa7f646af29615b805df5d98d; no Canonical changes",
+    "uigs_coverage": "PASS previous head run 39912565828; new head PENDING",
+    "pr_merge": "BLOCKED until exact repaired head frontend and all CI success"
+  },
+  "updated_at": "2026-10-23"
+}

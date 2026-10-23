@@ -2,6 +2,7 @@ import {commitVerifiedSizeBudget} from './size-budget-adoption.js';
 import {sharedTaskPresentation} from './shared-task-presentation.js';
 import {guidedTaskSettings} from './guided-task-handoff.js';
 import {compileGuidedCpuHandoff,commitGuidedCpuHandoff} from './guided-cpu-compiler-contract.js';
+import {prepareGuidedExplicitAudioHandoff} from './guided-explicit-audio-handoff.js';
 import {buildTaskReview,renderTaskReview} from './task-review.js';
 import { formatSize, outputReport, sampleSettings, sampleProjection, sampleQualityTrial } from './media-planning.js';
 import {buildAuxiliaryPreflightRequest} from './auxiliary-preflight-request.js';
@@ -677,7 +678,7 @@ export function mountMediaWorkspace(hooks) {
   const download=(data,name)=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   const configs=()=>{try{return JSON.parse(localStorage.getItem(storageKey)||'{}');}catch{return {};}};
   const refreshConfigs=()=>{get('savedConfig').innerHTML=Object.keys(configs()).map(n=>`<option value="${escape(n)}">${escape(n)}</option>`).join('');};
-  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=key==='audioPlan'&&Array.isArray(value)?JSON.stringify(value):String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();audioStreamPlan.refresh();hooks.onBudgetEvidenceChange?.();};
+  const applyConfig=raw=>{if(raw.codec==='h266'&&!vvcCapability(hooks.platformKey?.()||{}).available)throw Error('当前平台未通过 H.266 运行探测，不能导入此编码配置');markCompletedAsPrevious('config');for(const key of ['operation','codec'])if(get(key)&&raw[key]!=null)get(key).value=raw[key];updateEncoder();if(raw.encoder){if(![...get('encoder').options].some(o=>o.value===raw.encoder))throw Error('当前平台不支持配置中的编码器 '+raw.encoder+'；请手动选择编码器');get('encoder').value=raw.encoder;}updatePreset();for(const [key,value] of Object.entries(raw)){const el=get(key);if(!el||['savedConfig','configName'].includes(key))continue;if(el.type==='checkbox')el.checked=value===true;else if(el.tagName==='SELECT'){if([...el.options].some(o=>o.value===String(value)))el.value=String(value);}else el.value=['audioPlan','mustCopyAudioOrdinals'].includes(key)&&Array.isArray(value)?JSON.stringify(value):String(value??'');}lastManualCodec=get('codec').value;updateMode();updateRate();syncQualityRange();audioStreamPlan.refresh();hooks.onBudgetEvidenceChange?.();};
   const status = text => { section.querySelector('#taskStatus').textContent = text; };
   const read = () => Object.fromEntries([...form.elements].filter(x=>x.name).map(x=>[x.name,x.type==='checkbox'?x.checked:x.value]));
   const windows = () => hooks.isWindows();
@@ -1932,7 +1933,9 @@ export function mountMediaWorkspace(hooks) {
   function syncHardsubStrategyChrome(mode = get('operation').value) {
     const hardsub = mode === 'hardsub';
     const guided = hardsubStrategy === 'guided';
-    audioStreamPlan.panel.hidden=hardsub&&guided;
+    // The one existing per-stream audio editor is also the Guided opt-in UI;
+    // it never owns a second task or silently changes the Guided snapshot.
+    audioStreamPlan.panel.hidden=false;
     document.body.dataset.hardsubStrategy = hardsubStrategy;
     section.dataset.mobileStageSection = hardsub ? 'produce' : 'prepare';
     for (const button of strategyButtons) {
@@ -1979,15 +1982,47 @@ export function mountMediaWorkspace(hooks) {
   }
 
   const guidedHandoffButton=document.querySelector('#guidedToManual');
+  const guidedMixedAudioLabel=document.createElement('label');
+  guidedMixedAudioLabel.className='task-check';
+  const guidedMixedAudioConfirm=document.createElement('input');
+  guidedMixedAudioConfirm.type='checkbox';
+  guidedMixedAudioConfirm.id='guidedMixedAudioConfirm';
+  guidedMixedAudioConfirm.setAttribute('aria-label','确认采用当前来源逐音轨配置并重新计算引导体积预算');
+  guidedMixedAudioLabel.append(guidedMixedAudioConfirm,document.createTextNode(
+    '明确采用当前逐音轨方案（必须 Copy 锁与重新编码）；交接将按当前来源成本重算视频码率，旧短样证据不会转移'));
+  const guidedMixedAudioHelp=document.createElement('p');
+  guidedMixedAudioHelp.className='note';
+  guidedMixedAudioHelp.textContent='在下方「逐音轨输出计划」选择各轨动作，将保留轨及编码轨的时间范围均设为「完整音轨」，勾选必须 Copy 的原音轨，并先测量当前完整来源的流成本。未勾选时保持原 Guided 全局音频交接。';
+  guidedHandoffButton?.after(guidedMixedAudioLabel,guidedMixedAudioHelp);
+  // A prior checkbox confirmation is not consent to *later* edited tracks.
+  // The fields are the existing authoritative Manual form's audio owner.
+  audioStreamPlan.panel.addEventListener('change',()=>{guidedMixedAudioConfirm.checked=false;});
+  const invalidateGuidedAudioApproval=()=>{guidedMixedAudioConfirm.checked=false;};
+  document.addEventListener('quick-hardsub-media-info-changed',invalidateGuidedAudioApproval);
   let initialManualSettings;
   if(guidedHandoffButton)guidedHandoffButton.onclick=()=>{
     if(busy||hooks.busy()||clipBatchRunning||clipAwaitingSave)return;
     try{
       const sourceKey=hooks.videoIdentity?.()||'';
-      const source=hooks.mediaSnapshot?.();
+      let source=hooks.mediaSnapshot?.();
       const evidence=budgetSourceIdentity===sourceKey?budgetEvidence:null;
+      let snapshot=hooks.guidedSnapshot?.();
+      if(guidedMixedAudioConfirm.checked){
+        const prepared=prepareGuidedExplicitAudioHandoff({
+          snapshot,settings:read(),defaults:initialManualSettings,media:source,
+          sourceKey,evidence,evidenceSourceKey:budgetSourceIdentity,
+          approved:true
+        });
+        if(!prepared.ok)throw Error('逐轨交接未获准：'+prepared.reason+
+          (prepared.detail?' · '+prepared.detail:''));
+        snapshot=prepared.snapshot;source=prepared.media;
+      }else if(get('audioPlan')?.value){
+        // A populated per-stream editor is never silently dropped. The user
+        // must either explicitly confirm it or reset it to the global policy.
+        throw Error('检测到逐音轨计划：请勾选明确采用，或恢复全局音频策略后再交接');
+      }
       const compiled=compileGuidedCpuHandoff({
-        snapshot:hooks.guidedSnapshot?.(),defaults:initialManualSettings,
+        snapshot,defaults:initialManualSettings,
         media:source,evidence,sourceKey,evidenceSourceKey:budgetSourceIdentity
       });
       if(!compiled.ok)throw Error('无法安全交接 CPU 任务：'+compiled.reason+
@@ -2000,6 +2035,7 @@ export function mountMediaWorkspace(hooks) {
       if(!applied.ok)throw Error('交接没有采用任何新任务：'+applied.reason+
         (applied.detail?' · '+applied.detail:''));
       hardsubStrategy='manual';
+      guidedMixedAudioConfirm.checked=false;
       localStorage.setItem('hardsub-control-strategy-v1',hardsubStrategy);
       // Handoff previews and compiles the proposed task, but only prepare() +
       // hooks.validate() may mark the current plan as independently checked.
@@ -2755,5 +2791,5 @@ export function mountMediaWorkspace(hooks) {
   form.addEventListener('change',syncBrowserBatch);
   updateEncoder();updateMode();updateRate();refreshConfigs();syncQualityRange();syncAudioPlaybackWarning();renderPlanSummary();setTaskState('idle');syncRecipeMatrix();syncBrowserBatch();
   initialManualSettings=read();
-  return {section,runCurrent:()=>form.onsubmit({preventDefault(){}}),getActiveBudgetEvidence:()=>budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:null,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
+  return {section,runCurrent:()=>form.onsubmit({preventDefault(){}}),getActiveBudgetEvidence:()=>budgetSourceIdentity===hooks.videoIdentity?.()?budgetEvidence:null,refreshAudioPlaybackWarning:()=>syncAudioPlaybackWarning(),dispose:()=>{transcodeCurves.dispose();closeFrameFullscreen();revokeVerificationFrames();clearInterval(platformTimer);subtitleCardObserver.disconnect();document.removeEventListener('change',handleSharedAudioChange);document.removeEventListener('quick-hardsub-media-info-changed',mediaInfoListener);document.removeEventListener('quick-hardsub-media-info-changed',invalidateGuidedAudioApproval);document.removeEventListener('quick-hardsub-media-info-changed',invalidateCurvesOnMediaChange);document.removeEventListener('keydown',frameFullscreenKeyHandler);window.removeEventListener('resize',frameFullscreenResizeHandler);window.removeEventListener('quick-hardsub-native-export-result',nativeExportListener);for(const url of sampleUrls)URL.revokeObjectURL(url);if(waveformUrl?.startsWith('blob:'))URL.revokeObjectURL(waveformUrl);modeNav.remove();outputPolicy?.remove();outputPolicyAnchor.remove();delete document.body.dataset.mediaOperation;delete document.body.dataset.hardsubStrategy;}};
 }

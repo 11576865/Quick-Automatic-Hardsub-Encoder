@@ -12,7 +12,7 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
    const fs=require('node:fs/promises'),path=require('node:path');
    await page.route('**/__qa-font/**',async route=>{const relative=new URL(route.request().url()).pathname.split('/__qa-font/')[1];await route.fulfill({body:await fs.readFile(path.join(process.env.QHE_QA_FONT_DIR,relative)),contentType:relative.endsWith('.css')?'text/css':'font/woff2'})});
   }
-  await page.route('**/basic-fixture',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/style.css"><link rel="stylesheet" href="/src/studio-v3.css"></head><body><div class="app-shell"><div id="studioModeDock"></div><div class="workspace-layout"><main class="workflow-main"><section id="inputCard" class="card"><div class="card-heading"><h2>来源</h2><p>素材</p></div><div class="grid two"><div class="input-ass">ASS 已选择</div></div><button id="analyze">分析视频与字幕</button></section><section id="subtitleCard"></section><div class="production-region"><div class="production-controls"><section id="hardsubControlDeck"><button data-hardsub-strategy="guided">引导</button><button data-hardsub-strategy="manual">参数</button></section><div id="hardsubManualMount"></div><section id="planCard"></section><div id="sharedMediaOutputMount"></div><section id="encodeCard"><button id="encodeBtn" disabled>开始</button><button id="cancelEncodeBtn" class="hidden">取消</button></section></div></div><button id="previewBtn" disabled>预览</button></main><aside class="support-rail"></aside></div></div></body></html>`}));
+  await page.route('**/basic-fixture',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/style.css"><link rel="stylesheet" href="/src/studio-v3.css"></head><body><div class="app-shell"><div id="studioModeDock"></div><div class="workspace-layout"><main class="workflow-main"><section id="inputCard" class="card"><div class="card-heading"><h2>来源</h2><p>素材</p></div><div class="grid two"><div class="input-ass">ASS 已选择</div></div><button id="analyze">分析视频与字幕</button></section><section id="subtitleCard"></section><div class="production-region"><div class="production-controls"><section id="hardsubControlDeck"><button data-hardsub-strategy="guided">引导</button><button data-hardsub-strategy="manual">参数</button></section><div id="hardsubManualMount"></div><section id="planCard"><button type="button" id="guidedToManual">将引导目标交接到正式任务</button></section><div id="sharedMediaOutputMount"></div><section id="encodeCard"><button id="encodeBtn" disabled>开始</button><button id="cancelEncodeBtn" class="hidden">取消</button></section></div></div><button id="previewBtn" disabled>预览</button></main><aside class="support-rail"></aside></div></div></body></html>`}));
   await page.goto('http://127.0.0.1:4187/basic-fixture');
   await page.evaluate(async()=>{
    const {mountMediaWorkspace}=await import('/src/media-workspace.js');
@@ -47,7 +47,19 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   await page.waitForFunction(()=>!document.querySelector('.v3-basic-video').hidden);
   await page.locator('[data-basic-strategy]').selectOption('guided');await page.waitForFunction(()=>document.body.dataset.hardsubStrategy==='guided');
   const guidedObjects=await page.locator('[name=keepSubtitles]').isChecked();await page.locator('[data-object-kind="subtitles"][data-object-ordinal="0"]').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}))});assert.equal(await page.locator('[name=keepSubtitles]').isChecked(),guidedObjects,'Hidden guided object projection cannot change preservation');
-  const guidedAudio=await page.locator('[name=audioPlan]').inputValue();await page.locator('.v3-audio-plan [data-audio-field="0"]').evaluate(el=>{el.value='flac';el.dispatchEvent(new Event('change',{bubbles:true}))});assert.equal(await page.locator('[name=audioPlan]').inputValue(),guidedAudio,'Hidden guided projection cannot alter the audio plan');
+  // WU11: Guided deliberately exposes the ONE formal per-track editor. An
+  // explicit user action may now edit the source-bound plan; it must NOT
+  // implicitly confirm its transfer or create a runnable task.
+  const guidedAudio=await page.locator('[name=audioPlan]').inputValue();
+  await page.locator('.v3-audio-plan [data-audio-field="0"]').evaluate(el=>{el.value='flac';el.dispatchEvent(new Event('change',{bubbles:true}))});
+  const guidedEditedAudio=await page.locator('[name=audioPlan]').inputValue();
+  assert.notEqual(guidedEditedAudio,guidedAudio,'An explicit Guided per-track edit must reach the single formal audioPlan owner');
+  assert.equal(JSON.parse(guidedEditedAudio)[0].action,'flac','Guided selection retains the explicitly chosen source track');
+  assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,'Editing tracks cannot silently approve a Guided-to-Manual transaction');
+  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,'Guided per-track editing does not execute a task');
+  // Keep the explicit Guided edit until we enter the *visible* Transcode
+  // audio editor. Its form-owned details projection is hidden in Guided,
+  // so clicking the underlying hidden panel here would never be a real action.
   await page.locator('[data-media-mode="copy"]').click();await page.waitForTimeout(50);
   assert.equal(await control('codec').isDisabled(),true,'Copy inherits disabled video fieldset');
   for(const name of ['width','height','scaleAlgorithm','fpsMode','fps'])assert.equal(await control(name).isDisabled(),true,`Copy locks ${name}`);
@@ -57,6 +69,19 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   await control('codec').evaluate(el=>{el.value='av1';el.dispatchEvent(new Event('change',{bubbles:true}))});
   assert.equal(await page.locator('#mediaTaskForm [name="codec"]').inputValue(),copyCodec,'Copy cannot mutate disabled encoding settings');
   await page.locator('[data-media-mode="transcode"]').click();
+  // The following Transcode scene uses independent global audio settings.
+  // Reset through the visible V3-owned projection, not the hidden underlying
+  // details panel. Keep the 2s full-audio / 1s trimmed-video assertion later.
+  const separateAudioEditor=page.locator('.v3-audio-plan');
+  await separateAudioEditor.locator('summary').click();
+  await separateAudioEditor.locator('[data-audio-reset]').click();
+  await page.waitForFunction(()=>document.querySelector('[name=audioPlan]').value==='');
+  assert.equal(await page.locator('[name=mustCopyAudioOrdinals]').inputValue(),'');
+  assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,
+    'Reset must not create implicit Guided handoff approval');
+  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,
+    'Resetting a Guided audio edit cannot start a task');
+  await separateAudioEditor.locator('summary').click();
   await control('outputContainer').selectOption('mkv');
   await control('codec').selectOption('h265');await control('preset').selectOption('fast');await control('quality').fill('25');await control('quality').blur();
   await page.waitForTimeout(50);
