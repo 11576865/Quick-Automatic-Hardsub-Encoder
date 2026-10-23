@@ -1,0 +1,48 @@
+{
+  "goal": "WU11 same real Chromium Guided clicks, source-bound production Windows Native Bridge job, actual FFmpeg output independent validation",
+  "status": "COMMITTED_CODE_PENDING_HOSTED_CI",
+  "authorization": {
+    "source": "R19 P1/P2/P3 and R24 §05/§11/§13; docs/qhe-initial-version-route-reanchor-2026-10-14.md WU01/WU02; owner issue #107",
+    "requirements": [
+      "B02",
+      "B04",
+      "B05",
+      "B06",
+      "B07",
+      "B11",
+      "B13",
+      "B24",
+      "A01",
+      "A02",
+      "A03"
+    ],
+    "user_acceptance": "Same Windows Bridge session: user-equivalent real Chromium select Copy+AAC, explicit confirm, Manual task schema-v4, actual Native encode and independent source-locked FFmpeg packet/pixel oracle",
+    "gap": "PR129 real Windows output but automated approval; PR130 real Chromium click but fake Native transport. Both merged and separately green; this unit binds both to one job",
+    "priority": "Original D1/D2 exact user intent->immutable plan->artifact critical path before adding further synthetic tests; unrelated B21 and strict A07 remain independent"
+  },
+  "current_bounded_work_unit": "One Windows hosted Native browser session with actual per-track interaction and independent final output identity",
+  "completed_units": [
+    "PR130 exact-head 10/10 CI PASS after 2nd attempt browser setup; squash merged to main@4e4e5e1cb71289959082d150031cdd69ab46ef01",
+    "Added scripts/check-wu11-browser-native-session.cjs: real Chromium with production media-workspace and Windows Native JS client; live Bridge probe, embedded ASS/font, actual source budget; real user-equivalent clicks to source-locked schema-v4 Manual task; real Native /api/encode job poll and receipt",
+    "Added scripts/verify-wu11-browser-native-output.mjs: FFprobe independently validates same clicked job output FLAC packets unchanged, AAC reencoded, ASS font source bytes and burnt pixel difference, proper target/cost/source/current measurement",
+    "Updated scripts/check-wu02-embedded-native.ps1 to run this browser acceptance while original live Native Bridge still owns the rich MKV source, before independent WU02 CRF verification",
+    "Updated Windows WU02 workflow to install Chromium and run same-session scenario (35 minute bounded job)"
+  ],
+  "next_units": [],
+  "branch": "feat/wu11-real-browser-native-session-20261024",
+  "pr": null,
+  "latest_durable_commit": "07e6ee4cd8bbec714868fe97e89898257c76497e",
+  "base_main_sha": "4e4e5e1cb71289959082d150031cdd69ab46ef01",
+  "external_validation_states": {
+    "windows_chromium_native": "PENDING",
+    "full_frontend": "PENDING",
+    "uigs": "PENDING",
+    "real_user_device": "FIELD_PENDING"
+  },
+  "blockers": [
+    "Must execute actual Windows hosted CI before calling success",
+    "Host UI is minimal fixture using real production modules/transport, not entire main.js source picker",
+    "No strict ceiling, long film or device acceptance"
+  ],
+  "updated_at": "2026-10-24"
+}
