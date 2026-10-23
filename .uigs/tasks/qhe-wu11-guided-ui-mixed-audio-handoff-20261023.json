@@ -39,7 +39,8 @@
     "PR130 exact-head 60d3f7548d185ad9986f8896454c298113510064: 9/10 CI success, full frontend run 39953955003 FAIL in check-workbench-basic.cjs:156: 'Full audio is independent of trimmed video', observed 1 versus expected 2. Cause: test explicitly edited shared Guided audioPlan earlier (now allowed), then continued Copy/Transcode fixture assuming untouched global audio, so audio track range remained trim.",
     "Committed repair 6779608fb04b6aaf6ce1c517fbd681e8cdf75c7a: after asserting Guided explicit audio edit propagates to shared formal owner without approval/execution, click production '恢复全局音频策略' in real browser and assert audio plan + lock empty and no approval/task before independent Copy/Transcode timing tests. Preserve later `expectedAudioDuration==2` and packet/time assertions unchanged.",
     "PR130 exact head 47fddd33ae4012ce94fe9594e70b56d3c1b9ab13: all other nine scoped workflows SUCCESS, frontend run 39970406401 FAIL at check-workbench-basic.cjs:64 Playwright timeout clicking details.media-audio-plan summary not visible in Guided layout.",
-    "Repair e9e74295f12b37854ce12c51b04b0e5677f51726: retain Guided per-track edit assertions; after switching to Transcode use the actually visible `.v3-audio-plan` summary and existing [data-audio-reset], assert audioPlan/lock empty, no approval, zero run, then keep original full-audio 2s video-trim 1s assertions."
+    "Repair e9e74295f12b37854ce12c51b04b0e5677f51726: retain Guided per-track edit assertions; after switching to Transcode use the actually visible `.v3-audio-plan` summary and existing [data-audio-reset], assert audioPlan/lock empty, no approval, zero run, then keep original full-audio 2s video-trim 1s assertions.",
+    "UIGS Intake appended existing Test with exact failing frontend run, hidden form-owner DOM vs visible V3 projection, repair SHA and pending post-repair validation; deduplicated, no Canonical promotion."
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -59,7 +60,7 @@
     "full_frontend": "PREVIOUS_HEAD FAIL run 39970406401 hidden source-owned details reset; repaired head PENDING",
     "native_real": "EXISTING_PR129_ONLY_NOT_THIS_UI",
     "field": "FIELD_PENDING",
-    "uigs_intake": "PENDING Foundry Test update",
+    "uigs_intake": "WRITTEN Foundry existing Test inbox/tests/2026-10-23-guided-visible-audio-edit-vs-separate-approval-gate.md @ ae873b63cd14468fa7f646af29615b805df5d98d; no Canonical changes",
     "uigs_coverage": "PASS previous head run 39912565828; new head PENDING",
     "pr_merge": "BLOCKED until exact repaired head frontend and all CI success"
   },
