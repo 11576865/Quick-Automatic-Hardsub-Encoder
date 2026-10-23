@@ -119,7 +119,7 @@ try {
   }
   & node './scripts/verify-wu11-native-vbr-output.mjs' $source $wu11Output $importPath $wu11TaskPath $wu11PlanPath $wu11AcceptedPath $work
   if($LASTEXITCODE -ne 0){throw 'WU11 independent Native formal VBR artifact verification failed'}
-  Write-Host 'WU11 BOUNDED NATIVE VBR ARTIFACT PASS: same source/ASS/fonts, official bitrate budget, both copied audio packet streams, and burned pixels. Browser click not claimed.'
+  Write-Host 'WU11 BOUNDED NATIVE MIXED VBR ARTIFACT PASS: same source/ASS/fonts, source-owned FLAC Copy plus AAC re-encode cost, formal bitrate, FLAC packet hashes, re-encoded AAC packets and burned pixels. Browser click not claimed.'
   & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath $sourceKey
   if($LASTEXITCODE -ne 0){throw 'Formal shared task compiler failed'}
   $formal=Get-Content -Raw -LiteralPath $requestPath | ConvertFrom-Json
