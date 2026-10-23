@@ -26,7 +26,8 @@
     "用原生产 verifyGuidedNativeVbr + commitVerifiedGuidedBranch 测试，并新增导入 ASS UTF8 SHA/附件 TTF staged aggregate hash 与两窗 Native stamp 的独立断言",
     "脚本同时核对源文件 SHA before/after，不把 Native stat token 当 cryptographic digest",
     "工作流 path trigger 追踪新检测脚本",
-    "PR #127 non-Draft created with real Windows WU02 Native source/ASS/font VBR regression; exact-head CI pending"
+    "PR #127 non-Draft created with real Windows WU02 Native source/ASS/font VBR regression; exact-head CI pending",
+    "Foundry Intake dedup existing scoped-CI-vs-complete-case; record real same-source sample only, not simulated adoption or full output"
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -43,7 +44,7 @@
     "windows_native": "PENDING EXACT_HEAD_PR127",
     "test_frontend": "PENDING EXACT_HEAD_PR127",
     "field": "FIELD_PENDING",
-    "uigs_intake": "PENDING_DEDUP"
+    "uigs_intake": "WRITTEN dedup existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md @ 42149c39525e4d3c682875ebd02e6d42cc2149be; no Canonical promotion"
   },
   "blockers": [],
   "updated_at": "2026-10-23"
