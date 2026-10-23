@@ -47,7 +47,16 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   await page.waitForFunction(()=>!document.querySelector('.v3-basic-video').hidden);
   await page.locator('[data-basic-strategy]').selectOption('guided');await page.waitForFunction(()=>document.body.dataset.hardsubStrategy==='guided');
   const guidedObjects=await page.locator('[name=keepSubtitles]').isChecked();await page.locator('[data-object-kind="subtitles"][data-object-ordinal="0"]').evaluate(el=>{el.checked=true;el.dispatchEvent(new Event('change',{bubbles:true}))});assert.equal(await page.locator('[name=keepSubtitles]').isChecked(),guidedObjects,'Hidden guided object projection cannot change preservation');
-  const guidedAudio=await page.locator('[name=audioPlan]').inputValue();await page.locator('.v3-audio-plan [data-audio-field="0"]').evaluate(el=>{el.value='flac';el.dispatchEvent(new Event('change',{bubbles:true}))});assert.equal(await page.locator('[name=audioPlan]').inputValue(),guidedAudio,'Hidden guided projection cannot alter the audio plan');
+  // WU11: Guided deliberately exposes the ONE formal per-track editor. An
+  // explicit user action may now edit the source-bound plan; it must NOT
+  // implicitly confirm its transfer or create a runnable task.
+  const guidedAudio=await page.locator('[name=audioPlan]').inputValue();
+  await page.locator('.v3-audio-plan [data-audio-field="0"]').evaluate(el=>{el.value='flac';el.dispatchEvent(new Event('change',{bubbles:true}))});
+  const guidedEditedAudio=await page.locator('[name=audioPlan]').inputValue();
+  assert.notEqual(guidedEditedAudio,guidedAudio,'An explicit Guided per-track edit must reach the single formal audioPlan owner');
+  assert.equal(JSON.parse(guidedEditedAudio)[0].action,'flac','Guided selection retains the explicitly chosen source track');
+  assert.equal(await page.locator('#guidedMixedAudioConfirm').isChecked(),false,'Editing tracks cannot silently approve a Guided-to-Manual transaction');
+  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,'Guided per-track editing does not execute a task');
   await page.locator('[data-media-mode="copy"]').click();await page.waitForTimeout(50);
   assert.equal(await control('codec').isDisabled(),true,'Copy inherits disabled video fieldset');
   for(const name of ['width','height','scaleAlgorithm','fpsMode','fps'])assert.equal(await control(name).isDisabled(),true,`Copy locks ${name}`);
