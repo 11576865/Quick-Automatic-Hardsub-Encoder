@@ -44,9 +44,21 @@ const defaults={
  crop:'',codecParams:'',lookahead:'',maxrate:'',bufsize:'',gop:'',bf:'',refs:'',
  sampleLength:'15',squarePixels:false
 };
-// Derive the video rate from the *official* whole-file budget compiler;
-// a hardcoded 650 kbps may not equal the same-source FLAC+AAC copy budget.
-const preliminary=compileTask(defaults,media);
+// The per-stream choice is explicit intent for THIS source, not an old
+// copy/copy Guided proof. Recompute full-file costs *before* Native samples:
+ // FLAC a:0 retains all packet bytes, AAC a:1 must be encoded at 96 kbps.
+const explicitAudioPlan=[
+ {sourceOrdinal:0,action:'copy',range:'full'},
+ {sourceOrdinal:1,action:'aac',range:'full',bitrate:96000}
+];
+const intent={...defaults,audioPlan:explicitAudioPlan,
+ mustCopyAudioOrdinals:[0],audioKeepSourceIdentity:sourceKey};
+const preliminary=compileTask(intent,media);
+assert.equal(preliminary.sizePlan.fixedPayloadBytes,budget.audioPacketBytes[0]);
+assert.ok(preliminary.sizePlan.encodedAudioBytes>0);
+assert.ok(preliminary.sizePlan.fixedPayloadBytes<
+ budget.audioPacketBytes[0]+budget.audioPacketBytes[1],
+ 'mixed strategy must not reserve the old all-copy total');
 assert.equal(preliminary.sizePlan.targetBytes,1000000);
 const plan={
  codec:'h264',mode:'budget-rate',goal:'sizeBudget',preset:'medium',
@@ -57,9 +69,13 @@ const plan={
  encodedAudioBytes:preliminary.sizePlan.encodedAudioBytes,
  outputWidth:0,outputHeight:0
 };
-const snapshot={plan,audio:{audio:'copy'},container:'mkv'};
+const snapshot={plan,audio:{
+ audio:'copy',intent:'explicit-per-stream-v1',
+ sourceIdentity:sourceKey,mustCopyAudioOrdinals:[0],
+ audioPlan:explicitAudioPlan
+},container:'mkv'};
 const contract=compileGuidedCpuHandoff({
- snapshot,defaults,media,evidence:budget,sourceKey,evidenceSourceKey:sourceKey
+ snapshot,defaults:intent,media,evidence:budget,sourceKey,evidenceSourceKey:sourceKey
 });
 assert.equal(contract.ok,true,JSON.stringify(contract));
 assert.equal(contract.nativeVbrCertificateTransferAllowed,false);
@@ -81,28 +97,39 @@ assert.equal(task.sizePlan.targetBytes,plan.sizeCeiling);
 assert.equal(task.sizePlan.fixedPayloadBytes,plan.fixedPayloadBytes);
 assert.equal(task.audio,'copy');
 assert.equal(task.expectedAudioTracks,2);
-assert.equal(task.audioPlan,null);
+assert.deepEqual(task.audioPlan.map(x=>x.action),['copy','aac']);
+assert.deepEqual(task.mustCopyAudioOrdinals,[0]);
+assert.equal(task.sizePlan.encodedAudioBytes,plan.encodedAudioBytes);
+assert.ok(plan.encodedAudioBytes>0);
 assert.equal(task.subtitleRenderOrder,'before-scale');
 assert.equal(task.outputArgs[task.outputArgs.indexOf('-vf')+1],
  'ass=__ASS__:fontsdir=__FONTS__,pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0');
 assert.ok(task.outputArgs.includes('-b:v'));
 assert.equal(task.outputArgs[task.outputArgs.indexOf('-b:v')+1],String(plan.targetVideoBitrate));
 assert.ok(!task.outputArgs.includes('-crf'));
-assert.deepEqual(task.outputArgs.slice(task.outputArgs.indexOf('-c:a'),task.outputArgs.indexOf('-c:a')+2),['-c:a','copy']);
+assert.ok(task.outputArgs.includes('-c:a:0'));
+assert.ok(task.outputArgs.includes('-c:a:1'));
+assert.equal(task.outputArgs[task.outputArgs.indexOf('-c:a:0')+1],'copy');
+assert.equal(task.outputArgs[task.outputArgs.indexOf('-c:a:1')+1],'aac');
+assert.ok(!task.outputArgs.includes('-crf'));
 assert.equal(task.budgetEvidence.measurementId,budget.measurementId);
 // Deliberately refuse stale measurement origins. No certificate from Native
 // short-sample SSIM is accepted as an executable authorization.
 assert.equal(compileGuidedCpuHandoff({
- snapshot,defaults,media,evidence:budget,sourceKey,evidenceSourceKey:'sha256:'+'0'.repeat(64)
+ snapshot,defaults:intent,media,evidence:budget,sourceKey,evidenceSourceKey:'sha256:'+'0'.repeat(64)
 }).reason,'stale-source-budget-evidence');
-writeFileSync(taskPath,JSON.stringify({request:{task,suggestedName:'wu11-guided-vbr-copy-audio.mkv'}},null,2));
+writeFileSync(taskPath,JSON.stringify({request:{task,suggestedName:'wu11-guided-vbr-mixed-audio.mkv'}},null,2));
 writeFileSync(planPath,JSON.stringify({
  kind:'wu11-source-scoped-guided-vbr-plan-v1',sourceSha256:sourceKey,
  measurementId:budget.measurementId,plan,
- audioPolicy:'both-source-tracks-copy',
+ audioPolicy:'FLAC-copy-AAC-reencode-explicit-source-locked',
+ explicitAudioPlan, mustCopyAudioOrdinals:[0],
+ fixedPayloadBytes:plan.fixedPayloadBytes,
+ encodedAudioBytes:plan.encodedAudioBytes,
  explicitUserClickObserved:false,fullMovieQualityVerified:false,
  nativeVbrCertificateTransferAllowed:false
 },null,2));
 console.log(JSON.stringify({kind:'wu11-native-formal-vbr-plan',targetBytes:plan.sizeCeiling,
  videoRate:plan.targetVideoBitrate,measuredCopyBytes:plan.fixedPayloadBytes,
+ plannedEncodedAudioBytes:plan.encodedAudioBytes,
  nativeVbrCertificateTransferAllowed:false}));

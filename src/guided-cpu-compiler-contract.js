@@ -11,7 +11,8 @@ const settingsFields=[
   'operation','codec','encoder','preset','rateMode','quality','bitrate',
   'width','height','scaleAlgorithm','subtitleRenderOrder','targetSize','sizeUnit','sizeReserve',
   'budgetPolicy','twoPass','audio','audioTrack','audioPlan','audioRange',
-  'audioBitrate','audioChannels','audioSampleRate','videoStreams','videoRange',
+  'audioBitrate','audioChannels','audioSampleRate','mustCopyAudioOrdinals',
+  'audioKeepSourceIdentity','videoStreams','videoRange',
   'keepSubtitles','keepAttachments','outputContainer'
 ];
 function executableProjection(task){
@@ -23,6 +24,8 @@ function executableProjection(task){
   subtitleRenderOrder:task.subtitleRenderOrder||'after-scale',
   width:task.expectedWidth||0,height:task.expectedHeight||0,
   audio:task.audio,expectedAudioTracks:task.expectedAudioTracks,
+  audioPlan:task.audioPlan?task.audioPlan.map(x=>({...x})):null,
+  mustCopyAudioOrdinals:[...(task.mustCopyAudioOrdinals||[])],
   audioRange:task.audioRange,videoRange:task.videoRange,
   strict:task.budgetPolicy==='strict-ceiling',
   twoPass:task.twoPass===true,
@@ -84,6 +87,26 @@ export function compileGuidedCpuHandoff({
   return fail('invalid-guided-size-plan');
  if(sourceKey&&evidence&&sourceKey!==evidenceSourceKey)
   return fail('stale-source-budget-evidence');
+ // The existing Guided UI supplies whole-source audio only. A separate,
+ // explicitly approved Manual per-stream plan may join the transaction only
+ // with its exact current source identity and its own newly computed ledger.
+ const mixed=audio?.intent==='explicit-per-stream-v1';
+ if(audio?.audioPlan!=null&&!mixed)
+  return fail('unapproved-guided-mixed-audio-intent');
+ if(mixed){
+  const entries=audio.audioPlan,copies=entries?.filter(x=>x?.action==='copy')||[];
+  const encoded=entries?.filter(x=>['aac','libopus','flac'].includes(x?.action))||[];
+  const locks=audio.mustCopyAudioOrdinals;
+  if(audio.audio!=='copy'||!Array.isArray(entries)||entries.length<2||
+     entries.length>32||!copies.length||!encoded.length||
+     !Array.isArray(locks)||locks.length!==copies.length||
+     audio.sourceIdentity!==sourceKey||
+     copies.some(x=>!locks.includes(x.sourceOrdinal))||
+     new Set(locks).size!==locks.length)
+   return fail('invalid-or-stale-guided-mixed-audio-intent');
+  if(!evidence||evidence.scope!=='full-source')
+   return fail('missing-copied-audio-cost-evidence');
+ }
  if(plan.mode==='budget-rate'&&audio?.audio==='copy'&&
    Number(media.audioTracks)>0&&(!evidence||evidence.scope!=='full-source'))
   return fail('missing-copied-audio-cost-evidence');
@@ -102,6 +125,12 @@ export function compileGuidedCpuHandoff({
     task.audio!==audio?.audio||task.expectedAudioTracks!==
       (audio.audio==='none'?0:Number(media.audioTracks??0)))
   return fail('compiled-guided-executable-divergence');
+ if(mixed&&(
+    !Array.isArray(task.audioPlan)||
+    task.audioPlan.length!==audio.audioPlan.length||
+    task.mustCopyAudioOrdinals.length!==audio.mustCopyAudioOrdinals.length||
+    task.mustCopyAudioOrdinals.some(x=>!audio.mustCopyAudioOrdinals.includes(x))
+   ))return fail('compiled-guided-mixed-audio-divergence');
  if((task.expectedWidth||0)!==(Number(plan.outputWidth)||0)||
     (task.expectedHeight||0)!==(Number(plan.outputHeight)||0))
   return fail('compiled-guided-geometry-divergence');

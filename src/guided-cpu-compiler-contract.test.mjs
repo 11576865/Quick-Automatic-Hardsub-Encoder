@@ -174,3 +174,56 @@ test('source change during authoritative recompile cannot commit success',()=>{
  assert.match(r.detail,/source-changed-during-recompile/);
  assert.equal(f.count(),2);
 });
+
+test('WU11 mixed FLAC Copy + AAC encode uses only explicitly source-locked Guided intent and actual budget',()=>{
+ const source='sha256:source-v4-fixture';
+ const m={...media(),audioTracks:2,sourceIdentity:source};
+ const evidence={version:1,scope:'full-source',measurementId:'cost-now',
+  audioPacketBytes:[200000,80000],subtitlePacketBytes:[],attachmentBytes:[]};
+ const audio={audio:'copy',intent:'explicit-per-stream-v1',sourceIdentity:source,
+  mustCopyAudioOrdinals:[0],
+  audioPlan:[{sourceOrdinal:0,action:'copy',range:'full'},
+   {sourceOrdinal:1,action:'aac',range:'full',bitrate:96000}]};
+ const p=plan({targetVideoBitrate:1120000,fixedPayloadBytes:200000,encodedAudioBytes:60000});
+ const params={snapshot:snapshot(p,audio),defaults:defaults(),media:m,
+  sourceKey:source,evidence,evidenceSourceKey:source};
+ const c=compileGuidedCpuHandoff(params);
+ assert.equal(c.ok,true,c.detail||c.reason);
+ assert.deepEqual(c.task.audioPlan.map(x=>x.action),['copy','aac']);
+ assert.deepEqual(c.task.mustCopyAudioOrdinals,[0]);
+ assert.equal(c.task.bitrate,1120000);
+ assert.equal(c.task.sizePlan.encodedAudioBytes,60000);
+ assert.equal(c.task.sizePlan.fixedPayloadBytes,200000);
+ assert.equal(c.nativeVbrCertificateTransferAllowed,false);
+ let form=defaults();
+ const handoff=commitGuidedCpuHandoff({contract:c,media:m,evidence,
+  expectedSourceIdentity:source,sourceIdentity:()=>source,
+  read:()=>({...form}),apply:x=>{form={...x};}});
+ assert.equal(handoff.ok,true,handoff.detail||handoff.reason);
+ assert.deepEqual(handoff.task.mustCopyAudioOrdinals,[0]);
+ assert.deepEqual(handoff.task.outputPlan.audio.map(x=>x.action),['copy','aac']);
+ assert.equal(handoff.task.bitrate,1120000);
+ const fail=({a=audio,p2=p,e=evidence,key=source}={})=>
+  compileGuidedCpuHandoff({...params,snapshot:snapshot(p2,a),
+   evidence:e,evidenceSourceKey:key});
+ assert.equal(fail({a:{...audio,intent:undefined}}).reason,'unapproved-guided-mixed-audio-intent');
+ assert.equal(fail({a:{...audio,sourceIdentity:'another'}}).reason,
+  'invalid-or-stale-guided-mixed-audio-intent');
+ assert.equal(fail({a:{...audio,mustCopyAudioOrdinals:[]}}).reason,
+  'invalid-or-stale-guided-mixed-audio-intent');
+ assert.equal(fail({key:'stale-source'}).reason,'stale-source-budget-evidence');
+ assert.equal(fail({e:null}).reason,'missing-copied-audio-cost-evidence');
+ assert.equal(fail({p2:{...p,targetVideoBitrate:p.targetVideoBitrate+100}}).reason,
+  'compiled-guided-whole-file-budget-divergence');
+ const wrongAudio={...audio,audioPlan:[{sourceOrdinal:0,action:'aac',bitrate:96000},
+  {sourceOrdinal:1,action:'copy',range:'full'}]};
+ assert.equal(fail({a:wrongAudio}).reason,'invalid-or-stale-guided-mixed-audio-intent');
+ form={...defaults(),codec:'h265',rateMode:'quality'};
+ const previous={...form};
+ const changed=commitGuidedCpuHandoff({contract:c,media:m,evidence,
+  expectedSourceIdentity:source,sourceIdentity:()=>source,
+  read:()=>({...form}),
+  apply:x=>{form=x.codec==='h265'?{...x}:{...x,audioPlan:[]};}});
+ assert.equal(changed.ok,false);
+ assert.deepEqual(form,previous,'rejected form drift must restore prior settings');
+});

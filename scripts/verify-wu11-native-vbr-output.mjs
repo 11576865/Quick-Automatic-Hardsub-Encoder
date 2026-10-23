@@ -34,7 +34,13 @@ assert.equal(task.operation,'hardsub');
 assert.equal(task.rateMode,'size');
 assert.equal(task.audio,'copy');
 assert.equal(task.expectedAudioTracks,2);
-assert.equal(task.audioPlan,null);
+assert.deepEqual(task.audioPlan.map(x=>x.action),['copy','aac']);
+assert.deepEqual(task.mustCopyAudioOrdinals,[0]);
+assert.equal(formal.audioPolicy,'FLAC-copy-AAC-reencode-explicit-source-locked');
+assert.deepEqual(formal.mustCopyAudioOrdinals,[0]);
+assert.equal(task.sizePlan.encodedAudioBytes,formal.encodedAudioBytes);
+assert.equal(task.sizePlan.fixedPayloadBytes,formal.fixedPayloadBytes);
+assert.ok(formal.encodedAudioBytes>0);
 assert.equal(task.bitrate,formal.plan.targetVideoBitrate);
 assert.equal(task.sizePlan.targetBytes,formal.plan.sizeCeiling);
 assert.equal(task.sizePlan.fixedPayloadBytes,formal.plan.fixedPayloadBytes);
@@ -75,13 +81,18 @@ const packetHashes=(file,select)=>{
   '-show_entries','packet=data_hash','-of','json',file]));
  return scan.packets.map(x=>x.data_hash);
 };
-const copies=[];
-for(const track of ['a:0','a:1']){
- const from=packetHashes(source,track),to=packetHashes(output,track);
- assert.ok(from.length>=10);
- assert.deepEqual(to,from,track+' source payload must remain byte-for-byte identical');
- copies.push(from.length);
-}
+const flacIn=packetHashes(source,'a:0'),flacOut=packetHashes(output,'a:0');
+assert.ok(flacIn.length>=10);
+assert.deepEqual(flacOut,flacIn,
+ 'Locked FLAC a:0 compressed packets must be identical in final mixed VBR artifact');
+const aacIn=packetHashes(source,'a:1'),aacOut=packetHashes(output,'a:1');
+assert.ok(aacIn.length>=10&&aacOut.length>=10);
+assert.notDeepEqual(aacOut,aacIn,
+ 'The second source AAC track must really be re-encoded, not copied');
+assert.equal(task.outputPlan.audio[0].mustCopy,true);
+assert.equal(task.outputPlan.audio[1].mustCopy,false);
+assert.equal(task.outputArgs[task.outputArgs.indexOf('-c:a:0')+1],'copy');
+assert.equal(task.outputArgs[task.outputArgs.indexOf('-c:a:1')+1],'aac');
 run('ffmpeg',['-v','error','-i',output,'-map','0:v:0','-f','null','-']);
 const fonts=join(work,'wu11-fonts');mkdirSync(fonts,{recursive:true});
 writeFileSync(join(fonts,'QHE-Synthetic-CI.ttf'),fontBytes);
@@ -101,7 +112,8 @@ console.log(JSON.stringify({
  result:'PASS',sourceSha256:sourceSha,outputSha256:'sha256:'+hash(readFileSync(output)),
  measuredWindows:2,requestedVideoBitrate:task.bitrate,
  targetBytes:formal.plan.sizeCeiling,actualBytes:statSync(output).size,
- flacCopyPackets:copies[0],aacCopyPackets:copies[1],
+ flacCopyPackets:flacIn.length,aacReencodedPackets:aacOut.length,
+ mixedAudioPolicyVerified:true,encodedAudioBudgetBytes:formal.encodedAudioBytes,
  actualAssPixelDifference:true,
  nativeVbrCertificateTransferAllowed:false,
  explicitUserClickObserved:false,fullMovieQualityVerified:false
