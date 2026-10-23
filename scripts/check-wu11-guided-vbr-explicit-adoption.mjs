@@ -3,13 +3,13 @@
 // samples already encoded by check-guided-budget-native.ps1.
 // This is NOT a browser click, whole-file outcome or a model recommendation.
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {verifyGuidedNativeVbr} from '../src/guided-native-vbr-verification.js';
 import {createGuidedBranchProposal,commitVerifiedGuidedBranch}
   from '../src/guided-branch-adoption.js';
 
-const [file,richImportPath,expectedSourceSha]=process.argv.slice(2);
+const [file,richImportPath,expectedSourceSha,formalPlanPath,acceptedPath]=process.argv.slice(2);
 assert(file,'Usage: check-wu11-guided-vbr-explicit-adoption.mjs paired-native.json');
 const data=JSON.parse(readFileSync(file,'utf8'));
 assert.equal(data.samples?.length,2);
@@ -46,10 +46,17 @@ if(richImportPath){
 }
 const referenceScope=JSON.stringify(['decision-reference-v1','guided-ass-rendered',
   first.sourceToken,first.runtimeToken,first.assTextSha256,first.fontContentSha256]);
-const plan={
+const frozenFormalPlan=formalPlanPath?JSON.parse(readFileSync(formalPlanPath,'utf8')):null;
+if(frozenFormalPlan){
+  assert.equal(frozenFormalPlan.kind,'wu11-source-scoped-guided-vbr-plan-v1');
+  assert.equal(frozenFormalPlan.sourceSha256,expectedSourceSha);
+  assert.match(frozenFormalPlan.measurementId,/^[a-z0-9-]+$/i);
+  assert.equal(frozenFormalPlan.nativeVbrCertificateTransferAllowed,false);
+}
+const plan=frozenFormalPlan?.plan||{
   mode:'budget-rate',goal:'sizeBudget',sizeBudgetPolicy:'best-effort',
   codec:'h264',preset:'medium',targetVideoBitrate:650000,
-  // This is an opt-in transaction fixture, NOT a computed full-file budget.
+  // Legacy independent testsrc2 observation: NOT a full-file computed budget.
   sizeCeiling:5000000,outputWidth:0,outputHeight:0
 };
 const check=(samples=data.samples,targetSsim=0.8)=>verifyGuidedNativeVbr({
@@ -105,6 +112,25 @@ assert.equal(accepted.plan.codec,'h264');
 assert.equal(selected.codec,'h264');
 assert.equal(writes,1);
 assert.equal(real.outputBytesVerified,false);
+if(acceptedPath){
+  assert.ok(frozenFormalPlan&&expectedSourceSha,
+    'Only same-source, budget-backed Native receipts can be recorded');
+  writeFileSync(acceptedPath,JSON.stringify({
+    kind:'wu11-bounded-guided-native-adoption-v1',
+    sourceSha256:expectedSourceSha,
+    sourceRuntimeStamp:real.sourceRuntimeStamp,
+    referenceScope:real.referenceScope,
+    assTextSha256:receipts[0].assTextSha256,
+    fontContentSha256:real.fontContentSha256,
+    measurementId:frozenFormalPlan.measurementId,
+    plan:accepted.plan,
+    measuredWindows:real.measuredWindows,
+    automaticAdoption:false,
+    explicitApproval:'automated-fixture-only',
+    nativeVbrCertificateTransferAllowed:false,
+    outputBytesVerified:false,fullMovieQualityVerified:false
+  },null,2));
+}
 console.log(JSON.stringify({
  result:'PASS',kind:'WU11 bounded native Guided VBR -> explicit transaction',
  measuredWindows:real.measuredWindows,
