@@ -3,7 +3,8 @@
     [switch]$NoBrowser,
     [string]$Token = '',
     [string]$InitialVideo = '',
-    [string]$CiSaveDirectory = ''
+    [string]$CiSaveDirectory = '',
+    [string]$CiBatchVideoSeedList = ''
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -37,6 +38,7 @@ $script:Selections = @{ video=@(); ass=@(); fonts=@() }
 # B21: Native-only, opaque user-authorized multi-file selection registry.
 # Paths never cross the localhost HTTP response boundary.
 $script:BatchVideoSelections = @{}
+$script:CiBatchPickerResult=$null
 $script:EmbeddedAssImport=$null
 # CI-only export destination acts as a pre-authorized *test dialog choice*.
 # Production has NO HTTP file-path argument: users must use SaveFileDialog.
@@ -47,6 +49,7 @@ $script:EmbeddedAssImport=$null
 # parameter silently erased the CI launch argument and opened a modal Windows
 # SaveFileDialog on headless runners. Preserve the input under a distinct name.
 $requestedCiSaveDirectory=[string]$CiSaveDirectory
+$requestedCiBatchVideoSeedList=[string]$CiBatchVideoSeedList
 $script:CiSaveDirectory=''
 if($requestedCiSaveDirectory){
     if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
@@ -580,15 +583,19 @@ function Select-BridgeBatchVideos {
             throw 'Finish the current Native encode before selecting another source batch.'
         }
     }
+    if($script:CiBatchPickerResult){return $script:CiBatchPickerResult}
     $paths=@(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts|All files|*.*' $true)
     if (-not $paths.Count) {
         return [pscustomobject]@{ok=$true;cancelled=$true;files=@()}
     }
-    if ($paths.Count -gt 8) { throw 'Native batch permits at most 8 independently selected source files.' }
+    return Register-BridgeBatchVideos $paths
+}
+function Register-BridgeBatchVideos([string[]]$Paths) {
+    if ($Paths.Count -gt 8) { throw 'Native batch permits at most 8 independently selected source files.' }
     $seen=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
     $entries=@()
     $registry=@{}
-    foreach ($path in $paths) {
+    foreach ($path in $Paths) {
         $full=[IO.Path]::GetFullPath($path)
         if (-not $seen.Add($full)) { throw 'A source was selected more than once.' }
         $item=Get-Item -LiteralPath $full -ErrorAction Stop
@@ -2548,6 +2555,26 @@ function Handle-Request($Request) {
     }
 }
 
+# CI-only OS-picker preauthorization for deterministic real Native multi-source
+# acceptance. The browser API still cannot submit source paths, and production
+# runs cannot enable this flag without the GitHub runner environment.
+if($requestedCiBatchVideoSeedList){
+    if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
+        throw 'Native batch CI picker seed requires a GitHub Actions runner.'
+    }
+    $ciRoot=[IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92,[char]47)+[IO.Path]::DirectorySeparatorChar
+    $seedPaths=@($requestedCiBatchVideoSeedList.Split([char]124))
+    if($seedPaths.Count -lt 2 -or $seedPaths.Count -gt 8){throw 'CI batch seed must contain 2-8 paths.'}
+    foreach($seedPath in $seedPaths){
+        $full=[IO.Path]::GetFullPath($seedPath)
+        if(-not $full.StartsWith($ciRoot,[StringComparison]::OrdinalIgnoreCase) -or
+           -not(Test-Path -LiteralPath $full -PathType Leaf)){
+            throw 'CI batch source must be an existing file below RUNNER_TEMP.'
+        }
+    }
+    $script:CiBatchPickerResult=Register-BridgeBatchVideos $seedPaths
+    Write-BridgeLog ('CI-only Native batch preauthorized sources: '+$seedPaths.Count)
+}
 if(-not $script:Ffmpeg -or -not $script:Ffprobe){
     Write-BridgeLog 'FFmpeg / FFprobe was not found. Install Gyan.FFmpeg or place the toolchain under tools\ffmpeg\bin.' 'ERROR'
     [Windows.Forms.MessageBox]::Show('Windows Native Bridge requires ffmpeg.exe and ffprobe.exe. Install Gyan.FFmpeg with winget or place them in tools\ffmpeg\bin.','Quick Hardsub - FFmpeg missing')|Out-Null
