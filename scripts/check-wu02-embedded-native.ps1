@@ -339,6 +339,25 @@ try {
   }
   Write-Host 'WU14 REAL NATIVE SAVE RECOVERY PASS: CI cancel -> prepublish denied (old bytes preserved) -> same Job SHA save -> second source.'
 
+  # WU15: a successful atomic replace is still a data-loss bug if the user
+  # mistakenly selected an input as destination. Exercise the real endpoint
+  # against both the active and OTHER queued source, without accepting a
+  # browser-supplied absolute path. The two files must remain byte-identical.
+  $protectedReceiptPath=Join-Path $work 'wu15-protected-sources-receipt.json'
+  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $protectedReceiptPath 'protected-inputs'
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $protectedReceiptPath)){
+    throw 'WU15 real Native output collision safeguards failed'
+  }
+  $protectedReceipt=Get-Content -Raw -LiteralPath $protectedReceiptPath | ConvertFrom-Json
+  if($protectedReceipt.result -ne 'PASS' -or
+     $protectedReceipt.protectedActiveAndQueuedSourceFiles -ne $true -or
+     $protectedReceipt.saveAttempts -ne 4 -or
+     $protectedReceipt.jobCount -ne 2 -or $protectedReceipt.savedCount -ne 2){
+    throw 'WU15 two protected inputs and same-job successful retry lack actual evidence'
+  }
+  Write-Host 'WU15 REAL NATIVE SOURCE GUARD PASS: rejected active and queued source destinations; both inputs intact; same-job save retry and second output passed.'
+
+
 
 
 }finally{

@@ -2379,6 +2379,35 @@ function Get-CutTimelineEvidence([string]$JobId){
   }
 }
 
+function Get-BridgeProtectedPublishPaths {
+    # All currently authorized input assets plus private output stages remain
+    # protected, including OTHER queued batch videos (not just active input).
+    $protected=New-Object 'System.Collections.Generic.List[string]'
+    foreach($role in @('video','ass','fonts')){
+        foreach($inputPath in @($script:Selections[$role])){
+            if($inputPath){$protected.Add([string]$inputPath)}
+        }
+    }
+    foreach($grant in @($script:BatchVideoSelections.Values)){
+        if($grant.path){$protected.Add([string]$grant.path)}
+    }
+    if($script:VideoImport -and $script:VideoImport.Path){
+        $protected.Add([string]$script:VideoImport.Path)
+    }
+    if($script:EmbeddedAssImport){
+        foreach($asset in @([string]$script:EmbeddedAssImport.AssPath)+@($script:EmbeddedAssImport.FontPaths)){
+            if($asset){$protected.Add([string]$asset)}
+        }
+    }
+    foreach($job in @($script:Jobs.Values)){
+        if($job.Output){$protected.Add([string]$job.Output)}
+    }
+    foreach($samplePath in @($script:Samples.Values)){
+        if($samplePath){$protected.Add([string]$samplePath)}
+    }
+    return [string[]]$protected.ToArray()
+}
+
 function Arm-CiExportFault([string]$Mode) {
     # Runner-only. No filename/path can be specified by this endpoint.
     if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP -or
@@ -2388,7 +2417,7 @@ function Arm-CiExportFault([string]$Mode) {
           [StringComparison]::OrdinalIgnoreCase)){
         throw 'CI export fault is disabled outside the approved runner fixture.'
     }
-    if($Mode -notin @('cancel','publish-denied')){
+    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source')){
         throw 'Unknown CI export fault mode.'
     }
     if($script:CiNextExportFault){throw 'CI export fault already armed.'}
@@ -2410,6 +2439,30 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
         $dest=''
     }
     if(-not $dest){return [pscustomobject]@{ok=$false;jobId=$JobId;cancelled=$true;error='Save cancelled.'}}
+    # The additional two modes do NOT accept a filename from any web request:
+    # they intentionally aim at sources that were already selected through the
+    # runner's trusted fixture, to prove the production overwrite guard.
+    if($script:CiNextExportFault -in @('overwrite-active-source','overwrite-batch-source')){
+        $active=[string](Get-OriginalVideoPath)
+        if($script:CiNextExportFault -eq 'overwrite-active-source'){
+            $dest=$active
+        }else{
+            $other=@($script:BatchVideoSelections.Values |
+                Where-Object {$_.path -and -not [string]::Equals(
+                    [string]$_.path,$active,[StringComparison]::OrdinalIgnoreCase)} |
+                Select-Object -First 1)
+            if(-not $other.Count){throw 'No second authorized batch source for CI safety test.'}
+            $dest=[string]$other[0].path
+        }
+        $script:CiNextExportFault=''
+        $runnerRoot=[IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92,[char]47)+[IO.Path]::DirectorySeparatorChar
+        if(-not [IO.Path]::GetFullPath($dest).StartsWith(
+                $runnerRoot,[StringComparison]::OrdinalIgnoreCase)){
+            throw 'CI collision target is not a runner-local authorized source.'
+        }
+    }
+    $protectedPaths=@(Get-BridgeProtectedPublishPaths)
+    $dest=Assert-NativePublishDestinationSafe $dest $protectedPaths
     # Native save dialogs are modal: the original status check may be stale
     # by the time the user chooses a destination.
     $status=Get-JobStatus $JobId
@@ -2448,6 +2501,9 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
             $script:CiNextExportFault=''
             throw 'CI-only publish denied after verified temporary copy.'
         }
+        # Revalidate immediately before atomic publication, after the modal
+        # dialog and the potentially lengthy verified same-volume copy.
+        [void](Assert-NativePublishDestinationSafe $dest (Get-BridgeProtectedPublishPaths))
         Publish-VerifiedOutput $temp $dest
     }finally{
         if(Test-Path -LiteralPath $temp -PathType Leaf){
@@ -2464,9 +2520,27 @@ function Export-Sample([string]$SampleId,[string]$SuggestedName) {
     $name=if($SuggestedName){$SuggestedName}else{'hardsub_test.mkv'}
     $dest=Show-NativeSaveFileDialog 'Matroska video|*.mkv' 'mkv' $name
     if(-not $dest){return [pscustomobject]@{ok=$false;error='Save cancelled.'}}
-    Copy-Item -LiteralPath $src -Destination $dest -Force
-    $bytes=(Get-Item -LiteralPath $dest).Length
-    return [pscustomobject]@{ok=$true;bytes=$bytes}
+    # Samples are also staged media; reject inputs and samples as destinations.
+    $dest=Assert-NativePublishDestinationSafe $dest (Get-BridgeProtectedPublishPaths)
+    $srcBefore=Get-GuidedContainerFingerprint $src
+    $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
+    $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
+    try{
+        Copy-Item -LiteralPath $src -Destination $temp
+        $srcAfter=Get-GuidedContainerFingerprint $src
+        $copied=Get-GuidedContainerFingerprint $temp
+        if($srcBefore.Length -ne $srcAfter.Length -or $srcBefore.Hash -ne $srcAfter.Hash -or
+           $srcBefore.Length -ne $copied.Length -or $srcBefore.Hash -ne $copied.Hash){
+            throw 'Sample export changed between staging and publication.'
+        }
+        [void](Assert-NativePublishDestinationSafe $dest (Get-BridgeProtectedPublishPaths))
+        Publish-VerifiedOutput $temp $dest
+    }finally{
+        if(Test-Path -LiteralPath $temp -PathType Leaf){
+            Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return [pscustomobject]@{ok=$true;bytes=$copied.Length;sha256=$copied.Hash.ToLowerInvariant()}
 }
 
 function Read-HttpRequest($Client) {
