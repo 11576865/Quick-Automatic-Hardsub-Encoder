@@ -39,7 +39,8 @@
     "Compared src/workbench-basic-controls.js: shipping V3 renders visible <select data-basic-strategy> with choices guided/manual; change event calls hidden original data-hardsub-strategy button and preserves authoritative state. Bounded code repair commit 60b88c6a1389664cb4cd0174357d7e5f558b144d now uses real Playwright selectOption('manual'), awaits body dataset change and checks visible selector+actual legacy-owned state. No run/Native fixture mocks or weakened packet/pixel assertions.",
     "UIGS Intake appended second WU12 exact-head counterexample to existing Foundry Case, deduplicated at a9ec033de1da739efb3f58eaa5ccaa53d0a6fb0e; only Case, no Canonical promotion.",
     "PR #132 exact head f1f32ffcfedc315e455512afe4a8c28abfb7f020: frontend 40061449227 SUCCESS and UIGS 40061449212 SUCCESS. Windows 40061449271 reached real full shipping index.html/main.js MKV source recovery, explicit ASS/font import, production preflight, real Native preview, visible Manual plan, full-source budget, real FFmpeg encode and job completion; WU12 browser receipt printed PASS for Native job 16da772ea3c9474a87008691d9cc7a45, bitrate 1298237 bps. Independent validator FAILED at verify-wu11-browser-native-output.mjs:56 because actual Manual subtitleRenderOrder='after-scale' while WU11 Guided-specific oracle expected 'before-scale'. No prior WU11 pass lost.",
-    "Reviewed src/media-task.js: explicit comment confirms standalone Manual default after-scale, Guided handoff freezes before-scale. This WU12 test requested no resizing. Oracle correction cd42803900a4d329bcea0534cb4c87205e33c6b0 retains WU11 before-scale STRICT, requires WU12 after-scale STRICT, width=0 height=0 no crop/no `scale=` video filter, and `ass=__ASS__:fontsdir=__FONTS__` plus the existing independent actual burned-pixel and packet-hash tests. No encoding code changed and no success asserted before hosted re-run."
+    "Reviewed src/media-task.js: explicit comment confirms standalone Manual default after-scale, Guided handoff freezes before-scale. This WU12 test requested no resizing. Oracle correction cd42803900a4d329bcea0534cb4c87205e33c6b0 retains WU11 before-scale STRICT, requires WU12 after-scale STRICT, width=0 height=0 no crop/no `scale=` video filter, and `ass=__ASS__:fontsdir=__FONTS__` plus the existing independent actual burned-pixel and packet-hash tests. No encoding code changed and no success asserted before hosted re-run.",
+    "UIGS Intake deduplicated WU12 third counterexample into existing Foundry Case at commit 5932eab7236af124b525b2506a0907a1e15468e1; no Canonical mutation."
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -51,13 +52,13 @@
   "branch": "feat/wu12-production-main-native-acceptance-20261024",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/132",
   "base_main_sha": "2bdb2730db4172a4e0104837c5c4eb47d4daa763",
-  "latest_durable_commit": "cd42803900a4d329bcea0534cb4c87205e33c6b0",
+  "latest_durable_commit": "61e41bf99712af35d74f1dedb323102f343fc17d",
   "external_validation_states": {
     "windows_full_production_main": "PRIOR exact head real main.js Native job completed, WU12 browser receipt PASS, but output oracle FAILED at intentional Manual-vs-Guided subtitle order distinction; corrected verifier PENDING exact-head Windows",
     "frontend": "PRIOR HEAD 40061449227 SUCCESS, NEW head pending",
     "uigs": "PRIOR HEAD 40061449212 SUCCESS, NEW head pending",
     "physical_user_devices": "FIELD_PENDING",
-    "uigs_intake": "PENDING_FOUNDRY_CASE_SYNC"
+    "uigs_intake": "WRITTEN Existing Foundry scoped QHE Case @5932eab7236af124b525b2506a0907a1e15468e1; no Canonical"
   },
   "blockers": [
     "Independent WU12 native output packet/pixel oracle must PASS on exact revised head before merge",
