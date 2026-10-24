@@ -176,7 +176,7 @@ let browser;
   const oldHash=sha(published);
   // Unknown job should NEVER open a picker, damage old bytes or start a save.
   const rejected=await page.evaluate(async suggested=>{
-   return await globalThis.NativeHardsub.requestNativeExport('not-a-real-native-job',suggested);
+   return await globalThis.NativeHardsub.requestNativeExport('notarealnativejob',suggested);
   },name);
   assert.equal(rejected.ok,false,'Exporting an unknown job must be rejected');
   assert.equal(sha(published),oldHash,'Unknown export must preserve existing destination bytes');
