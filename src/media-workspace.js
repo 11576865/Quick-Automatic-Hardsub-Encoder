@@ -20,7 +20,7 @@ import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-q
 import {assessCopyCutStart} from './copy-cut-feasibility.js';
 import {normalizeCompletedCutTimeline} from './cut-timeline-evidence.js';
 import {createOutputRecipe,validateOutputRecipe,outputRecipeFilename} from './output-recipe-matrix.js';
-import {makeBrowserSourceBatch,assertBrowserBatchSource} from './browser-source-batch.js';
+import {makeBrowserSourceBatch,assertBrowserBatchSource,makeNativeSourceBatch,assertNativeBatchSource} from './browser-source-batch.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
 
@@ -147,9 +147,10 @@ export function mountMediaWorkspace(hooks) {
     </div>
   </details>
   <details id="taskMultiSourcePanel" class="media-clip-queue media-browser-batch">
-    <summary><strong>多来源输出队列</strong> · Web 浏览器复制／转码</summary>
-    <p class="note">一次选择多个视频，最多 8 项。分别激活来源、探测、执行并交给浏览器下载。浏览器移交不证明已写入磁盘；请允许多个下载并检查目标文件。Native 多文件、跨来源硬压和共享质量证明尚未支持。</p>
+    <summary><strong>多来源输出队列</strong> · Stream Copy／纯转码</summary>
+    <p class="note">最多 8 个来源，独立激活、FFprobe 探测、编译、编码与验证。Web 由浏览器下载；Windows Native 通过系统选择源文件，并为每个验证成品分别选择保存位置。取消或保存失败时停止后续来源，保留当前成品以供重试。跨来源 ASS 硬压、音轨锁、严格体积预算与共享质量证明均不继承。</p>
     <label>浏览器视频文件 <input id="taskBatchSources" type="file" multiple accept="video/*,.mkv,.mp4,.mov,.webm,.avi,.ts"></label>
+    <button type="button" class="secondary" id="taskChooseNativeBatchSources" hidden>通过 Windows 选择多个视频</button>
     <div class="media-clip-queue-header-actions">
       <button type="button" id="taskQueueBatchSources" class="secondary">按当前设置加入所选来源</button>
       <button type="button" id="taskClearBatchSources" class="secondary">清空队列记录</button>
@@ -421,8 +422,11 @@ export function mountMediaWorkspace(hooks) {
   let batchRunning=false,batchStop=false,batchCurrent=null,batchSavePending=null;
   const browserBatchAvailable=()=>typeof hooks.activateBrowserBatchSource==='function'&&
     !!hooks.supportsBrowserSourceBatch?.();
+  const nativeBatchAvailable=()=>typeof hooks.activateNativeBatchSource==='function'&&
+    typeof hooks.selectNativeBatchSources==='function'&&!!hooks.supportsNativeSourceBatch?.();
+  const batchAvailable=()=>browserBatchAvailable()||nativeBatchAvailable();
   const syncBrowserBatch=()=>{
-    const available=browserBatchAvailable();
+    const available=batchAvailable(),web=browserBatchAvailable(),native=nativeBatchAvailable();
     section.querySelector('#taskMultiSourcePanel').hidden=!available;
     const locked=busy||hooks.busy()||clipBatchRunning||recipeBatchRunning||batchRunning;
     batchList.replaceChildren();
@@ -442,8 +446,12 @@ export function mountMediaWorkspace(hooks) {
       action.disabled=locked||!!batchSavePending&&batchSavePending!==entry;
       row.append(info,action);batchList.append(row);
     });
-    section.querySelector('#taskBatchSources').disabled=!available||locked||!!batchSavePending;
-    section.querySelector('#taskQueueBatchSources').disabled=!available||locked||!!batchSavePending||browserBatch.length>=8;
+    section.querySelector('#taskBatchSources').closest('label').hidden=!web;
+    section.querySelector('#taskQueueBatchSources').hidden=!web;
+    section.querySelector('#taskChooseNativeBatchSources').hidden=!native;
+    section.querySelector('#taskBatchSources').disabled=!web||locked||!!batchSavePending;
+    section.querySelector('#taskQueueBatchSources').disabled=!web||locked||!!batchSavePending||browserBatch.length>=8;
+    section.querySelector('#taskChooseNativeBatchSources').disabled=!native||locked||!!batchSavePending||browserBatch.length>0;
     section.querySelector('#taskClearBatchSources').disabled=locked||!!batchSavePending||!browserBatch.length;
     section.querySelector('#taskRunBatchSources').disabled=!available||locked||!!batchSavePending||!browserBatch.some(e=>!browserBatchDone(e));
     section.querySelector('#taskStopBatchSources').hidden=!batchRunning;
@@ -2264,8 +2272,32 @@ export function mountMediaWorkspace(hooks) {
   };
 
 
-  // B21 user-selected multi-source Web lane. Never reuse a previous source
-  // probe, ASS/font binding, or codec evidence across independent File jobs.
+  // B21: Web File and Windows native picker share the ONE authoritative
+  // per-source compile/run/save owner; no virtual files or browser-supplied paths.
+  section.querySelector('#taskChooseNativeBatchSources').onclick=async()=>{
+    if(!nativeBatchAvailable()||busy||hooks.busy()||batchRunning||
+       recipeBatchRunning||clipBatchRunning||batchSavePending||recipePendingSave||
+       clipAwaitingSave)return;
+    if(browserBatch.length){
+      batchStatus.textContent='请先清空已有来源队列，再通过系统文件对话框建立新的授权批次。';
+      return;
+    }
+    const pick=section.querySelector('#taskChooseNativeBatchSources');
+    pick.disabled=true;
+    try{
+      // Freeze preferences BEFORE showing a modal native picker.
+      const settings=read();
+      const picked=await hooks.selectNativeBatchSources();
+      if(picked?.cancelled){
+        batchStatus.textContent='已取消 Windows 文件选择；原有来源和成品未被改动。';
+        return;
+      }
+      const items=makeNativeSourceBatch({selections:picked?.files,settings});
+      for(const source of items)browserBatch.push({source,state:'queued',number:browserBatch.length+1});
+      batchStatus.textContent='Windows 已授权 '+items.length+' 个文件；实际路径只保留在 Native Bridge，逐个执行前重新探测。';
+    }catch(error){batchStatus.textContent='Native 多来源授权失败：'+error.message;}
+    finally{pick.disabled=false;syncBrowserBatch();}
+  };
   section.querySelector('#taskQueueBatchSources').onclick=()=>{
     try{
       if(!browserBatchAvailable()||busy||hooks.busy()||batchRunning||
@@ -2329,7 +2361,7 @@ export function mountMediaWorkspace(hooks) {
       batchSavePending||recipePendingSave||clipAwaitingSave)return;
     let current=null,phase='prepare';
     try{
-      if(!browserBatchAvailable())throw Error('当前原生后端不提供 Web File 多来源执行');
+      if(!batchAvailable())throw Error('当前后端不提供已授权的多来源执行');
       const pending=browserBatch.filter(row=>!browserBatchDone(row));
       if(!pending.length)throw Error('队列没有待执行来源');
       if(completed&&['verified','save_failed'].includes(section.dataset.taskState))
@@ -2343,21 +2375,27 @@ export function mountMediaWorkspace(hooks) {
         current=row;batchCurrent=row;phase='prepare';row.state='running';
         batchStatus.textContent='正在激活并探测：'+row.source.name;
         syncBrowserBatch();
-        const active=await hooks.activateBrowserBatchSource(row.source.file);
-        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        const native=!!row.source.nativeId;
+        const active=native
+          ? await hooks.activateNativeBatchSource(row.source)
+          : await hooks.activateBrowserBatchSource(row.source.file);
+        const assertActive=()=>native
+          ? assertNativeBatchSource(row.source,active,hooks.videoIdentity?.())
+          : assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        assertActive();
         const settings=row.source.settings,media=await hooks.prepare(settings.operation);
-        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        assertActive();
         const task=compileTask({...settings,budgetPolicy:'best-effort'},{
           ...media,sourceIdentity:row.source.identity,budgetEvidence:undefined
         });
         await hooks.validate?.(task);
-        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        assertActive();
         activeTask=task;currentPlanTask=task;
         executingSourceName=row.source.name;taskStartedAt=performance.now();
         setTaskState('encoding');phase='encode';syncBrowserBatch();
         batchStatus.textContent='正在处理 '+row.source.name+' · '+task.operation;
         const result=await hooks.run(task,media,(p,message,meta)=>updateTaskProgress(p,message,meta));
-        assertBrowserBatchSource(row.source,active,hooks.videoIdentity?.());
+        assertActive();
         if(result?.verified!==true)throw Error('本来源未取得可信的成品验证结果');
         completed={...result,name:outputRecipeFilename(result.name||row.source.name,row.number)};
         completedStale=false;
@@ -2369,12 +2407,14 @@ export function mountMediaWorkspace(hooks) {
         const saved=await saveQueuedResult(completed);
         row.state=saved?.kind==='browser-download'?'handed_off':'saved';setTaskState('saved');
         batchStatus.textContent='已完成 '+browserBatch.filter(browserBatchDone).length+
-          ' / '+browserBatch.length+' 个来源输出；浏览器下载须在本机独立确认。';
+          ' / '+browserBatch.length+(native?' 个 Native 成品已逐一保存。':' 个来源输出；浏览器下载须在本机独立确认。');
         syncBrowserBatch();
       }
       if(batchStop)batchStatus.textContent='已停止后续来源；已移交浏览器的文件需要检查下载结果。';
       else if(browserBatch.every(browserBatchDone))batchStatus.textContent=
-        '全部来源已分别探测、编译、运行并移交保存；请检查浏览器下载是否落盘。';
+        nativeBatchAvailable()
+          ? '全部 Native 来源已独立重新探测、编译、运行、验证和保存。'
+          : '全部来源已分别探测、编译、运行并移交保存；请检查浏览器下载是否落盘。';
     }catch(error){
       if(current){
         if(phase==='save'&&completed?.verified){
