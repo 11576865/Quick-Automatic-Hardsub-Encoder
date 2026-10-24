@@ -53,9 +53,23 @@ assert.deepEqual(task.mustCopyAudioOrdinals,[0]);
 assert.equal(task.outputArgs[task.outputArgs.indexOf('-c:a:0')+1],'copy');
 assert.equal(task.outputArgs[task.outputArgs.indexOf('-c:a:1')+1],'aac');
 assert.equal(task.outputArgs[task.outputArgs.indexOf('-b:v')+1],String(task.bitrate));
-assert.equal(task.subtitleRenderOrder,'before-scale');
+// The two *different* production user transactions intentionally choose
+// different ASS placement contracts. WU11 Guided->Manual explicitly freezes
+// before-scale; an independently opened Manual task has the documented
+// after-scale default. WU12 requests NO resize. Never weaken the pixel oracle
+// or silently accept a scale when interpreting its no-resize ASS filter order.
+assert.equal(task.subtitleRenderOrder,fullProductionApp?'after-scale':'before-scale');
+const videoFilter=task.outputArgs[task.outputArgs.indexOf('-vf')+1];
+assert.ok(videoFilter?.startsWith('ass=__ASS__:fontsdir=__FONTS__'),
+ 'The actual FFmpeg video filter must render source-bound ASS/fonts');
+if(fullProductionApp){
+ assert.equal(Number(task.width||0),0,'WU12 intentionally requested no width resize');
+ assert.equal(Number(task.height||0),0,'WU12 intentionally requested no height resize');
+ assert.equal(String(task.crop||''),'','WU12 must not silently crop source');
+ assert.ok(!/(^|,)scale=/.test(videoFilter),
+  'WU12 manual no-resize task must not insert a video scale');
+}
 assert.equal(task.nativeVbrCertificate,undefined);
-assert.ok(task.outputArgs[task.outputArgs.indexOf('-vf')+1].startsWith('ass=__ASS__:fontsdir=__FONTS__'));
 assert.equal(imported.sourceBound,true);
 assert.equal(imported.fontCount,1);
 const assBytes=Buffer.from(imported.ass.base64,'base64');
