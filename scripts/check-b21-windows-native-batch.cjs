@@ -36,7 +36,11 @@ let browser;
   page.on('dialog',d=>d.dismiss());
   await page.goto(origin+'/?windowsNative='+encodeURIComponent(bridgeOrigin)+'&token='+encodeURIComponent(token));
   await page.waitForFunction(()=>document.body.dataset.runtimeBackend==='windows-native',null,{timeout:30000});
-  await page.waitForFunction(()=>document.querySelector('#videoMeta')?.textContent.includes('source.mkv'),null,{timeout:30000});
+  // First run may leave the Bridge on its final authorized source. A fresh
+  // production page must recover that last source; the queue itself must
+  // explicitly reactivate source 1 then source 2 before each new job.
+  await page.waitForFunction(()=>/source(?:-second)?\.mkv/.test(
+    document.querySelector('#videoMeta')?.textContent||''),null,{timeout:30000});
   // Capture original JS client calls while forwarding them unchanged. This
   // records the two distinct jobs but never manufactures a completed state.
   await page.evaluate(()=>{
