@@ -168,10 +168,10 @@ let browser;
    name:wu12Proof.request?.suggestedName,jobId:wu12Proof.jobId
   }));
   assert.match(jobId,/^[a-z0-9]+$/i);
-  assert.ok(name&&name===basename(name)&&/\\.mkv$/i.test(name),'Native suggested name must be safe');
+  assert.ok(name&&name===basename(name)&&name.toLowerCase().endsWith('.mkv'),'Native suggested name must be safe');
   const published=join(exportDir,name);
   assert.ok(!existsSync(published),'Fresh CI export target must not already exist');
-  const sentinel=Buffer.from('PREVIOUS USER FILE: DO NOT DELETE WITHOUT VERIFIED EXPORT\\n');
+  const sentinel=Buffer.from('PREVIOUS USER FILE: DO NOT DELETE WITHOUT VERIFIED EXPORT\n');
   writeFileSync(published,sentinel);
   const oldHash=sha(published);
   // Unknown job should NEVER open a picker, damage old bytes or start a save.
