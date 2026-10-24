@@ -95,9 +95,13 @@ let browser;
   // a hard-sub job may start. Do not manufacture readiness in window.state.
   await page.locator('#analyze').evaluate(el=>el.click());
   await page.waitForFunction(()=>document.querySelector('#previewBtn')?.disabled===false,null,{timeout:60000});
-  await page.locator('#previewBtn').evaluate(el=>el.click());
+  // Generate the true Native libass reference using the visible shipping
+  // V3 action; the V3 frame is a projection of the ONE legacy preview owner.
+  await page.locator('[data-v3-action="preview"]').click();
+  await page.locator('[data-v3-action="generate-preview"]').click();
   await page.waitForFunction(()=>!!document.querySelector('#previewImage')?.getAttribute('src'),null,{timeout:90000});
-  assert.equal(await page.locator('#previewImage').isVisible(),true);
+  await page.waitForFunction(()=>!!document.querySelector('[data-v3-frame]')?.getAttribute('src'),null,{timeout:30000});
+  assert.equal(await page.locator('[data-v3-frame]').isVisible(),true);
   const preflight=await page.evaluate(()=>({
    nativePreviewVisible:!!document.querySelector('#previewImage')?.getAttribute('src'),
    acceptedWarnings:document.querySelector('#acceptWarnings')?.checked===true,
