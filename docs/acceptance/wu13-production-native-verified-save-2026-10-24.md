@@ -18,3 +18,9 @@ WU12 证明了最终 `output.mkv` 在 Bridge 私有临时目录中存在、音�
 此次验收需要实际 Windows CI 成功，才可称为发布路径闭环；提交源代码本身不是 PASS。CI 在启动 Bridge 时声明了隔离保存位置，因而它**不能证明**真实 SaveFileDialog UI、用户取消、磁盘故障、权限错误、覆盖提示、重开应用恢复、真实长片或播放器矩阵。不会由短测试素材推断全部 A08 / A09 已完成。
 
 **预期外部验收：** 精确 PR 头 Windows WU02/WU11/WU12/WU13 同套真实浏览器 Native 码流、保存与校验，完整前端回归及 UIGS Evidence Coverage 均成功才合并。
+## 精确头 CI 首轮失败与已提交修复（2026-10-24）
+
+- 失败证据：PR #133 head `d29484f93ecb8976f030155aa1f13d1e0099c34f`，GitHub Actions Windows WU02 run `40073432152` / job `120811594253` 失败；同头 frontend、UIGS 与其他有记录的 Windows 检查成功。
+- 日志中 WU02 来源合成、WU11 Guided VBR、正式混合音轨产物及真实 Chromium→Native 工作全部通过。失败发生在 WU12/WU13 的 shipping `main.js` 验收脚本 `check-wu12-production-main-native.cjs:171`，错误为 `Native suggested name must be safe`。
+- 根因是新增检查将扩展名正则写为 `/\\\\.mkv$/i`（错误地匹配反斜杠），导致合法 `.mkv` 也被拒绝。脚本改为 `name.toLowerCase().endsWith('.mkv')`，保留 `name === basename(name)` 的基础路径检查；旧文件测试 sentinel 同时改为实际换行字符。修复提交：`041e71e9ef4e553973c016668b69ab9e26507add`。
+- **状态：已提交修复 / Pending exact-head CI。** 上述失败不能证明保存操作已执行，更不能宣布发布后的 SHA、字节、音轨和字幕像素审计 PASS。必须以修复后 exact-head Windows WU02 成功为 WU13 合并门槛；不因其余工作流通过而放行。
