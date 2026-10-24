@@ -49,3 +49,48 @@ export function assertBrowserBatchSource(entry,activatedFile,activeIdentity){
    throw Error('多来源任务激活的实际 File 或身份不匹配；拒绝混用媒体计划');
  return entry;
 }
+
+/** Native B21 is a separate authorization domain from File objects:
+ * the Bridge stores OS paths; the browser only freezes opaque IDs and stats.
+ * Each source is independently re-probed before compileTask.
+ */
+export function makeNativeSourceBatch({selections,settings,existingCount=0}={}){
+ const inputs=Array.from(selections||[]);
+ if(!inputs.length||inputs.length>MAX_FILES||
+    existingCount<0||existingCount+inputs.length>MAX_FILES)
+   throw Error('Native 多来源队列最多 8 项，必须通过 Windows 选择视频');
+ if(!settings||!['copy','transcode'].includes(settings.operation))
+   throw Error('Native 多来源队列仅支持 Stream Copy / 纯转码；逐来源 ASS 硬压尚未开放');
+ if(settings.rateMode==='size'||settings.budgetPolicy==='strict-ceiling'||
+    settings.audioPlan&&settings.audioPlan!=='[]'||
+    settings.mustCopyAudioOrdinals&&settings.mustCopyAudioOrdinals!=='[]'||
+    settings.audioKeepSourceIdentity)
+   throw Error('Native 多来源不得复用旧来源的音轨锁、逐轨计划或体积证据');
+ const seenIds=new Set(),seenIdentities=new Set();
+ const snapshot=frozen(structuredClone(settings));
+ return inputs.map((row,index)=>{
+   if(!/^[a-f0-9]{32}$/i.test(String(row?.id||''))||
+      typeof row?.name!=='string'||!row.name||
+      !Number.isSafeInteger(row.size)||row.size<=0||
+      !Number.isSafeInteger(row.lastModified)||row.lastModified<0)
+     throw Error('Native 第 '+(index+1)+' 个授权缺少有效的 ID / 来源统计');
+   const identity=batchSourceIdentity(row);
+   if(seenIds.has(row.id)||seenIdentities.has(identity))
+     throw Error('Native 来源重复或统计身份相同，拒绝混用任务');
+   seenIds.add(row.id);seenIdentities.add(identity);
+   return Object.freeze({
+     nativeId:row.id,identity,name:row.name,size:row.size,
+     lastModified:row.lastModified,operation:snapshot.operation,
+     settings:frozen(structuredClone(snapshot))
+   });
+ });
+}
+export function assertNativeBatchSource(entry,activated,activeIdentity){
+ if(!entry?.nativeId||activated?.id!==entry.nativeId||
+    entry.identity!==batchSourceIdentity(activated?.file)||
+    String(activeIdentity||'')!==entry.identity)
+   throw Error('Native 授权、重新探测的源文件与当前任务身份不匹配');
+ if(activated?.probe?.ok!==true)
+   throw Error('Native 来源激活后没有取得实际 FFprobe 证明');
+ return entry;
+}
