@@ -68,6 +68,9 @@ let browser;
   });
   await page.locator('[data-media-mode="'+requestedMode+'"]').click();
   await page.waitForFunction(mode=>document.body.dataset.mediaOperation===mode,requestedMode);
+  // Single source-bound queue owner is hidden in V3's details until expanded.
+  const editor=page.locator('.v3-editor');
+  if(!await editor.evaluate(el=>el.open))await editor.locator(':scope > summary').click();
   if(requestedMode==='transcode'){
    // These are the actual user-visible controls used by the production V3
    // compiler; do not inject a hand-built/parallel FFmpeg request.
@@ -78,9 +81,6 @@ let browser;
    await page.locator('#mediaTaskForm [name="audio"]').selectOption('aac');
    await page.locator('#mediaTaskForm [name="audioBitrate"]').fill('96000');
   }
-  // Single source-bound queue owner is hidden in V3's details until expanded.
-  const editor=page.locator('.v3-editor');
-  if(!await editor.evaluate(el=>el.open))await editor.locator(':scope > summary').click();
   const panel=page.locator('#taskMultiSourcePanel');
   await page.waitForFunction(()=>document.querySelector('#taskMultiSourcePanel')?.hidden===false);
   if(!await panel.evaluate(el=>el.open))await panel.locator(':scope > summary').click();
