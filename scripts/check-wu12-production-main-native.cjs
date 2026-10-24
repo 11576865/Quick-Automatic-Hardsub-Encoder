@@ -107,7 +107,9 @@ let browser;
   assert.ok((await page.evaluate(()=>wu12Proof.embedded?.fonts?.length))===1,'Actual source font import missing');
   // The production preflight and Native libass preview are required before
   // a hard-sub job may start. Do not manufacture readiness in window.state.
-  await page.locator('#analyze').evaluate(el=>el.click());
+  const inspect=page.locator('[data-v3-action="source-inspect"]');
+  assert.equal(await inspect.isVisible(),true,'Source check must be user-visible');
+  await inspect.click();
   await page.waitForFunction(()=>document.querySelector('#previewBtn')?.disabled===false,null,{timeout:60000});
   // Generate the true Native libass reference using the visible shipping
   // V3 action; the V3 frame is a projection of the ONE legacy preview owner.
@@ -154,8 +156,15 @@ let browser;
   await audio.getByRole('checkbox',{name:'音轨 0 必须 Copy 保留'}).check();
   assert.deepEqual(await page.evaluate(()=>JSON.parse(document.querySelector('[name=audioPlan]').value).map(a=>a.action)),['copy','aac']);
   assert.deepEqual(await page.evaluate(()=>JSON.parse(document.querySelector('[name=mustCopyAudioOrdinals]').value)),[0]);
-  await page.locator('#taskMeasureBudget').evaluate(el=>el.click());
-  await page.waitForFunction(()=>document.querySelector('#taskBudgetLedger')?.textContent.includes('已测量'),null,{timeout:100000});
+  const measure=page.locator('[data-basic-action="measure-budget"]');
+  assert.equal(await measure.isVisible(),true,'Manual size measurement must be user-visible');
+  assert.equal(await measure.isEnabled(),true);
+  await measure.click();
+  await page.waitForFunction(()=>document.querySelector('[data-basic-budget-status]')?.textContent.includes('已测量'),null,{timeout:100000});
+  assert.equal(await page.locator('[data-basic-budget-status]').textContent(),
+    await page.locator('#taskBudgetLedger').textContent(),'Visible budget status must match the authoritative ledger');
+  assert.ok(await page.evaluate(()=>wu12Proof.budget?.measurementId),
+    'Visible click must obtain actual Native budget evidence');
   assert.equal(await page.locator('body').getAttribute('data-runtime-backend'),'windows-native');
   const run=page.locator('[data-v3-action=run]');
   await page.waitForFunction(()=>!document.querySelector('#taskRun')?.disabled,null,{timeout:30000});
@@ -244,6 +253,7 @@ let browser;
     kind:'wu12-production-main-to-windows-native-v1',
     productionMainLoaded:true,sourceRecoveredFromNative:true,
     fullAppSourceImportClicked:true,preflightAndNativePreviewCompleted:true,
+    visibleSourceCheckClicked:true,visibleBudgetMeasurementClicked:true,
     browserExplicitClicksObserved:true,bridgeTransport:'production-windows-native-client',
     task:wu12Proof.request?.task,request:wu12Proof.request,
     jobId:wu12Proof.jobId,nativeResult:wu12Proof.completed,
