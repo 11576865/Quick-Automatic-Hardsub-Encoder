@@ -27,6 +27,14 @@ try {
     }catch{}
   }
   if(-not $ready){throw 'Native Bridge failed to start'}
+  # WU13 must never block on a real hidden SaveFileDialog in CI. This is a
+  # preauthorized test-only destination, not a browser-chosen arbitrary path.
+  # If the startup flag did not reach the Bridge, reject the fixture early.
+  $startupLog=Get-Content -Raw -LiteralPath $outlog -ErrorAction SilentlyContinue
+  if(-not $startupLog -or
+     -not $startupLog.Contains('CI-only preauthorized save chooser enabled')){
+    throw 'WU13 CI preauthorized save chooser was not confirmed in Native Bridge startup log'
+  }
   $probe=Invoke-RestMethod -Method Post -Uri "$root/api/probe" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 45
   if(-not $probe.ok -or $probe.subtitleTracks -ne 1 -or $probe.attachmentTracks -ne 1){
     throw 'Source ASS or font attachment missing from actual probe'
@@ -155,7 +163,12 @@ try {
   $productionReceiptPath=Join-Path $work 'wu12-production-main-native-receipt.json'
   & node './scripts/check-wu12-production-main-native.cjs' $source $wu11PlanPath $productionReceiptPath $exportDirectory
   if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $productionReceiptPath)){
-    throw 'WU12 shipping main.js real Windows Native source-import/preview/encode acceptance failed'
+    # The Node oracle sees browser state; the Native Bridge stdout independently
+    # establishes whether the export endpoint was reached or blocked at the dialog.
+    Write-Host 'WU13 Native Bridge last requests (no auth headers):'
+    Get-Content -LiteralPath $outlog -Tail 35 -ErrorAction SilentlyContinue | Write-Host
+    Get-Content -LiteralPath $errlog -Tail 15 -ErrorAction SilentlyContinue | Write-Host
+    throw 'WU12/WU13 shipping V3 Native source/import/preview/encode/save acceptance failed'
   }
   $productionReceipt=Get-Content -Raw -LiteralPath $productionReceiptPath | ConvertFrom-Json
   if($productionReceipt.kind -ne 'wu12-production-main-to-windows-native-v1' -or
