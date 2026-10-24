@@ -36,7 +36,8 @@
     "Investigated src/workbench-import-controls.js production UI: V3 import menu role=embedded intentionally reveals .v3-dependencies and focuses #embeddedAssStream without starting import; previous test clicked menu then waited, omitting explicit #importEmbeddedAss action. Repaired script commit 222bf7bf3eed7145b97351d38d43475b5433953f to assert revealed/dependency panel, select visible ASS ordinal 0, and click actual production importer before waiting for status. Production behavior and all Native verification gates left unchanged.",
     "UIGS Intake appended observed two-step V3 import user-transaction boundary to existing Foundry scoped-CI Case, commit 00933f501798820f82d4a374392ef0b697524536. Not promoted to Canonical.",
     "PR #132 prior exact head f29df72dc93bf9782253f77c09ac2995c65e5e64 frontend 40060628721 SUCCESS; UIGS 40060628635 SUCCESS; Windows WU02 40060628698 FAILED at check-wu12-production-main-native.cjs:125 hidden [data-hardsub-strategy=manual] click timeout. This proves WU12 first two-step import fix advanced through production native ASS import, analysis and actual preview to mode selection; WU11 real browser→Native+output remained PASS.",
-    "Compared src/workbench-basic-controls.js: shipping V3 renders visible <select data-basic-strategy> with choices guided/manual; change event calls hidden original data-hardsub-strategy button and preserves authoritative state. Bounded code repair commit 60b88c6a1389664cb4cd0174357d7e5f558b144d now uses real Playwright selectOption('manual'), awaits body dataset change and checks visible selector+actual legacy-owned state. No run/Native fixture mocks or weakened packet/pixel assertions."
+    "Compared src/workbench-basic-controls.js: shipping V3 renders visible <select data-basic-strategy> with choices guided/manual; change event calls hidden original data-hardsub-strategy button and preserves authoritative state. Bounded code repair commit 60b88c6a1389664cb4cd0174357d7e5f558b144d now uses real Playwright selectOption('manual'), awaits body dataset change and checks visible selector+actual legacy-owned state. No run/Native fixture mocks or weakened packet/pixel assertions.",
+    "UIGS Intake appended second WU12 exact-head counterexample to existing Foundry Case, deduplicated at a9ec033de1da739efb3f58eaa5ccaa53d0a6fb0e; only Case, no Canonical promotion."
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -48,13 +49,13 @@
   "branch": "feat/wu12-production-main-native-acceptance-20261024",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/132",
   "base_main_sha": "2bdb2730db4172a4e0104837c5c4eb47d4daa763",
-  "latest_durable_commit": "60b88c6a1389664cb4cd0174357d7e5f558b144d",
+  "latest_durable_commit": "805bbe980a80a73a1f4b64e174e33f7b34d59ff8",
   "external_validation_states": {
     "windows_full_production_main": "PREVIOUS_HEAD FAILED run 40060628698 hidden legacy strategy button after real import/preview; fixed visible V3 selector, NEW EXACT-HEAD CI PENDING",
     "frontend": "PR #132 old tested head frontend 40060628721 SUCCESS; new head pending",
     "uigs": "PR #132 old tested head UIGS 40060628635 SUCCESS; new head pending",
     "physical_user_devices": "FIELD_PENDING",
-    "uigs_intake": "PENDING_FOUNDARY_DEDUP_CASE_UPDATE"
+    "uigs_intake": "WRITTEN Existing Foundry Case @a9ec033de1da739efb3f58eaa5ccaa53d0a6fb0e; no Canonical"
   },
   "blockers": [
     "Must verify repaired exact PR head in hosted Windows before merge",
