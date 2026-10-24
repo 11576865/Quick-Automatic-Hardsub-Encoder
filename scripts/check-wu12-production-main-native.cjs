@@ -122,7 +122,15 @@ let browser;
   await page.locator('[data-v3-action="close-preview"]').click();
   // Switch the fully initialized production app to its REAL Manual task and
   // interact with the one visible V3 audio owner (no second test compiler).
-  await page.locator('[data-hardsub-strategy=manual]').click();
+  // Shipping V3 projects the hidden legacy strategy buttons through its
+  // visible "形成计划" selector. A user cannot click the old hidden buttons;
+  // the real proxy emits the existing strategy owner's change event.
+  const strategy=page.locator('[data-basic-strategy]');
+  assert.equal(await strategy.isVisible(),true,
+    'Shipping V3 must expose the user-operated plan strategy selector');
+  await strategy.selectOption('manual');
+  await page.waitForFunction(()=>document.body.dataset.hardsubStrategy==='manual');
+  assert.equal(await strategy.inputValue(),'manual');
   assert.equal(await page.locator('body').getAttribute('data-hardsub-strategy'),'manual');
   const field=name=>page.locator('[data-basic-field="'+name+'"]');
   await field('codec').selectOption('h264');
