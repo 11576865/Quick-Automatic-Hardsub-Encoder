@@ -40,11 +40,20 @@ let browser;
   // records the two distinct jobs but never manufactures a completed state.
   await page.evaluate(()=>{
    const bridge=globalThis.NativeHardsub;
-   globalThis.b21Proof={starts:[],exports:[]};
+   globalThis.b21Proof={activations:[],starts:[],exports:[]};
+   const activate=bridge.activateNativeBatchVideo.bind(bridge);
+   bridge.activateNativeBatchVideo=async(id)=>{
+    const result=await activate(id);
+    b21Proof.activations.push({id:result.id,name:result.file?.name,
+      probedName:result.probe?.sourceOriginalName,ok:result.probe?.ok});
+    return result;
+   };
    const start=bridge.startNativeEncode.bind(bridge);
    bridge.startNativeEncode=async(json,ass)=>{
     const result=JSON.parse(await start(json,ass));
-    b21Proof.starts.push({jobId:result.jobId,request:JSON.parse(json),assLength:(ass||'').length});
+    const source=b21Proof.activations[b21Proof.activations.length-1];
+    b21Proof.starts.push({jobId:result.jobId,sourceGrantId:source?.id,
+      sourceName:source?.name,request:JSON.parse(json),assLength:(ass||'').length});
     return JSON.stringify(result);
    };
    const save=bridge.requestNativeExport.bind(bridge);
@@ -89,9 +98,12 @@ let browser;
   assert.equal(proof.exports.length,2,'Each job must have its own native Save receipt');
   assert.equal(new Set(proof.starts.map(x=>x.jobId)).size,2);
   assert.deepEqual(proof.starts.map(x=>x.request.task.operation),['copy','copy']);
-  const sources=proof.starts.map(x=>x.request.sourceIdentity||'');
-  assert.ok(sources[0].includes('source.mkv')&&sources[1].includes('source-second.mkv'),
-   'Native jobs did not bind to distinct sources in order');
+  assert.equal(proof.activations.length,2,'Native picker grants were not activated twice');
+  assert.deepEqual(proof.activations.map(x=>x.probedName),[basename(first),basename(second)],
+   'Native Bridge did not independently FFprobe two distinct selected sources');
+  assert.deepEqual(proof.starts.map(x=>x.sourceGrantId),proof.activations.map(x=>x.id),
+   'The two real FFmpeg jobs were not started under their sequential Native source grants');
+  assert.ok(proof.starts.every(x=>x.request.task.operation==='copy'));
   const published=[];
   for(let i=0;i<2;i++){
    const save=proof.exports[i],start=proof.starts[i];
@@ -109,7 +121,7 @@ let browser;
   const receipt={kind:'b21-two-real-source-native-copy-batch-v1',result:'PASS',
    productionMainLoaded:true,realWindowsNative:true,originalNativeTransport:true,
    ciPreauthorizedPicker:true,interactiveOsPickerVerified:false,
-   sourceCount:2,jobCount:2,savedCount:2,artifacts:published,
+   sourceCount:2,jobCount:2,savedCount:2,activations:proof.activations,artifacts:published,
    strictSizeVerified:false,longMovieVerified:false,physicalDeviceVerified:false};
   writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
   console.log(JSON.stringify({kind:receipt.kind,result:'PASS',sourceCount:2,jobCount:2,
