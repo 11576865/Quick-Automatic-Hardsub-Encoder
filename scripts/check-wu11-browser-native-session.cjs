@@ -29,9 +29,24 @@ let browser;
     await new Promise(r=>setTimeout(r,180));
   }
   assert.ok(available,'Vite did not start: '+output);
+  // Establish that the real Bridge is healthy before diagnosing whether
+  // Chromium can reach it from a cross-port localhost document.
+  const nodeHealth=await fetch(bridgeUrl+'/api/health',{
+   headers:{'X-Quick-Hardsub-Token':token,'Origin':base}
+  });
+  const nodeInfo=await nodeHealth.json();
+  assert.equal(nodeHealth.status,200,'Bridge local HTTP health rejected Node');
+  assert.equal(nodeInfo.backend,'windows-native');
+  assert.equal(nodeInfo.available,true);
   browser=await chromium.launch({headless:true});
   const page=await browser.newPage({viewport:{width:1300,height:900}});
-  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const errors=[];const browserConsoleErrors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',e=>{if(e.type()==='error')browserConsoleErrors.push(e.text());});
+  page.on('requestfailed',request=>{
+   if(request.url().startsWith(bridgeUrl))browserConsoleErrors.push(
+    'Bridge request failed: '+String(request.failure()?.errorText||'unknown'));
+  });
   await page.route('**/wu11-real-native-ui*',route=>route.fulfill({
    contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/style.css"></head><body>
     <section id="hardsubControlDeck"><button data-hardsub-strategy="guided">Guided</button><button data-hardsub-strategy="manual">Manual</button></section>
@@ -46,15 +61,35 @@ let browser;
    const {detectWindowsNativeBridge}=await import('/src/windows-native-client.js');
    const {mountMediaWorkspace}=await import('/src/media-workspace.js');
    const discovered=await detectWindowsNativeBridge();
-   if(!discovered||!globalThis.NativeHardsub?.__windowsNative)
-     throw Error('Real Windows Native browser client failed to discover live Bridge');
+   if(!discovered||!globalThis.NativeHardsub?.__windowsNative){
+    // Production client intentionally returns false for any discovery failure.
+    // Redact token; report only the visible HTTP/CORS/local-network diagnosis.
+    let diagnostic;
+    try{
+     const response=await fetch(init.bridgeUrl+'/api/health',{
+      headers:{'X-Quick-Hardsub-Token':init.bridgeToken},cache:'no-store'
+     });
+     const payload=await response.json().catch(()=>({}));
+     diagnostic={status:response.status,backend:payload.backend||null,
+      available:payload.available===true,error:payload.error||null};
+    }catch(e){diagnostic={networkException:String(e?.message||e)};}
+    throw Error('Real Windows Native browser client failed discovery: '+JSON.stringify({
+     documentOrigin:location.origin,queryHasBridge:new URL(location.href).searchParams.has('windowsNative'),
+     queryHasToken:new URL(location.href).searchParams.has('token'),
+     browserHealth:diagnostic
+    }));
+   }
    const bridge=globalThis.NativeHardsub;
    const selected=JSON.parse(await bridge.readSelectedVideoInfo());
    if(!selected.ok||selected.name!==init.sourceName||Number(selected.size)!==init.sourceSize)
      throw Error('Bridge source selection does not match the physical checked MKV: '+JSON.stringify(selected));
    const probe=await new Promise((resolve,reject)=>{
     const timeout=setTimeout(()=>reject(Error('Native probe callback timed out')),25000);
-    globalThis.__onNativeInputProbe=data=>{clearTimeout(timeout);resolve(data)};
+    globalThis.__onNativeInputProbe=data=>{
+     clearTimeout(timeout);
+     try{resolve(typeof data==='string'?JSON.parse(data):data)}
+     catch(error){reject(error)}
+    };
     bridge.probeSelectedVideo();
    });
    if(!probe.ok||probe.videoTracks!==1||probe.audioTracks!==2||
@@ -151,7 +186,8 @@ let browser;
     duration:media.duration,sourceAudioCodecs:probe.audioCodecs,
     fontCount:imported.fontCount,bridgeDiscovered:discovered,
     originalCopyBytes:copyAllBytes};
-  },{sourceName:'source.mkv',sourceSize:sourceStat.size,sourceKey:key});
+  },{sourceName:'source.mkv',sourceSize:sourceStat.size,sourceKey:key,
+    bridgeUrl,bridgeToken:token});
   assert.equal(bootstrap.bridgeDiscovered,true);
   assert.equal(bootstrap.sourceBytes,sourceStat.size);
   assert.ok(bootstrap.duration>4&&bootstrap.duration<6);
@@ -212,6 +248,8 @@ let browser;
   assert.equal(receipt.task.nativeVbrCertificate,undefined);
   assert.equal(receipt.task.subtitleRenderOrder,'before-scale');
   assert.deepEqual(errors,[],'Production client and Guided DOM must not log browser page errors');
+  assert.deepEqual(browserConsoleErrors,[],
+   'Chromium generated console/network errors in the real Bridge user session');
   writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
   console.log(JSON.stringify({result:'PASS',kind:receipt.kind,
    sourceSha256:receipt.sourceKey,jobId:receipt.jobId,
