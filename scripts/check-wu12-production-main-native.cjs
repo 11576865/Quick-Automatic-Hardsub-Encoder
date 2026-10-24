@@ -184,17 +184,50 @@ let browser;
   // owns taskSave -> requestNativeExport -> real Bridge -> native callback.
   await page.evaluate(()=>{
     wu12Proof.exportResult=null;
+    wu12Proof.exportCalls=[];
+    wu12Proof.exportEvents=[];
+    const realExport=globalThis.NativeHardsub.requestNativeExport.bind(globalThis.NativeHardsub);
+    globalThis.NativeHardsub.requestNativeExport=(...args)=>{
+      wu12Proof.exportCalls.push({jobId:args[0],suggestedName:args[1]});
+      return realExport(...args); // Observe the original Native transport; do not stub it.
+    };
     window.addEventListener('quick-hardsub-native-export-result',event=>{
+     wu12Proof.exportEvents.push({jobId:event.detail?.jobId,ok:event.detail?.ok,error:event.detail?.error||''});
      if(event.detail?.jobId===wu12Proof.jobId)wu12Proof.exportResult=event.detail;
     });
   });
+  const exportHttp=[];
+  page.on('request',req=>{if(req.url().includes('/export'))exportHttp.push({kind:'request',method:req.method()});});
+  page.on('response',response=>{if(response.url().includes('/export'))exportHttp.push({kind:'response',status:response.status()});});
+  page.on('requestfailed',req=>{if(req.url().includes('/export'))exportHttp.push({kind:'failed',reason:req.failure()?.errorText||'network failure'});});
   await page.locator('[data-v3-action="artifact"]').click();
   const visibleSave=page.locator('[data-v3-action="save-artifact"]');
   assert.equal(await visibleSave.isVisible(),true);
   assert.equal(await visibleSave.isEnabled(),true);
   await visibleSave.click();
-  await page.waitForFunction(()=>wu12Proof.exportResult?.jobId===wu12Proof.jobId,
-    null,{timeout:60000});
+  // A visible enabled V3 Save is not proof that the actual form owner sent an
+  // export. Reject that gap immediately rather than waiting 60s for a callback.
+  const dispatch=await page.evaluate(()=>({
+    state:document.querySelector('#mediaWorkspace')?.dataset.taskState,
+    status:document.querySelector('#taskStatus')?.textContent,
+    calls:wu12Proof.exportCalls
+  }));
+  assert.equal(dispatch.calls.length,1,'Visible V3 Save did not invoke the real Native client: '+JSON.stringify(dispatch));
+  assert.equal(dispatch.calls[0].jobId,jobId,'V3 Save targeted a stale or unrelated Native job');
+  assert.ok(['saving','saved','save_failed'].includes(dispatch.state),
+    'The form owner did not enter its saving lifecycle: '+JSON.stringify(dispatch));
+  try{
+    await page.waitForFunction(()=>wu12Proof.exportResult?.jobId===wu12Proof.jobId,
+      null,{timeout:60000});
+  }catch(error){
+    const evidence=await page.evaluate(()=>({
+      state:document.querySelector('#mediaWorkspace')?.dataset.taskState,
+      status:document.querySelector('#taskStatus')?.textContent,
+      calls:wu12Proof.exportCalls,
+      events:wu12Proof.exportEvents
+    }));
+    throw Error('WU13 Native save result was not delivered: '+JSON.stringify({evidence,exportHttp,pageErrors})+'; '+error.message);
+  }
   const exported=await page.evaluate(()=>wu12Proof.exportResult);
   assert.equal(exported.ok,true,'Native save must complete successfully');
   assert.equal(exported.jobId,jobId,'Saved job must be the just-completed Native job');
