@@ -7,8 +7,9 @@ const {readFileSync,existsSync,statSync,writeFileSync}=require('node:fs');
 const {join,resolve,basename}=require('node:path');
 const {createHash}=require('node:crypto');
 const {chromium}=require('playwright');
-const [first,second,exportDir,receiptPath]=process.argv.slice(2);
-assert(first&&second&&exportDir&&receiptPath,'Usage: node check-b21-windows-native-batch.cjs source1 source2 exportDir receipt');
+const [first,second,exportDir,receiptPath,requestedMode='copy']=process.argv.slice(2);
+assert(first&&second&&exportDir&&receiptPath,'Usage: node check-b21-windows-native-batch.cjs source1 source2 exportDir receipt [copy|transcode]');
+assert.ok(['copy','transcode'].includes(requestedMode),'Only explicit copy/transcode modes may be audited');
 assert.equal(process.env.GITHUB_ACTIONS,'true');
 assert.ok(resolve(exportDir).startsWith(resolve(process.env.RUNNER_TEMP)+'\\'));
 assert.ok(existsSync(first)&&existsSync(second)&&existsSync(exportDir));
@@ -61,8 +62,18 @@ let browser;
     b21Proof.exports.push({jobId,name,...result});return result;
    });
   });
-  await page.locator('[data-media-mode="copy"]').click();
-  await page.waitForFunction(()=>document.body.dataset.mediaOperation==='copy');
+  await page.locator('[data-media-mode="'+requestedMode+'"]').click();
+  await page.waitForFunction(mode=>document.body.dataset.mediaOperation===mode,requestedMode);
+  if(requestedMode==='transcode'){
+   // These are the actual user-visible controls used by the production V3
+   // compiler; do not inject a hand-built/parallel FFmpeg request.
+   await page.locator('#mediaTaskForm [name="codec"]').selectOption('h264');
+   await page.locator('#mediaTaskForm [name="encoder"]').selectOption('libx264');
+   await page.locator('#mediaTaskForm [name="rateMode"]').selectOption('quality');
+   await page.locator('#mediaTaskForm [name="quality"]').fill('27');
+   await page.locator('#mediaTaskForm [name="audio"]').selectOption('aac');
+   await page.locator('#mediaTaskForm [name="audioBitrate"]').fill('96000');
+  }
   // Single source-bound queue owner is hidden in V3's details until expanded.
   const editor=page.locator('.v3-editor');
   if(!await editor.evaluate(el=>el.open))await editor.locator(':scope > summary').click();
@@ -97,13 +108,18 @@ let browser;
   assert.equal(proof.starts.length,2,'Expected two separate official FFmpeg jobs');
   assert.equal(proof.exports.length,2,'Each job must have its own native Save receipt');
   assert.equal(new Set(proof.starts.map(x=>x.jobId)).size,2);
-  assert.deepEqual(proof.starts.map(x=>x.request.task.operation),['copy','copy']);
+  assert.deepEqual(proof.starts.map(x=>x.request.task.operation),[requestedMode,requestedMode]);
+  if(requestedMode==='transcode'){
+   assert.ok(proof.starts.every(x=>x.request.task.encoder==='libx264'),'H.264 software encoder must be the executable authority');
+   assert.ok(proof.starts.every(x=>x.request.task.audio==='aac'),'Both sources must receive independent AAC transcode plans');
+   assert.ok(proof.starts.every(x=>Number(x.request.task.quality)===27),'Frozen per-source CRF 27 must reach both jobs');
+  }
   assert.equal(proof.activations.length,2,'Native picker grants were not activated twice');
   assert.deepEqual(proof.activations.map(x=>x.probedName),[basename(first),basename(second)],
    'Native Bridge did not independently FFprobe two distinct selected sources');
   assert.deepEqual(proof.starts.map(x=>x.sourceGrantId),proof.activations.map(x=>x.id),
    'The two real FFmpeg jobs were not started under their sequential Native source grants');
-  assert.ok(proof.starts.every(x=>x.request.task.operation==='copy'));
+  assert.ok(proof.starts.every(x=>x.request.task.operation===requestedMode));
   const published=[];
   for(let i=0;i<2;i++){
    const save=proof.exports[i],start=proof.starts[i];
@@ -113,18 +129,38 @@ let browser;
    assert.ok(existsSync(save.path)&&statSync(save.path).size>0);
    assert.equal(fileHash(save.path),save.sha256,'Saved disk bytes differ from Native SHA receipt');
    const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=duration,size','-show_entries','stream=codec_type,codec_name','-of','json',save.path],{encoding:'utf8'}));
-   assert.ok(probe.streams.some(x=>x.codec_type==='video'),'Saved batch artifact lacks video');
+   const input=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=duration','-show_entries','stream=codec_type,codec_name,width,height','-of','json',i===0?first:second],{encoding:'utf8'}));
+   const srcVideo=input.streams.find(x=>x.codec_type==='video');
+   const outputVideo=probe.streams.find(x=>x.codec_type==='video');
+   assert.ok(outputVideo,'Saved batch artifact lacks video');
+   assert.deepEqual([outputVideo.width,outputVideo.height],[srcVideo.width,srcVideo.height],
+    'Output dimensions borrowed a prior source or were unexpectedly changed');
+   const srcAudio=input.streams.filter(x=>x.codec_type==='audio');
+   const outputAudio=probe.streams.filter(x=>x.codec_type==='audio');
+   assert.equal(outputAudio.length,srcAudio.length,'Output borrowed prior source audio stream plan/count');
+   if(requestedMode==='transcode'){
+    assert.equal(outputVideo.codec_name,'h264','Expected independent H.264 re-encoded video, not FFV1 copy');
+    assert.ok(outputAudio.every(x=>x.codec_name==='aac'),'All audio tracks must be actually encoded to AAC');
+   }else{
+    assert.equal(outputVideo.codec_name,srcVideo.codec_name,'Stream Copy must preserve video codec');
+    assert.deepEqual(outputAudio.map(x=>x.codec_name),srcAudio.map(x=>x.codec_name));
+   }
+   // Decode actual compressed picture packets; probing only container fields
+   // is not sufficient evidence of a playable result.
+   execFileSync('ffmpeg',['-v','error','-i',save.path,'-map','0:v:0','-frames:v','4','-f','null','-'],
+     {stdio:['ignore','pipe','pipe'],timeout:30000});
    published.push({source:i===0?basename(first):basename(second),jobId:start.jobId,
-    bytes:statSync(save.path).size,sha256:save.sha256,path:save.path,streams:probe.streams});
+    bytes:statSync(save.path).size,sha256:save.sha256,path:save.path,streams:probe.streams,
+    sourceWidth:srcVideo.width,sourceHeight:srcVideo.height,sourceAudioTracks:srcAudio.length});
   }
   assert.deepEqual(errors,[],'Shipping main.js emitted browser exceptions');
-  const receipt={kind:'b21-two-real-source-native-copy-batch-v1',result:'PASS',
+  const receipt={kind:'b21-two-real-source-native-'+requestedMode+'-batch-v2',mode:requestedMode,result:'PASS',
    productionMainLoaded:true,realWindowsNative:true,originalNativeTransport:true,
    ciPreauthorizedPicker:true,interactiveOsPickerVerified:false,
    sourceCount:2,jobCount:2,savedCount:2,activations:proof.activations,artifacts:published,
    strictSizeVerified:false,longMovieVerified:false,physicalDeviceVerified:false};
   writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
-  console.log(JSON.stringify({kind:receipt.kind,result:'PASS',sourceCount:2,jobCount:2,
+  console.log(JSON.stringify({kind:receipt.kind,result:'PASS',mode:requestedMode,sourceCount:2,jobCount:2,
    savedCount:2,artifacts:published.map(({source,jobId,bytes,sha256})=>({source,jobId,bytes,sha256}))}));
  }finally{
   if(browser)await browser.close().catch(()=>{});
