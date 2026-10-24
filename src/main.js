@@ -6617,6 +6617,49 @@ mediaWorkspace=mountMediaWorkspace({
   },
   platformKey: () => state.nativeBackend || {},
   // WU08: only user-provided browser File objects, never synthetic native paths.
+  // B21 Native queue: a real Windows OpenFileDialog owns source selection.
+  // Every file path stays in the Bridge; the page receives only opaque grants.
+  supportsNativeSourceBatch:()=>!!globalThis.NativeHardsub?.__windowsNative&&
+    typeof globalThis.NativeHardsub?.pickNativeBatchVideos==='function'&&
+    typeof globalThis.NativeHardsub?.activateNativeBatchVideo==='function',
+  selectNativeBatchSources:async()=>{
+    const bridge=globalThis.NativeHardsub;
+    if(!bridge?.__windowsNative||!bridge.pickNativeBatchVideos)
+      throw Error('Windows Native 多来源选择器不可用');
+    if(state.nativeJobId||state.nativeImportJobId||state.videoImportBusy)
+      throw Error('完成现有 Native 任务后才可选择新的来源批次');
+    const result=await bridge.pickNativeBatchVideos();
+    if(!result?.ok)throw Error(result?.error||'未取得 Native 来源授权');
+    return result;
+  },
+  activateNativeBatchSource:async entry=>{
+    const bridge=globalThis.NativeHardsub;
+    if(!bridge?.__windowsNative||!bridge.activateNativeBatchVideo)
+      throw Error('Windows Native 来源激活桥不可用');
+    if(!entry?.nativeId||state.nativeJobId||state.nativeImportJobId)
+      throw Error('Native 来源授权不合法或仍有作业进行中');
+    const result=await bridge.activateNativeBatchVideo(entry.nativeId);
+    if(!result?.ok||result.id!==entry.nativeId||!result.file||
+       result.probe?.ok!==true)
+      throw Error('Native 来源激活与 FFprobe 未通过');
+    // Source is the live Bridge selection, not a synthetic browser File.
+    state.video={name:String(result.file.name),size:Number(result.file.size),
+      lastModified:Number(result.file.lastModified),windowsNative:true};
+    state.nativeInputProbe=null;
+    state.ass=null;state.fonts=[];state.embeddedAssSourceIdentity='';
+    $('assMeta').textContent='未选择';updateFontMeta();
+    invalidateAnalysis({clearVideoMetadata:true});
+    renderSourceAdapterState(null);
+    notifyMediaInfoChanged();
+    $('videoMeta').textContent=state.video.name+' · '+formatBytes(state.video.size)+' · Windows Native 批次';
+    $('videoMeta').className='';
+    // Reuse the production Native probe UI owner. No stale source metadata.
+    globalThis.__onNativeInputProbe?.(JSON.stringify(result.probe));
+    if(result.probe.sourceOriginalName &&
+       result.probe.sourceOriginalName!==state.video.name)
+      throw Error('Native FFprobe 回报来源与授权名称不一致');
+    return result;
+  },
   supportsBrowserSourceBatch:()=>!state.nativeBackend?.available,
   activateBrowserBatchSource:async file=>{
     if(state.nativeBackend?.available)throw Error('Native 多来源文件授权未实现');
