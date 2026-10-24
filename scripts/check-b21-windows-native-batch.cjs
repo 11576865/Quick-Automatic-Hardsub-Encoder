@@ -79,7 +79,11 @@ let browser;
    await page.locator('#mediaTaskForm [name="rateMode"]').selectOption('quality');
    await page.locator('#mediaTaskForm [name="quality"]').fill('27');
    await page.locator('#mediaTaskForm [name="audio"]').selectOption('aac');
-   await page.locator('#mediaTaskForm [name="audioBitrate"]').fill('96000');
+   const audioBitrateInput=page.locator('#mediaTaskForm [name="audioBitrate"]');
+   const audioDetails=audioBitrateInput.locator('xpath=ancestor::details[1]');
+   if(await audioDetails.count()&&!(await audioDetails.evaluate(el=>el.open)))
+    await audioDetails.locator(':scope > summary').click();
+   await audioBitrateInput.fill('96000');
   }
   const panel=page.locator('#taskMultiSourcePanel');
   await page.waitForFunction(()=>document.querySelector('#taskMultiSourcePanel')?.hidden===false);
