@@ -1,0 +1,57 @@
+{
+  "goal": "WU12: execute shipping index.html + main.js and V3 workflow through actual Windows Native rich MKV, embedded ASS/font, native preview and final mixed-audio MKV output",
+  "status": "BOUNDED_IMPLEMENTATION_CHECKPOINT_PENDING_HOSTED_VALIDATION",
+  "current_bounded_work_unit": "Replace minimal WU11 synthetic HTML host with shipping V3/main.js Native source recovery and source-bound ASS import through production UI, then inspect the actual FFmpeg job's MKV independently",
+  "authorization": {
+    "source": "R19 and R24 owner-defined initial version, docs/qhe-initial-version-route-reanchor-2026-10-14.md D1/D2, B02/B04/B05/B06/B07/B20/B24 and A01-A03; PR #131 merged main",
+    "requirements": [
+      "B02",
+      "B04",
+      "B05",
+      "B06",
+      "B07",
+      "B20",
+      "B24",
+      "A01",
+      "A02",
+      "A03"
+    ],
+    "user_facing_acceptance": "Shipping index.html and main.js restores selected Windows Native source, user uses actual V3 import entry to import embedded ASS/fonts; actual production analyze+real Native libass preview; real Manual per-track Copy lock / AAC selection and size budget produce schema-v4 task sent through normal main.js run implementation; independent FFmpeg oracle verifies that exact Native job output",
+    "implemented_vs_verified": "WU11 #131 hosted proved controlled real Chromium + Native session but loaded a minimal synthetic HTML host with manual hooks and replicated the main.js run envelope. This unit removes that second host/job-owner as acceptance proxy and executes existing shipping main.js itself.",
+    "critical_path": "D1 source/task/artifact identity and D2 ASS/fonts/a:0 Copy/AAC physical stream semantics require actual shipping product path; independent fixtures alone cannot prove recovery, import, readiness or production job wiring.",
+    "deprioritized": "B21 true multi-source output matrix, B13/B16 strict cached FLAC costs, long/VFR/device A09-A10 remain separate pending and are not promoted merely from generated next_units"
+  },
+  "completed_units": [
+    "PR #131 complete 11/11 exact-head CI PASS; merged to main@2bdb2730db4172a4e0104837c5c4eb47d4daa763",
+    "Created scripts/check-wu12-production-main-native.cjs: launches real Chromium on actual shipping Vite/index.html/main.js, with browser site-scoped LNA approval; asserts restored Native-selected MKV, loaded real V3 workbench and observed original client source metadata",
+    "Source import performed via actual V3 import entry. Original main.js analyze and Native libass preview are invoked (legacy analyze owner currently triggered programmatically, visible V3 preview triggered through production controls). Explicitly reject unacknowledged font-warning state.",
+    "Manual via real production strategy control and one authoritative V3 audio editor: set H264/size=1MB/best-effort/mkv, FLAC copy with MustCopy, AAC 96kbps and all full range; obtain source budget from real current Native Bridge.",
+    "Instrumentation wraps real client import, budget, encode and status methods to record exact task/job and ASS bytes while forwarding all requests unchanged (no fake transport). Original src/main.js run hook creates real FFmpeg Native job.",
+    "Extended verify-wu11-browser-native-output.mjs to accept a second clearly distinguished real-production-main receipt and reuse strict flac packet hash, AAC actual transcode, ASS/fonts burnt pixel and target bitrate checks. Existing original WU11 receipt semantics remain.",
+    "Extended check-wu02-embedded-native.ps1 to launch full shipping UI workflow while still using the same actual source/Bridge, locate actual production jobId's output.mkv and invoke independent validator.",
+    "Added new full-app browser script to Windows WU02 acceptance workflow paths."
+  ],
+  "authorized_next_units": [],
+  "discovered_followups": [
+    "Native probe/ASS/preview UI readiness must pass actual hosted Windows execution; no same-source human/physical device claim",
+    "Production save/export requires a separate real folder-dialog/provider permission acceptance (do not auto-export in CI)",
+    "User-visible preflight analysis owner is invoked via existing DOM handler in the test, not a fabricated readiness value; final full-control clickable surface must be examined after CI",
+    "Full user source picker and switching among different Native files (not preselected CLI source) still FIELD_PENDING"
+  ],
+  "branch": "feat/wu12-production-main-native-acceptance-20261024",
+  "pr": null,
+  "base_main_sha": "2bdb2730db4172a4e0104837c5c4eb47d4daa763",
+  "latest_durable_commit": "f7717d2e1ff6ce2dadcf5a8814623e63af3a2867",
+  "external_validation_states": {
+    "windows_full_production_main": "PENDING",
+    "frontend": "PENDING",
+    "uigs": "PENDING",
+    "physical_user_devices": "FIELD_PENDING",
+    "uigs_intake": "PENDING_DEDUP"
+  },
+  "blockers": [
+    "No hosted Windows CI proof on new full-app test yet",
+    "Production hardsub preview/Native callback and job receipt must all be independently confirmed"
+  ],
+  "updated_at": "2026-10-24"
+}
