@@ -1,0 +1,40 @@
+{
+  "goal": "Verify visible source check and budget measurement through same Native encoded and saved artifact",
+  "status": "COMMITTED_PENDING_EXTERNAL_VALIDATION",
+  "current_bounded_work_unit": "Replace last hidden DOM check/measure triggers in shipping Windows acceptance with visible controls",
+  "authorization": {
+    "source": "R19 §09/§14; R24 §14/§18–20",
+    "requirements": [
+      "B13",
+      "B17",
+      "B20",
+      "B24",
+      "A08"
+    ],
+    "gap": "PR134 UI used controlled callback; PR133 real Native test invoked hidden check/measure controls",
+    "acceptance": "Visible clicks produce real budget measurementId used by same saved job",
+    "priority": "Finish integrated existing workflow before new codec or batch scope"
+  },
+  "completed_units": [
+    "PR134 merged376a120; frontend browser and FFmpeg PASS",
+    "PR133 mergedaa466c9; exact-head all11 acceptance workflows PASS plus branch hygiene",
+    "Visible check/measure assertions added, existing saved-artifact oracles preserved"
+  ],
+  "next_units": [
+    "Read exact-head Windows WU02 and frontend results"
+  ],
+  "authorized_next_units": [
+    "Verify this integrated visible flow"
+  ],
+  "discovered_followups": [],
+  "branch": "test/visible-native-budget-save-20261024",
+  "pr": null,
+  "latest_durable_commit": "aa466c92ace7aad40209a3f49a77779ec4d18627",
+  "external_validation_states": {
+    "windows": "PENDING",
+    "frontend": "PENDING",
+    "uigs_intake": "PENDING"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-24"
+}
