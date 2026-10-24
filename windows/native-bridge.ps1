@@ -44,8 +44,8 @@ if($CiSaveDirectory){
     if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
         throw 'CI save directory requires a GitHub Actions runner.'
     }
-    $runnerRoot=[IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]'\\',[char]'/')+[IO.Path]::DirectorySeparatorChar
-    $saveRoot=[IO.Path]::GetFullPath($CiSaveDirectory).TrimEnd([char]'\\',[char]'/')
+    $runnerRoot=[IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92,[char]47)+[IO.Path]::DirectorySeparatorChar
+    $saveRoot=[IO.Path]::GetFullPath($CiSaveDirectory).TrimEnd([char]92,[char]47)
     if(-not $saveRoot.StartsWith($runnerRoot,[StringComparison]::OrdinalIgnoreCase) -or
        -not (Test-Path -LiteralPath $saveRoot -PathType Container)){
         throw 'CI save directory must be an existing directory below RUNNER_TEMP.'
