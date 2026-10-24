@@ -20,6 +20,7 @@ export function mountWorkbenchBasicControls({shell,source,media,showEditor,showH
   const strategy=q('[data-v3-strategy]'),choice=document.createElement('select');
   choice.dataset.basicStrategy='';choice.dataset.v3Strategy='';choice.setAttribute('aria-label','形成计划');choice.innerHTML='<option value="guided">引导目标</option><option value="manual">手动参数</option>';strategy.replaceWith(choice);
   q('.v3-decisions').insertAdjacentHTML('beforeend',`<section class="v3-basic-video"><h3>正式视频参数</h3><div class="v3-basic-grid">${['codec','encoder','preset','rateMode','quality','bitrate','targetSize','sizeUnit','budgetPolicy'].map(markup).join('')}</div><details class="v3-basic-picture"><summary>画幅与帧率</summary><div class="v3-basic-grid">${['width','height','scaleAlgorithm','fpsMode','fps'].map(markup).join('')}</div><p>宽高均留空时不主动缩放；只填一项时，另一项按比例计算并对齐编码所需尺寸。目标帧率支持 24000/1001 等分数，填写时须选择恒定帧率 CFR；留空由所选帧率策略决定。</p><p>画幅与帧率会影响画面和时间参考，原有测量结果不代表修改后的输出质量。字幕叠加次序沿用正式计划。</p></details><p>修改会使已检查的计划失效，开始前重新检查；预期意图草稿单独保留。</p></section><p class="v3-basic-guided">引导模式使用已有目标探索与正式采用流程。切换到手动参数后，可在这里直接编辑编码设置。</p>`);
+  q('.v3-basic-video').insertAdjacentHTML('beforeend','<section class="v3-basic-budget" aria-label="完整文件预算"><h3>源流与附件成本</h3><p data-basic-budget-status role="status"></p><button type="button" data-basic-action="measure-budget">测量源流与附件成本</button><button type="button" data-basic-action="review-budget">检查预算分项</button><p>测量不会开始编码。目标体积还需分配音频、附件和封装余量；最终大小以成品验证为准。</p></section>');
   q('[data-v3-range-policies]').innerHTML=['videoRange','audioRange','subtitleRange'].map(markup).join('');
   q('.v3-output').insertAdjacentHTML('beforeend',`<div class="v3-basic-audio">${markup('audio')}</div><details class="v3-basic-streams"><summary>音轨、字幕与附件去向</summary><div class="v3-basic-checks">${['keepSubtitles','keepAttachments','keepChapters','keepMetadata'].map(markup).join('')}</div><p>更多流设置可在完整正式参数中调整。</p></details>`);
   q('.v3-footer').insertAdjacentHTML('beforeend','<button type="button" data-basic-action="cancel" hidden>取消任务</button>');
@@ -64,6 +65,11 @@ export function mountWorkbenchBasicControls({shell,source,media,showEditor,showH
     choice.value=guided?'guided':'manual';choice.disabled=busy||operation!=='hardsub';
     q('.v3-basic-video').hidden=guided||operation==='copy';q('.v3-basic-guided').hidden=!guided;q('.v3-basic-streams').hidden=guided;
     for(const name of ['quality','bitrate','targetSize','sizeUnit','budgetPolicy'])q(`[data-basic-label="${name}"]`).hidden=disabled(actual(name));
+    const budget=q('.v3-basic-budget'),measure=$('#taskMeasureBudget');
+    budget.hidden=actual('rateMode').value!=='size';
+    text('[data-basic-budget-status]',$('#taskBudgetLedger').textContent);
+    q('[data-basic-action="measure-budget"]').disabled=busy||!source()||!measure||measure.disabled;
+    q('[data-basic-action="review-budget"]').disabled=busy||!source();
     const cancel=cancelTarget(),cancelButton=q('[data-basic-action="cancel"]');cancelButton.hidden=!cancel;cancelButton.disabled=taskState()==='cancelling';
     const state=taskState(),progress=q('.v3-basic-progress');progress.hidden=['idle','failed'].includes(state);
     progress.querySelector('progress').value=Number($('#taskProgress').value)||0;
@@ -107,6 +113,12 @@ export function mountWorkbenchBasicControls({shell,source,media,showEditor,showH
     if(command==='source-inspect'||own==='probe'){probe();return;}
     if(command==='source-more'){const open=q('.v3-source-menu').hidden;q('.v3-source-menu').hidden=!open;more.setAttribute('aria-expanded',String(open));if(open)q('.v3-source-menu button').focus();return;}
     if(command==='validate'||own==='dependencies'){closeMenu();$('.v3-dependencies').open=true;if(command==='validate')probe();else $('#inputCard').scrollIntoView({block:'start'});return;}
+    if(own==='measure-budget'){
+      const target=$('#taskMeasureBudget');
+      if(!locked()&&source()&&target&&!target.disabled)target.click();
+      schedule();return;
+    }
+    if(own==='review-budget'){if(!locked())showEditor('#taskBudgetTools');return;}
     if(own==='parameters'){closeMenu();showEditor('#mediaWorkspace');return;}
     if(own==='cancel'){const target=cancelTarget();if(target&&!target.disabled)target.click();schedule();return;}
     if(command==='location'){

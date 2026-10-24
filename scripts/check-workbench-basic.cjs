@@ -12,7 +12,7 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
    const fs=require('node:fs/promises'),path=require('node:path');
    await page.route('**/__qa-font/**',async route=>{const relative=new URL(route.request().url()).pathname.split('/__qa-font/')[1];await route.fulfill({body:await fs.readFile(path.join(process.env.QHE_QA_FONT_DIR,relative)),contentType:relative.endsWith('.css')?'text/css':'font/woff2'})});
   }
-  await page.route('**/basic-fixture',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/style.css"><link rel="stylesheet" href="/src/studio-v3.css"></head><body><div class="app-shell"><div id="studioModeDock"></div><div class="workspace-layout"><main class="workflow-main"><section id="inputCard" class="card"><div class="card-heading"><h2>来源</h2><p>素材</p></div><div class="grid two"><div class="input-ass">ASS 已选择</div></div><button id="analyze">分析视频与字幕</button></section><section id="subtitleCard"></section><div class="production-region"><div class="production-controls"><section id="hardsubControlDeck"><button data-hardsub-strategy="guided">引导</button><button data-hardsub-strategy="manual">参数</button></section><div id="hardsubManualMount"></div><section id="planCard"><button type="button" id="guidedToManual">将引导目标交接到正式任务</button></section><div id="sharedMediaOutputMount"></div><section id="encodeCard"><button id="encodeBtn" disabled>开始</button><button id="cancelEncodeBtn" class="hidden">取消</button></section></div></div><button id="previewBtn" disabled>预览</button></main><aside class="support-rail"></aside></div></div></body></html>`}));
+  await page.route('**/basic-fixture',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="/src/style.css"><link rel="stylesheet" href="/src/studio-v3.css"></head><body><div class="app-shell"><div id="studioModeDock"></div><div class="workspace-layout"><main class="workflow-main"><section id="inputCard" class="card"><div class="card-heading"><h2>来源</h2><p>素材</p></div><div class="grid two"><div class="input-ass">ASS 已选择</div></div><input type="file" id="video"><button id="analyze">分析视频与字幕</button></section><section id="subtitleCard"></section><div class="production-region"><div class="production-controls"><section id="hardsubControlDeck"><button data-hardsub-strategy="guided">引导</button><button data-hardsub-strategy="manual">参数</button></section><div id="hardsubManualMount"></div><section id="planCard"><button type="button" id="guidedToManual">将引导目标交接到正式任务</button></section><div id="sharedMediaOutputMount"></div><section id="encodeCard"><button id="encodeBtn" disabled>开始</button><button id="cancelEncodeBtn" class="hidden">取消</button></section></div></div><button id="previewBtn" disabled>预览</button></main><aside class="support-rail"></aside></div></div></body></html>`}));
   await page.goto('http://127.0.0.1:4187/basic-fixture');
   await page.evaluate(async()=>{
    const {mountMediaWorkspace}=await import('/src/media-workspace.js');
@@ -21,7 +21,7 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
    const file=new File(['fixture'],'source.mkv',{lastModified:1}),media={duration:2,width:320,height:180,fps:24,videoCodec:'h264',formatName:'matroska',videoTracks:1,videoStreams:[{ordinal:0,index:0,width:320,height:180,codec:'h264',pixelFormat:'yuv420p',bitDepth:8}],audioTracks:2,audioCodecs:['flac','aac'],audioStreams:[{ordinal:0,index:1,codec:'flac',channels:2,language:'jpn'},{ordinal:1,index:2,codec:'aac',channels:2,language:'eng'}],subtitleTracks:2,subtitleStreams:[{index:7,codec_name:'ass',tags:{language:'jpn'}},{index:8,codec_name:'subrip',tags:{language:'eng'}}],attachmentTracks:2,attachmentStreams:[{index:9,codec_name:'ttf',tags:{filename:'font.ttf'}},{index:10,codec_name:'otf',tags:{filename:'extra.otf'}}]};
    state.file=file;state.media=media;
    document.querySelector('#analyze').onclick=()=>state.probes++;
-   mountMediaWorkspace({busy:()=>state.busy,setBusy:v=>{state.busy=v;document.querySelector('#analyze').disabled=v},isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.file.name,sourceName:()=>state.file.name,mediaSnapshot:()=>state.media,prepare:async()=>state.media,validate:async()=>{},log:()=>{},cancel:()=>state.reject?.(Error('已取消')),save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true,kind:'browser-download'}},run:async task=>{state.tasks.push(task);if(state.defer)return new Promise((resolve,reject)=>state.reject=reject);return {outputBytes:1000,verified:true,name:'output.mkv'}}});
+   mountMediaWorkspace({measureBudget:()=>new Promise((resolve,reject)=>{state.finishBudget=resolve;state.failBudget=reject}),busy:()=>state.busy,setBusy:v=>{state.busy=v;document.querySelector('#analyze').disabled=v;document.querySelector('#video').disabled=v},isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.file.name,sourceName:()=>state.file.name,mediaSnapshot:()=>state.media,prepare:async()=>state.media,validate:async()=>{},log:()=>{},cancel:()=>state.reject?.(Error('已取消')),save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true,kind:'browser-download'}},run:async task=>{state.tasks.push(task);if(state.defer)return new Promise((resolve,reject)=>state.reject=reject);return {outputBytes:1000,verified:true,name:'output.mkv'}}});
    mountExpectedWorkbench({source:()=>state.file,media:()=>state.media});
   });
   if(process.env.QHE_QA_FONT_DIR){await page.addStyleTag({url:'/__qa-font/index.css'});await page.evaluate(()=>document.fonts.ready)}
@@ -93,6 +93,20 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   assert.equal(await page.locator('#mediaTaskForm [name="targetSize"]').inputValue(),'5');
   assert.equal(await page.locator('#mediaTaskForm [name="budgetPolicy"]').inputValue(),'strict-ceiling');
   assert.equal(await control('quality').isDisabled(),true,'Target size does not leave quality input active');
+  const budgetButton=page.locator('[data-basic-action="measure-budget"]');
+  assert.equal(await budgetButton.isVisible(),true,'Size workflow exposes measurement without opening legacy editor');
+  await budgetButton.click();
+  await page.waitForFunction(()=>document.querySelector('[data-basic-action="measure-budget"]').disabled);
+  assert.match(await page.locator('[data-basic-budget-status]').textContent(),/正在扫描/);
+  assert.equal(await control('targetSize').isDisabled(),true,'Measurement locks task edits');
+  await page.evaluate(()=>basicFixture.finishBudget({version:1,scope:'full-source'}));
+  await page.waitForFunction(()=>document.querySelector('[data-basic-budget-status]').textContent.includes('已测量'));
+  assert.equal(await page.locator('[data-basic-budget-status]').textContent(),await page.locator('#taskBudgetLedger').textContent());
+  await budgetButton.click();
+  await page.evaluate(()=>basicFixture.failBudget(Error('read failed')));
+  await page.waitForFunction(()=>document.querySelector('[data-basic-budget-status]').textContent.includes('read failed'));
+  assert.equal(await budgetButton.isDisabled(),false,'Failed measurement remains retryable');
+  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,'Measuring must never start an encode');
   await control('rateMode').selectOption('quality');await page.waitForFunction(()=>!document.querySelector('[data-basic-label="quality"]').hidden);
   await control('audio').selectOption('aac');
   assert.equal(await page.locator('.v3-cut').isVisible(),true,'Transcode must expose central range controls');
