@@ -39,13 +39,18 @@ $script:EmbeddedAssImport=$null
 # Production has NO HTTP file-path argument: users must use SaveFileDialog.
 # Require the GitHub-hosted runner's own temporary subtree, never arbitrary
 # paths or an untrusted page-provided destination.
+# Script parameters themselves live in the script scope. Assigning
+# $script:CiSaveDirectory='' before reading the same-named $CiSaveDirectory
+# parameter silently erased the CI launch argument and opened a modal Windows
+# SaveFileDialog on headless runners. Preserve the input under a distinct name.
+$requestedCiSaveDirectory=[string]$CiSaveDirectory
 $script:CiSaveDirectory=''
-if($CiSaveDirectory){
+if($requestedCiSaveDirectory){
     if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
         throw 'CI save directory requires a GitHub Actions runner.'
     }
     $runnerRoot=[IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92,[char]47)+[IO.Path]::DirectorySeparatorChar
-    $saveRoot=[IO.Path]::GetFullPath($CiSaveDirectory).TrimEnd([char]92,[char]47)
+    $saveRoot=[IO.Path]::GetFullPath($requestedCiSaveDirectory).TrimEnd([char]92,[char]47)
     if(-not $saveRoot.StartsWith($runnerRoot,[StringComparison]::OrdinalIgnoreCase) -or
        -not (Test-Path -LiteralPath $saveRoot -PathType Container)){
         throw 'CI save directory must be an existing directory below RUNNER_TEMP.'
