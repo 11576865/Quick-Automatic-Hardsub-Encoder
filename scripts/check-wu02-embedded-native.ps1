@@ -239,22 +239,6 @@ try {
   if($LASTEXITCODE -ne 0){throw 'WU13 published main.js output failed independent packet/pixel audit'}
   Write-Host 'WU13 PRODUCTION V3 SAVE VERIFIED PASS: original Native job, visible save click, replaced prior destination, stage/delivered SHA-256 equality and independently audited saved MKV.'
   Write-Host 'WU12 FULL PRODUCTION MAIN.JS WINDOWS NATIVE PASS: recovered MKV, UI import ASS/fonts, actual Native preview, source-budgeted Manual mixed-audio job, same job packet identity and ASS pixels.'
-  # B21 is an independent live user-level batch after WU13's one-saved-file
-  # sentinel and verified-published-file gate. It uses a second Chromium page,
-  # the SAME live Bridge, and TWO real, separately saved source output jobs.
-  $b21ReceiptPath=Join-Path $work 'b21-two-native-sources-receipt.json'
-  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $b21ReceiptPath
-  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $b21ReceiptPath)){
-    throw 'B21 real shipping Chromium -> two Native source jobs -> two saved files acceptance failed'
-  }
-  $b21Receipt=Get-Content -Raw -LiteralPath $b21ReceiptPath|ConvertFrom-Json
-  if($b21Receipt.result -ne 'PASS' -or
-     $b21Receipt.sourceCount -ne 2 -or $b21Receipt.savedCount -ne 2 -or
-     -not $b21Receipt.originalNativeTransport){
-    throw 'B21 two-source saved-output receipt incomplete'
-  }
-  Write-Host 'B21 REAL TWO-SOURCE NATIVE BATCH PASS: shipping V3 -> two source probes -> two FFmpeg jobs -> two saved MKV SHA receipts.'
-
   & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath $sourceKey
   if($LASTEXITCODE -ne 0){throw 'Formal shared task compiler failed'}
   $formal=Get-Content -Raw -LiteralPath $requestPath | ConvertFrom-Json
@@ -275,6 +259,7 @@ try {
   if(-not(Test-Path -LiteralPath $output)){throw 'Encoded MKV missing'}
   & node './scripts/verify-wu02-native-output.mjs' $source $output $importPath $requestPath (Join-Path $work 'QHE-Synthetic-CI.ttf') $work
   if($LASTEXITCODE -ne 0){throw 'Independent artifact verification failed'}
+  $originalSourceUtc=(Get-Item -LiteralPath $source).LastWriteTimeUtc
   [IO.File]::AppendAllText($source,'MUTATED-SOURCE-AFTER-IMPORT')
   $rejected=$false
   try{
@@ -283,6 +268,33 @@ try {
   }catch{$rejected=$true}
   if(-not $rejected){throw 'Stale embedded font/ASS source was reused after source mutation'}
   Write-Host 'WU02 REAL WINDOWS NATIVE PASS: MKV embedded ASS+font burn-in, FLAC packet copy, AAC transcode.'
+
+  # The WU02 stale-source mutation refusal must execute with its ORIGINAL
+  # ASS/font import owner before B21 changes the selected source. Restore the
+  # exact CI fixture bytes and timestamp only AFTER proving rejection; this is
+  # safe solely inside RUNNER_TEMP and matches the original batch grant stat.
+  Copy-Item -LiteralPath $sourceSecond -Destination $source -Force
+  [IO.File]::SetLastWriteTimeUtc($source,$originalSourceUtc)
+  if((Get-Item -LiteralPath $source).Length -ne (Get-Item -LiteralPath $sourceSecond).Length){
+    throw 'WU02 fixture restoration did not recover original source bytes'
+  }
+  # B21 is an independent live user-level batch after WU13's one-saved-file
+  # sentinel and verified-published-file gate. It uses a second Chromium page,
+  # the SAME live Bridge, and TWO real, separately saved source output jobs.
+  $b21ReceiptPath=Join-Path $work 'b21-two-native-sources-receipt.json'
+  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $b21ReceiptPath
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $b21ReceiptPath)){
+    throw 'B21 real shipping Chromium -> two Native source jobs -> two saved files acceptance failed'
+  }
+  $b21Receipt=Get-Content -Raw -LiteralPath $b21ReceiptPath|ConvertFrom-Json
+  if($b21Receipt.result -ne 'PASS' -or
+     $b21Receipt.sourceCount -ne 2 -or $b21Receipt.savedCount -ne 2 -or
+     -not $b21Receipt.originalNativeTransport){
+    throw 'B21 two-source saved-output receipt incomplete'
+  }
+  Write-Host 'B21 REAL TWO-SOURCE NATIVE BATCH PASS: shipping V3 -> two source probes -> two FFmpeg jobs -> two saved MKV SHA receipts.'
+
+
 }finally{
   if($bridge -and -not $bridge.HasExited){
     Stop-Process -Id $bridge.Id -Force -ErrorAction SilentlyContinue
