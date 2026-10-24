@@ -1,0 +1,38 @@
+{
+  "goal": "Expose all existing task queues from the main workbench",
+  "status": "IMPLEMENTED_PENDING_BROWSER_VALIDATION",
+  "current_bounded_work_unit": "Queue hub for sources, recipes and clips, live owner status/count and safe navigation",
+  "authorization": {
+    "source": "R19 §14/§16 P5; R24 §19/§22; initial-version route D4",
+    "requirements": [
+      "B20",
+      "B21"
+    ],
+    "acceptance": "Top-level queue entry reaches all three real queue owners and shows current status without starting jobs",
+    "gap": "Old queue entry only opened same-source recipe matrix",
+    "priority": "Discoverability of implemented batch workflows before new codecs or cross-source ASS"
+  },
+  "completed_units": [
+    "PR135 merged main2fa29fa; complete visible Native encode/save acceptance passed",
+    "Queue hub implemented using existing owners",
+    "Local model tests435PASS12SKIP0FAIL"
+  ],
+  "next_units": [
+    "Read exact-head frontend browser regression and repair concrete failure"
+  ],
+  "authorized_next_units": [
+    "Validate queue hub navigation and original-owner operations"
+  ],
+  "discovered_followups": [],
+  "branch": "feat/workbench-queue-hub-20261025",
+  "pr": null,
+  "latest_durable_commit": "2fa29fa6cdf32a28d5a39de384bff3a36ff8bba5",
+  "external_validation_states": {
+    "browser": "PENDING",
+    "uigs_intake": "PENDING"
+  },
+  "blockers": [
+    "No local Chromium available; prior browser download invalid ZIP"
+  ],
+  "updated_at": "2026-10-25"
+}
