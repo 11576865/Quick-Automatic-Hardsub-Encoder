@@ -1,0 +1,42 @@
+{
+  "goal": "Complete visible Manual target-size measurement workflow",
+  "status": "IMPLEMENTED_PENDING_BROWSER_VALIDATION",
+  "current_bounded_work_unit": "Visible source budget measurement, progress, retry and original ledger access",
+  "authorization": {
+    "source": "R19 §09/§14; R24 §14/§18–20; route D3/D4",
+    "requirements": [
+      "B13",
+      "B20",
+      "B24"
+    ],
+    "acceptance": "User can measure source stream costs from primary Manual size workspace without hidden DOM calls",
+    "gap": "Existing backend measurement lacked primary workflow entry",
+    "priority": "Complete existing size workflow before new codec/multi-source scope"
+  },
+  "completed_units": [
+    "PR132 merged at main193ecfc; exact-head frontend/Windows/UIGS success verified",
+    "Primary budget projection implemented",
+    "Local suite:432 pass,12 skipped,0 fail"
+  ],
+  "next_units": [
+    "Read exact-head frontend browser results; repair concrete current failure if needed"
+  ],
+  "authorized_next_units": [
+    "Verify visible budget workflow"
+  ],
+  "discovered_followups": [
+    "Use visible measure control in Native full-app acceptance after PR133 integration"
+  ],
+  "branch": "feat/visible-budget-workflow-20261024",
+  "pr": null,
+  "latest_durable_commit": "193ecfcbf276f37249a036e59ee79edf874bbe5c",
+  "external_validation_states": {
+    "browser": "PENDING",
+    "native": "Unchanged backend; new UI not Native verified",
+    "uigs_intake": "Pending"
+  },
+  "blockers": [
+    "Local browser install failed: invalid download ZIP"
+  ],
+  "updated_at": "2026-10-24"
+}
