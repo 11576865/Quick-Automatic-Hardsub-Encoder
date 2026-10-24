@@ -3,7 +3,8 @@
     [switch]$NoBrowser,
     [string]$Token = '',
     [string]$InitialVideo = '',
-    [string]$CiSaveDirectory = ''
+    [string]$CiSaveDirectory = '',
+    [string]$CiBatchVideoSeedList = ''
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -34,6 +35,8 @@ Write-BridgeLog 'Starting local backend and detecting FFmpeg / GPU capabilities.
 $script:AllowedOrigin = 'https://11576865.github.io'
 $script:Token = if($Token){$Token}else{[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '[^A-Za-z0-9]', ''}
 $script:Selections = @{ video=@(); ass=@(); fonts=@() }
+$script:BatchVideoSelections=@{}
+$script:CiBatchPickerResult=$null
 $script:EmbeddedAssImport=$null
 # CI-only export destination acts as a pre-authorized *test dialog choice*.
 # Production has NO HTTP file-path argument: users must use SaveFileDialog.
@@ -44,6 +47,7 @@ $script:EmbeddedAssImport=$null
 # parameter silently erased the CI launch argument and opened a modal Windows
 # SaveFileDialog on headless runners. Preserve the input under a distinct name.
 $requestedCiSaveDirectory=[string]$CiSaveDirectory
+$requestedCiBatchVideoSeedList=[string]$CiBatchVideoSeedList
 $script:CiSaveDirectory=''
 if($requestedCiSaveDirectory){
     if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
@@ -565,6 +569,74 @@ function Show-NativeSaveFileDialog([string]$Filter, [string]$DefaultExt, [string
         $owner.Close()
         $owner.Dispose()
     }
+}
+
+# B21: system-authorized file paths never leave the native Bridge.
+function Register-BridgeBatchVideos([string[]]$Paths) {
+    if($Paths.Count -lt 1 -or $Paths.Count -gt 8) {
+        throw 'Native source batch requires 1-8 files.'
+    }
+    $seen=New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+    $registry=@{}
+    $entries=@()
+    foreach($path in $Paths) {
+        $full=[IO.Path]::GetFullPath($path)
+        if(-not $seen.Add($full)){throw 'Native batch source selected more than once.'}
+        $item=Get-Item -LiteralPath $full -ErrorAction Stop
+        if($item.PSIsContainer -or [long]$item.Length -le 0){
+            throw 'Native batch source must be a non-empty file.'
+        }
+        $id=[guid]::NewGuid().ToString('N')
+        $info=[pscustomobject]@{
+            id=$id;name=[string]$item.Name;size=[long]$item.Length
+            lastModified=([DateTimeOffset]$item.LastWriteTimeUtc).ToUnixTimeMilliseconds()
+        }
+        $registry[$id]=[pscustomobject]@{
+            path=$full;size=[long]$item.Length
+            writeTicks=[long]$item.LastWriteTimeUtc.Ticks;info=$info
+        }
+        $entries+=,$info
+    }
+    # Only after every candidate passes: old grants expire.
+    $script:BatchVideoSelections=$registry
+    return [pscustomobject]@{ok=$true;cancelled=$false;files=[object[]]$entries}
+}
+function Select-BridgeBatchVideos {
+    if(Test-Bink2ImportBusy){throw 'Bink 2 import is currently running.'}
+    foreach($job in @($script:Jobs.Values)) {
+        if($job.State -in @('encoding','verifying','cancelling')){
+            throw 'Finish the current Native job before selecting another source batch.'
+        }
+    }
+    if($script:CiBatchPickerResult){return $script:CiBatchPickerResult}
+    $picked=@(Show-NativeOpenFileDialog 'Video files|*.mp4;*.mkv;*.mov;*.avi;*.webm;*.ts;*.m2ts|All files|*.*' $true)
+    if(-not $picked.Count){return [pscustomobject]@{ok=$true;cancelled=$true;files=@()}}
+    return Register-BridgeBatchVideos $picked
+}
+function Activate-BridgeBatchVideo([string]$Id) {
+    if($Id -notmatch '^[a-fA-F0-9]{32}$' -or
+       -not $script:BatchVideoSelections.ContainsKey($Id)){
+        throw 'Unknown or expired Native source authorization.'
+    }
+    if(Test-Bink2ImportBusy){throw 'Cannot switch source during Bink 2 import.'}
+    foreach($job in @($script:Jobs.Values)) {
+        if($job.State -in @('encoding','verifying','cancelling')){
+            throw 'Cannot switch source while Native job is active.'
+        }
+    }
+    $row=$script:BatchVideoSelections[$Id]
+    $item=Get-Item -LiteralPath $row.path -ErrorAction Stop
+    if($item.PSIsContainer -or [long]$item.Length -ne [long]$row.size -or
+       [long]$item.LastWriteTimeUtc.Ticks -ne [long]$row.writeTicks){
+        throw 'Authorized batch source changed; choose files again.'
+    }
+    Clear-Bink2ImportStaging
+    Clear-BridgeEmbeddedAss
+    $script:Selections.video=@([string]$row.path)
+    $script:Selections.ass=@()
+    $script:Selections.fonts=@()
+    $probe=Get-ProbeMedia
+    return [pscustomobject]@{ok=$true;id=$Id;file=$row.info;probe=$probe}
 }
 
 function Show-BridgePicker([string]$Role) {
@@ -2464,6 +2536,8 @@ function Handle-Request($Request) {
         if($Request.Method -eq 'GET' -and $path -eq '/api/history'){Send-HttpJson $Request 200 (Get-CompressionHistorySnapshot);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/history'){Send-HttpJson $Request 200 (Add-ClientCompressionEvidence $body.record);return}
         if($Request.Method -eq 'POST' -and $path -match '^/api/pick/(video|ass|fonts)$'){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/batch/videos/pick'){Send-HttpJson $Request 200 (Select-BridgeBatchVideos);return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/batch/videos/activate'){Send-HttpJson $Request 200 (Activate-BridgeBatchVideo ([string]$body.id));return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/video'){
             $p=Get-OriginalVideoPath
             if(-not $p -or -not(Test-Path -LiteralPath $p -PathType Leaf)){Send-HttpJson $Request 200 @{ok=$false;error='No video selected.'};return}
@@ -2505,6 +2579,28 @@ function Handle-Request($Request) {
         Write-BridgeLog ($Request.Method+' '+$Request.Path+' failed: '+$_.Exception.Message) 'ERROR'
         Send-HttpJson $Request 500 @{ok=$false;error=$_.Exception.Message}
     }
+}
+
+# CI-only two-source fixture is restricted to the runner's own temporary
+# subtree. Ordinary applications cannot authorize paths through HTTP.
+if($requestedCiBatchVideoSeedList){
+    if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
+        throw 'Native batch seed requires GitHub Actions.'
+    }
+    $root=[IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92,[char]47)+[IO.Path]::DirectorySeparatorChar
+    $seeds=@($requestedCiBatchVideoSeedList.Split([char]124))
+    if($seeds.Count -lt 2 -or $seeds.Count -gt 8){
+        throw 'CI batch seed requires 2-8 files.'
+    }
+    foreach($seedPath in $seeds){
+        $full=[IO.Path]::GetFullPath($seedPath)
+        if(-not $full.StartsWith($root,[StringComparison]::OrdinalIgnoreCase) -or
+           -not(Test-Path -LiteralPath $full -PathType Leaf)){
+            throw 'CI batch file must exist under RUNNER_TEMP.'
+        }
+    }
+    $script:CiBatchPickerResult=Register-BridgeBatchVideos $seeds
+    Write-BridgeLog ('CI-only Native batch preauthorized sources: '+$seeds.Count)
 }
 
 if(-not $script:Ffmpeg -or -not $script:Ffprobe){

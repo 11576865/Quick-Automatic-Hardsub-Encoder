@@ -1,0 +1,26 @@
+{
+  "goal": "QHE B21 Windows Native multi-source copy/transcode batch executed from shipping workbench with no browser path authority",
+  "status": "CODE_COMMITTED_EXACT_HEAD_CI_PENDING",
+  "current_bounded_work_unit": "B21: opaque native multi-file user authorization -> per-source disk identity and real FFprobe -> existing official compileTask -> serialized Native jobs -> verified Save per artifact",
+  "pr": 136,
+  "branch": "feat/b21-windows-native-multisource-batch-20261024",
+  "base_main_sha": "aa466c92ace7aad40209a3f49a77779ec4d18627",
+  "implemented": [
+    "Windows native OpenFileDialog multi-select up to 8 user-selected video files; grants UUID-like ephemeral IDs and stat metadata, never absolute paths in browser JSON",
+    "Bridge refuses stale/unknown IDs and source mutation, blocks activation while encoding/import, clears prior subtitle/font/Bink staging, executes new FFprobe for every source",
+    "Native JS client sends opaque grant ID only; real main.js rebinds selected media and source probe without fabricating File objects",
+    "Existing media-workspace source batch orchestrates official source-specific compileTask, real backend job, output report, real per-item Save and failure/retry contract",
+    "CI-only preselected 2 file fixture confined under RUNNER_TEMP; first Windows WU02 exact-head activation/FFprobe test succeeded",
+    "Real shipping Chromium B21 two-file queue test added to WU02; checks distinct start job IDs, actual saved disk bytes/hash and FFprobe"
+  ],
+  "pending": [
+    "Exact-head 084d3c087f9f5cf9aec2fa4c2751bbf5513bafd4 hosted Windows WU02 user-clicked B21 two-save output verification",
+    "All 18 exact-head check matrix before merge",
+    "Real person Windows OpenFileDialog selection, cancel/overwrite, per-file mixed media/permission/disk errors, large files and physical playback",
+    "Cross-source ASS hard-sub, copied audio locks and strict whole-size budget intentionally not inherited",
+    "Android SAF multi-source and browser WASM real artifacts separate"
+  ],
+  "evidence_boundary": "CI grant seeds are runner-only and cannot certify real human-operated OS dialog; local Node assertions do not certify output",
+  "updated_at": "2026-10-24",
+  "foundry_intake": "PENDING_CASE_EXTENSION"
+}

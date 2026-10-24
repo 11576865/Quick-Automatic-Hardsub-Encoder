@@ -126,6 +126,19 @@ function installWindowsBridge(config, backendInfo, initialHistory = { records: [
     async readSelectedVideoInfo() {
       return JSON.stringify(await makeRequest(config, 'GET', '/api/selection/video'));
     },
+    // B21: video paths are retained exclusively inside the Windows process.
+    // Never send a path in either request. Activation uses an opaque ID issued
+    // only by the real system's multi-file picker.
+    async pickNativeBatchVideos() {
+      return makeRequest(config, 'POST', '/api/batch/videos/pick', {});
+    },
+    async activateNativeBatchVideo(id) {
+      if (!/^[a-f0-9]{32}$/i.test(String(id || ''))) {
+        throw new Error('Invalid Native batch source authorization.');
+      }
+      ++inputProbeGeneration; // prevent late probe callbacks from an old source
+      return makeRequest(config, 'POST', '/api/batch/videos/activate', { id });
+    },
     async importEmbeddedAss(ordinal,source){
       return makeRequest(config,'POST','/api/embedded-ass',{
         subtitleOrdinal:ordinal,sourceName:source?.name||'',sourceSize:Number(source?.size||0)
