@@ -1,0 +1,45 @@
+{
+  "packet_version": 1,
+  "packet_id": "ci-11576865-Quick-Automatic-Hardsub-Encoder-40080047035-1",
+  "status": "pending",
+  "record_type": "ci_failure",
+  "title": "Test frontend: failure",
+  "summary": "Tracked CI workflow did not complete successfully. Source adapter captured failed job/step evidence when available.",
+  "source_repository": "11576865/Quick-Automatic-Hardsub-Encoder",
+  "source_event": "workflow_run",
+  "source_ref": "feat/b21-windows-native-multisource-batch-20261024",
+  "source_sha": "56d3c31fa49de2cbc8f12040d44bf786ea89670d",
+  "source_url": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/actions/runs/40080047035",
+  "created_at": "2026-10-24T08:57:46+00:00",
+  "dedupe_key": "workflow_run:11576865/Quick-Automatic-Hardsub-Encoder:40080047035:1",
+  "routing_hints": [
+    "architecture",
+    "interface-grammar",
+    "operations",
+    "red-reason",
+    "reliability"
+  ],
+  "evidence": {
+    "workflow": "Test frontend",
+    "run_id": "40080047035",
+    "run_attempt": "1",
+    "conclusion": "failure",
+    "trigger_event": "pull_request",
+    "failed_jobs": [
+      {
+        "id": 120831524474,
+        "name": "frontend",
+        "conclusion": "failure"
+      }
+    ],
+    "failed_steps": [
+      {
+        "job": "frontend",
+        "number": 24,
+        "name": "Run node --test src/transcode-curves.test.mjs src/transcode-calibration-panel.test.mjs",
+        "conclusion": "failure"
+      }
+    ],
+    "capture_error": ""
+  }
+}
