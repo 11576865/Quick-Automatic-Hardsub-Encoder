@@ -1853,6 +1853,31 @@ export function mountMediaWorkspace(hooks) {
     const data=event.detail||{};
     if(!completed?.jobId)return;
     if(data.jobId&&data.jobId!==completed.jobId)return;
+    // B21 retry has a different owner from first-run saveQueuedResult: the
+    // queue is no longer running. Do not mark this row "saved" until the
+    // actual same-job published bytes/hash are bound to its source grant.
+    if(batchSavePending){
+      if(data.jobId!==completed.jobId)return;
+      if(data.ok){
+        try{
+          const sourceName=batchSavePending.source.name;
+          batchSavePending.deliveryReceipt=nativeBatchDeliveryReceipt(
+            batchSavePending.source,completed,data);
+          setTaskState('saved');
+          settlePendingBatchSave(true);
+          status('批次成品 '+sourceName+' 已重新保存；Native 回执已绑定，可继续剩余来源。');
+        }catch(error){
+          setTaskState('save_failed');settlePendingBatchSave(false);
+          status('Native 重试回执无效：'+error.message+'。不能将本来源标为已交付。');
+        }
+      }else{
+        setTaskState('save_failed');settlePendingBatchSave(false);
+        status(String(data.error||'').toLowerCase().includes('cancel')
+          ? '已取消本次保存；批次成品仍保留，可再次选择保存位置。'
+          : '批次保存失败：'+(data.error||'未知错误')+'；无需重新编码，保留同一 Job 重试。');
+      }
+      return;
+    }
     if(data.ok){
       setTaskState('saved');
       status('成品已保存'+(data.path?' · '+data.path:'')+(data.bytes?' · '+formatSize(Number(data.bytes)):'')+'。');
@@ -2368,6 +2393,10 @@ export function mountMediaWorkspace(hooks) {
   };
   const settlePendingBatchSave=saved=>{
     if(!batchSavePending)return;
+    // A Native save cannot pass the queue gate on a bare callback with no
+    // verified per-source delivery receipt. Web hand-off has no disk proof.
+    if(saved===true&&batchSavePending.source.nativeId&&!batchSavePending.deliveryReceipt)
+      saved=false;
     batchSavePending.state=saved?(saved==='handed_off'?'handed_off':'saved'):'save_failed';
     if(saved)batchSavePending=null;
     batchStatus.textContent=saved?(saved==='handed_off'?'已移交浏览器下载；请核对目标文件。':'成品已确认保存；可继续剩余来源。'):

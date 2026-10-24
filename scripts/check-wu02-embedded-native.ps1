@@ -321,6 +321,25 @@ try {
   }
   Write-Host 'B21 REAL DIVERGENT-SOURCE TRANSCODE PASS: independent FFprobe, real libx264/AAC Native jobs and two published disk MKVs.'
 
+  # WU14: exercise two distinct Save failures against one actually completed
+  # Windows Native job, verify an existing destination remains unchanged after
+  # denied publication, retry the SAME job without FFmpeg, then resume source 2.
+  $recoveryReceiptPath=Join-Path $work 'b21-native-save-recovery-receipt.json'
+  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $recoveryReceiptPath 'fault-recovery'
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $recoveryReceiptPath)){
+    throw 'WU14 real Windows Native batch cancel/denial/same-job retry/continuation failed'
+  }
+  $recovered=Get-Content -Raw -LiteralPath $recoveryReceiptPath|ConvertFrom-Json
+  if($recovered.result -ne 'PASS' -or
+     $recovered.firstJobSaveRecovered -ne $true -or
+     $recovered.existingDestinationPreservedOnFailure -ne $true -or
+     $recovered.saveAttempts -ne 4 -or $recovered.jobCount -ne 2 -or
+     $recovered.savedCount -ne 2){
+    throw 'WU14 Native retry proof did not preserve two distinct actual Job IDs and four save attempts'
+  }
+  Write-Host 'WU14 REAL NATIVE SAVE RECOVERY PASS: CI cancel -> prepublish denied (old bytes preserved) -> same Job SHA save -> second source.'
+
+
 
 }finally{
   if($bridge -and -not $bridge.HasExited){

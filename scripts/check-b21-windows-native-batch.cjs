@@ -3,13 +3,15 @@
 // compileTask -> Bridge -> FFmpeg -> verified user-dir exports. No HTTP mock.
 const assert=require('node:assert/strict');
 const {spawn,execFileSync}=require('node:child_process');
-const {readFileSync,existsSync,statSync,writeFileSync}=require('node:fs');
+const {readFileSync,existsSync,statSync,writeFileSync,readdirSync}=require('node:fs');
 const {join,resolve,basename}=require('node:path');
 const {createHash}=require('node:crypto');
 const {chromium}=require('playwright');
 const [first,second,exportDir,receiptPath,requestedMode='copy']=process.argv.slice(2);
 assert(first&&second&&exportDir&&receiptPath,'Usage: node check-b21-windows-native-batch.cjs source1 source2 exportDir receipt [copy|transcode]');
-assert.ok(['copy','transcode'].includes(requestedMode),'Only explicit copy/transcode modes may be audited');
+const recovery=requestedMode==='fault-recovery';
+const mode=recovery?'copy':requestedMode;
+assert.ok(['copy','transcode'].includes(mode),'Only explicit copy/transcode modes may be audited');
 assert.equal(process.env.GITHUB_ACTIONS,'true');
 assert.ok(resolve(exportDir).startsWith(resolve(process.env.RUNNER_TEMP)+'\\'));
 assert.ok(existsSync(first)&&existsSync(second)&&existsSync(exportDir));
@@ -17,6 +19,15 @@ assert.notEqual(resolve(first),resolve(second));
 const fileHash=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
 const origin='http://127.0.0.1:4195',bridgeOrigin='http://127.0.0.1:9361';
 const token='wu02-ci-token';
+const armRunnerExportFault=async fault=>{
+ const response=await fetch(bridgeOrigin+'/api/ci/export-fault',{
+  method:'POST',headers:{'X-Quick-Hardsub-Token':token,Origin:bridgeOrigin,'Content-Type':'application/json'},
+  body:JSON.stringify({mode:fault})
+ });
+ const body=await response.text();
+ assert.equal(response.status,200,'Runner-only fault arm refused '+fault+': '+body);
+ assert.equal(JSON.parse(body).armed,fault);
+};
 const vite=spawn(process.execPath,['node_modules/vite/bin/vite.js','--host','127.0.0.1','--port','4195','--strictPort'],{stdio:'pipe'});
 let browser;
 (async()=>{
@@ -66,12 +77,12 @@ let browser;
     b21Proof.exports.push({jobId,name,...result});return result;
    });
   });
-  await page.locator('[data-media-mode="'+requestedMode+'"]').click();
-  await page.waitForFunction(mode=>document.body.dataset.mediaOperation===mode,requestedMode);
+  await page.locator('[data-media-mode="'+mode+'"]').click();
+  await page.waitForFunction(expected=>document.body.dataset.mediaOperation===expected,mode);
   // Single source-bound queue owner is hidden in V3's details until expanded.
   const editor=page.locator('.v3-editor');
   if(!await editor.evaluate(el=>el.open))await editor.locator(':scope > summary').click();
-  if(requestedMode==='transcode'){
+  if(mode==='transcode'){
    // These are the actual user-visible controls used by the production V3
    // compiler; do not inject a hand-built/parallel FFmpeg request.
    await page.locator('#mediaTaskForm [name="codec"]').selectOption('h264');
@@ -99,7 +110,55 @@ let browser;
   assert.ok(rows.some(t=>t.includes(basename(second))));
   const run=page.locator('#taskRunBatchSources');
   assert.equal(await run.isEnabled(),true,'Cannot execute two Native batch sources');
-  await run.click();
+  if(recovery){
+   await armRunnerExportFault('cancel');
+   await run.click();
+   await page.waitForFunction(()=>b21Proof.exports.length===1 &&
+       document.querySelectorAll('[data-browser-batch-action="retry-save"]').length===1,
+      null,{timeout:60000});
+   let stage=await page.evaluate(()=>b21Proof);
+   assert.equal(stage.starts.length,1,'Cancel must not start next encode');
+   assert.equal(stage.exports[0].ok,false);
+   assert.equal(stage.exports[0].cancelled,true);
+   assert.equal(stage.exports[0].jobId,stage.starts[0].jobId);
+   const filename=stage.exports[0].name;
+   assert.ok(filename&&filename===basename(filename)&&filename.toLowerCase().endsWith('.mkv'));
+   const destination=join(exportDir,filename);
+   writeFileSync(destination,'PREVIOUS USER FILE MUST SURVIVE DENIED EXPORT\n');
+   const sentinelHash=fileHash(destination);
+   await armRunnerExportFault('publish-denied');
+   await page.locator('[data-browser-batch-action="retry-save"]').click();
+   await page.waitForFunction(()=>b21Proof.exports.length===2 &&
+       document.querySelectorAll('[data-browser-batch-action="retry-save"]').length===1,
+      null,{timeout:60000});
+   stage=await page.evaluate(()=>b21Proof);
+   assert.equal(stage.starts.length,1,'Failed retry must reuse completed job');
+   assert.equal(stage.exports[1].ok,false);
+   assert.match(stage.exports[1].error||'',/publish denied/i);
+   assert.equal(stage.exports[1].jobId,stage.starts[0].jobId);
+   assert.equal(fileHash(destination),sentinelHash,'Failed export destroyed the existing destination');
+   assert.deepEqual(readdirSync(exportDir).filter(n=>n.includes('.quick-hardsub-')&&n.endsWith('.tmp')),[],
+    'Failed export leaked a partial destination file');
+   const jobResponse=await fetch(bridgeOrigin+'/api/jobs/'+stage.starts[0].jobId,{
+      headers:{'X-Quick-Hardsub-Token':token,Origin:bridgeOrigin}});
+   assert.equal(jobResponse.status,200);
+   assert.equal((await jobResponse.json()).state,'completed','Original staged job was lost');
+   await page.locator('[data-browser-batch-action="retry-save"]').click();
+   await page.waitForFunction(()=>b21Proof.exports.length===3 &&
+       document.querySelectorAll('[data-browser-batch-action="retry-save"]').length===0 &&
+       document.querySelectorAll('[data-browser-batch-action="copy-receipt"]').length===1,
+      null,{timeout:60000});
+   stage=await page.evaluate(()=>b21Proof);
+   assert.equal(stage.starts.length,1,'Successful retry must not re-encode');
+   assert.equal(stage.exports[2].ok,true);
+   assert.equal(stage.exports[2].jobId,stage.starts[0].jobId);
+   assert.equal(fileHash(destination),stage.exports[2].sha256);
+   assert.notEqual(fileHash(destination),sentinelHash,'Retry did not atomically replace sentinel');
+   assert.equal(await run.isEnabled(),true,'Failed save cannot permanently block remaining sources');
+   await run.click();
+  }else{
+   await run.click();
+  }
   try {
    await page.waitForFunction(()=>document.querySelector('#taskMultiSourceStatus')?.textContent.includes('全部 Native 来源已独立'),
     null,{timeout:180000});
@@ -115,8 +174,10 @@ let browser;
   const proof=await page.evaluate(()=>globalThis.b21Proof);
   const visibleBatchRows=await page.locator('#taskMultiSourceList li').allTextContents();
   assert.equal(visibleBatchRows.length,2);
+  const successfulExports=proof.exports.filter(x=>x.ok);
+  assert.equal(successfulExports.length,2);
   for(let i=0;i<2;i++){
-   const published=proof.exports[i];
+   const published=successfulExports[i];
    assert.ok(visibleBatchRows[i].includes('Native 保存回执'),'Saved row hides its verified Native publish receipt');
    assert.ok(visibleBatchRows[i].includes(String(published.bytes)),'Saved row bytes do not match this Job publication');
    assert.ok(visibleBatchRows[i].includes(published.sha256.slice(0,16)),'Saved row hash belongs to an unrelated artifact');
@@ -124,10 +185,10 @@ let browser;
   assert.equal(await page.locator('[data-browser-batch-action="copy-receipt"]').count(),2,
    'Each Native published file must provide its own user-copyable delivery receipt');
   assert.equal(proof.starts.length,2,'Expected two separate official FFmpeg jobs');
-  assert.equal(proof.exports.length,2,'Each job must have its own native Save receipt');
+  assert.equal(proof.exports.length,recovery?4:2,'Jobs must have their expected native Save attempts');
   assert.equal(new Set(proof.starts.map(x=>x.jobId)).size,2);
-  assert.deepEqual(proof.starts.map(x=>x.request.task.operation),[requestedMode,requestedMode]);
-  if(requestedMode==='transcode'){
+  assert.deepEqual(proof.starts.map(x=>x.request.task.operation),[mode,mode]);
+  if(mode==='transcode'){
    assert.ok(proof.starts.every(x=>x.request.task.encoder==='libx264'),'H.264 software encoder must be the executable authority');
    assert.ok(proof.starts.every(x=>x.request.task.audio==='aac'),'Both sources must receive independent AAC transcode plans');
    assert.ok(proof.starts.every(x=>Number(x.request.task.quality)===27),'Frozen per-source CRF 27 must reach both jobs');
@@ -137,10 +198,12 @@ let browser;
    'Native Bridge did not independently FFprobe two distinct selected sources');
   assert.deepEqual(proof.starts.map(x=>x.sourceGrantId),proof.activations.map(x=>x.id),
    'The two real FFmpeg jobs were not started under their sequential Native source grants');
-  assert.ok(proof.starts.every(x=>x.request.task.operation===requestedMode));
+  assert.ok(proof.starts.every(x=>x.request.task.operation===mode));
   const published=[];
+  const delivered=proof.exports.filter(x=>x.ok);
+  assert.equal(delivered.length,2,'Each Native source must produce a successful publication');
   for(let i=0;i<2;i++){
-   const save=proof.exports[i],start=proof.starts[i];
+   const save=delivered[i],start=proof.starts[i];
    assert.equal(save.ok,true,'Real Native export failed: '+JSON.stringify(save));
    assert.equal(save.jobId,start.jobId);
    assert.ok(save.path&&resolve(save.path).startsWith(resolve(exportDir)+'\\'));
@@ -156,7 +219,7 @@ let browser;
    const srcAudio=input.streams.filter(x=>x.codec_type==='audio');
    const outputAudio=probe.streams.filter(x=>x.codec_type==='audio');
    assert.equal(outputAudio.length,srcAudio.length,'Output borrowed prior source audio stream plan/count');
-   if(requestedMode==='transcode'){
+   if(mode==='transcode'){
     assert.equal(outputVideo.codec_name,'h264','Expected independent H.264 re-encoded video, not FFV1 copy');
     assert.ok(outputAudio.every(x=>x.codec_name==='aac'),'All audio tracks must be actually encoded to AAC');
    }else{
@@ -172,13 +235,15 @@ let browser;
     sourceWidth:srcVideo.width,sourceHeight:srcVideo.height,sourceAudioTracks:srcAudio.length});
   }
   assert.deepEqual(errors,[],'Shipping main.js emitted browser exceptions');
-  const receipt={kind:'b21-two-real-source-native-'+requestedMode+'-batch-v2',mode:requestedMode,result:'PASS',
+  const receipt={kind:'b21-two-real-source-native-'+requestedMode+'-batch-v2',mode:mode,result:'PASS',
    productionMainLoaded:true,realWindowsNative:true,originalNativeTransport:true,
    ciPreauthorizedPicker:true,interactiveOsPickerVerified:false,
-   sourceCount:2,jobCount:2,savedCount:2,activations:proof.activations,artifacts:published,
+   sourceCount:2,jobCount:2,savedCount:2,saveAttempts:proof.exports.length,
+   firstJobSaveRecovered:recovery,existingDestinationPreservedOnFailure:recovery,
+   activations:proof.activations,artifacts:published,
    strictSizeVerified:false,longMovieVerified:false,physicalDeviceVerified:false};
   writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
-  console.log(JSON.stringify({kind:receipt.kind,result:'PASS',mode:requestedMode,sourceCount:2,jobCount:2,
+  console.log(JSON.stringify({kind:receipt.kind,result:'PASS',mode:mode,sourceCount:2,jobCount:2,
    savedCount:2,artifacts:published.map(({source,jobId,bytes,sha256})=>({source,jobId,bytes,sha256}))}));
  }finally{
   if(browser)await browser.close().catch(()=>{});
