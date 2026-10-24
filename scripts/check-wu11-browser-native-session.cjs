@@ -39,7 +39,13 @@ let browser;
   assert.equal(nodeInfo.backend,'windows-native');
   assert.equal(nodeInfo.available,true);
   browser=await chromium.launch({headless:true});
-  const page=await browser.newPage({viewport:{width:1300,height:900}});
+  // Chromium 142+ requires explicit Local Network Access (LNA) consent
+  // before even loopback HTTP/WebSocket requests. A real user approves in
+  // browser UI; headless CI must grant this site-scoped permission explicitly.
+  // Do NOT disable Chromium's LNA security feature or bypass Native Bridge.
+  const context=await browser.newContext({viewport:{width:1300,height:900}});
+  await context.grantPermissions(['local-network-access'],{origin:base});
+  const page=await context.newPage();
   const errors=[];const browserConsoleErrors=[];
   page.on('pageerror',e=>errors.push(e.message));
   page.on('console',e=>{if(e.type()==='error')browserConsoleErrors.push(e.text());});
