@@ -49,6 +49,8 @@ $script:EmbeddedAssImport=$null
 $requestedCiSaveDirectory=[string]$CiSaveDirectory
 $requestedCiBatchVideoSeedList=[string]$CiBatchVideoSeedList
 $script:CiSaveDirectory=''
+# Test-only fault hook, inert in all production sessions.
+$script:CiNextExportFault=''
 if($requestedCiSaveDirectory){
     if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
         throw 'CI save directory requires a GitHub Actions runner.'
@@ -2377,6 +2379,23 @@ function Get-CutTimelineEvidence([string]$JobId){
   }
 }
 
+function Arm-CiExportFault([string]$Mode) {
+    # Runner-only. No filename/path can be specified by this endpoint.
+    if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP -or
+       -not $script:CiSaveDirectory -or
+       -not $script:CiSaveDirectory.StartsWith(
+          [IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92,[char]47)+[IO.Path]::DirectorySeparatorChar,
+          [StringComparison]::OrdinalIgnoreCase)){
+        throw 'CI export fault is disabled outside the approved runner fixture.'
+    }
+    if($Mode -notin @('cancel','publish-denied')){
+        throw 'Unknown CI export fault mode.'
+    }
+    if($script:CiNextExportFault){throw 'CI export fault already armed.'}
+    $script:CiNextExportFault=$Mode
+    return [pscustomobject]@{ok=$true;armed=$Mode}
+}
+
 function Export-Job([string]$JobId,[string]$SuggestedName) {
     if(-not $script:Jobs.ContainsKey($JobId)){throw 'Unknown job.'}
     $j=$script:Jobs[$JobId]
@@ -2386,7 +2405,11 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     $filter=if($ext -eq 'mp4'){'MP4 video|*.mp4'}else{'Matroska video|*.mkv'}
     $name=if($SuggestedName){$SuggestedName}else{$j.SuggestedName}
     $dest=Show-NativeSaveFileDialog $filter $ext $name
-    if(-not $dest){return [pscustomobject]@{ok=$false;jobId=$JobId;error='Save cancelled.'}}
+    if($script:CiNextExportFault -eq 'cancel'){
+        $script:CiNextExportFault=''
+        $dest=''
+    }
+    if(-not $dest){return [pscustomobject]@{ok=$false;jobId=$JobId;cancelled=$true;error='Save cancelled.'}}
     # Native save dialogs are modal: the original status check may be stale
     # by the time the user chooses a destination.
     $status=Get-JobStatus $JobId
@@ -2418,6 +2441,12 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
            ($copied.Length -gt [long]$j.BudgetCeiling -or
             $copied.Hash -ne $j.StrictVerifiedHash)){
             throw 'Strict export bytes or fingerprint no longer match budget approval.'
+        }
+        # Runner-only deterministic denial AFTER staging and SHA verification,
+        # BEFORE touching the user's existing destination.
+        if($script:CiNextExportFault -eq 'publish-denied'){
+            $script:CiNextExportFault=''
+            throw 'CI-only publish denied after verified temporary copy.'
         }
         Publish-VerifiedOutput $temp $dest
     }finally{
@@ -2538,6 +2567,7 @@ function Handle-Request($Request) {
         if($Request.Method -eq 'POST' -and $path -match '^/api/pick/(video|ass|fonts)$'){Send-HttpJson $Request 200 (Show-BridgePicker $Matches[1]);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/batch/videos/pick'){Send-HttpJson $Request 200 (Select-BridgeBatchVideos);return}
         if($Request.Method -eq 'POST' -and $path -eq '/api/batch/videos/activate'){Send-HttpJson $Request 200 (Activate-BridgeBatchVideo ([string]$body.id));return}
+        if($Request.Method -eq 'POST' -and $path -eq '/api/ci/export-fault'){Send-HttpJson $Request 200 (Arm-CiExportFault ([string]$body.mode));return}
         if($Request.Method -eq 'GET' -and $path -eq '/api/selection/video'){
             $p=Get-OriginalVideoPath
             if(-not $p -or -not(Test-Path -LiteralPath $p -PathType Leaf)){Send-HttpJson $Request 200 @{ok=$false;error='No video selected.'};return}
