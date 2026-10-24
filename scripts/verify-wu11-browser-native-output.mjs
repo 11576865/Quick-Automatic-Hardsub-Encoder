@@ -15,7 +15,19 @@ const receipt=JSON.parse(readFileSync(receiptPath,'utf8'));
 const imported=JSON.parse(readFileSync(importPath,'utf8'));
 const formal=JSON.parse(readFileSync(formalPath,'utf8'));
 const task=receipt.task;
-assert.equal(receipt.kind,'wu11-real-chromium-to-windows-native-v1');
+const fullProductionApp=receipt.kind==='wu12-production-main-to-windows-native-v1';
+assert.ok(fullProductionApp||receipt.kind==='wu11-real-chromium-to-windows-native-v1');
+if(fullProductionApp){
+  assert.equal(receipt.productionMainLoaded,true);
+  assert.equal(receipt.sourceRecoveredFromNative,true);
+  assert.equal(receipt.fullAppSourceImportClicked,true);
+  assert.equal(receipt.preflightAndNativePreviewCompleted,true);
+  assert.equal(receipt.displayedTaskState,'verified');
+  assert.equal(receipt.sourceImport?.sourceBound,true);
+  assert.equal(receipt.sourceImport?.fontCount,1);
+  assert.equal(receipt.request?.task?.version,4);
+  assert.equal(receipt.request?.goal,'manual');
+}
 assert.equal(receipt.browserExplicitClicksObserved,true);
 assert.equal(receipt.bridgeTransport,'production-windows-native-client');
 assert.equal(receipt.sourceKey,srcSha);
@@ -34,7 +46,8 @@ assert.equal(task.sizePlan.targetBytes,1000000);
 assert.equal(task.sizePlan.fixedPayloadBytes,formal.fixedPayloadBytes);
 assert.equal(task.sizePlan.encodedAudioBytes,formal.encodedAudioBytes);
 assert.equal(task.budgetEvidence.measurementId,receipt.browserBudgetMeasurementId);
-assert.notEqual(receipt.oldGuidedCopyRate,task.bitrate);
+if(!fullProductionApp)assert.notEqual(receipt.oldGuidedCopyRate,task.bitrate,
+ 'Guided copied-bitrate evidence must not be reused after an audio policy change');
 assert.deepEqual(task.audioPlan.map(a=>a.action),['copy','aac']);
 assert.deepEqual(task.mustCopyAudioOrdinals,[0]);
 assert.equal(task.outputArgs[task.outputArgs.indexOf('-c:a:0')+1],'copy');
@@ -49,6 +62,12 @@ const assBytes=Buffer.from(imported.ass.base64,'base64');
 const fontBytes=Buffer.from(imported.fonts[0].base64,'base64');
 assert.equal(sha(Buffer.from(receipt.importedAssBase64,'base64')),sha(assBytes),
  'The real Chromium bridge imported a different ASS payload');
+if(fullProductionApp){
+ assert.equal(sha(Buffer.from(receipt.assText,'utf8')),sha(assBytes),
+   'The actual shipping main.js encoded different ASS text than it imported');
+ assert.equal(receipt.browserBudget.scope,'full-source');
+ assert.deepEqual(receipt.browserBudget.audioPacketBytes.length,2);
+}
 assert.equal(sha(Buffer.from(receipt.importedFontBase64,'base64')),sha(fontBytes),
  'The real Chromium bridge imported a different font attachment');
 assert.match(assBytes.toString('utf8'),/Dialogue:/);
@@ -94,9 +113,10 @@ const frame=file=>run('ffmpeg',['-v','error','-ss','0.9','-i',file,
 assert.notEqual(frame(output),frame(blank),
  'Real Windows Native output has no independently detectable ASS pixels');
 console.log(JSON.stringify({
- kind:'wu11-single-real-browser-native-final-artifact',
+ kind:fullProductionApp?'wu12-production-main-native-audited-artifact':'wu11-single-real-browser-native-final-artifact',
  result:'PASS',sourceSha256:srcSha,outputSha256:'sha256:'+sha(readFileSync(output)),
- browserExplicitClicksObserved:true,bridgeTransport:'production-windows-native-client',
+ browserExplicitClicksObserved:true,productionMainLoaded:fullProductionApp,
+ bridgeTransport:'production-windows-native-client',
  jobId:receipt.jobId,taskVersion:task.version,
  fullSourceBudgetMeasurementId:receipt.browserBudgetMeasurementId,
  videoBitrate:task.bitrate,actualOutputBytes:statSync(output).size,
