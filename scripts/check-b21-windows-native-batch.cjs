@@ -94,6 +94,16 @@ let browser;
    throw Error('Two real Native batch outputs did not finish: '+JSON.stringify({state,errors})+'; '+error.message);
   }
   const proof=await page.evaluate(()=>globalThis.b21Proof);
+  const visibleBatchRows=await page.locator('#taskMultiSourceList li').allTextContents();
+  assert.equal(visibleBatchRows.length,2);
+  for(let i=0;i<2;i++){
+   const published=proof.exports[i];
+   assert.ok(visibleBatchRows[i].includes('Native 保存回执'),'Saved row hides its verified Native publish receipt');
+   assert.ok(visibleBatchRows[i].includes(String(published.bytes)),'Saved row bytes do not match this Job publication');
+   assert.ok(visibleBatchRows[i].includes(published.sha256.slice(0,16)),'Saved row hash belongs to an unrelated artifact');
+  }
+  assert.equal(await page.locator('[data-browser-batch-action="copy-receipt"]').count(),2,
+   'Each Native published file must provide its own user-copyable delivery receipt');
   assert.equal(proof.starts.length,2,'Expected two separate official FFmpeg jobs');
   assert.equal(proof.exports.length,2,'Each job must have its own native Save receipt');
   assert.equal(new Set(proof.starts.map(x=>x.jobId)).size,2);
