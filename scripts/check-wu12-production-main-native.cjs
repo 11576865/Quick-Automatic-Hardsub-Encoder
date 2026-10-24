@@ -110,6 +110,7 @@ let browser;
   assert.equal(preflight.nativePreviewVisible,true);
   assert.equal(preflight.warningPanelHidden,true,
    'Source-local ASS/font warnings must be resolved instead of silently accepted');
+  await page.locator('[data-v3-action="close-preview"]').click();
   // Switch the fully initialized production app to its REAL Manual task and
   // interact with the one visible V3 audio owner (no second test compiler).
   await page.locator('[data-hardsub-strategy=manual]').click();
