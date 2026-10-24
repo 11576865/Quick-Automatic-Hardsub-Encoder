@@ -9,3 +9,10 @@
 本地模型套件 447 项：435 PASS，12 SKIP，0 FAIL。新界面不宣称 Windows Native 或 Web 实际批次新验收；已有后端证据仅作基线。B20/B21 整项仍未关闭。UIGS Intake Pending。
 
 生产构建通过（既有 chunk/serviceworker 警告）。审查发现并修复硬字幕依赖未就绪时祖先工作区隐藏但入口可用的问题；增加对应禁用/恢复断言。
+
+## 2026-10-25 可见性修复
+精确 head29d153：前端 run40110882733/job120922158851 在 check-workbench-basic.cjs:90 失败：Copy 队列打开后片段面板不可见。此前模型、FFmpeg 集成、构建、media-ui、11宽度工作台检查全部通过。
+
+media-workspace-ui.css 的 `body[data-media-operation="copy"] .production-region`（转码同理）使用 display:none!important，优先级 (0,2,1)，高于 V3 `.v3-editor :is(...)` 的 (0,2,0)。给 V3 原显示规则添加 body.workbench-v3 范围，优先级提升为 (0,3,1)，使原有 V3 显示意图生效。手机布局、后端门禁及 mediaWorkspace 的依赖隐藏规则不变。原始面板可见性断言完整保留。
+
+本次恢复环境没有本地浏览器/构建结果可核验，不把中断前未取回的命令输出算作通过。新精确提交完整 CI Pending；提交后按异步规则不轮询下一代。
