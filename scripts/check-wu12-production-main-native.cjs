@@ -87,7 +87,16 @@ let browser;
   const entry=page.getByRole('button',{name:'导入 ASS 与字体',exact:true});
   await entry.click();
   assert.equal(await page.locator('[data-import-action=embedded]').isDisabled(),false);
+  // The production V3 import action deliberately *reveals* the real
+  // dependencies owner and focuses the native ASS-track selector; it does
+  // NOT silently import the first track. Complete the second explicit user
+  // action using the actually visible source-bound Native importer.
   await page.locator('[data-import-action=embedded]').click();
+  assert.equal(await page.locator('.v3-dependencies').getAttribute('open'),'',
+   'V3 import entry must expand the source dependencies owner');
+  assert.equal(await page.locator('#embeddedAssStream').isVisible(),true);
+  await page.locator('#embeddedAssStream').selectOption('0');
+  await page.locator('#importEmbeddedAss').click();
   await page.waitForFunction(()=>document.querySelector('#embeddedAssStatus')?.textContent.includes('已导入 ASS'),null,{timeout:45000});
   assert.match(await page.locator('#assMeta').textContent(),/内封 ASS/);
   assert.ok((await page.evaluate(()=>wu12Proof.embedded?.fonts?.length))===1,'Actual source font import missing');
