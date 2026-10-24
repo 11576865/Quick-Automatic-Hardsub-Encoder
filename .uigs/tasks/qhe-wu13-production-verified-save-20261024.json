@@ -31,7 +31,8 @@
     "UIGS Intake de-duplicated and appended existing QHE Foundry scoped Case at commit c2252a0ce7cc77008a9979fa6755537aada357e1; no Canonical change.",
     "WU13 first exact-head Windows WU02 at d29484f / run 40073432152 FAILED only after real WU11 Native mixed VBR and Chromium end-to-end passed: scripts/check-wu12-production-main-native.cjs line 171 double-escaped .mkv regex rejected valid Native suggested name. Corrected to toLowerCase().endsWith('.mkv'), preserving basename safety check, commit 041e71e9.",
     "Small local Node assertion demonstrated original /\\\\.mkv$/i rejects output.mkv while the new test accepts valid MKV and rejects non-MKV. No full Windows Native export rerun was locally performed.",
-    "WU13 acceptance report updated with exact failed run/job provenance, root cause and Pending rerun at docs commit 99d24894973cb09db081728036e60d03b2a6ac36."
+    "WU13 acceptance report updated with exact failed run/job provenance, root cause and Pending rerun at docs commit 99d24894973cb09db081728036e60d03b2a6ac36.",
+    "UIGS Intake: queried Foundry for prior regex/oracle cases, de-duplicated existing HSR double-escape observation, appended QHE WU13 scoped Case to existing Foundry entry at commit 60a2a22ff53da17a2d76115ea0007505c67c2e49; no Canonical promotion."
   ],
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/133",
   "branch": "feat/wu13-verified-windows-native-export-20261024",
@@ -43,7 +44,7 @@
     "UIGS": "PREVIOUS_EXACT_HEAD_d29484f_SUCCESS; NEW_HEAD_PENDING",
     "real_user_dialog_cancel_disk_permissions": "FIELD_PENDING",
     "physical_devices": "FIELD_PENDING",
-    "Foundry_intake": "PENDING_CHECK"
+    "Foundry_intake": "WRITTEN_TO_EXISTING_QHE_CASE_COMMIT_60a2a22ff53da17a2d76115ea0007505c67c2e49"
   },
   "limitations": [
     "CI preauthorizes output directory so cannot claim a person clicked actual Windows SaveFileDialog or verified OS dialog UI automation.",
