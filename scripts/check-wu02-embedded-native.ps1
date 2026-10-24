@@ -15,9 +15,11 @@ $bridge=$null
 try {
   & node './scripts/build-manual-rich-native-fixture.mjs' $work
   if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $source)){throw 'Rich MKV fixture missing'}
+  $sourceSecond=Join-Path $work 'source-second.mkv'
+  Copy-Item -LiteralPath $source -Destination $sourceSecond
   $outlog=Join-Path $work 'bridge-stdout.log'
   $errlog=Join-Path $work 'bridge-stderr.log'
-  $bridge=Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $outlog -RedirectStandardError $errlog -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path './windows/native-bridge.ps1'),'-NoBrowser','-Port',[string]$port,'-Token','wu02-ci-token','-InitialVideo',$source,'-CiSaveDirectory',$exportDirectory)
+  $bridge=Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $outlog -RedirectStandardError $errlog -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path './windows/native-bridge.ps1'),'-NoBrowser','-Port',[string]$port,'-Token','wu02-ci-token','-InitialVideo',$source,'-CiSaveDirectory',$exportDirectory,'-CiBatchVideoSeedList',($source+'|'+$sourceSecond))
   $ready=$false
   for($i=0;$i -lt 65;$i++){
     Start-Sleep -Milliseconds 300
@@ -34,6 +36,33 @@ try {
      $health.ciSaveChooserActive -ne $true){
     throw 'WU13 CI preauthorized save chooser is not active on the live Native Bridge'
   }
+  # B21: exercise the authenticated, real Bridge picker registry with two
+  # distinct source files under RUNNER_TEMP. The live API never returns paths.
+  $grants=Invoke-RestMethod -Method Post -Uri "$root/api/batch/videos/pick" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 45
+  if(-not $grants.ok -or @($grants.files).Count -ne 2){throw 'B21 Native CI selector did not authorize two sources'}
+  foreach($g in @($grants.files)){
+    if(-not $g.id -or $g.path -or $g.fullName){throw 'B21 Native grant must contain opaque ID, never disk path'}
+  }
+  $secondGrant=@($grants.files | Where-Object { $_.name -eq 'source-second.mkv' })
+  $firstGrant=@($grants.files | Where-Object { $_.name -eq 'source.mkv' })
+  if($firstGrant.Count -ne 1 -or $secondGrant.Count -ne 1){throw 'B21 source grants do not match selected files'}
+  $activateSecond=@{id=[string]$secondGrant[0].id}|ConvertTo-Json -Compress
+  $activated=Invoke-RestMethod -Method Post -Uri "$root/api/batch/videos/activate" -Headers $headers -ContentType 'application/json' -Body $activateSecond -TimeoutSec 45
+  if(-not $activated.ok -or $activated.file.name -ne 'source-second.mkv' -or
+     $activated.probe.sourceOriginalName -ne 'source-second.mkv'){
+    throw 'B21 independently activated second source was not actually probed'
+  }
+  $foreignDenied=$false
+  try{
+    [void](Invoke-RestMethod -Method Post -Uri "$root/api/batch/videos/activate" -Headers $headers -ContentType 'application/json' -Body '{"id":"not-authorized"}' -TimeoutSec 10)
+  }catch{$foreignDenied=$true}
+  if(-not $foreignDenied){throw 'B21 unauthorized source ID was accepted'}
+  $activateFirst=@{id=[string]$firstGrant[0].id}|ConvertTo-Json -Compress
+  $reactivated=Invoke-RestMethod -Method Post -Uri "$root/api/batch/videos/activate" -Headers $headers -ContentType 'application/json' -Body $activateFirst -TimeoutSec 45
+  if(-not $reactivated.ok -or $reactivated.probe.sourceOriginalName -ne 'source.mkv'){
+    throw 'B21 original source was not restored before pre-existing rich-MKV acceptance'
+  }
+  Write-Host 'B21 TWO REAL NATIVE SOURCE GRANTS PASS: opaque IDs, user-authorized scope, second FFprobe and original restoration.'
   $probe=Invoke-RestMethod -Method Post -Uri "$root/api/probe" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 45
   if(-not $probe.ok -or $probe.subtitleTracks -ne 1 -or $probe.attachmentTracks -ne 1){
     throw 'Source ASS or font attachment missing from actual probe'
