@@ -1,0 +1,49 @@
+{
+  "goal": "QHE WU13 close shipping V3→real Windows Native job→user-selected destination with SHA-identical atomic saved output",
+  "status": "COMMITTED_PENDING_EXACT_HEAD_CI",
+  "current_bounded_work_unit": "Ship verified same-job Native export and CI-isolated full V3 save button acceptance with strict and ordinary Manual SHA identity",
+  "authorization": {
+    "source": "R19/R24 initial version route D1/D4, B17 and B24/A08 staged-to-saved verified artifact edge; PR #132 already merged main",
+    "requirements": [
+      "B02",
+      "B04",
+      "B05",
+      "B17",
+      "B20",
+      "B24",
+      "A01",
+      "A02",
+      "A03",
+      "A08"
+    ],
+    "baseline_sha": "193ecfcbf276f37249a036e59ee79edf874bbe5c"
+  },
+  "completed_units": [
+    "PR #132 exact-head all 3 CI PASS; squash merged main@193ecfcbf276f37249a036e59ee79edf874bbe5c; shipping index.html+main.js recovered Native source, imported ASS/fonts, generated real preview, built manual mixed FLAC Copy/AAC task, encoded and independently audited same-job MKV.",
+    "Windows Native Export-Job now computes hash of approved staging before save, asserts completed status matches byte count, copies to same-dir temporary file, recomputes staged and copied SHA/size before atomic Publish-VerifiedOutput. Applies also to best-effort Manual; strict additionally matches previously approved ceiling SHA.",
+    "Successful Native export result returns SHA-256, byte count, job ID and selected path; real production save dialog remains owner on cursor monitor. No new browser-supplied arbitrary destination path endpoint.",
+    "CI-only -CiSaveDirectory accepted only when GITHUB_ACTIONS=true and path is under RUNNER_TEMP existing folder; enables non-interactive test of a preauthorized dialog outcome. Normal app always opens real Windows SaveFileDialog.",
+    "WU12 shipping main.js browser acceptance extended to seed an old user file, reject unknown Native job export with no change, click actual visible V3 Artifact→Save action, await original JS export callback and saved task state, assert sentinel replaced and returned SHA/bytes match final file.",
+    "Windows WU02 acceptance updated to pass CI-only save directory into already-running Native Bridge, verify stage SHA = published SHA = exported SHA, require exactly one final file with no temporary remnants, and run independent FLAC/AAC/ASS pixel validator directly against the published user-directory MKV.",
+    "Independent source/job/file oracle now requires actual browser-save flag, Native job matching and final saved output file identity without relaxing older WU11 scenario."
+  ],
+  "pr": null,
+  "branch": "feat/wu13-verified-windows-native-export-20261024",
+  "base_main_sha": "193ecfcbf276f37249a036e59ee79edf874bbe5c",
+  "latest_durable_commit": "9eeb573e93a982769b1394d115464cfb2b4dedd3",
+  "external_validation_states": {
+    "Windows_full_main_and_saved_artifact": "PENDING",
+    "frontend": "PENDING",
+    "UIGS": "PENDING",
+    "real_user_dialog_cancel_disk_permissions": "FIELD_PENDING",
+    "physical_devices": "FIELD_PENDING",
+    "Foundry_intake": "PENDING"
+  },
+  "limitations": [
+    "CI preauthorizes output directory so cannot claim a person clicked actual Windows SaveFileDialog or verified OS dialog UI automation.",
+    "Test input is short synthetic rich MKV, not long film or real playback matrix.",
+    "Original source picker is preselected by Native startup; multi-file source picker and real permissions remain field pending.",
+    "Strict ceiling source fingerprint guarantees preserved but this WU13 end-to-end scenario uses best-effort Manual and independently validates saved bytes, not strict size admission."
+  ],
+  "updated_at": "2026-10-24"
+}
