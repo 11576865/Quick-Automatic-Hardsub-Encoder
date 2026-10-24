@@ -142,6 +142,31 @@ try {
   & node './scripts/verify-wu11-browser-native-output.mjs' $source $uiOutput $uiReceiptPath $importPath $wu11PlanPath $work
   if($LASTEXITCODE -ne 0){throw 'WU11 real Chromium-to-Native artifact independent audit FAILED'}
   Write-Host 'WU11 REAL CHROMIUM TO WINDOWS NATIVE SAME-SESSION ARTIFACT PASS: clicked audio policy, genuine localhost Bridge job, source-locked FLAC packets, AAC re-encode, ASS font pixels and fresh source-budget transaction.'
+  # WU12: remove the synthetic HTML host gap. This is the SHIPPING index.html
+  # plus src/main.js: recover the Bridge-selected MKV in the UI, use the V3
+  # import entry to import source-attached ASS/fonts, perform production Native
+  # preflight + libass preview, then use the Manual audio UI to submit a formal
+  # mixed-audio hardsub job. Its *own* jobId leads to an independent audit.
+  $productionReceiptPath=Join-Path $work 'wu12-production-main-native-receipt.json'
+  & node './scripts/check-wu12-production-main-native.cjs' $source $wu11PlanPath $productionReceiptPath
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $productionReceiptPath)){
+    throw 'WU12 shipping main.js real Windows Native source-import/preview/encode acceptance failed'
+  }
+  $productionReceipt=Get-Content -Raw -LiteralPath $productionReceiptPath | ConvertFrom-Json
+  if($productionReceipt.kind -ne 'wu12-production-main-to-windows-native-v1' -or
+     -not $productionReceipt.productionMainLoaded -or
+     -not $productionReceipt.fullAppSourceImportClicked -or
+     $productionReceipt.nativeResult.state -ne 'completed' -or
+     -not $productionReceipt.jobId){
+    throw 'WU12 shipping main.js Native completion receipt is invalid'
+  }
+  $productionStage=@(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter ('quick-media-job-'+$productionReceipt.jobId+'-*'))
+  if($productionStage.Count -ne 1){throw 'WU12 shipping main.js job-specific Native stage missing'}
+  $productionOutput=Join-Path $productionStage[0].FullName 'output.mkv'
+  if(-not(Test-Path -LiteralPath $productionOutput)){throw 'WU12 production main.js output.mkv missing'}
+  & node './scripts/verify-wu11-browser-native-output.mjs' $source $productionOutput $productionReceiptPath $importPath $wu11PlanPath $work
+  if($LASTEXITCODE -ne 0){throw 'WU12 full production main.js independent packet/pixel audit failed'}
+  Write-Host 'WU12 FULL PRODUCTION MAIN.JS WINDOWS NATIVE PASS: recovered MKV, UI import ASS/fonts, actual Native preview, source-budgeted Manual mixed-audio job, same job packet identity and ASS pixels.'
   & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath $sourceKey
   if($LASTEXITCODE -ne 0){throw 'Formal shared task compiler failed'}
   $formal=Get-Content -Raw -LiteralPath $requestPath | ConvertFrom-Json

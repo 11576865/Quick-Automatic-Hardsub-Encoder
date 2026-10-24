@@ -14,6 +14,7 @@ on:
       - 'scripts/build-wu11-native-vbr-task.mjs'
       - 'scripts/verify-wu11-native-vbr-output.mjs'
       - 'scripts/check-wu11-browser-native-session.cjs'
+      - 'scripts/check-wu12-production-main-native.cjs'
       - 'scripts/verify-wu11-browser-native-output.mjs'
       - 'src/guided-explicit-audio-handoff.js'
       - 'src/media-workspace.js'
