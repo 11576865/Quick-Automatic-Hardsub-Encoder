@@ -1,7 +1,7 @@
 {
   "goal": "WU12: execute shipping index.html + main.js and V3 workflow through actual Windows Native rich MKV, embedded ASS/font, native preview and final mixed-audio MKV output",
-  "status": "BOUNDED_IMPORT_TWO_CLICK_REPAIR_COMMITTED_PENDING_EXACT_HEAD_WINDOWS_CI",
-  "current_bounded_work_unit": "Fix WU12 full production shipping V3 import sequence to preserve explicit two-step entry: reveal track chooser then confirm source-bound embedded ASS/font import",
+  "status": "BOUNDED_VISIBLE_V3_STRATEGY_REPAIR_COMMITTED_PENDING_EXACT_HEAD_WINDOWS_CI",
+  "current_bounded_work_unit": "Restore full shipping V3 user-mode transaction fidelity: select visible data-basic-strategy=manual rather than click hidden legacy strategy button after actual Native ASS import/preview",
   "authorization": {
     "source": "R19 and R24 owner-defined initial version, docs/qhe-initial-version-route-reanchor-2026-10-14.md D1/D2, B02/B04/B05/B06/B07/B20/B24 and A01-A03; PR #131 merged main",
     "requirements": [
@@ -34,7 +34,9 @@
     "UIGS Intake deduplicated and appended existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md, commit 1715352a8e2e7daf17b86266d8bc07aef5e8c3c1; no Canonical.",
     "PR #132 old exact-head bfd15f6af6944a03b4a7adb7be169159ec78329c: frontend run 40059482122 SUCCESS, UIGS coverage 40059482106 SUCCESS; Windows 40059482140 FAILURE only new WU12 shipping main.js test at check-wu12-production-main-native.cjs:91 after 45s waiting for '已导入 ASS'. Old WU11 browser-to-real-Native job and its independently verified output stayed PASS in same failed Windows job.",
     "Investigated src/workbench-import-controls.js production UI: V3 import menu role=embedded intentionally reveals .v3-dependencies and focuses #embeddedAssStream without starting import; previous test clicked menu then waited, omitting explicit #importEmbeddedAss action. Repaired script commit 222bf7bf3eed7145b97351d38d43475b5433953f to assert revealed/dependency panel, select visible ASS ordinal 0, and click actual production importer before waiting for status. Production behavior and all Native verification gates left unchanged.",
-    "UIGS Intake appended observed two-step V3 import user-transaction boundary to existing Foundry scoped-CI Case, commit 00933f501798820f82d4a374392ef0b697524536. Not promoted to Canonical."
+    "UIGS Intake appended observed two-step V3 import user-transaction boundary to existing Foundry scoped-CI Case, commit 00933f501798820f82d4a374392ef0b697524536. Not promoted to Canonical.",
+    "PR #132 prior exact head f29df72dc93bf9782253f77c09ac2995c65e5e64 frontend 40060628721 SUCCESS; UIGS 40060628635 SUCCESS; Windows WU02 40060628698 FAILED at check-wu12-production-main-native.cjs:125 hidden [data-hardsub-strategy=manual] click timeout. This proves WU12 first two-step import fix advanced through production native ASS import, analysis and actual preview to mode selection; WU11 real browser→Native+output remained PASS.",
+    "Compared src/workbench-basic-controls.js: shipping V3 renders visible <select data-basic-strategy> with choices guided/manual; change event calls hidden original data-hardsub-strategy button and preserves authoritative state. Bounded code repair commit 60b88c6a1389664cb4cd0174357d7e5f558b144d now uses real Playwright selectOption('manual'), awaits body dataset change and checks visible selector+actual legacy-owned state. No run/Native fixture mocks or weakened packet/pixel assertions."
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -46,17 +48,18 @@
   "branch": "feat/wu12-production-main-native-acceptance-20261024",
   "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/132",
   "base_main_sha": "2bdb2730db4172a4e0104837c5c4eb47d4daa763",
-  "latest_durable_commit": "eeac9072ab1554cd158dc68f4223b6517b7c52e5",
+  "latest_durable_commit": "60b88c6a1389664cb4cd0174357d7e5f558b144d",
   "external_validation_states": {
-    "windows_full_production_main": "PREVIOUS_HEAD FAIL fixture omitted required explicit second import click; REPAIR COMMITTED, NEW EXACT-HEAD CI PENDING",
-    "frontend": "Previous head 40059482122 PASS; new exact-head PENDING",
-    "uigs": "Previous head 40059482106 PASS; new exact-head PENDING",
+    "windows_full_production_main": "PREVIOUS_HEAD FAILED run 40060628698 hidden legacy strategy button after real import/preview; fixed visible V3 selector, NEW EXACT-HEAD CI PENDING",
+    "frontend": "PR #132 old tested head frontend 40060628721 SUCCESS; new head pending",
+    "uigs": "PR #132 old tested head UIGS 40060628635 SUCCESS; new head pending",
     "physical_user_devices": "FIELD_PENDING",
-    "uigs_intake": "WRITTEN deduplicated existing Foundry Case @00933f501798820f82d4a374392ef0b697524536; no Canonical"
+    "uigs_intake": "PENDING_FOUNDARY_DEDUP_CASE_UPDATE"
   },
   "blockers": [
-    "Must verify repaired exact head on real hosted Windows before merge",
-    "Future real main.js preflight/preview/task/runtime failures may appear only after now-fixed import step"
+    "Must verify repaired exact PR head in hosted Windows before merge",
+    "Possible remaining full main.js runtime/plan compiler failures only proven or rejected by new CI",
+    "Real picker, actual save/export and physical long-form remain FIELD_PENDING"
   ],
   "updated_at": "2026-10-24"
 }
