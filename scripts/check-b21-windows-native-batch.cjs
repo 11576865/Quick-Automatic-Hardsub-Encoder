@@ -128,7 +128,7 @@ let browser;
    assert.ok(save.path&&resolve(save.path).startsWith(resolve(exportDir)+'\\'));
    assert.ok(existsSync(save.path)&&statSync(save.path).size>0);
    assert.equal(fileHash(save.path),save.sha256,'Saved disk bytes differ from Native SHA receipt');
-   const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=duration,size','-show_entries','stream=codec_type,codec_name','-of','json',save.path],{encoding:'utf8'}));
+   const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=duration,size','-show_entries','stream=codec_type,codec_name,width,height','-of','json',save.path],{encoding:'utf8'}));
    const input=JSON.parse(execFileSync('ffprobe',['-v','error','-show_entries','format=duration','-show_entries','stream=codec_type,codec_name,width,height','-of','json',i===0?first:second],{encoding:'utf8'}));
    const srcVideo=input.streams.find(x=>x.codec_type==='video');
    const outputVideo=probe.streams.find(x=>x.codec_type==='video');
