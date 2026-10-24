@@ -94,3 +94,38 @@ export function assertNativeBatchSource(entry,activated,activeIdentity){
    throw Error('Native 来源激活后没有取得实际 FFprobe 证明');
  return entry;
 }
+
+/** B21 post-publication receipt. The Bridge—not the web page—owns the path,
+ * hashes the delivered file, and returns its own job-bound export result.
+ * Never turn browser download hand-off or an unverified job into this receipt.
+ */
+export function nativeBatchDeliveryReceipt(source, completed, exportResult){
+ if(!source?.nativeId||!source?.identity||!completed?.jobId||
+    !exportResult||exportResult.ok!==true||
+    exportResult.jobId!==completed.jobId||
+    typeof exportResult.sha256!=='string'||!/^[a-f0-9]{64}$/i.test(exportResult.sha256)||
+    !Number.isSafeInteger(Number(exportResult.bytes))||Number(exportResult.bytes)<=0){
+   throw Error('Native 批次保存回执缺少同一 Job 的真实 SHA-256 或字节数');
+ }
+ return Object.freeze({
+   kind:'native-published',
+   sourceName:source.name,
+   sourceIdentity:source.identity,
+   sourceGrantId:source.nativeId,
+   jobId:completed.jobId,
+   bytes:Number(exportResult.bytes),
+   sha256:exportResult.sha256.toLowerCase()
+ });
+}
+export function formatNativeBatchDeliveryReceipt(receipt){
+ if(receipt?.kind!=='native-published')throw Error('尚无可复制的 Native 已发布文件回执');
+ return [
+   'QHE Native 批次保存回执（Native Bridge 提供的文件哈希，不代表独立播放器现场验收）',
+   '来源: '+receipt.sourceName,
+   '来源身份: '+receipt.sourceIdentity,
+   '授权标识: '+receipt.sourceGrantId,
+   'Native Job: '+receipt.jobId,
+   '保存文件字节: '+receipt.bytes,
+   'SHA-256: '+receipt.sha256
+ ].join('\n');
+}

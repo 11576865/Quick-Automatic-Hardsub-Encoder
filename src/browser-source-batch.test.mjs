@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {File} from 'node:buffer';
-import {makeBrowserSourceBatch,assertBrowserBatchSource,makeNativeSourceBatch,assertNativeBatchSource} from './browser-source-batch.js';
+import {makeBrowserSourceBatch,assertBrowserBatchSource,makeNativeSourceBatch,assertNativeBatchSource,nativeBatchDeliveryReceipt,formatNativeBatchDeliveryReceipt} from './browser-source-batch.js';
 const video=(name,bytes='abc')=>new File([bytes],name,{lastModified:1000});
 const settings={operation:'transcode',codec:'h264',encoder:'libx264',
  audio:'copy',audioPlan:'',mustCopyAudioOrdinals:'',rateMode:'quality',quality:23};
@@ -82,4 +82,33 @@ test('B21 Native queue does not inherit ASS hard-sub, per-track audio locks or s
   {rateMode:'size'},
   {budgetPolicy:'strict-ceiling'}
  ])assert.throws(()=>makeNativeSourceBatch({selections:[a],settings:{...settings,...change}}),/Native 多来源/);
+});
+
+test('B21 native per-file delivery requires real same-job published hash and byte count',()=>{
+ const source=makeNativeSourceBatch({selections:[grant('c','release.mkv')],settings})[0];
+ const completed={jobId:'job-123',verified:true,name:'release.mkv'};
+ const receipt=nativeBatchDeliveryReceipt(source,completed,{
+  jobId:'job-123',ok:true,sha256:'AB'.repeat(32),bytes:1048576,
+  path:'C:\\users\\private\\video\\release.mkv'
+ });
+ assert.equal(receipt.kind,'native-published');
+ assert.equal(receipt.sourceGrantId,source.nativeId);
+ assert.equal(receipt.sha256,'ab'.repeat(32));
+ assert.equal(receipt.bytes,1048576);
+ assert.equal(Object.isFrozen(receipt),true);
+ const formatted=formatNativeBatchDeliveryReceipt(receipt);
+ assert.match(formatted,/job-123/);
+ assert.match(formatted,/1048576/);
+ assert.match(formatted,/ab{1}/);
+ assert.ok(!formatted.includes('C:\\users\\private'),'Never copy user disk paths into receipt');
+ assert.equal(receipt.path,undefined);
+ for(const invalid of [
+  {jobId:'other-job',ok:true,sha256:'a'.repeat(64),bytes:100},
+  {jobId:'job-123',ok:false,sha256:'a'.repeat(64),bytes:100},
+  {jobId:'job-123',ok:true,sha256:'incomplete',bytes:100},
+  {jobId:'job-123',ok:true,sha256:'a'.repeat(64),bytes:0},
+  {jobId:'job-123',ok:true,sha256:'a'.repeat(64),bytes:-1},
+  {jobId:'job-123',ok:true,sha256:'a'.repeat(64),bytes:'not-a-number'}
+ ])assert.throws(()=>nativeBatchDeliveryReceipt(source,completed,invalid),/保存回执/);
+ assert.throws(()=>formatNativeBatchDeliveryReceipt(null),/尚无/);
 });

@@ -20,7 +20,7 @@ import {makeQueuedClip,validateQueuedCopySettings,clipOutputName} from './clip-q
 import {assessCopyCutStart} from './copy-cut-feasibility.js';
 import {normalizeCompletedCutTimeline} from './cut-timeline-evidence.js';
 import {createOutputRecipe,validateOutputRecipe,outputRecipeFilename} from './output-recipe-matrix.js';
-import {makeBrowserSourceBatch,assertBrowserBatchSource,makeNativeSourceBatch,assertNativeBatchSource} from './browser-source-batch.js';
+import {makeBrowserSourceBatch,assertBrowserBatchSource,makeNativeSourceBatch,assertNativeBatchSource,nativeBatchDeliveryReceipt,formatNativeBatchDeliveryReceipt} from './browser-source-batch.js';
 import { verificationDuration, verificationSourceTime, verificationHasSpatialTransforms } from './media-verification.js';
 import './media-workspace-ui.css';
 
@@ -439,6 +439,20 @@ export function mountMediaWorkspace(hooks) {
         saved:'已确认保存',handed_off:'已交浏览器下载（落盘待确认）',failed:'执行失败',save_failed:'成品保留，待重试保存'
       }[entry.state]||entry.state);
       info.append(name,status);
+      if(entry.deliveryReceipt){
+        const proof=document.createElement('small');
+        proof.textContent='Native 保存回执 · '+entry.deliveryReceipt.bytes+' B · SHA-256 '+entry.deliveryReceipt.sha256.slice(0,16)+'…';
+        proof.title='Native Bridge 回执的完整 SHA-256：'+entry.deliveryReceipt.sha256;
+        info.append(proof);
+      }
+      if(entry.deliveryReceipt){
+        const copy=document.createElement('button');copy.type='button';copy.className='secondary';
+        copy.dataset.browserBatchIndex=String(index);
+        copy.dataset.browserBatchAction='copy-receipt';
+        copy.textContent='复制回执';
+        copy.disabled=locked;
+        row.append(copy);
+      }
       const action=document.createElement('button');action.type='button';action.className='secondary';
       action.dataset.browserBatchIndex=String(index);
       action.dataset.browserBatchAction=batchSavePending===entry?'retry-save':'remove';
@@ -2263,7 +2277,8 @@ export function mountMediaWorkspace(hooks) {
       if(saved?.ok===false)throw Error(saved.error||'保存失败');
       if(saved?.pending){
         if(!nativeOutcome)throw Error('无法确认成品保存完成，批量任务已暂停');
-        await nativeOutcome;
+        const receipt=await nativeOutcome;
+        return {...saved,nativeExportReceipt:receipt};
       }
       return saved;
     }finally{
@@ -2320,7 +2335,7 @@ export function mountMediaWorkspace(hooks) {
     }catch(error){batchStatus.textContent='加入失败：'+error.message;}
     syncBrowserBatch();
   };
-  batchList.addEventListener('click',event=>{
+  batchList.addEventListener('click',async event=>{
     if(busy||batchRunning||hooks.busy())return;
     const btn=event.target.closest('button[data-browser-batch-action]');
     if(!btn)return;
@@ -2328,6 +2343,16 @@ export function mountMediaWorkspace(hooks) {
     if(!row)return;
     if(btn.dataset.browserBatchAction==='retry-save'){
       if(row===batchSavePending)section.querySelector('#taskSave').click();
+      return;
+    }
+    if(btn.dataset.browserBatchAction==='copy-receipt'){
+      if(!row.deliveryReceipt)return;
+      try{
+        await navigator.clipboard.writeText(formatNativeBatchDeliveryReceipt(row.deliveryReceipt));
+        batchStatus.textContent='已复制 '+row.source.name+' 的 Native 发布回执；请使用 SHA-256 核对成品。';
+      }catch(error){
+        batchStatus.textContent='无法自动复制回执：'+error.message+'；完整 SHA-256 见完成项提示。';
+      }
       return;
     }
     if(batchSavePending)return;
@@ -2372,7 +2397,7 @@ export function mountMediaWorkspace(hooks) {
       setTaskState('preparing');syncBrowserBatch();
       for(const row of pending){
         if(batchStop)break;
-        current=row;batchCurrent=row;phase='prepare';row.state='running';
+        current=row;batchCurrent=row;phase='prepare';row.state='running';row.deliveryReceipt=null;
         batchStatus.textContent='正在激活并探测：'+row.source.name;
         syncBrowserBatch();
         const native=!!row.source.nativeId;
@@ -2405,6 +2430,11 @@ export function mountMediaWorkspace(hooks) {
         setTaskState('verified');phase='save';row.state='saving';syncBrowserBatch();
         setTaskState('saving');
         const saved=await saveQueuedResult(completed);
+        // "saved" requires the real same-Job Native callback with a delivery
+        // hash; browser-download merely hands off bytes to the browser.
+        row.deliveryReceipt=native
+          ? nativeBatchDeliveryReceipt(row.source,completed,saved?.nativeExportReceipt)
+          : null;
         row.state=saved?.kind==='browser-download'?'handed_off':'saved';setTaskState('saved');
         batchStatus.textContent='已完成 '+browserBatch.filter(browserBatchDone).length+
           ' / '+browserBatch.length+(native?' 个 Native 成品已逐一保存。':' 个来源输出；浏览器下载须在本机独立确认。');
