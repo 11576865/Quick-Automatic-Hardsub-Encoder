@@ -29,7 +29,9 @@
     "Instrumentation wraps real client import, budget, encode and status methods to record exact task/job and ASS bytes while forwarding all requests unchanged (no fake transport). Original src/main.js run hook creates real FFmpeg Native job.",
     "Extended verify-wu11-browser-native-output.mjs to accept a second clearly distinguished real-production-main receipt and reuse strict flac packet hash, AAC actual transcode, ASS/fonts burnt pixel and target bitrate checks. Existing original WU11 receipt semantics remain.",
     "Extended check-wu02-embedded-native.ps1 to launch full shipping UI workflow while still using the same actual source/Bridge, locate actual production jobId's output.mkv and invoke independent validator.",
-    "Added new full-app browser script to Windows WU02 acceptance workflow paths."
+    "Added new full-app browser script to Windows WU02 acceptance workflow paths.",
+    "PR #132 opened non-Draft to trigger actual shipping main.js real Windows native source+preview+artifact suite; new JS code has been syntax-compiled in V8 but not yet runtime exercised.",
+    "UIGS Intake deduplicated and appended existing Foundry Case inbox/cases/2026-10-13-qhe-report-baseline-cannot-be-replaced-by-scoped-ci-delivery.md, commit 1715352a8e2e7daf17b86266d8bc07aef5e8c3c1; no Canonical."
   ],
   "authorized_next_units": [],
   "discovered_followups": [
@@ -39,15 +41,15 @@
     "Full user source picker and switching among different Native files (not preselected CLI source) still FIELD_PENDING"
   ],
   "branch": "feat/wu12-production-main-native-acceptance-20261024",
-  "pr": null,
+  "pr": "https://github.com/11576865/Quick-Automatic-Hardsub-Encoder/pull/132",
   "base_main_sha": "2bdb2730db4172a4e0104837c5c4eb47d4daa763",
-  "latest_durable_commit": "f7717d2e1ff6ce2dadcf5a8814623e63af3a2867",
+  "latest_durable_commit": "675d47c3a3f483ccc09c7204913c482d7cb5257d",
   "external_validation_states": {
     "windows_full_production_main": "PENDING",
     "frontend": "PENDING",
     "uigs": "PENDING",
     "physical_user_devices": "FIELD_PENDING",
-    "uigs_intake": "PENDING_DEDUP"
+    "uigs_intake": "WRITTEN Foundry Case @1715352a8e2e7daf17b86266d8bc07aef5e8c3c1"
   },
   "blockers": [
     "No hosted Windows CI proof on new full-app test yet",
