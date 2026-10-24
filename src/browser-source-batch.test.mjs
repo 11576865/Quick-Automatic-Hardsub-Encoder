@@ -41,10 +41,11 @@ const grant=(id,name,size=4096,lastModified=1750000000000)=>({id:id.repeat(32),n
 test('B21 Native source queue freezes only opaque picker grants and never paths',()=>{
  const selections=[grant('a','clip-1.mkv'),grant('b','clip-2.mkv')];
  const request={...settings,operation:'transcode'};
+ const requestedQuality=request.quality;
  const rows=makeNativeSourceBatch({selections,settings:request});
  request.quality=51;
  assert.equal(rows.length,2);
- assert.equal(rows[0].settings.quality,23);
+ assert.equal(rows[0].settings.quality,requestedQuality);
  assert.equal(Object.isFrozen(rows[0].settings),true);
  assert.equal(rows[0].nativeId,'a'.repeat(32));
  assert.equal(rows[0].file,undefined);
