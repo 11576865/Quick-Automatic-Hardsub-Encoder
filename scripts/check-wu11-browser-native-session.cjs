@@ -187,7 +187,14 @@ let browser;
     fontCount:imported.fontCount,bridgeDiscovered:discovered,
     originalCopyBytes:copyAllBytes};
   },{sourceName:'source.mkv',sourceSize:sourceStat.size,sourceKey:key,
-    bridgeUrl,bridgeToken:token});
+    bridgeUrl,bridgeToken:token}).catch(error=>{
+     // Never log the bearer token, only Chromium network/console telemetry.
+     console.error('WU11_CHROMIUM_NETWORK_DIAG '+JSON.stringify({
+      errors:browserConsoleErrors.slice(-12),currentOrigin:base,
+      bridgeHost:'127.0.0.1',bridgePort:9361
+     }));
+     throw error;
+    });
   assert.equal(bootstrap.bridgeDiscovered,true);
   assert.equal(bootstrap.sourceBytes,sourceStat.size);
   assert.ok(bootstrap.duration>4&&bootstrap.duration<6);
