@@ -615,7 +615,32 @@ function Register-BridgeBatchVideos([string[]]$Paths) {
     return [pscustomobject]@{ok=$true;cancelled=$false;files=[object[]]$entries}
 }
 function Activate-BridgeBatchVideo([string]$Id) {
-    if ($Id -notmatch '^[a-fA-F0-9]{32}
+    if ($Id -notmatch '^[a-fA-F0-9]{32}$' -or -not $script:BatchVideoSelections.ContainsKey($Id)) {
+        throw 'Unknown or expired Native source authorization.'
+    }
+    if (Test-Bink2ImportBusy) { throw 'Cannot change source during Bink 2 import.' }
+    foreach ($job in @($script:Jobs.Values)) {
+        if ($job.State -in @('encoding','verifying','cancelling')) {
+            throw 'Cannot activate another source while a Native job is active.'
+        }
+    }
+    $row=$script:BatchVideoSelections[$Id]
+    $item=Get-Item -LiteralPath $row.path -ErrorAction Stop
+    if ($item.PSIsContainer -or [long]$item.Length -ne [long]$row.size -or
+        [long]$item.LastWriteTimeUtc.Ticks -ne [long]$row.writeTicks) {
+        throw 'Authorized batch source changed on disk; choose files again.'
+    }
+    Clear-Bink2ImportStaging
+    Clear-BridgeEmbeddedAss
+    $script:Selections.video=@([string]$row.path)
+    $script:Selections.ass=@()
+    $script:Selections.fonts=@()
+    # Never use the prior input probe when compiling this source.
+    $probe=Get-ProbeMedia
+    return [pscustomobject]@{ok=$true;id=$Id;file=$row.info;probe=$probe}
+}
+
+function Show-BridgePicker([string]$Role) {
     $picked = @()
     if ($Role -eq 'video') {
         if (Test-Bink2ImportBusy) { throw 'Bink 2 import is running; cancel or wait before replacing the video.' }
