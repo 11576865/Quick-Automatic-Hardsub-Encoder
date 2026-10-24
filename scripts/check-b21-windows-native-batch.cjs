@@ -174,8 +174,10 @@ let browser;
   const proof=await page.evaluate(()=>globalThis.b21Proof);
   const visibleBatchRows=await page.locator('#taskMultiSourceList li').allTextContents();
   assert.equal(visibleBatchRows.length,2);
+  const successfulExports=proof.exports.filter(x=>x.ok);
+  assert.equal(successfulExports.length,2);
   for(let i=0;i<2;i++){
-   const published=proof.exports[i];
+   const published=successfulExports[i];
    assert.ok(visibleBatchRows[i].includes('Native 保存回执'),'Saved row hides its verified Native publish receipt');
    assert.ok(visibleBatchRows[i].includes(String(published.bytes)),'Saved row bytes do not match this Job publication');
    assert.ok(visibleBatchRows[i].includes(published.sha256.slice(0,16)),'Saved row hash belongs to an unrelated artifact');
