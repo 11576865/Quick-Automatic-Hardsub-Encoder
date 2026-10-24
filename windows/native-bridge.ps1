@@ -638,6 +638,9 @@ function Get-BackendInfo {
         available=$available
         backend='windows-native'
         platform='windows'
+        # Diagnostic capability only: no save path is exposed or accepted over HTTP.
+        # Enabled only for a runner with a restricted, preauthorized CI save root.
+        ciSaveChooserActive=[bool]($env:GITHUB_ACTIONS -eq 'true' -and $script:CiSaveDirectory)
         cpu=if($script:Capabilities){$script:Capabilities.Cpu}else{$env:PROCESSOR_IDENTIFIER}
         gpus=[object[]]$gpuList
         ffmpeg=$script:Ffmpeg
