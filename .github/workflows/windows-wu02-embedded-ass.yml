@@ -13,6 +13,13 @@ on:
       - 'scripts/check-wu11-guided-vbr-explicit-adoption.mjs'
       - 'scripts/build-wu11-native-vbr-task.mjs'
       - 'scripts/verify-wu11-native-vbr-output.mjs'
+      - 'scripts/check-wu11-browser-native-session.cjs'
+      - 'scripts/verify-wu11-browser-native-output.mjs'
+      - 'src/guided-explicit-audio-handoff.js'
+      - 'src/media-workspace.js'
+      - 'src/audio-stream-plan-ui.js'
+      - 'src/media-task.js'
+      - 'src/windows-native-client.js'
       - 'src/guided-task-handoff.js'
       - 'src/guided-cpu-compiler-contract.js'
       - 'src/guided-cpu-compiler-contract.test.mjs'
@@ -21,7 +28,7 @@ on:
 jobs:
   native-embedded-ass:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -69,6 +76,13 @@ jobs:
           $ffprobe=Get-Command ffprobe -ErrorAction Stop
           Write-Host ("FFmpeg: "+$ffmpeg.Source)
           Write-Host ("FFprobe: "+$ffprobe.Source)
+      - name: Prepare real Chromium for same-session Windows Native UI acceptance
+        shell: powershell
+        run: |
+          npm ci
+          npm install --no-save playwright
+          npx playwright install chromium
+          if($LASTEXITCODE -ne 0){throw 'Chromium install failed; no browser Native acceptance has run'}
       - name: Real Windows localhost MKV ASS font audio processing
         shell: powershell
         run: ./scripts/check-wu02-embedded-native.ps1

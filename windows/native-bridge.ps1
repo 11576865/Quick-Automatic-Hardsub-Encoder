@@ -2378,15 +2378,17 @@ function Read-HttpRequest($Client) {
 }
 
 function Send-HttpJson($Request,[int]$Status,$Payload) {
-    $json=ConvertTo-JsonUtf8 $Payload
-    $bytes=[Text.Encoding]::UTF8.GetBytes($json)
+    # HTTP 204 (including browser CORS/PNA preflight) MUST NOT contain a
+    # response body or Content-Length. Chromium can reject malformed 204
+    # framing even when a direct Node/PowerShell GET health check succeeds.
+    $bytes=if($Status -eq 204){[byte[]]@()}else{[Text.Encoding]::UTF8.GetBytes((ConvertTo-JsonUtf8 $Payload))}
     $origin=if($Request.Headers.ContainsKey('origin')){$Request.Headers['origin']}else{''}
     $allowOrigin=if($origin -eq $script:AllowedOrigin -or $origin -match '^http://(127\.0\.0\.1|localhost)(:\d+)?$'){$origin}else{$script:AllowedOrigin}
     $reason=if($Status -eq 200){'OK'}elseif($Status -eq 204){'No Content'}elseif($Status -eq 403){'Forbidden'}elseif($Status -eq 404){'Not Found'}else{'Error'}
     $crlf=[Environment]::NewLine
     $head='HTTP/1.1 '+$Status+' '+$reason+$crlf+
         'Content-Type: application/json; charset=utf-8'+$crlf+
-        'Content-Length: '+$bytes.Length+$crlf+
+        $(if($Status -ne 204){'Content-Length: '+$bytes.Length+$crlf}else{''})+
         'Access-Control-Allow-Origin: '+$allowOrigin+$crlf+
         'Access-Control-Allow-Headers: Content-Type, X-Quick-Hardsub-Token'+$crlf+
         'Access-Control-Allow-Methods: GET, POST, OPTIONS'+$crlf+
