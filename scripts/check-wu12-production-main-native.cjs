@@ -5,11 +5,16 @@
 // a user-edited formal Manual plan to FFmpeg. NO fake Native transport.
 const assert=require('node:assert/strict');
 const {spawn}=require('node:child_process');
-const {readFileSync,writeFileSync,statSync}=require('node:fs');
+const {readFileSync,writeFileSync,statSync,existsSync}=require('node:fs');
+const {resolve,join,basename}=require('node:path');
 const {createHash}=require('node:crypto');
 const {chromium}=require('playwright');
-const [source,formalPath,receiptPath]=process.argv.slice(2);
-assert(source&&formalPath&&receiptPath,'Usage: check-wu12-production-main-native.cjs source formal-plan receipt');
+const [source,formalPath,receiptPath,exportDir]=process.argv.slice(2);
+assert(source&&formalPath&&receiptPath&&exportDir,
+ 'Usage: check-wu12-production-main-native.cjs source formal-plan receipt ci-export-directory');
+assert.equal(process.env.GITHUB_ACTIONS,'true','Only runner CI can exercise pre-authorized save choice');
+assert.ok(resolve(exportDir).startsWith(resolve(process.env.RUNNER_TEMP)+'\\'),
+ 'Preauthorized export must stay within the current Windows runner temp subtree');
 const sha=p=>'sha256:'+createHash('sha256').update(readFileSync(p)).digest('hex');
 const sourceSha=sha(source),stat=statSync(source);
 const formal=JSON.parse(readFileSync(formalPath,'utf8'));
@@ -159,6 +164,82 @@ let browser;
    null,{timeout:150000});
   await page.waitForFunction(()=>document.querySelector('#mediaWorkspace')?.dataset.taskState==='verified',
    null,{timeout:150000});
+  const {name,jobId}=await page.evaluate(()=>({
+   name:wu12Proof.request?.suggestedName,jobId:wu12Proof.jobId
+  }));
+  assert.match(jobId,/^[a-z0-9]+$/i);
+  assert.ok(name&&name===basename(name)&&name.toLowerCase().endsWith('.mkv'),'Native suggested name must be safe');
+  const published=join(exportDir,name);
+  assert.ok(!existsSync(published),'Fresh CI export target must not already exist');
+  const sentinel=Buffer.from('PREVIOUS USER FILE: DO NOT DELETE WITHOUT VERIFIED EXPORT\n');
+  writeFileSync(published,sentinel);
+  const oldHash=sha(published);
+  // Unknown job should NEVER open a picker, damage old bytes or start a save.
+  const rejected=await page.evaluate(async suggested=>{
+   return await globalThis.NativeHardsub.requestNativeExport('notarealnativejob',suggested);
+  },name);
+  assert.equal(rejected.ok,false,'Exporting an unknown job must be rejected');
+  assert.equal(sha(published),oldHash,'Unknown export must preserve existing destination bytes');
+  // Shipping V3 delivery UI, not direct bridge export: the original main.js
+  // owns taskSave -> requestNativeExport -> real Bridge -> native callback.
+  await page.evaluate(()=>{
+    wu12Proof.exportResult=null;
+    wu12Proof.exportCalls=[];
+    wu12Proof.exportEvents=[];
+    const realExport=globalThis.NativeHardsub.requestNativeExport.bind(globalThis.NativeHardsub);
+    globalThis.NativeHardsub.requestNativeExport=(...args)=>{
+      wu12Proof.exportCalls.push({jobId:args[0],suggestedName:args[1]});
+      return realExport(...args); // Observe the original Native transport; do not stub it.
+    };
+    window.addEventListener('quick-hardsub-native-export-result',event=>{
+     wu12Proof.exportEvents.push({jobId:event.detail?.jobId,ok:event.detail?.ok,error:event.detail?.error||''});
+     if(event.detail?.jobId===wu12Proof.jobId)wu12Proof.exportResult=event.detail;
+    });
+  });
+  const exportHttp=[];
+  page.on('request',req=>{if(req.url().includes('/export'))exportHttp.push({kind:'request',method:req.method()});});
+  page.on('response',response=>{if(response.url().includes('/export'))exportHttp.push({kind:'response',status:response.status()});});
+  page.on('requestfailed',req=>{if(req.url().includes('/export'))exportHttp.push({kind:'failed',reason:req.failure()?.errorText||'network failure'});});
+  await page.locator('[data-v3-action="artifact"]').click();
+  const visibleSave=page.locator('[data-v3-action="save-artifact"]');
+  assert.equal(await visibleSave.isVisible(),true);
+  assert.equal(await visibleSave.isEnabled(),true);
+  await visibleSave.click();
+  // A visible enabled V3 Save is not proof that the actual form owner sent an
+  // export. Reject that gap immediately rather than waiting 60s for a callback.
+  const dispatch=await page.evaluate(()=>({
+    state:document.querySelector('#mediaWorkspace')?.dataset.taskState,
+    status:document.querySelector('#taskStatus')?.textContent,
+    calls:wu12Proof.exportCalls
+  }));
+  assert.equal(dispatch.calls.length,1,'Visible V3 Save did not invoke the real Native client: '+JSON.stringify(dispatch));
+  assert.equal(dispatch.calls[0].jobId,jobId,'V3 Save targeted a stale or unrelated Native job');
+  assert.ok(['saving','saved','save_failed'].includes(dispatch.state),
+    'The form owner did not enter its saving lifecycle: '+JSON.stringify(dispatch));
+  try{
+    await page.waitForFunction(()=>wu12Proof.exportResult?.jobId===wu12Proof.jobId,
+      null,{timeout:60000});
+  }catch(error){
+    const evidence=await page.evaluate(()=>({
+      state:document.querySelector('#mediaWorkspace')?.dataset.taskState,
+      status:document.querySelector('#taskStatus')?.textContent,
+      calls:wu12Proof.exportCalls,
+      events:wu12Proof.exportEvents
+    }));
+    throw Error('WU13 Native save result was not delivered: '+JSON.stringify({evidence,exportHttp,pageErrors})+'; '+error.message);
+  }
+  const exported=await page.evaluate(()=>wu12Proof.exportResult);
+  assert.equal(exported.ok,true,'Native save must complete successfully');
+  assert.equal(exported.jobId,jobId,'Saved job must be the just-completed Native job');
+  assert.equal(resolve(exported.path),resolve(published),'No arbitrary export path accepted from web UI');
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace')?.dataset.taskState==='saved',
+   null,{timeout:30000});
+  assert.ok(existsSync(published),'The user-chosen destination has no published MKV');
+  assert.notEqual(sha(published),oldHash,'Old user file was not atomically replaced');
+  assert.equal(exported.sha256,sha(published).slice(7),
+   'Native Bridge SHA-256 export receipt is not the published file bytes');
+  assert.equal(Number(exported.bytes),statSync(published).size,
+   'Native Bridge published byte count is incorrect');
   const receipt=await page.evaluate(()=>({
     kind:'wu12-production-main-to-windows-native-v1',
     productionMainLoaded:true,sourceRecoveredFromNative:true,
@@ -173,6 +254,8 @@ let browser;
     assText:wu12Proof.assText,
     browserBudgetMeasurementId:wu12Proof.budget?.measurementId,
     browserBudget:wu12Proof.budget,
+    nativeExport:wu12Proof.exportResult,
+    browserSaveClicked:true,
     displayedTaskState:document.querySelector('#mediaWorkspace')?.dataset.taskState
   }));
   receipt.sourceKey=sourceSha;
@@ -188,13 +271,19 @@ let browser;
   assert.equal(receipt.task.bitrate,formal.plan.targetVideoBitrate,
     'Production main.js must compile the same budget as the independent native fixture');
   assert.equal(receipt.task.nativeVbrCertificate,undefined);
-  assert.equal(receipt.displayedTaskState,'verified');
+  assert.equal(receipt.displayedTaskState,'saved');
+  assert.equal(receipt.nativeExport?.ok,true);
+  assert.equal(receipt.nativeExport?.jobId,receipt.jobId);
+  assert.equal(receipt.browserSaveClicked,true);
+  assert.equal(receipt.nativeExport?.sha256,sha(published).slice(7));
   assert.deepEqual(pageErrors,[],'Actual production app page errors');
   writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
   console.log(JSON.stringify({kind:receipt.kind,result:'PASS',
     sourceSha256:sourceSha,jobId:receipt.jobId,
     budgetMeasurementId:receipt.browserBudgetMeasurementId,
     formalBitrate:receipt.task.bitrate,sourceImported:true,
-    fullMainJs:true,realNativeEncode:true,realNativePreview:true}));
+    fullMainJs:true,realNativeEncode:true,realNativePreview:true,
+    savedByVisibleV3:true,exportedSha256:exported.sha256,
+    replacedExistingDestinationAtomically:true}));
  }finally{await browser?.close();vite.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1});

@@ -22,7 +22,15 @@ if(fullProductionApp){
   assert.equal(receipt.sourceRecoveredFromNative,true);
   assert.equal(receipt.fullAppSourceImportClicked,true);
   assert.equal(receipt.preflightAndNativePreviewCompleted,true);
-  assert.equal(receipt.displayedTaskState,'verified');
+  assert.equal(receipt.displayedTaskState,'saved');
+  assert.equal(receipt.browserSaveClicked,true);
+  assert.equal(receipt.nativeExport?.ok,true);
+  assert.equal(receipt.nativeExport?.jobId,receipt.jobId);
+  assert.equal(receipt.nativeExport?.sha256,sha(readFileSync(output)),
+    'A saved output must match the Bridge SHA-256 publication receipt exactly');
+  assert.equal(Number(receipt.nativeExport?.bytes),statSync(output).size);
+  assert.equal(receipt.nativeExport?.path,output,
+    'The independently audited artifact must be the actual saved file, not staging');
   assert.equal(receipt.sourceImport?.sourceBound,true);
   assert.equal(receipt.sourceImport?.fontCount,1);
   assert.equal(receipt.request?.task?.version,4);
@@ -135,6 +143,8 @@ console.log(JSON.stringify({
  fullSourceBudgetMeasurementId:receipt.browserBudgetMeasurementId,
  videoBitrate:task.bitrate,actualOutputBytes:statSync(output).size,
  flacBitExactPackets:flacSrc.length,aacReencodedPackets:aacDst.length,
- actualAssPixelDifference:true,strictSizeCeilingVerified:false,
+ actualAssPixelDifference:true,savedByProductionV3:fullProductionApp,
+ exportedSha256:fullProductionApp?receipt.nativeExport.sha256:null,
+ strictSizeCeilingVerified:false,
  longMovieQualityVerified:false,physicalUserDeviceVerified:false
 }));

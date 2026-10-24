@@ -3,6 +3,11 @@ $ErrorActionPreference='Stop'
 $work=Join-Path $env:RUNNER_TEMP ('wu02-embedded-'+[guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $work -Force)
 $source=Join-Path $work 'source.mkv'
+# Only this isolated GitHub Actions temporary directory can be chosen as the
+# simulated user's dialog destination. The actual production API never accepts
+# a browser-provided path and still uses a real Windows SaveFileDialog.
+$exportDirectory=Join-Path $work 'verified-delivery'
+[void](New-Item -ItemType Directory -Path $exportDirectory -Force)
 $port=9361
 $root="http://127.0.0.1:$port"
 $headers=@{'X-Quick-Hardsub-Token'='wu02-ci-token';Origin=$root}
@@ -12,7 +17,7 @@ try {
   if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $source)){throw 'Rich MKV fixture missing'}
   $outlog=Join-Path $work 'bridge-stdout.log'
   $errlog=Join-Path $work 'bridge-stderr.log'
-  $bridge=Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $outlog -RedirectStandardError $errlog -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path './windows/native-bridge.ps1'),'-NoBrowser','-Port',[string]$port,'-Token','wu02-ci-token','-InitialVideo',$source)
+  $bridge=Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $outlog -RedirectStandardError $errlog -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path './windows/native-bridge.ps1'),'-NoBrowser','-Port',[string]$port,'-Token','wu02-ci-token','-InitialVideo',$source,'-CiSaveDirectory',$exportDirectory)
   $ready=$false
   for($i=0;$i -lt 65;$i++){
     Start-Sleep -Milliseconds 300
@@ -22,6 +27,13 @@ try {
     }catch{}
   }
   if(-not $ready){throw 'Native Bridge failed to start'}
+  # Query the authenticated live Bridge, NOT redirected PowerShell stdout:
+  # the process may buffer console logging while the HTTP server is healthy.
+  # The Bridge reports only the restricted CI mode boolean, never the path.
+  if($health.backend -ne 'windows-native' -or
+     $health.ciSaveChooserActive -ne $true){
+    throw 'WU13 CI preauthorized save chooser is not active on the live Native Bridge'
+  }
   $probe=Invoke-RestMethod -Method Post -Uri "$root/api/probe" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 45
   if(-not $probe.ok -or $probe.subtitleTracks -ne 1 -or $probe.attachmentTracks -ne 1){
     throw 'Source ASS or font attachment missing from actual probe'
@@ -148,9 +160,14 @@ try {
   # preflight + libass preview, then use the Manual audio UI to submit a formal
   # mixed-audio hardsub job. Its *own* jobId leads to an independent audit.
   $productionReceiptPath=Join-Path $work 'wu12-production-main-native-receipt.json'
-  & node './scripts/check-wu12-production-main-native.cjs' $source $wu11PlanPath $productionReceiptPath
+  & node './scripts/check-wu12-production-main-native.cjs' $source $wu11PlanPath $productionReceiptPath $exportDirectory
   if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $productionReceiptPath)){
-    throw 'WU12 shipping main.js real Windows Native source-import/preview/encode acceptance failed'
+    # The Node oracle sees browser state; the Native Bridge stdout independently
+    # establishes whether the export endpoint was reached or blocked at the dialog.
+    Write-Host 'WU13 Native Bridge last requests (no auth headers):'
+    Get-Content -LiteralPath $outlog -Tail 35 -ErrorAction SilentlyContinue | Write-Host
+    Get-Content -LiteralPath $errlog -Tail 15 -ErrorAction SilentlyContinue | Write-Host
+    throw 'WU12/WU13 shipping V3 Native source/import/preview/encode/save acceptance failed'
   }
   $productionReceipt=Get-Content -Raw -LiteralPath $productionReceiptPath | ConvertFrom-Json
   if($productionReceipt.kind -ne 'wu12-production-main-to-windows-native-v1' -or
@@ -164,8 +181,34 @@ try {
   if($productionStage.Count -ne 1){throw 'WU12 shipping main.js job-specific Native stage missing'}
   $productionOutput=Join-Path $productionStage[0].FullName 'output.mkv'
   if(-not(Test-Path -LiteralPath $productionOutput)){throw 'WU12 production main.js output.mkv missing'}
-  & node './scripts/verify-wu11-browser-native-output.mjs' $source $productionOutput $productionReceiptPath $importPath $wu11PlanPath $work
-  if($LASTEXITCODE -ne 0){throw 'WU12 full production main.js independent packet/pixel audit failed'}
+  # WU13: the browser actually used shipping V3's Save button; verify the
+  # file published in the preauthorized CI "user directory" is the original
+  # verified staging bytes, and run the independent stream/pixel oracle on
+  # the DELIVERED file, not only on hidden private staging.
+  if(-not $productionReceipt.browserSaveClicked -or
+     $productionReceipt.displayedTaskState -ne 'saved' -or
+     -not $productionReceipt.nativeExport.ok -or
+     $productionReceipt.nativeExport.jobId -ne $productionReceipt.jobId){
+    throw 'WU13 shipping V3 save did not complete for the same Native job'
+  }
+  $published=Join-Path $exportDirectory ([IO.Path]::GetFileName([string]$productionReceipt.request.suggestedName))
+  if([IO.Path]::GetFullPath([string]$productionReceipt.nativeExport.path) -ne [IO.Path]::GetFullPath($published)){
+    throw 'WU13 Native export returned an unexpected destination outside the user-choice scope'
+  }
+  if(-not(Test-Path -LiteralPath $published -PathType Leaf)){throw 'WU13 final saved MKV missing'}
+  $stageHash=(Get-FileHash -LiteralPath $productionOutput -Algorithm SHA256).Hash.ToLowerInvariant()
+  $savedHash=(Get-FileHash -LiteralPath $published -Algorithm SHA256).Hash.ToLowerInvariant()
+  if($stageHash -ne $savedHash -or
+     $savedHash -ne [string]$productionReceipt.nativeExport.sha256 -or
+     (Get-Item -LiteralPath $published).Length -ne [long]$productionReceipt.nativeExport.bytes){
+    throw 'WU13 saved bytes, staged FFmpeg output and Native signed-by-content receipt differ'
+  }
+  if(@(Get-ChildItem -LiteralPath $exportDirectory -File).Count -ne 1){
+    throw 'WU13 export directory contains leftover backup/temp files'
+  }
+  & node './scripts/verify-wu11-browser-native-output.mjs' $source $published $productionReceiptPath $importPath $wu11PlanPath $work
+  if($LASTEXITCODE -ne 0){throw 'WU13 published main.js output failed independent packet/pixel audit'}
+  Write-Host 'WU13 PRODUCTION V3 SAVE VERIFIED PASS: original Native job, visible save click, replaced prior destination, stage/delivered SHA-256 equality and independently audited saved MKV.'
   Write-Host 'WU12 FULL PRODUCTION MAIN.JS WINDOWS NATIVE PASS: recovered MKV, UI import ASS/fonts, actual Native preview, source-budgeted Manual mixed-audio job, same job packet identity and ASS pixels.'
   & node './scripts/build-wu02-native-task.mjs' $probePath $requestPath $sourceKey
   if($LASTEXITCODE -ne 0){throw 'Formal shared task compiler failed'}

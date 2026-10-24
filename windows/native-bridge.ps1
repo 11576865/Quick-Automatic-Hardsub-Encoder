@@ -2,7 +2,8 @@
     [int]$Port = 8766,
     [switch]$NoBrowser,
     [string]$Token = '',
-    [string]$InitialVideo = ''
+    [string]$InitialVideo = '',
+    [string]$CiSaveDirectory = ''
 )
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -34,6 +35,29 @@ $script:AllowedOrigin = 'https://11576865.github.io'
 $script:Token = if($Token){$Token}else{[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Minimum 0 -Maximum 256 })) -replace '[^A-Za-z0-9]', ''}
 $script:Selections = @{ video=@(); ass=@(); fonts=@() }
 $script:EmbeddedAssImport=$null
+# CI-only export destination acts as a pre-authorized *test dialog choice*.
+# Production has NO HTTP file-path argument: users must use SaveFileDialog.
+# Require the GitHub-hosted runner's own temporary subtree, never arbitrary
+# paths or an untrusted page-provided destination.
+# Script parameters themselves live in the script scope. Assigning
+# $script:CiSaveDirectory='' before reading the same-named $CiSaveDirectory
+# parameter silently erased the CI launch argument and opened a modal Windows
+# SaveFileDialog on headless runners. Preserve the input under a distinct name.
+$requestedCiSaveDirectory=[string]$CiSaveDirectory
+$script:CiSaveDirectory=''
+if($requestedCiSaveDirectory){
+    if($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP){
+        throw 'CI save directory requires a GitHub Actions runner.'
+    }
+    $runnerRoot=[IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd([char]92,[char]47)+[IO.Path]::DirectorySeparatorChar
+    $saveRoot=[IO.Path]::GetFullPath($requestedCiSaveDirectory).TrimEnd([char]92,[char]47)
+    if(-not $saveRoot.StartsWith($runnerRoot,[StringComparison]::OrdinalIgnoreCase) -or
+       -not (Test-Path -LiteralPath $saveRoot -PathType Container)){
+        throw 'CI save directory must be an existing directory below RUNNER_TEMP.'
+    }
+    $script:CiSaveDirectory=$saveRoot
+    Write-BridgeLog 'CI-only preauthorized save chooser enabled (restricted RUNNER_TEMP).'
+}
 if($InitialVideo){
     if(-not (Test-Path -LiteralPath $InitialVideo -PathType Leaf)){throw 'InitialVideo does not exist.'}
     $script:Selections.video=@((Resolve-Path -LiteralPath $InitialVideo).Path)
@@ -490,6 +514,16 @@ function Show-NativeOpenFileDialog([string]$Filter, [bool]$Multiselect = $false)
 
 
 function Show-NativeSaveFileDialog([string]$Filter, [string]$DefaultExt, [string]$FileName) {
+    if($script:CiSaveDirectory){
+        # Only CI's explicit launch-time authorization can reach here.
+        # Never turn this into an API that accepts arbitrary browser paths.
+        $safe=[IO.Path]::GetFileName($FileName)
+        if(-not $safe -or $safe -ne $FileName -or
+           [IO.Path]::GetExtension($safe).ToLowerInvariant() -ne ('.'+$DefaultExt).ToLowerInvariant()){
+            throw 'CI export requires an ordinary, correctly extended output filename.'
+        }
+        return (Join-Path $script:CiSaveDirectory $safe)
+    }
     # The Bridge runs hidden. An unowned SaveFileDialog can be placed behind the
     # browser or off-screen after the first modal dialog, leaving the HTTP
     # request blocked and making a later export look frozen. Give every save
@@ -609,6 +643,9 @@ function Get-BackendInfo {
         available=$available
         backend='windows-native'
         platform='windows'
+        # Diagnostic capability only: no save path is exposed or accepted over HTTP.
+        # Enabled only for a runner with a restricted, preauthorized CI save root.
+        ciSaveChooserActive=[bool]($env:GITHUB_ACTIONS -eq 'true' -and $script:CiSaveDirectory)
         cpu=if($script:Capabilities){$script:Capabilities.Cpu}else{$env:PROCESSOR_IDENTIFIER}
         gpus=[object[]]$gpuList
         ffmpeg=$script:Ffmpeg
@@ -2285,23 +2322,30 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
     $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
     try{
+        # Every job, including non-strict Manual/CRF, must publish only
+        # byte-identical contents of the verified staged output. The strict
+        # path additionally matches its earlier ceiling-approval SHA.
+        $approved=Get-GuidedContainerFingerprint $j.Output
+        if([long]$approved.Length -ne [long]$status.outputBytes){
+            throw 'Staged container bytes changed since completed-job verification.'
+        }
+        if($j.StrictBudget -and $approved.Hash -ne $j.StrictVerifiedHash){
+            throw 'Strict staged content changed after budget approval.'
+        }
         Copy-Item -LiteralPath $j.Output -Destination $temp -Force
-        if($j.StrictBudget){
-            # The private job can change while the copy is being made.
-            # Re-check source and copied container bytes before publish.
-            $status=Get-JobStatus $JobId
-            if($status.state -ne 'completed'){throw 'Strict staged output changed during export copy.'}
-            $copiedBytes=[long](Get-Item -LiteralPath $temp).Length
-            if($copiedBytes -le 0 -or $copiedBytes -gt [long]$j.BudgetCeiling -or
-                $copiedBytes -ne [long]$status.outputBytes){
-                throw 'Strict copied container bytes exceed ceiling or differ from verified staged output.'
-            }
-            # Match the approved bytes, not just their length.
-            $copiedFingerprint=Get-GuidedContainerFingerprint $temp
-            if($copiedFingerprint.Length -ne $copiedBytes -or
-                $copiedFingerprint.Hash -ne $j.StrictVerifiedHash){
-                throw 'Strict copied container fingerprint differs from verified staged output.'
-            }
+        $status=Get-JobStatus $JobId
+        if($status.state -ne 'completed'){throw 'Staged output changed during export copy.'}
+        $after=Get-GuidedContainerFingerprint $j.Output
+        $copied=Get-GuidedContainerFingerprint $temp
+        if($after.Length -ne $approved.Length -or $after.Hash -ne $approved.Hash -or
+           $copied.Length -ne $approved.Length -or $copied.Hash -ne $approved.Hash -or
+           [long]$status.outputBytes -ne [long]$copied.Length){
+            throw 'Export copy differs from the verified staged container.'
+        }
+        if($j.StrictBudget -and
+           ($copied.Length -gt [long]$j.BudgetCeiling -or
+            $copied.Hash -ne $j.StrictVerifiedHash)){
+            throw 'Strict export bytes or fingerprint no longer match budget approval.'
         }
         Publish-VerifiedOutput $temp $dest
     }finally{
@@ -2309,7 +2353,7 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
             Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
         }
     }
-    return [pscustomobject]@{ok=$true;jobId=$JobId;bytes=(Get-Item -LiteralPath $dest).Length;path=$dest}
+    return [pscustomobject]@{ok=$true;jobId=$JobId;bytes=(Get-Item -LiteralPath $dest).Length;sha256=$approved.Hash.ToLowerInvariant();path=$dest}
 }
 
 function Export-Sample([string]$SampleId,[string]$SuggestedName) {
