@@ -27,13 +27,12 @@ try {
     }catch{}
   }
   if(-not $ready){throw 'Native Bridge failed to start'}
-  # WU13 must never block on a real hidden SaveFileDialog in CI. This is a
-  # preauthorized test-only destination, not a browser-chosen arbitrary path.
-  # If the startup flag did not reach the Bridge, reject the fixture early.
-  $startupLog=Get-Content -Raw -LiteralPath $outlog -ErrorAction SilentlyContinue
-  if(-not $startupLog -or
-     -not $startupLog.Contains('CI-only preauthorized save chooser enabled')){
-    throw 'WU13 CI preauthorized save chooser was not confirmed in Native Bridge startup log'
+  # Query the authenticated live Bridge, NOT redirected PowerShell stdout:
+  # the process may buffer console logging while the HTTP server is healthy.
+  # The Bridge reports only the restricted CI mode boolean, never the path.
+  if($health.backend -ne 'windows-native' -or
+     $health.ciSaveChooserActive -ne $true){
+    throw 'WU13 CI preauthorized save chooser is not active on the live Native Bridge'
   }
   $probe=Invoke-RestMethod -Method Post -Uri "$root/api/probe" -Headers $headers -ContentType 'application/json' -Body '{}' -TimeoutSec 45
   if(-not $probe.ok -or $probe.subtitleTracks -ne 1 -or $probe.attachmentTracks -ne 1){
