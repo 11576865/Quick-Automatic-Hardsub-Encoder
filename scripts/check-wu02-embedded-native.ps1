@@ -15,8 +15,21 @@ $bridge=$null
 try {
   & node './scripts/build-manual-rich-native-fixture.mjs' $work
   if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $source)){throw 'Rich MKV fixture missing'}
+  # The original B21 fixture copied the same MKV twice. That validated
+  # distinct jobs but could not expose reused probe dimensions, source stream
+  # ordinals or stale per-file transcoder plans. Use a *different real source*:
+  # video dimensions/duration and audio stream count differ on purpose.
+  $sourceBackup=Join-Path $work 'source-pristine-for-mutation.mkv'
+  Copy-Item -LiteralPath $source -Destination $sourceBackup
   $sourceSecond=Join-Path $work 'source-second.mkv'
-  Copy-Item -LiteralPath $source -Destination $sourceSecond
+  & ffmpeg -hide_banner -loglevel error -y -i $source -map '0:v:0' -map '0:a:0' -t 3.2 -vf 'scale=256:144' -c:v ffv1 -c:a flac $sourceSecond
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $sourceSecond)){
+    throw 'B21 independent second video/audio fixture could not be encoded'
+  }
+  if((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -eq
+     (Get-FileHash -LiteralPath $sourceSecond -Algorithm SHA256).Hash){
+    throw 'B21 alternate source must differ in actual bytes'
+  }
   $outlog=Join-Path $work 'bridge-stdout.log'
   $errlog=Join-Path $work 'bridge-stderr.log'
   $bridge=Start-Process powershell.exe -PassThru -WindowStyle Hidden -RedirectStandardOutput $outlog -RedirectStandardError $errlog -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Resolve-Path './windows/native-bridge.ps1'),'-NoBrowser','-Port',[string]$port,'-Token','wu02-ci-token','-InitialVideo',$source,'-CiSaveDirectory',$exportDirectory,'-CiBatchVideoSeedList',($source+'|'+$sourceSecond))
@@ -273,10 +286,11 @@ try {
   # ASS/font import owner before B21 changes the selected source. Restore the
   # exact CI fixture bytes and timestamp only AFTER proving rejection; this is
   # safe solely inside RUNNER_TEMP and matches the original batch grant stat.
-  Copy-Item -LiteralPath $sourceSecond -Destination $source -Force
+  Copy-Item -LiteralPath $sourceBackup -Destination $source -Force
   [IO.File]::SetLastWriteTimeUtc($source,$originalSourceUtc)
-  if((Get-Item -LiteralPath $source).Length -ne (Get-Item -LiteralPath $sourceSecond).Length){
-    throw 'WU02 fixture restoration did not recover original source bytes'
+  if((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne
+     (Get-FileHash -LiteralPath $sourceBackup -Algorithm SHA256).Hash){
+    throw 'WU02 fixture restoration did not recover original source SHA'
   }
   # B21 is an independent live user-level batch after WU13's one-saved-file
   # sentinel and verified-published-file gate. It uses a second Chromium page,
@@ -292,7 +306,20 @@ try {
      -not $b21Receipt.originalNativeTransport){
     throw 'B21 two-source saved-output receipt incomplete'
   }
-  Write-Host 'B21 REAL TWO-SOURCE NATIVE BATCH PASS: shipping V3 -> two source probes -> two FFmpeg jobs -> two saved MKV SHA receipts.'
+  Write-Host 'B21 REAL TWO-SOURCE NATIVE BATCH PASS: shipping V3 -> two divergent FFprobe sources -> two Stream Copy jobs -> two saved MKV SHA receipts.'
+  # The second real work unit is video+audio TRANSCODE, not another copy test.
+  # The CI picker grants are re-used only for these unchanged, authorized files.
+  $b21TranscodeReceipt=Join-Path $work 'b21-two-native-transcode-receipt.json'
+  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $b21TranscodeReceipt 'transcode'
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $b21TranscodeReceipt)){
+    throw 'B21 two-real-source H.264/AAC transcode and saved outputs acceptance failed'
+  }
+  $transcodeReceipt=Get-Content -Raw -LiteralPath $b21TranscodeReceipt|ConvertFrom-Json
+  if($transcodeReceipt.result -ne 'PASS' -or $transcodeReceipt.mode -ne 'transcode' -or
+     $transcodeReceipt.savedCount -ne 2 -or $transcodeReceipt.jobCount -ne 2){
+    throw 'B21 independent transcode receipt did not establish two verified exports'
+  }
+  Write-Host 'B21 REAL DIVERGENT-SOURCE TRANSCODE PASS: independent FFprobe, real libx264/AAC Native jobs and two published disk MKVs.'
 
 
 }finally{
