@@ -1,0 +1,39 @@
+{
+  "goal": "Expose all existing task queues from the main workbench",
+  "status": "REPAIR_COMMITTED_PENDING_EXACT_HEAD_CI",
+  "current_bounded_work_unit": "Queue hub for sources, recipes and clips, live owner status/count and safe navigation",
+  "authorization": {
+    "source": "R19 §14/§16 P5; R24 §19/§22; initial-version route D4",
+    "requirements": [
+      "B20",
+      "B21"
+    ],
+    "acceptance": "Top-level queue entry reaches all three real queue owners and shows current status without starting jobs",
+    "gap": "Old queue entry only opened same-source recipe matrix",
+    "priority": "Discoverability of implemented batch workflows before new codecs or cross-source ASS"
+  },
+  "completed_units": [
+    "PR135 merged main2fa29fa; complete visible Native encode/save acceptance passed",
+    "Queue hub implemented using existing owners",
+    "Local model tests435PASS12SKIP0FAIL",
+    "Exact-head models/FFmpeg/build and other browser scenarios passed; basic workflow failed clip visibility; diagnosed legacy !important selector outranking V3 editor and restored V3 region visibility without weakening assertions"
+  ],
+  "next_units": [
+    "Read exact-head frontend browser regression and repair concrete failure"
+  ],
+  "authorized_next_units": [
+    "Validate queue hub navigation and original-owner operations"
+  ],
+  "discovered_followups": [],
+  "branch": "feat/workbench-queue-hub-20261025",
+  "pr": 138,
+  "latest_durable_commit": "29d153968e079a6ef8720571b05881f4dd0537e4",
+  "external_validation_states": {
+    "browser": "Prior head FAILED run40110882733 at visible clip queue assertion line90; CSS specificity repair awaiting new exact-head CI",
+    "uigs_intake": "PENDING"
+  },
+  "blockers": [
+    "No local Chromium available; prior browser download invalid ZIP"
+  ],
+  "updated_at": "2026-10-25"
+}
