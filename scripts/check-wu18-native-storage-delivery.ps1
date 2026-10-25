@@ -24,24 +24,24 @@ try {
     # The real target volume must be queried using Win32 path-aware free-space
     # evidence; test separately a deterministic no-space report without
     # filling the actual runner's shared system volume.
-    $avail=[ulong]0;$total=[ulong]0;$free=[ulong]0
+    $avail=[UInt64]0;$total=[UInt64]0;$free=[UInt64]0
     if(-not [QheWinFileIdentity]::GetDiskFreeSpaceEx($work,
             [ref]$avail,[ref]$total,[ref]$free)){
         throw 'WU18 GetDiskFreeSpaceEx returned an error for the real target volume.'
     }
-    if($avail -le [ulong]0 -or $total -lt $avail){
+    if($avail -le [UInt64]0 -or $total -lt $avail){
         throw 'WU18 real free-space data is invalid.'
     }
     Assert-NativeOutputVolumeSpace $target ([long](Get-Item -LiteralPath $stage).Length)
     $refused=$false
-    try{Assert-NativeAvailableOutputSpace ([long]1048576) ([ulong]0)}
+    try{Assert-NativeAvailableOutputSpace ([long]1048576) ([UInt64]0)}
     catch{if($_.Exception.Message -match 'Insufficient output volume space'){$refused=$true}else{throw}}
     if(-not $refused){throw 'WU18 deterministic low-space preflight did not refuse.'}
     # This is a byte-count test, not a request to allocate 6 GB on the runner.
     $large=[long]6000000000
-    Assert-NativeAvailableOutputSpace $large ([ulong]6010000000)
+    Assert-NativeAvailableOutputSpace $large ([UInt64]6010000000)
     $refused=$false
-    try{Assert-NativeAvailableOutputSpace $large ([ulong]6000000000)}
+    try{Assert-NativeAvailableOutputSpace $large ([UInt64]6000000000)}
     catch{if($_.Exception.Message -match 'Insufficient output volume space'){$refused=$true}else{throw}}
     if(-not $refused){throw 'WU18 64-bit capacity calculation truncated.'}
 
