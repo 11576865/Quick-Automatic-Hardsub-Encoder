@@ -357,6 +357,24 @@ try {
   }
   Write-Host 'WU15 REAL NATIVE SOURCE GUARD PASS: rejected active and queued source destinations; both inputs intact; same-job save retry and second output passed.'
 
+  # WU16: compare real Win32 handle identity and junction parents, then run
+  # a genuine first-job export aimed at an NTFS hardlink to the source. Both
+  # source bytes and alias must survive. No web path-specified destination.
+  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File './scripts/check-wu16-native-path-identity.ps1'
+  if($LASTEXITCODE -ne 0){throw 'WU16 Windows file-identity and junction oracle failed'}
+  $wu16Receipt=Join-Path $work 'wu16-two-source-hardlink-guard.json'
+  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $wu16Receipt 'hardlink-input'
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $wu16Receipt)){
+    throw 'WU16 actual Chromium Native Save hardlink alias refusal/retry failed'
+  }
+  $proof=Get-Content -LiteralPath $wu16Receipt -Raw|ConvertFrom-Json
+  if($proof.result -ne 'PASS' -or $proof.protectedNtfHardlinkAlias -ne $true -or
+     $proof.jobCount -ne 2 -or $proof.savedCount -ne 2 -or $proof.saveAttempts -ne 4){
+    throw 'WU16 two original-source hardlink refusals and completed outputs not proven'
+  }
+  Write-Host 'WU16 REAL NATIVE HARDLINK GUARD PASS: current source/NTFS hardlink denied, original bytes intact, same-job save and next source succeeded.'
+
+
 
 
 

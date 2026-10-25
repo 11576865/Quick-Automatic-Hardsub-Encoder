@@ -17,17 +17,88 @@ function Publish-VerifiedOutput([string]$Temporary, [string]$Destination) {
 # of an already authorized INPUT or a private staged result. This is an
 # independent safeguard before atomic publishing (which alone cannot prevent
 # a successful-but-destructive overwrite of the source).
+
+# WU16: Windows file identity by open handle, not by spelling. NTFS hardlinks
+# share the same volume/file index despite different canonical pathname.
+# The C# type is loaded only once so this module remains safe to dot-source.
+if(-not ('QheWinFileIdentity' -as [type])){
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public static class QheWinFileIdentity {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct NATIVE_FILETIME {
+        public UInt32 Low;
+        public UInt32 High;
+    }
+    [StructLayout(LayoutKind.Sequential)]
+    public struct BY_HANDLE_FILE_INFORMATION {
+        public UInt32 Attributes;
+        public NATIVE_FILETIME Created;
+        public NATIVE_FILETIME Accessed;
+        public NATIVE_FILETIME Written;
+        public UInt32 Volume;
+        public UInt32 SizeHigh;
+        public UInt32 SizeLow;
+        public UInt32 LinkCount;
+        public UInt32 IndexHigh;
+        public UInt32 IndexLow;
+    }
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool GetFileInformationByHandle(
+        SafeFileHandle handle, out BY_HANDLE_FILE_INFORMATION info);
+}
+'@ -ErrorAction Stop
+}
+function Get-NativeExistingFileIdentity([string]$Path) {
+    # Failure is a refusal, not permission to overwrite an unverified target.
+    $share=[IO.FileShare]([int][IO.FileShare]::ReadWrite -bor [int][IO.FileShare]::Delete)
+    $stream=[IO.File]::Open($Path,[IO.FileMode]::Open,[IO.FileAccess]::Read,$share)
+    try {
+        $info=New-Object 'QheWinFileIdentity+BY_HANDLE_FILE_INFORMATION'
+        if(-not [QheWinFileIdentity]::GetFileInformationByHandle(
+            $stream.SafeFileHandle,[ref]$info)){
+            $winError=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+            throw ('Windows file identity could not be read (Win32 '+$winError+').')
+        }
+        return ('{0:X8}/{1:X8}/{2:X8}' -f
+            [uint32]$info.Volume,[uint32]$info.IndexHigh,[uint32]$info.IndexLow)
+    }finally{$stream.Dispose()}
+}
+function Assert-NativePublishParentDirectories([string]$AbsoluteDestination) {
+    $parent=[IO.Path]::GetDirectoryName($AbsoluteDestination)
+    while($parent){
+        # Folder junctions/symlinks also redirect paths, even when the file
+        # does not yet exist at the path the user sees in SaveFileDialog.
+        $attrs=[IO.File]::GetAttributes($parent)
+        if(($attrs -band [IO.FileAttributes]::ReparsePoint) -ne 0){
+            throw 'Native output parent directory is a junction/reparse point.'
+        }
+        $next=[IO.Path]::GetDirectoryName($parent.TrimEnd([char]92,[char]47))
+        if(-not $next -or [string]::Equals($next,$parent,
+                [StringComparison]::OrdinalIgnoreCase)){break}
+        $parent=$next
+    }
+}
 function Assert-NativePublishDestinationSafe([string]$Destination,[string[]]$ProtectedPaths) {
     if([string]::IsNullOrWhiteSpace($Destination) -or
        -not [IO.Path]::IsPathRooted($Destination)){
         throw 'Native output destination must be an absolute file path.'
     }
     $full=[IO.Path]::GetFullPath($Destination)
+    Assert-NativePublishParentDirectories $full
+    # Explicit pathname match protects even deleted/replaced inputs; file
+    # identity comparison below closes distinct-path NTFS hardlink aliases.
+    $protectedExisting=New-Object 'System.Collections.Generic.List[string]'
     foreach($protected in @($ProtectedPaths)){
         if([string]::IsNullOrWhiteSpace($protected)){continue}
         $other=[IO.Path]::GetFullPath($protected)
         if([string]::Equals($full,$other,[StringComparison]::OrdinalIgnoreCase)){
             throw 'Refusing to overwrite an authorized source or verified staged output.'
+        }
+        if(Test-Path -LiteralPath $other -PathType Leaf){
+            $protectedExisting.Add($other)
         }
     }
     # Reject existing link aliases that could redirect even a non-equal
@@ -38,6 +109,13 @@ function Assert-NativePublishDestinationSafe([string]$Destination,[string[]]$Pro
         if(([IO.FileAttributes]$existing.Attributes -band
             [IO.FileAttributes]::ReparsePoint) -ne 0){
             throw 'Output destination is a symbolic link/reparse point; choose a regular file.'
+        }
+        $destinationKey=Get-NativeExistingFileIdentity $full
+        foreach($protected in $protectedExisting){
+            if([string]::Equals($destinationKey,(Get-NativeExistingFileIdentity $protected),
+                    [StringComparison]::Ordinal)){
+                throw 'Refusing to overwrite an authorized source via an NTFS hardlink/file identity alias.'
+            }
         }
     }
     return $full

@@ -2417,7 +2417,7 @@ function Arm-CiExportFault([string]$Mode) {
           [StringComparison]::OrdinalIgnoreCase)){
         throw 'CI export fault is disabled outside the approved runner fixture.'
     }
-    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source')){
+    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source')){
         throw 'Unknown CI export fault mode.'
     }
     if($script:CiNextExportFault){throw 'CI export fault already armed.'}
@@ -2442,10 +2442,17 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     # The additional two modes do NOT accept a filename from any web request:
     # they intentionally aim at sources that were already selected through the
     # runner's trusted fixture, to prove the production overwrite guard.
-    if($script:CiNextExportFault -in @('overwrite-active-source','overwrite-batch-source')){
+    if($script:CiNextExportFault -in @('overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source')){
         $active=[string](Get-OriginalVideoPath)
         if($script:CiNextExportFault -eq 'overwrite-active-source'){
             $dest=$active
+        }elseif($script:CiNextExportFault -eq 'overwrite-hardlink-source'){
+            # A test creates this real NTFS hardlink to the current source in
+            # the preauthorized runner-only export directory. No web path.
+            $dest=Join-Path $script:CiSaveDirectory 'wu16-hardlink-active.mkv'
+            if(-not(Test-Path -LiteralPath $dest -PathType Leaf)){
+                throw 'CI NTFS hardlink fixture is missing.'
+            }
         }else{
             $other=@($script:BatchVideoSelections.Values |
                 Where-Object {$_.path -and -not [string]::Equals(
