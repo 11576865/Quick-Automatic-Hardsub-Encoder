@@ -2492,7 +2492,7 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
         # This preflight does not replace the final filesystem write checks.
         if($script:CiNextExportFault -eq 'disk-capacity-low'){
             $script:CiNextExportFault=''
-            Assert-NativeAvailableOutputSpace ([long]$approved.Length) ([ulong]0)
+            Assert-NativeAvailableOutputSpace ([long]$approved.Length) ([UInt64]0)
         }
         Assert-NativeOutputVolumeSpace $dest ([long]$approved.Length)
         Copy-Item -LiteralPath $j.Output -Destination $temp -Force
