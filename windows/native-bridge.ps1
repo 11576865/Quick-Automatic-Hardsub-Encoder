@@ -2417,7 +2417,7 @@ function Arm-CiExportFault([string]$Mode) {
           [StringComparison]::OrdinalIgnoreCase)){
         throw 'CI export fault is disabled outside the approved runner fixture.'
     }
-    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source','destination-swapped')){
+    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source','destination-swapped','disk-capacity-low')){
         throw 'Unknown CI export fault mode.'
     }
     if($script:CiNextExportFault){throw 'CI export fault already armed.'}
@@ -2488,6 +2488,13 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
         if($j.StrictBudget -and $approved.Hash -ne $j.StrictVerifiedHash){
             throw 'Strict staged content changed after budget approval.'
         }
+        # The same-volume temp copy must fit alongside the current user file.
+        # This preflight does not replace the final filesystem write checks.
+        if($script:CiNextExportFault -eq 'disk-capacity-low'){
+            $script:CiNextExportFault=''
+            Assert-NativeAvailableOutputSpace ([long]$approved.Length) ([UInt64]0)
+        }
+        Assert-NativeOutputVolumeSpace $dest ([long]$approved.Length)
         Copy-Item -LiteralPath $j.Output -Destination $temp -Force
         $status=Get-JobStatus $JobId
         if($status.state -ne 'completed'){throw 'Staged output changed during export copy.'}
@@ -2542,6 +2549,7 @@ function Export-Sample([string]$SampleId,[string]$SuggestedName) {
     $dest=Assert-NativePublishDestinationSafe $dest (Get-BridgeProtectedPublishPaths)
     $expectedDestinationSnapshot=Get-NativePublishDestinationSnapshot $dest
     $srcBefore=Get-GuidedContainerFingerprint $src
+    Assert-NativeOutputVolumeSpace $dest ([long]$srcBefore.Length)
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
     $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
     try{

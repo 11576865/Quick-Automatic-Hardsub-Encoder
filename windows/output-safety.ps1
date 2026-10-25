@@ -48,6 +48,9 @@ public static class QheWinFileIdentity {
     [DllImport("kernel32.dll", SetLastError=true)]
     public static extern bool GetFileInformationByHandle(
         SafeFileHandle handle, out BY_HANDLE_FILE_INFORMATION info);
+    [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
+    public static extern bool GetDiskFreeSpaceEx(
+        string path, out UInt64 available, out UInt64 total, out UInt64 free);
 }
 '@ -ErrorAction Stop
 }
@@ -107,6 +110,10 @@ function Assert-NativePublishDestinationSafe([string]$Destination,[string[]]$Pro
         $existing=Get-Item -LiteralPath $full -Force -ErrorAction Stop
         if($existing.PSIsContainer){throw 'Output destination is a directory.'}
         if(([IO.FileAttributes]$existing.Attributes -band
+            [IO.FileAttributes]::ReadOnly) -ne 0){
+            throw 'Output destination is read-only; original file is unchanged. Remove read-only or choose another name, then retry Save.'
+        }
+        if(([IO.FileAttributes]$existing.Attributes -band
             [IO.FileAttributes]::ReparsePoint) -ne 0){
             throw 'Output destination is a symbolic link/reparse point; choose a regular file.'
         }
@@ -127,6 +134,38 @@ function Assert-NativePublishDestinationSafe([string]$Destination,[string[]]$Pro
 # last check and Replace/Move with Delete sharing denied.
 # This is a bounded Windows defense; Windows filename replacement is not an
 # atomic compare-and-swap and it does not stop all hostile rename races.
+
+# WU18: check the volume containing the user-selected output folder, NOT the
+# (possibly other-volume) Bridge staging folder. Free-space preflight is an
+# early refusal only: it cannot reserve disk, eliminate later disk-full, or
+# guarantee writes under external contention. Copy/publish errors stay fatal.
+function Assert-NativeAvailableOutputSpace([long]$BytesToStage,[UInt64]$AvailableBytes) {
+    if($BytesToStage -le 0){throw 'Verified staged output size must be positive.'}
+    # Same-volume output must temporarily coexist with any old destination.
+    # Atomic replacement renames the old file; do not subtract old bytes.
+    $minimumReserve=[UInt64]8388608
+    $need=[UInt64]$BytesToStage+$minimumReserve
+    if($AvailableBytes -lt $need){
+        throw ('Insufficient output volume space: need at least '+$need+
+            ' free bytes for verified delivery, available '+$AvailableBytes+
+            '. Original output remains unchanged; choose another volume or free space, then retry Save without encoding.')
+    }
+}
+function Assert-NativeOutputVolumeSpace([string]$Destination,[long]$VerifiedStageBytes) {
+    if($VerifiedStageBytes -le 0){throw 'No verified encoded bytes available for export.'}
+    $folder=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Destination))
+    $available=[UInt64]0
+    $total=[UInt64]0
+    $free=[UInt64]0
+    if(-not [QheWinFileIdentity]::GetDiskFreeSpaceEx(
+        $folder,[ref]$available,[ref]$total,[ref]$free)){
+        $code=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        throw ('Unable to measure selected output volume free space (Win32 '+$code+
+            '); cannot safely preflight verified delivery.')
+    }
+    Assert-NativeAvailableOutputSpace $VerifiedStageBytes $available
+}
+
 function Get-NativePublishDestinationSnapshot([string]$Destination) {
     if(Test-Path -LiteralPath $Destination){
         return 'existing:'+(Get-NativeExistingFileIdentity $Destination)

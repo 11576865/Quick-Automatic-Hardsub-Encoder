@@ -391,6 +391,24 @@ try {
   }
   Write-Host 'WU17 REAL NATIVE DESTINATION IDENTITY PASS: external target substitution refused; same staged Job saved after retry; second source verified.'
 
+# WU18: actual target-volume free-space API and NTFS ACL/read-only tests
+# against the REAL WU17 publication owner, with old bytes and staging
+# remaining intact on denial. Hosted low-space is simulated; don't fill disk.
+& powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File './scripts/check-wu18-native-storage-delivery.ps1'
+if($LASTEXITCODE -ne 0){throw 'WU18 Windows destination volume capacity/ACL/readonly recovery oracle failed'}
+$wu18Receipt=Join-Path $work 'wu18-two-source-capacity-recovery.json'
+& node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $wu18Receipt 'capacity-recovery'
+if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $wu18Receipt)){
+    throw 'WU18 shipping Chromium low-capacity Save-only retry acceptance failed'
+}
+$wu18=Get-Content -Raw -LiteralPath $wu18Receipt|ConvertFrom-Json
+if($wu18.result -ne 'PASS' -or $wu18.rejectedInsufficientOutputCapacity -ne $true -or
+   $wu18.jobCount -ne 2 -or $wu18.savedCount -ne 2 -or $wu18.saveAttempts -ne 4){
+    throw 'WU18 output-capacity recovery lacked two actual jobs, four saves and disk evidence'
+}
+Write-Host 'WU18 REAL NATIVE STORAGE RECOVERY PASS: target volume preflight, low-space refusal with old bytes unchanged, same Job saved after retry, second source verified.'
+
+
 
 
 

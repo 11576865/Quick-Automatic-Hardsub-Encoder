@@ -8,11 +8,12 @@ const {join,resolve,basename}=require('node:path');
 const {createHash}=require('node:crypto');
 const {chromium}=require('playwright');
 const [first,second,exportDir,receiptPath,requestedMode='copy']=process.argv.slice(2);
-assert(first&&second&&exportDir&&receiptPath,'Usage: node check-b21-windows-native-batch.cjs source1 source2 exportDir receipt [copy|transcode|fault-recovery|protected-inputs|hardlink-input|destination-changed]');
+assert(first&&second&&exportDir&&receiptPath,'Usage: node check-b21-windows-native-batch.cjs source1 source2 exportDir receipt [copy|transcode|fault-recovery|protected-inputs|hardlink-input|destination-changed|capacity-recovery]');
 const protectedInputs=requestedMode==='protected-inputs';
 const hardlinkInputs=requestedMode==='hardlink-input';
 const destinationChanged=requestedMode==='destination-changed';
-const recovery=requestedMode==='fault-recovery'||protectedInputs||hardlinkInputs||destinationChanged;
+const capacityRecovery=requestedMode==='capacity-recovery';
+const recovery=requestedMode==='fault-recovery'||protectedInputs||hardlinkInputs||destinationChanged||capacityRecovery;
 const mode=recovery?'copy':requestedMode;
 assert.ok(['copy','transcode'].includes(mode),'Only explicit copy/transcode modes may be audited');
 assert.equal(process.env.GITHUB_ACTIONS,'true');
@@ -139,7 +140,7 @@ let browser;
     linkSync(first,hardlinkAlias);
     assert.equal(fileHash(hardlinkAlias),firstHash,'Hardlink fixture does not alias original bytes');
    }
-   await armRunnerExportFault(destinationChanged?'destination-swapped':hardlinkInputs?'overwrite-hardlink-source':protectedInputs?'overwrite-batch-source':'publish-denied');
+   await armRunnerExportFault(capacityRecovery?'disk-capacity-low':destinationChanged?'destination-swapped':hardlinkInputs?'overwrite-hardlink-source':protectedInputs?'overwrite-batch-source':'publish-denied');
    await page.locator('[data-browser-batch-action="retry-save"]').click();
    await page.waitForFunction(()=>b21Proof.exports.length===2 &&
        document.querySelectorAll('[data-browser-batch-action="retry-save"]').length===1,
@@ -147,7 +148,7 @@ let browser;
    stage=await page.evaluate(()=>b21Proof);
    assert.equal(stage.starts.length,1,'Failed retry must reuse completed job');
    assert.equal(stage.exports[1].ok,false);
-   assert.match(stage.exports[1].error||'',destinationChanged?/destination changed since Save selection/i:hardlinkInputs?/NTFS hardlink\/file identity alias/i:protectedInputs?/Refusing to overwrite an authorized source/i:/publish denied/i);
+   assert.match(stage.exports[1].error||'',capacityRecovery?/Insufficient output volume space/i:destinationChanged?/destination changed since Save selection/i:hardlinkInputs?/NTFS hardlink\/file identity alias/i:protectedInputs?/Refusing to overwrite an authorized source/i:/publish denied/i);
    assert.equal(stage.exports[1].jobId,stage.starts[0].jobId);
    if(protectedInputs||hardlinkInputs){
     assert.equal(fileHash(first),firstHash,'Current source changed after denied export');
@@ -271,6 +272,7 @@ let browser;
    protectedActiveAndQueuedSourceFiles:protectedInputs,
    protectedNtfHardlinkAlias:hardlinkInputs,
    rejectedChangedDestination:destinationChanged,
+   rejectedInsufficientOutputCapacity:capacityRecovery,
    activations:proof.activations,artifacts:published,
    strictSizeVerified:false,longMovieVerified:false,physicalDeviceVerified:false};
   writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
