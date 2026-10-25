@@ -1,0 +1,29 @@
+name: Windows WU20 real over-4GiB Native delivery acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'windows/output-safety.ps1'
+      - 'scripts/check-wu20-native-over4gib-publish.ps1'
+      - '.github/workflows/windows-wu20-over4gib.yml'
+  workflow_dispatch:
+jobs:
+  native-over4gib:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse actual Windows PowerShell 5.1 source
+        shell: powershell
+        run: |
+          foreach($file in @('windows/output-safety.ps1','scripts/check-wu20-native-over4gib-publish.ps1')){
+            $tokens=$null;$errors=$null
+            [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors)
+            if($errors.Count){$errors|Format-List;throw "Invalid Windows PowerShell source: $file"}
+          }
+      - name: Verify physically copied over-4GiB bytes and 32-bit failure boundary
+        shell: powershell
+        run: |
+          # The test fails if real destination free space is insufficient.
+          # Never replace genuine whole-file I/O proof with a skip or mock.
+          ./scripts/check-wu20-native-over4gib-publish.ps1
