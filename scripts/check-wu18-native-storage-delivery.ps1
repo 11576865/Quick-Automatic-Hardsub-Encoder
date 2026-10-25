@@ -61,7 +61,7 @@ try {
     # Genuine Windows NTFS ACL denial on DELETE for the target (File.Replace
     # needs DELETE permission). Revoked in finally even if assertion fails.
     $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
-    $denyRule=New-Object System.Security.AccessControl.FileSystemAccessRule(
+    $denyRule=[Security.AccessControl.FileSystemAccessRule]::new(
         $sid,[Security.AccessControl.FileSystemRights]::Delete,
         [Security.AccessControl.AccessControlType]::Deny)
     $aclTarget=$target
