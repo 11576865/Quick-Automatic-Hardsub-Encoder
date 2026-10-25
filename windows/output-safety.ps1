@@ -203,3 +203,59 @@ function Publish-NativeProtectedOutput(
         foreach($lease in $leases){$lease.Dispose()}
     }
 }
+
+
+# WU19: bounded-memory streaming copy for large Native deliveries. The stage
+# remains an immutable encoded asset until post-copy SHA/length verification
+# in the existing Export-Job/Export-Sample flow. This is NOT a resumable copy:
+# after an IO error the caller deletes the partial destination-side temp
+# and retries using the same completed Native job.
+function Copy-NativeStageToOutputTemporary(
+    [string]$Source,[string]$Temporary,[long]$ExpectedBytes,
+    [long]$CiFailAfterBytes=-1) {
+    if($ExpectedBytes -le 0){throw 'Native verified output must be non-empty.'}
+    if($CiFailAfterBytes -ge 0 -and
+       ($env:GITHUB_ACTIONS -ne 'true' -or -not $env:RUNNER_TEMP)){
+        throw 'Native partial-write fault is disabled outside GitHub CI.'
+    }
+    # 1MiB fixed working set regardless of the full movie length. CreateNew
+    # prevents overwriting a colliding tmp path (even on a path race).
+    $buffer=New-Object byte[] 1048576
+    $input=$null
+    $output=$null
+    $written=[long]0
+    try{
+        $input=[IO.FileStream]::new($Source,[IO.FileMode]::Open,
+            [IO.FileAccess]::Read,[IO.FileShare]::Read,1048576,
+            [IO.FileOptions]::SequentialScan)
+        if([long]$input.Length -ne $ExpectedBytes){
+            throw 'Verified stage length changed before export stream opened.'
+        }
+        $output=[IO.FileStream]::new($Temporary,[IO.FileMode]::CreateNew,
+            [IO.FileAccess]::Write,[IO.FileShare]::None,1048576,
+            [IO.FileOptions]::SequentialScan)
+        while($true){
+            $n=$input.Read($buffer,0,$buffer.Length)
+            if($n -eq 0){break}
+            $output.Write($buffer,0,$n)
+            $written+=[long]$n
+            if($written -gt $ExpectedBytes){
+                throw 'Native source grew while copying to output volume.'
+            }
+            # The only testing seam. Inject after genuine partial bytes are
+            # written into the destination's real temporary file.
+            if($CiFailAfterBytes -ge 0 -and $written -ge $CiFailAfterBytes){
+                $output.Flush($true)
+                throw 'CI-only partial destination write failed after actual bytes were written.'
+            }
+        }
+        if($written -ne $ExpectedBytes){
+            throw 'Native source ended early during output copy.'
+        }
+        $output.Flush($true)
+        return $written
+    }finally{
+        if($output){$output.Dispose()}
+        if($input){$input.Dispose()}
+    }
+}

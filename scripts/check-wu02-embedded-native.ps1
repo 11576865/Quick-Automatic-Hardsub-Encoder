@@ -408,6 +408,25 @@ if($wu18.result -ne 'PASS' -or $wu18.rejectedInsufficientOutputCapacity -ne $tru
 }
 Write-Host 'WU18 REAL NATIVE STORAGE RECOVERY PASS: target volume preflight, low-space refusal with old bytes unchanged, same Job saved after retry, second source verified.'
 
+  # WU19: actually stream 96 MiB through the production copy primitive and
+  # fail after 5 MiB on disk. Verify partial-temp cleanup, original output
+  # preservation and exact SHA after same-stage retry. Detect distinct Windows
+  # VOLUME serials before making any cross-volume claim.
+  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File './scripts/check-wu19-native-streaming-delivery.ps1'
+  if($LASTEXITCODE -ne 0){throw 'WU19 actual 96MiB Native copy / partial disk write / cross-volume oracle failed'}
+  $wu19Receipt=Join-Path $work 'wu19-two-source-partial-write-recovery.json'
+  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $wu19Receipt 'partial-write-recovery'
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $wu19Receipt)){
+      throw 'WU19 shipping Chromium Native partially written output cleanup and retry failed'
+  }
+  $wu19=Get-Content -Raw -LiteralPath $wu19Receipt|ConvertFrom-Json
+  if($wu19.result -ne 'PASS' -or $wu19.rejectedMidCopyPartialWrite -ne $true -or
+     $wu19.jobCount -ne 2 -or $wu19.savedCount -ne 2 -or $wu19.saveAttempts -ne 4){
+      throw 'WU19 real copy failure and second-source delivery provenance is incomplete'
+  }
+  Write-Host 'WU19 REAL NATIVE PARTIAL-COPY RECOVERY PASS: partial destination write failed, no orphan bytes, old output unchanged, same Job published, second source saved.'
+
+
 
 
 
