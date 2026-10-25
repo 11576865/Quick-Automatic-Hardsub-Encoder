@@ -1,6 +1,6 @@
 {
   "goal": "Retain same-job Native saved artifact receipt in product UI and exported report",
-  "status": "IMPLEMENTED_PENDING_NATIVE_BROWSER_VALIDATION",
+  "status": "TEST_SETUP_REPAIR_PENDING_EXACT_HEAD_CI",
   "current_bounded_work_unit": "Normalize Native save receipt, preserve across audit refresh, display and export",
   "authorization": {
     "source": "R19 §03/P1 A08; R24 §05/§20; route D1/D4",
@@ -19,7 +19,8 @@
     "Same-job receipt capture and report refresh preservation",
     "Artifact evidence projection added",
     "Windows real save UI/downloaded-report assertions added",
-    "Local model440PASS12SKIP0FAIL"
+    "Local model440PASS12SKIP0FAIL",
+    "Windows real saved artifact UI and exported report receipt verified on5b0726b; frontend fixture needed explicit audio/subtitle trim range before adding clip"
   ],
   "next_units": [
     "Read exact-head Windows WU02 and frontend results"
@@ -29,13 +30,14 @@
   ],
   "discovered_followups": [],
   "branch": "feat/saved-artifact-receipt-20261025",
-  "pr": null,
-  "latest_durable_commit": "a7e31cb296d23a5160f48228853da677d7a437e0",
+  "pr": 144,
+  "latest_durable_commit": "5b0726b529f1cfc16f66c4731f12f66fe5f4d8cb",
   "external_validation_states": {
-    "windows": "PENDING",
-    "frontend": "PENDING",
+    "windows": "Exact5b0726b Windows WU02 40191012148 SUCCESS; real displayed and downloaded saved receipt passed",
+    "frontend": "40191012156 FAILED at #taskExportClips disabled; test inherited full audio range; explicit trim setup repair pending",
+    "uigs": "40191012168 SUCCESS on prior head",
     "uigs_intake": "PENDING"
   },
   "blockers": [],
-  "updated_at": "2026-10-25"
+  "updated_at": "2026-10-26"
 }

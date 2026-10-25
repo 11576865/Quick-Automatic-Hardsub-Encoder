@@ -7,3 +7,8 @@
 测试先写：同 Job 副本保存及失败/错 Job/缺失/无效字节/哈希/浏览器下载拒绝；stub 返回 null 时正例失败，随后通过。全套模型 452 项：440 PASS、12 SKIP、0 FAIL。新 Windows production main.js 检查保留既有保存 SHA/音轨/ASS 像素断言，并检查成品界面的真实路径/哈希和实际下载 JSON 的 deliveryReceipt。该新 Native 验收 Pending，不提前宣称通过。
 
 限制：只是 Native 后端报告的保存回执，非保存后任意时间的持续完整性监控；不验证外部播放器、真实设备或整部影片。B02/B17/B20/B24 未整体关闭。UIGS Intake Pending。
+
+## 2026-10-26 验收与测试准备修复
+精确5b0726b：Windows WU02 40191012148、Windows smoke40191012139及其他8项验收SUCCESS；真实保存界面与下载报告JSON验证已通过。前端40191012156/job121161832433仅新增片段场景在第277行等待disabled的taskExportClips超时。
+
+测试继承之前验证独立时轴时留下的audioRange=full。validateQueuedCopySettings明确拒绝批量片段携带完整音频，因此点击加入未产生队列项，导出正确禁用。修复仅通过可见控件设置audioRange/subtitleRange=trim，并在导出前断言队列确有1项，失败时输出原状态原因。不改产品门禁，不删回执或可见性断言。新提交CI Pending；推送后不轮询下一代。
