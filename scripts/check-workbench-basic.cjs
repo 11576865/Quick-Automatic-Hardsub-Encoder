@@ -21,11 +21,34 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
    const file=new File(['fixture'],'source.mkv',{lastModified:1}),media={duration:2,width:320,height:180,fps:24,videoCodec:'h264',formatName:'matroska',videoTracks:1,videoStreams:[{ordinal:0,index:0,width:320,height:180,codec:'h264',pixelFormat:'yuv420p',bitDepth:8}],audioTracks:2,audioCodecs:['flac','aac'],audioStreams:[{ordinal:0,index:1,codec:'flac',channels:2,language:'jpn'},{ordinal:1,index:2,codec:'aac',channels:2,language:'eng'}],subtitleTracks:2,subtitleStreams:[{index:7,codec_name:'ass',tags:{language:'jpn'}},{index:8,codec_name:'subrip',tags:{language:'eng'}}],attachmentTracks:2,attachmentStreams:[{index:9,codec_name:'ttf',tags:{filename:'font.ttf'}},{index:10,codec_name:'otf',tags:{filename:'extra.otf'}}]};
    state.file=file;state.media=media;
    document.querySelector('#analyze').onclick=()=>state.probes++;
-   mountMediaWorkspace({measureBudget:()=>new Promise((resolve,reject)=>{state.finishBudget=resolve;state.failBudget=reject}),busy:()=>state.busy,setBusy:v=>{state.busy=v;document.querySelector('#analyze').disabled=v;document.querySelector('#video').disabled=v},isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.file.name,sourceName:()=>state.file.name,mediaSnapshot:()=>state.media,prepare:async()=>state.media,validate:async()=>{},log:()=>{},cancel:()=>state.reject?.(Error('已取消')),save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true,kind:'browser-download'}},run:async task=>{state.tasks.push(task);if(state.defer)return new Promise((resolve,reject)=>state.reject=reject);return {outputBytes:1000,verified:true,name:'output.mkv'}}});
+   mountMediaWorkspace({supportsBrowserSourceBatch:()=>true,activateBrowserBatchSource:async file=>{state.file=file;return file},measureBudget:()=>new Promise((resolve,reject)=>{state.finishBudget=resolve;state.failBudget=reject}),busy:()=>state.busy,setBusy:v=>{state.busy=v;document.querySelector('#analyze').disabled=v;document.querySelector('#video').disabled=v},isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.file.name,sourceName:()=>state.file.name,mediaSnapshot:()=>state.media,prepare:async()=>state.media,validate:async()=>{},log:()=>{},cancel:()=>state.reject?.(Error('已取消')),save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true,kind:'browser-download'}},run:async task=>{state.tasks.push(task);if(state.defer)return new Promise((resolve,reject)=>state.reject=reject);return {outputBytes:1000,verified:true,name:'output.mkv'}}});
    mountExpectedWorkbench({source:()=>state.file,media:()=>state.media});
   });
   if(process.env.QHE_QA_FONT_DIR){await page.addStyleTag({url:'/__qa-font/index.css'});await page.evaluate(()=>document.fonts.ready)}
   const control=name=>page.locator(`[data-basic-field="${name}"]`);
+  await page.locator('[data-v3-action="queue"]').click();
+  assert.equal(await page.locator('.v3-queues').isVisible(),true);
+  assert.equal(await page.locator('[data-v3-queue]').count(),3);
+  await page.locator('#mediaWorkspace').evaluate(el=>el.classList.add('hardsub-strategy-suppressed'));
+  await page.waitForFunction(()=>document.querySelector('[data-v3-queue="recipes"]').disabled);
+  assert.equal(await page.locator('[data-v3-queue="sources"]').isDisabled(),true,'Suppressed ancestor cannot offer unreachable queue');
+  await page.locator('#mediaWorkspace').evaluate(el=>el.classList.remove('hardsub-strategy-suppressed'));
+  await page.waitForFunction(()=>!document.querySelector('[data-v3-queue="sources"]').disabled);
+
+  assert.equal(await page.locator('[data-v3-queue="clips"]').isDisabled(),true,'Do not silently switch operation to enable clip export');
+  assert.equal(await page.locator('[data-v3-action="run"]').textContent(),'返回输出计划');
+  await page.locator('[data-v3-action="run"]').click();
+  assert.equal(await page.evaluate(()=>basicFixture.tasks.length),0,'Queue footer cannot accidentally start a single job');
+  await page.locator('[data-v3-action="queue"]').click();
+  await page.locator('[data-v3-queue="sources"]').click();
+  assert.equal(await page.locator('#taskMultiSourcePanel').getAttribute('open'),'');
+  assert.equal(await page.locator('#taskMultiSourcePanel').isVisible(),true);
+  assert.equal(await page.locator('#taskMultiSourcePanel').count(),1,'Original owner must not be cloned');
+  await page.locator('[data-v3-action="queue"]').click();
+  await page.locator('[data-v3-queue="recipes"]').click();
+  assert.equal(await page.locator('#taskRecipeMatrixPanel').getAttribute('open'),'');
+  assert.equal(await page.locator('#taskRecipeMatrixPanel').isVisible(),true);
+
   assert.equal(await page.getByRole('button',{name:'导入 ASS 与字体',exact:true}).count(),1,'Source toolbar must expose the real import entry');
   await page.getByRole('button',{name:'导入 ASS 与字体',exact:true}).click();
   assert.equal(await page.locator('.v3-import-menu').isVisible(),true);
@@ -61,6 +84,12 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   // audio editor. Its form-owned details projection is hidden in Guided,
   // so clicking the underlying hidden panel here would never be a real action.
   await page.locator('[data-media-mode="copy"]').click();await page.waitForTimeout(50);
+  await page.locator('[data-v3-action="queue"]').click();
+  assert.equal(await page.locator('[data-v3-queue="clips"]').isEnabled(),true);
+  await page.locator('[data-v3-queue="clips"]').click();
+  assert.equal(await page.locator('#taskClipQueuePanel').isVisible(),true);
+  assert.equal(await page.locator('#taskClipQueuePanel').count(),1);
+
   assert.equal(await control('codec').isDisabled(),true,'Copy inherits disabled video fieldset');
   for(const name of ['width','height','scaleAlgorithm','fpsMode','fps'])assert.equal(await control(name).isDisabled(),true,`Copy locks ${name}`);
   await control('width').evaluate(el=>{el.value='192';el.dispatchEvent(new Event('change',{bubbles:true}))});

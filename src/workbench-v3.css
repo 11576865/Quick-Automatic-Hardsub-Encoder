@@ -165,7 +165,8 @@
  body.workbench-v3 .v3-editor .workspace-layout{display:block!important;grid-template-areas:none!important;margin-top:16px}
  body.workbench-v3 .v3-editor .workflow-main{display:flex!important;flex-direction:column;gap:14px!important}
  .v3-editor .setup-region:empty{display:none}
- .v3-editor :is(.production-region,.production-controls,.setup-region){display:flex!important;flex-direction:column;gap:14px}
+ /* The V3 editor must outrank the legacy copy/transcode region hiding rule. */
+ body.workbench-v3 .v3-editor :is(.production-region,.production-controls,.setup-region){display:flex!important;flex-direction:column;gap:14px}
  .v3-editor .studio-empty-stage{display:none!important}
  .v3-editor .support-rail{display:grid!important;gap:14px}
  .v3-editor .support-rail>*{position:static!important}

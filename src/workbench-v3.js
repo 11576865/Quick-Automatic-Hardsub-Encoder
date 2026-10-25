@@ -38,12 +38,26 @@ export function mountWorkbenchV3({source,media}) {
   const q=s=>shell.querySelector(s),editor=q('.v3-editor'),dock=$('#studioModeDock'),modeNav=dock.querySelector('.media-mode-switcher');
   editor.insertAdjacentHTML('beforebegin',`<section class="v3-comparison" hidden><section class="v3-card"><div class="v3-section-head"><h2>候选比较 · 质量与完整体积</h2><button data-v3-action="plan">返回输出计划</button></div><p>当前正式计划保持不变；推荐方案须明确采用。</p><div class="v3-comparison-empty">${icon('sliders')}<strong>测量与候选比较</strong><span>请打开实际比较面板，查看当前来源的观测、适用范围与候选证据。</span></div><div class="v3-button-pair"><button data-v3-action="open-comparison">打开实际测量与比较</button><button data-v3-action="comparison-help">比较与参考域说明</button></div></section><section class="v3-card"><h2>当前正式参数</h2><dl class="v3-audit-facts"><div><dt>编码器</dt><dd data-v3-compare-codec>尚未检查</dd></div><div><dt>质量 / 体积</dt><dd data-v3-compare-rate>尚未检查</dd></div><div><dt>推荐采用</dt><dd>不会自动应用候选</dd></div></dl></section></section>
   <section class="v3-artifact" hidden><section class="v3-card"><div class="v3-section-head"><h2>实际成品 · 验证与交付</h2><button data-v3-action="plan">返回输出计划</button></div><p class="v3-audit-status" data-v3-audit-status>尚无成品</p><dl class="v3-audit-facts"><div><dt>实际文件</dt><dd data-v3-audit-facts>尚未生成</dd></div><div><dt>验证证据</dt><dd data-v3-audit-evidence>尚无验证结果</dd></div></dl><p>拟输出计划与实际成品分别记录，实际结果以完成后的检查为准。</p></section><section class="v3-card"><h2>成品检查</h2><p data-v3-save-reason>尚无可保存成品。</p><div class="v3-button-pair"><button data-v3-action="audit-details">查看必需检查与报告</button><button data-v3-action="verify-frames">提取对比帧（可选）</button></div><p>播放器复开属于独立检查，不额外设为所有成品的保存门槛。</p></section><section class="v3-card"><h2>交付成品</h2><div class="v3-button-pair"><button data-v3-action="report">导出检查报告</button><button class="v3-primary" data-v3-action="save-artifact" disabled>保存成品</button></div></section></section>`);
+  const queues=[
+    {key:'sources',title:'多个来源分别输出',note:'Windows Native / Web：最多 8 个来源，逐个转码或 Stream Copy。每个成品独立验证和保存；不继承其他来源的 ASS、音轨锁和体积证据。',panel:'#taskMultiSourcePanel',list:'#taskMultiSourceList',status:'#taskMultiSourceStatus'},
+    {key:'recipes',title:'同一来源生成多个版本',note:'将当前正式方案加入矩阵，分别硬压、转码或剪切。失败后保留已保存项；保存失败只需重试保存。',panel:'#taskRecipeMatrixPanel',list:'#taskRecipeMatrixList',status:'#taskRecipeMatrixStatus'},
+    {key:'clips',title:'同一来源导出多个片段',note:'先选择无损剪切并设置 IN / OUT，再加入片段。实际切点受关键帧约束，不保证任意帧精确。',panel:'#taskClipQueuePanel',list:'#taskClipQueueList',status:'#taskClipQueueStatus'}
+  ];
+  editor.insertAdjacentHTML('beforebegin',`<section class="v3-queues" hidden aria-label="任务队列"><section class="v3-card"><div class="v3-section-head"><h2>任务队列</h2><button data-v3-action="plan">返回输出计划</button></div><p>选择任务类型；进入队列后再明确加入、执行或重试保存。这里不会自动启动任务。</p></section>${queues.map(item=>`<section class="v3-card"><h3>${item.title} · <span data-queue-count="${item.key}">0</span> 项</h3><p>${item.note}</p><p data-queue-status="${item.key}" role="status"></p><button type="button" data-v3-queue="${item.key}">打开${item.title}</button></section>`).join('')}</section>`);
+  shell.addEventListener('click',event=>{
+    const key=event.target.closest('[data-v3-queue]')?.dataset.v3Queue;
+    const item=queues.find(item=>item.key===key);if(!item)return;
+    const panel=$(item.panel);if(!panel||panel.hidden||panel.closest('.hardsub-strategy-suppressed'))return;
+    showView('plan');refresh();
+    if(panel.tagName==='DETAILS')panel.open=true;
+    showEditor(item.panel);
+  });
   const modeHome=document.createComment('v3-mode-home');modeNav.before(modeHome);
   for(const [mode,label] of Object.entries({hardsub:'ASS 硬字幕',transcode:'纯视频转码',copy:'无损剪切'}))modeNav.querySelector(`[data-media-mode="${mode}"] strong`).textContent=label;
   const modeNames={hardsub:'硬字幕',transcode:'转码',copy:'剪切'};
   function showView(view) {
     shell.dataset.view=view;
-    for(const [name,selector] of Object.entries({plan:'.v3-plan-view',preview:'#v3Preview',comparison:'.v3-comparison',artifact:'.v3-artifact'}))q(selector).hidden=name!==view;
+    for(const [name,selector] of Object.entries({plan:'.v3-plan-view',preview:'#v3Preview',comparison:'.v3-comparison',artifact:'.v3-artifact',queue:'.v3-queues'}))q(selector).hidden=name!==view;
     q('[data-v3-action="preview"]').setAttribute('aria-expanded',String(view==='preview'));
   }
   showView('plan');
@@ -131,6 +145,17 @@ export function mountWorkbenchV3({source,media}) {
     setText('[data-v3-compare-codec]',read('#taskPlanEncoder')||'尚未检查');
     setText('[data-v3-compare-rate]',read('#taskPlanRate')||'尚未检查');
     shell.dataset.density=toolbarDensity(pref.value,q('.v3-source').clientWidth);actualPreview();
+    for(const item of queues){
+      const panel=$(item.panel);
+      setText(`[data-queue-count="${item.key}"]`,$(item.list)?.children.length||0);
+      setText(`[data-queue-status="${item.key}"]`,panel?.closest('.hardsub-strategy-suppressed')?'当前硬字幕依赖尚未就绪；请先检查来源、字幕与字体，或主动选择转码 / 剪切工作流。':!panel||panel.hidden?(item.key==='clips'?'当前工作流不是无损剪切；请先切换工作流。':'当前后端不提供此队列；其他队列仍可独立使用。'):read(item.status));
+      q(`[data-v3-queue="${item.key}"]`).disabled=!panel||panel.hidden||!!panel.closest('.hardsub-strategy-suppressed');
+    }
+    if(shell.dataset.view==='queue'){
+      q('[data-v3-action="run"]').disabled=false;
+      setText('[data-v3-action="run"]','返回输出计划');
+      setText('[data-v3-footer-state]','各队列独立执行与保存；请进入对应队列操作。');
+    }
     basic?.refresh();
   }
   const schedule=()=>{if(!queued){queued=true;requestAnimationFrame(refresh);}};
@@ -157,6 +182,7 @@ export function mountWorkbenchV3({source,media}) {
     if(command==='help')return pending('工作台帮助','左侧添加来源与依赖，中央确认拟输出文件及正式参数，右侧配置预期意图草稿。标有“待接入”的设置尚未应用到执行；实际执行与保存以正式计划和已有验证结果为准。');
     if(command==='settings'){showEditor('.platform-rail');return;}
     if(command==='run'){
+      if(shell.dataset.view==='queue'){showView('plan');refresh();return;}
       if(shell.dataset.view==='artifact'){if(!$('#taskSave').disabled)$('#taskSave').click();return;}
       if(!source()){input.querySelector('#videoNativePickerBtn:not(.hidden)')?.click();if($('#videoNativePickerBtn').classList.contains('hidden'))$('#video').click();return;}
       showEditor('#taskRunState');const guided=document.body.dataset.mediaOperation==='hardsub'&&document.body.dataset.hardsubStrategy==='guided';$(guided?'#encodeBtn':'#taskRun')?.click();return;
@@ -173,7 +199,7 @@ export function mountWorkbenchV3({source,media}) {
       if(!$('#previewBtn').disabled){$('#previewBtn').click();return;}showEditor('#analyze');return;
     }
     if(command==='timeline'){showEditor('#taskWaveformPanel');return;}
-    if(command==='queue'){showEditor('#taskRecipeMatrixPanel');return;}
+    if(command==='queue'){showView('queue');refresh();q('.v3-queues h2').setAttribute('tabindex','-1');q('.v3-queues h2').focus();return;}
     if(command==='artifact'){showView('artifact');inspector.querySelector('[data-intent-tab="delivery"]').click();refresh();return;}
     if(command==='compare'){showView('comparison');inspector.querySelector('[data-intent-tab="decision"]').click();refresh();return;}
     if(command==='open-comparison'){showEditor(document.body.dataset.mediaOperation==='hardsub'?'#planCard':'#taskEncoding');return;}
