@@ -1,3 +1,4 @@
+import {savedArtifactReceipt} from './saved-artifact-receipt.js';
 import {commitVerifiedSizeBudget} from './size-budget-adoption.js';
 import {sharedTaskPresentation} from './shared-task-presentation.js';
 import {guidedTaskSettings} from './guided-task-handoff.js';
@@ -1853,6 +1854,12 @@ export function mountMediaWorkspace(hooks) {
     const data=event.detail||{};
     if(!completed?.jobId)return;
     if(data.jobId&&data.jobId!==completed.jobId)return;
+    const deliveryReceipt=savedArtifactReceipt(completed,data);
+    if(deliveryReceipt){
+      completed={...completed,deliveryReceipt};
+      if(lastReport)lastReport={...lastReport,deliveryReceipt};
+      if(artifactReview)artifactReview.report={...artifactReview.report,deliveryReceipt};
+    }
     // B21 retry has a different owner from first-run saveQueuedResult: the
     // queue is no longer running. Do not mark this row "saved" until the
     // actual same-job published bytes/hash are bound to its source grant.

@@ -21,7 +21,7 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
    const file=new File(['fixture'],'source.mkv',{lastModified:1}),media={duration:2,width:320,height:180,fps:24,videoCodec:'h264',formatName:'matroska',videoTracks:1,videoStreams:[{ordinal:0,index:0,width:320,height:180,codec:'h264',pixelFormat:'yuv420p',bitDepth:8}],audioTracks:2,audioCodecs:['flac','aac'],audioStreams:[{ordinal:0,index:1,codec:'flac',channels:2,language:'jpn'},{ordinal:1,index:2,codec:'aac',channels:2,language:'eng'}],subtitleTracks:2,subtitleStreams:[{index:7,codec_name:'ass',tags:{language:'jpn'}},{index:8,codec_name:'subrip',tags:{language:'eng'}}],attachmentTracks:2,attachmentStreams:[{index:9,codec_name:'ttf',tags:{filename:'font.ttf'}},{index:10,codec_name:'otf',tags:{filename:'extra.otf'}}]};
    state.file=file;state.media=media;
    document.querySelector('#analyze').onclick=()=>state.probes++;
-   mountMediaWorkspace({supportsBrowserSourceBatch:()=>true,activateBrowserBatchSource:async file=>{state.file=file;return file},measureBudget:()=>new Promise((resolve,reject)=>{state.finishBudget=resolve;state.failBudget=reject}),busy:()=>state.busy,setBusy:v=>{state.busy=v;document.querySelector('#analyze').disabled=v;document.querySelector('#video').disabled=v},isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.file.name,sourceName:()=>state.file.name,mediaSnapshot:()=>state.media,prepare:async()=>state.media,validate:async()=>{},log:()=>{},cancel:()=>state.reject?.(Error('已取消')),save:()=>{state.saves++;return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true,kind:'browser-download'}},run:async task=>{state.tasks.push(task);if(state.defer)return new Promise((resolve,reject)=>state.reject=reject);return {outputBytes:1000,verified:true,name:'output.mkv'}}});
+   mountMediaWorkspace({supportsBrowserSourceBatch:()=>true,activateBrowserBatchSource:async file=>{state.file=file;return file},measureBudget:()=>new Promise((resolve,reject)=>{state.finishBudget=resolve;state.failBudget=reject}),busy:()=>state.busy,setBusy:v=>{state.busy=v;document.querySelector('#analyze').disabled=v;document.querySelector('#video').disabled=v},isWindows:()=>true,hasNvenc:()=>false,platformKey:()=>({}),videoIdentity:()=>state.file.name,sourceName:()=>state.file.name,mediaSnapshot:()=>state.media,prepare:async()=>state.media,validate:async()=>{},log:()=>{},cancel:()=>state.reject?.(Error('已取消')),save:()=>{state.saves++;if(state.nativeReceipt)return {pending:true};return state.saveFailure?{ok:false,error:'provider failed'}:{ok:true,kind:'browser-download'}},run:async task=>{state.tasks.push(task);if(state.defer)return new Promise((resolve,reject)=>state.reject=reject);return {outputBytes:1000,verified:true,name:'output.mkv',...(state.nativeReceipt?{jobId:'fixture-native'}:{})}}});
    mountExpectedWorkbench({source:()=>state.file,media:()=>state.media});
   });
   if(process.env.QHE_QA_FONT_DIR){await page.addStyleTag({url:'/__qa-font/index.css'});await page.evaluate(()=>document.fonts.ready)}
@@ -265,6 +265,24 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   const copyTask=await page.evaluate(()=>basicFixture.tasks[3]);
   assert.equal(copyTask.encoder,'copy');assert.equal(copyTask.expectedVideoDuration,2);
   assert.ok(copyTask.outputArgs.includes('0:v:0'));assert.ok(copyTask.outputArgs.includes('1:s:1'),'Copy retains independent subtitle timing');
+  await page.locator('[data-v3-action="artifact"]').click();
+  await page.locator('[data-v3-action="save-artifact"]').click();
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saved');
+  await page.locator('.v3-path [data-v3-action="plan"]').click();
+  await page.evaluate(()=>basicFixture.nativeReceipt=true);
+  await control('videoRange').selectOption('trim');
+  await page.locator('[data-v3-action="queue"]').click();
+  await page.locator('[data-v3-queue="clips"]').click();
+  await page.locator('#taskAddClip').click();
+  await page.locator('#taskExportClips').click();
+  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
+  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:true,jobId:'fixture-native',bytes:1000,path:'C:/Exports/clip.mkv',sha256:'ab'.repeat(32)}})));
+  await page.waitForFunction(()=>!basicFixture.busy&&document.querySelector('#mediaWorkspace').dataset.taskState==='saved');
+  const savedClipEvidence=await page.locator('[data-review="artifact-evidence"]').textContent();
+  assert.match(savedClipEvidence,/后端成品验证已通过/,'Native clip save must retain existing artifact evidence');
+  assert.ok(savedClipEvidence.includes('ab'.repeat(32))&&savedClipEvidence.includes('C:/Exports/clip.mkv'));
+  await page.evaluate(()=>basicFixture.nativeReceipt=false);
+
   await page.locator('[data-media-mode="transcode"]').click();
   await page.locator('.v3-time-range>summary').click();
   for(const width of [1440,1194,834,768]){await page.setViewportSize({width,height:960});await page.waitForTimeout(100);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`Basic controls overflow at ${width}`);if(process.env.QHE_SCREENSHOT_DIR)await page.screenshot({path:`${process.env.QHE_SCREENSHOT_DIR}/basic-${width}.png`,fullPage:true})}

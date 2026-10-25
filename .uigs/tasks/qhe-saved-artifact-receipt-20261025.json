@@ -1,0 +1,41 @@
+{
+  "goal": "Retain same-job Native saved artifact receipt in product UI and exported report",
+  "status": "IMPLEMENTED_PENDING_NATIVE_BROWSER_VALIDATION",
+  "current_bounded_work_unit": "Normalize Native save receipt, preserve across audit refresh, display and export",
+  "authorization": {
+    "source": "R19 §03/P1 A08; R24 §05/§20; route D1/D4",
+    "requirements": [
+      "B02",
+      "B17",
+      "B20",
+      "B24"
+    ],
+    "acceptance": "User can inspect saved path bytes and SHA256 in artifact view and downloaded report",
+    "gap": "Native callback returned receipt but current report and artifact view discarded it",
+    "priority": "Traceable delivery of existing output before new codec or batch variants"
+  },
+  "completed_units": [
+    "Normalizer negative and positive tests red/green",
+    "Same-job receipt capture and report refresh preservation",
+    "Artifact evidence projection added",
+    "Windows real save UI/downloaded-report assertions added",
+    "Local model440PASS12SKIP0FAIL"
+  ],
+  "next_units": [
+    "Read exact-head Windows WU02 and frontend results"
+  ],
+  "authorized_next_units": [
+    "Verify actual Native receipt in displayed and exported report"
+  ],
+  "discovered_followups": [],
+  "branch": "feat/saved-artifact-receipt-20261025",
+  "pr": null,
+  "latest_durable_commit": "a7e31cb296d23a5160f48228853da677d7a437e0",
+  "external_validation_states": {
+    "windows": "PENDING",
+    "frontend": "PENDING",
+    "uigs_intake": "PENDING"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-25"
+}
