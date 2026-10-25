@@ -14,7 +14,10 @@ try {
     $temp=Join-Path $work '.user-output.quick-hardsub-wu19.tmp'
     # Actual binary stage bytes, not just a mocked byte count or sparse file.
     $block=New-Object byte[] 1048576
-    for($i=0;$i -lt $block.Length;$i++){ $block[$i]=[byte](($i*37+11) % 256) }
+    for($i=0;$i -lt 1024;$i++){ $block[$i]=[byte](($i*37+11) % 256) }
+    for($i=1024;$i -lt $block.Length;$i+=1024){
+        [Array]::Copy($block,0,$block,$i,1024)
+    }
     $writer=[IO.File]::Open($stage,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
     try {
         for($i=0;$i -lt 96;$i++){$writer.Write($block,0,$block.Length)}
