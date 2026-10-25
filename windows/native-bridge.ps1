@@ -2417,7 +2417,7 @@ function Arm-CiExportFault([string]$Mode) {
           [StringComparison]::OrdinalIgnoreCase)){
         throw 'CI export fault is disabled outside the approved runner fixture.'
     }
-    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source','destination-swapped','disk-capacity-low')){
+    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source','destination-swapped','disk-capacity-low','partial-write')){
         throw 'Unknown CI export fault mode.'
     }
     if($script:CiNextExportFault){throw 'CI export fault already armed.'}
@@ -2495,7 +2495,12 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
             Assert-NativeAvailableOutputSpace ([long]$approved.Length) ([UInt64]0)
         }
         Assert-NativeOutputVolumeSpace $dest ([long]$approved.Length)
-        Copy-Item -LiteralPath $j.Output -Destination $temp -Force
+        $writeFaultAt=[long]-1
+        if($script:CiNextExportFault -eq 'partial-write'){
+            $script:CiNextExportFault=''
+            $writeFaultAt=[long]262144
+        }
+        [void](Copy-NativeStageToOutputTemporary $j.Output $temp ([long]$approved.Length) $writeFaultAt)
         $status=Get-JobStatus $JobId
         if($status.state -ne 'completed'){throw 'Staged output changed during export copy.'}
         $after=Get-GuidedContainerFingerprint $j.Output
@@ -2553,7 +2558,7 @@ function Export-Sample([string]$SampleId,[string]$SuggestedName) {
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
     $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
     try{
-        Copy-Item -LiteralPath $src -Destination $temp
+        [void](Copy-NativeStageToOutputTemporary $src $temp ([long]$srcBefore.Length))
         $srcAfter=Get-GuidedContainerFingerprint $src
         $copied=Get-GuidedContainerFingerprint $temp
         if($srcBefore.Length -ne $srcAfter.Length -or $srcBefore.Hash -ne $srcAfter.Hash -or
