@@ -139,12 +139,12 @@ function Assert-NativePublishDestinationSafe([string]$Destination,[string[]]$Pro
 # (possibly other-volume) Bridge staging folder. Free-space preflight is an
 # early refusal only: it cannot reserve disk, eliminate later disk-full, or
 # guarantee writes under external contention. Copy/publish errors stay fatal.
-function Assert-NativeAvailableOutputSpace([long]$BytesToStage,[ulong]$AvailableBytes) {
+function Assert-NativeAvailableOutputSpace([long]$BytesToStage,[UInt64]$AvailableBytes) {
     if($BytesToStage -le 0){throw 'Verified staged output size must be positive.'}
     # Same-volume output must temporarily coexist with any old destination.
     # Atomic replacement renames the old file; do not subtract old bytes.
-    $minimumReserve=[ulong]8388608
-    $need=[ulong]$BytesToStage+$minimumReserve
+    $minimumReserve=[UInt64]8388608
+    $need=[UInt64]$BytesToStage+$minimumReserve
     if($AvailableBytes -lt $need){
         throw ('Insufficient output volume space: need at least '+$need+
             ' free bytes for verified delivery, available '+$AvailableBytes+
@@ -154,9 +154,9 @@ function Assert-NativeAvailableOutputSpace([long]$BytesToStage,[ulong]$Available
 function Assert-NativeOutputVolumeSpace([string]$Destination,[long]$VerifiedStageBytes) {
     if($VerifiedStageBytes -le 0){throw 'No verified encoded bytes available for export.'}
     $folder=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($Destination))
-    $available=[ulong]0
-    $total=[ulong]0
-    $free=[ulong]0
+    $available=[UInt64]0
+    $total=[UInt64]0
+    $free=[UInt64]0
     if(-not [QheWinFileIdentity]::GetDiskFreeSpaceEx(
         $folder,[ref]$available,[ref]$total,[ref]$free)){
         $code=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
