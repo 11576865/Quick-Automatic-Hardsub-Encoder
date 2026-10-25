@@ -2417,7 +2417,7 @@ function Arm-CiExportFault([string]$Mode) {
           [StringComparison]::OrdinalIgnoreCase)){
         throw 'CI export fault is disabled outside the approved runner fixture.'
     }
-    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source')){
+    if($Mode -notin @('cancel','publish-denied','overwrite-active-source','overwrite-batch-source','overwrite-hardlink-source','destination-swapped')){
         throw 'Unknown CI export fault mode.'
     }
     if($script:CiNextExportFault){throw 'CI export fault already armed.'}
@@ -2470,6 +2470,7 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
     }
     $protectedPaths=@(Get-BridgeProtectedPublishPaths)
     $dest=Assert-NativePublishDestinationSafe $dest $protectedPaths
+    $expectedDestinationSnapshot=Get-NativePublishDestinationSnapshot $dest
     # Native save dialogs are modal: the original status check may be stale
     # by the time the user chooses a destination.
     $status=Get-JobStatus $JobId
@@ -2508,10 +2509,20 @@ function Export-Job([string]$JobId,[string]$SuggestedName) {
             $script:CiNextExportFault=''
             throw 'CI-only publish denied after verified temporary copy.'
         }
-        # Revalidate immediately before atomic publication, after the modal
-        # dialog and the potentially lengthy verified same-volume copy.
-        [void](Assert-NativePublishDestinationSafe $dest (Get-BridgeProtectedPublishPaths))
-        Publish-VerifiedOutput $temp $dest
+        # CI only: another process replaced the previously selected target
+        # after the verified temporary copy, before publication. Never accept
+        # user/page-provided paths for the injected fixture.
+        if($script:CiNextExportFault -eq 'destination-swapped'){
+            $script:CiNextExportFault=''
+            if($env:GITHUB_ACTIONS -ne 'true' -or -not $script:CiSaveDirectory -or
+               -not [string]::Equals([IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest)),
+                   $script:CiSaveDirectory,[StringComparison]::OrdinalIgnoreCase)){
+                throw 'CI destination swap outside runner save fixture is forbidden.'
+            }
+            if(Test-Path -LiteralPath $dest -PathType Leaf){[IO.File]::Delete($dest)}
+            [IO.File]::WriteAllText($dest,'WU17_EXTERNAL_REPLACEMENT_PRESERVE',[Text.Encoding]::UTF8)
+        }
+        Publish-NativeProtectedOutput $temp $dest (Get-BridgeProtectedPublishPaths) $expectedDestinationSnapshot
     }finally{
         if(Test-Path -LiteralPath $temp -PathType Leaf){
             Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
@@ -2529,6 +2540,7 @@ function Export-Sample([string]$SampleId,[string]$SuggestedName) {
     if(-not $dest){return [pscustomobject]@{ok=$false;error='Save cancelled.'}}
     # Samples are also staged media; reject inputs and samples as destinations.
     $dest=Assert-NativePublishDestinationSafe $dest (Get-BridgeProtectedPublishPaths)
+    $expectedDestinationSnapshot=Get-NativePublishDestinationSnapshot $dest
     $srcBefore=Get-GuidedContainerFingerprint $src
     $dir=[IO.Path]::GetDirectoryName([IO.Path]::GetFullPath($dest))
     $temp=Join-Path $dir ('.'+[IO.Path]::GetFileName($dest)+'.quick-hardsub-'+[guid]::NewGuid().ToString('N')+'.tmp')
@@ -2540,8 +2552,7 @@ function Export-Sample([string]$SampleId,[string]$SuggestedName) {
            $srcBefore.Length -ne $copied.Length -or $srcBefore.Hash -ne $copied.Hash){
             throw 'Sample export changed between staging and publication.'
         }
-        [void](Assert-NativePublishDestinationSafe $dest (Get-BridgeProtectedPublishPaths))
-        Publish-VerifiedOutput $temp $dest
+        Publish-NativeProtectedOutput $temp $dest (Get-BridgeProtectedPublishPaths) $expectedDestinationSnapshot
     }finally{
         if(Test-Path -LiteralPath $temp -PathType Leaf){
             Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
