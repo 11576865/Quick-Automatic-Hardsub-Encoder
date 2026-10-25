@@ -3,14 +3,15 @@
 // compileTask -> Bridge -> FFmpeg -> verified user-dir exports. No HTTP mock.
 const assert=require('node:assert/strict');
 const {spawn,execFileSync}=require('node:child_process');
-const {readFileSync,existsSync,statSync,writeFileSync,readdirSync}=require('node:fs');
+const {readFileSync,existsSync,statSync,writeFileSync,readdirSync,linkSync,unlinkSync}=require('node:fs');
 const {join,resolve,basename}=require('node:path');
 const {createHash}=require('node:crypto');
 const {chromium}=require('playwright');
 const [first,second,exportDir,receiptPath,requestedMode='copy']=process.argv.slice(2);
-assert(first&&second&&exportDir&&receiptPath,'Usage: node check-b21-windows-native-batch.cjs source1 source2 exportDir receipt [copy|transcode|fault-recovery|protected-inputs]');
+assert(first&&second&&exportDir&&receiptPath,'Usage: node check-b21-windows-native-batch.cjs source1 source2 exportDir receipt [copy|transcode|fault-recovery|protected-inputs|hardlink-input]');
 const protectedInputs=requestedMode==='protected-inputs';
-const recovery=requestedMode==='fault-recovery'||protectedInputs;
+const hardlinkInputs=requestedMode==='hardlink-input';
+const recovery=requestedMode==='fault-recovery'||protectedInputs||hardlinkInputs;
 const mode=recovery?'copy':requestedMode;
 assert.ok(['copy','transcode'].includes(mode),'Only explicit copy/transcode modes may be audited');
 assert.equal(process.env.GITHUB_ACTIONS,'true');
@@ -113,7 +114,7 @@ let browser;
   assert.equal(await run.isEnabled(),true,'Cannot execute two Native batch sources');
   if(recovery){
    const firstHash=fileHash(first),secondHash=fileHash(second);
-   await armRunnerExportFault(protectedInputs?'overwrite-active-source':'cancel');
+   await armRunnerExportFault(protectedInputs||hardlinkInputs?'overwrite-active-source':'cancel');
    await run.click();
    await page.waitForFunction(()=>b21Proof.exports.length===1 &&
        document.querySelectorAll('[data-browser-batch-action="retry-save"]').length===1,
@@ -121,7 +122,7 @@ let browser;
    let stage=await page.evaluate(()=>b21Proof);
    assert.equal(stage.starts.length,1,'Cancel must not start next encode');
    assert.equal(stage.exports[0].ok,false);
-   if(protectedInputs){
+   if(protectedInputs||hardlinkInputs){
     assert.match(stage.exports[0].error||'',/Refusing to overwrite an authorized source/i);
     assert.equal(fileHash(first),firstHash,'Active video was overwritten as output');
    }else assert.equal(stage.exports[0].cancelled,true);
@@ -130,8 +131,14 @@ let browser;
    assert.ok(filename&&filename===basename(filename)&&filename.toLowerCase().endsWith('.mkv'));
    const destination=join(exportDir,filename);
    if(!protectedInputs)writeFileSync(destination,'PREVIOUS USER FILE MUST SURVIVE DENIED EXPORT\n');
-   const sentinelHash=protectedInputs?null:fileHash(destination);
-   await armRunnerExportFault(protectedInputs?'overwrite-batch-source':'publish-denied');
+   const sentinelHash=protectedInputs||hardlinkInputs?null:fileHash(destination);
+   const hardlinkAlias=join(exportDir,'wu16-hardlink-active.mkv');
+   if(hardlinkInputs){
+    if(existsSync(hardlinkAlias))unlinkSync(hardlinkAlias);
+    linkSync(first,hardlinkAlias);
+    assert.equal(fileHash(hardlinkAlias),firstHash,'Hardlink fixture does not alias original bytes');
+   }
+   await armRunnerExportFault(hardlinkInputs?'overwrite-hardlink-source':protectedInputs?'overwrite-batch-source':'publish-denied');
    await page.locator('[data-browser-batch-action="retry-save"]').click();
    await page.waitForFunction(()=>b21Proof.exports.length===2 &&
        document.querySelectorAll('[data-browser-batch-action="retry-save"]').length===1,
@@ -139,11 +146,12 @@ let browser;
    stage=await page.evaluate(()=>b21Proof);
    assert.equal(stage.starts.length,1,'Failed retry must reuse completed job');
    assert.equal(stage.exports[1].ok,false);
-   assert.match(stage.exports[1].error||'',protectedInputs?/Refusing to overwrite an authorized source/i:/publish denied/i);
+   assert.match(stage.exports[1].error||'',hardlinkInputs?/NTFS hardlink\/file identity alias/i:protectedInputs?/Refusing to overwrite an authorized source/i:/publish denied/i);
    assert.equal(stage.exports[1].jobId,stage.starts[0].jobId);
-   if(protectedInputs){
+   if(protectedInputs||hardlinkInputs){
     assert.equal(fileHash(first),firstHash,'Current source changed after denied export');
     assert.equal(fileHash(second),secondHash,'Other queued source was overwritten as output');
+    if(hardlinkInputs)assert.equal(fileHash(hardlinkAlias),firstHash,'Hardlink alias was overwritten');
    }else assert.equal(fileHash(destination),sentinelHash,'Failed export destroyed the existing destination');
    assert.deepEqual(readdirSync(exportDir).filter(n=>n.includes('.quick-hardsub-')&&n.endsWith('.tmp')),[],
     'Failed export leaked a partial destination file');
@@ -161,9 +169,13 @@ let browser;
    assert.equal(stage.exports[2].ok,true);
    assert.equal(stage.exports[2].jobId,stage.starts[0].jobId);
    assert.equal(fileHash(destination),stage.exports[2].sha256);
-   if(protectedInputs){
+   if(protectedInputs||hardlinkInputs){
     assert.equal(fileHash(first),firstHash,'Published output damaged the original source');
     assert.equal(fileHash(second),secondHash,'Published output damaged the other batch source');
+    if(hardlinkInputs){
+      assert.equal(fileHash(hardlinkAlias),firstHash,'Original hardlink data changed after retry');
+      unlinkSync(hardlinkAlias);
+    }
    }else assert.notEqual(fileHash(destination),sentinelHash,'Retry did not atomically replace sentinel');
    assert.equal(await run.isEnabled(),true,'Failed save cannot permanently block remaining sources');
    await run.click();
@@ -252,6 +264,7 @@ let browser;
    sourceCount:2,jobCount:2,savedCount:2,saveAttempts:proof.exports.length,
    firstJobSaveRecovered:recovery,existingDestinationPreservedOnFailure:recovery,
    protectedActiveAndQueuedSourceFiles:protectedInputs,
+   protectedNtfHardlinkAlias:hardlinkInputs,
    activations:proof.activations,artifacts:published,
    strictSizeVerified:false,longMovieVerified:false,physicalDeviceVerified:false};
   writeFileSync(receiptPath,JSON.stringify(receipt,null,2));
