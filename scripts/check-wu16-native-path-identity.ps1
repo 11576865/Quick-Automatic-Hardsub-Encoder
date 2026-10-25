@@ -11,6 +11,7 @@ try{
     $ordinary=Join-Path $work 'ordinary-output.mkv'
     $alias=Join-Path $work 'other-name.mkv'
     [IO.File]::WriteAllBytes($source,[byte[]](1..64))
+    $originalSha=(Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
     # A normal non-aliased publish target must remain allowed.
     $allowed=Assert-NativePublishDestinationSafe $ordinary @($source)
     if($allowed -ne [IO.Path]::GetFullPath($ordinary)){
@@ -37,12 +38,15 @@ try{
     try{[void](Assert-NativePublishDestinationSafe (Join-Path $junction 'new-file.mkv') @($source))}
     catch{if($_.Exception.Message -match 'junction/reparse point'){$denied=$true}else{throw}}
     if(-not $denied){throw 'WU16 parent junction was accepted as safe output.'}
-    $originalBytes=[IO.File]::ReadAllBytes($source)
-    if($originalBytes.Length -ne 64 -or
-       -not ([Linq.Enumerable]::SequenceEqual([byte[]]$originalBytes,[byte[]](1..64)))){
+    if((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $originalSha){
         throw 'Protected input bytes changed during path identity checks.'
     }
     Write-Host 'WU16 WINDOWS FILE IDENTITY PASS: NTFS hardlink same handle identity, new-file parent junction denied, normal output allowed, original bytes intact.'
 }finally{
+    # Remove only the junction entry before recursive cleanup; never recurse
+    # into a linked directory that may point back to the work tree.
+    if($junction -and (Test-Path -LiteralPath $junction)){
+        [IO.Directory]::Delete($junction)
+    }
     if(Test-Path -LiteralPath $work){Remove-Item -LiteralPath $work -Force -Recurse -ErrorAction Stop}
 }
