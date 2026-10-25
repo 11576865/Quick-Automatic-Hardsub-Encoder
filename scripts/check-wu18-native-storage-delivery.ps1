@@ -58,29 +58,50 @@ try {
     }
     [IO.File]::SetAttributes($target,[IO.FileAttributes]::Normal)
 
-    # Genuine Windows NTFS ACL denial on DELETE for the target (File.Replace
-    # needs DELETE permission). Revoked in finally even if assertion fails.
+    # Genuine NTFS directory ACL denial on CreateFiles prevents the exact
+    # new same-volume temp Copy-Item used by Native Export-Job. Denying DELETE
+    # on the destination *file* alone is NOT a reliable substitute on Windows:
+    # granted DELETE_CHILD on its parent can permit File.Replace.
+    $folder=Join-Path $work 'permission-denied-destination'
+    New-Item -ItemType Directory -Path $folder -Force|Out-Null
+    $permissionTarget=Join-Path $folder 'user-output.mkv'
+    $permissionTemp=Join-Path $folder '.user-output.quick-hardsub-verify.tmp'
+    [IO.File]::WriteAllText($permissionTarget,'PRESERVE_OLD_PERMISSION_TARGET',[Text.Encoding]::UTF8)
+    $permissionSha=(Get-FileHash -LiteralPath $permissionTarget -Algorithm SHA256).Hash
+    $permissionSnapshot=Get-NativePublishDestinationSnapshot $permissionTarget
+    $aclTarget=$folder
     $sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
     $denyRule=[Security.AccessControl.FileSystemAccessRule]::new(
-        $sid,[Security.AccessControl.FileSystemRights]::Delete,
+        $sid,[Security.AccessControl.FileSystemRights]::CreateFiles,
         [Security.AccessControl.AccessControlType]::Deny)
-    $aclTarget=$target
-    $acl=Get-Acl -LiteralPath $target
-    $acl.AddAccessRule($denyRule)
-    Set-Acl -LiteralPath $target -AclObject $acl
+    $folderAcl=Get-Acl -LiteralPath $folder
+    $folderAcl.AddAccessRule($denyRule)
+    Set-Acl -LiteralPath $folder -AclObject $folderAcl
     $refused=$false
-    try{Publish-NativeProtectedOutput $stage $target @($source) $selected}
-    catch{if($_.Exception -is [UnauthorizedAccessException] -or
-             $_.Exception.Message -match 'access|denied|permission'){$refused=$true}else{throw}}
-    if(-not $refused){throw 'WU18 real NTFS ACL Delete denial did not prevent overwrite.'}
-    if((Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash -ne $oldSha -or
-       (Get-FileHash -LiteralPath $stage -Algorithm SHA256).Hash -ne $stageSha){
-        throw 'WU18 ACL refusal changed previous output or verified stage.'
+    try{
+        Copy-Item -LiteralPath $stage -Destination $permissionTemp -ErrorAction Stop
+    }catch{
+        if($_.Exception.Message -match 'access|denied|permission' -or
+           $_.Exception -is [UnauthorizedAccessException]){$refused=$true}else{throw}
     }
-    $revert=Get-Acl -LiteralPath $target
+    if(-not $refused){throw 'WU18 real NTFS directory ACL CreateFiles denial did not prevent staging copy.'}
+    if((Get-FileHash -LiteralPath $permissionTarget -Algorithm SHA256).Hash -ne $permissionSha -or
+       (Get-FileHash -LiteralPath $stage -Algorithm SHA256).Hash -ne $stageSha -or
+       (Test-Path -LiteralPath $permissionTemp)){
+        throw 'WU18 denied temp create damaged the existing user output or staged artifact.'
+    }
+    $revert=Get-Acl -LiteralPath $folder
     [void]$revert.RemoveAccessRuleSpecific($denyRule)
-    Set-Acl -LiteralPath $target -AclObject $revert
+    Set-Acl -LiteralPath $folder -AclObject $revert
     $denyRule=$null
+    Copy-Item -LiteralPath $stage -Destination $permissionTemp -ErrorAction Stop
+    if((Get-FileHash -LiteralPath $permissionTemp -Algorithm SHA256).Hash -ne $stageSha){
+        throw 'WU18 permission-retry temporary output was not byte-identical.'
+    }
+    Publish-NativeProtectedOutput $permissionTemp $permissionTarget @($source) $permissionSnapshot
+    if((Get-FileHash -LiteralPath $permissionTarget -Algorithm SHA256).Hash -ne $stageSha){
+        throw 'WU18 permission-retry failed to publish the original verified stage bytes.'
+    }
 
     # The exact same original snapshot/stage must publish once the permission
     # returns, preserving the original source file.
@@ -89,7 +110,7 @@ try {
        (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ne $sourceSha){
         throw 'WU18 same-stage retry failed or source bytes changed.'
     }
-    Write-Host 'WU18 REAL WINDOWS STORAGE DELIVERY PASS: volume-aware space preflight, 64-bit low-space refusal, read-only rejection, genuine NTFS ACL denied, same verified stage retried and source preserved.'
+    Write-Host 'WU18 REAL WINDOWS STORAGE DELIVERY PASS: volume-aware space preflight, 64-bit low-space refusal, read-only rejection, genuine NTFS CreateFiles ACL denied, same verified stage retried and source preserved.'
 }finally{
     if($denyRule -and $aclTarget -and (Test-Path -LiteralPath $aclTarget)){
         try{
