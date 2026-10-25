@@ -374,6 +374,24 @@ try {
   }
   Write-Host 'WU16 REAL NATIVE HARDLINK GUARD PASS: current source/NTFS hardlink denied, original bytes intact, same-job save and next source succeeded.'
 
+  # WU17: stage a verified file, then have an external actor replace the
+  # selected path; Native must reject identity mismatch, not overwrite.
+  # Also prove an exclusive share lock and absent->created destination race.
+  & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File './scripts/check-wu17-native-publish-lease.ps1'
+  if($LASTEXITCODE -ne 0){throw 'WU17 independent target identity/locked-output publication oracle failed'}
+  $wu17Receipt=Join-Path $work 'wu17-two-source-destination-changed.json'
+  & node './scripts/check-b21-windows-native-batch.cjs' $source $sourceSecond $exportDirectory $wu17Receipt 'destination-changed'
+  if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $wu17Receipt)){
+    throw 'WU17 shipping Chromium Native Save destination substitution/retry acceptance failed'
+  }
+  $wu17=Get-Content -Raw -LiteralPath $wu17Receipt|ConvertFrom-Json
+  if($wu17.result -ne 'PASS' -or $wu17.rejectedChangedDestination -ne $true -or
+     $wu17.jobCount -ne 2 -or $wu17.savedCount -ne 2 -or $wu17.saveAttempts -ne 4){
+    throw 'WU17 actual delivery proof does not establish 2 jobs, 4 saves and rejected changed target'
+  }
+  Write-Host 'WU17 REAL NATIVE DESTINATION IDENTITY PASS: external target substitution refused; same staged Job saved after retry; second source verified.'
+
+
 
 
 

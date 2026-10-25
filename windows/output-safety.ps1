@@ -120,3 +120,47 @@ function Assert-NativePublishDestinationSafe([string]$Destination,[string[]]$Pro
     }
     return $full
 }
+
+
+# WU17: an ordinary destination must still be the SAME file observed when
+# the user authorized Save. Protected input read handles stay open across the
+# last check and Replace/Move with Delete sharing denied.
+# This is a bounded Windows defense; Windows filename replacement is not an
+# atomic compare-and-swap and it does not stop all hostile rename races.
+function Get-NativePublishDestinationSnapshot([string]$Destination) {
+    if(Test-Path -LiteralPath $Destination){
+        return 'existing:'+(Get-NativeExistingFileIdentity $Destination)
+    }
+    return 'absent'
+}
+function Publish-NativeProtectedOutput(
+    [string]$Temporary,[string]$Destination,[string[]]$ProtectedPaths,
+    [string]$ExpectedDestinationSnapshot) {
+    $full=Assert-NativePublishDestinationSafe $Destination $ProtectedPaths
+    if([string]::IsNullOrWhiteSpace($ExpectedDestinationSnapshot)){
+        throw 'Native publish requires the destination snapshot from Save selection.'
+    }
+    if((Get-NativePublishDestinationSnapshot $full) -cne $ExpectedDestinationSnapshot){
+        throw 'Native output destination changed since Save selection; new file remains untouched.'
+    }
+    $leases=New-Object 'System.Collections.Generic.List[System.IO.FileStream]'
+    try{
+        $share=[IO.FileShare]([int][IO.FileShare]::Read -bor [int][IO.FileShare]::Write)
+        foreach($path in @($ProtectedPaths)){
+            if(-not $path){continue}
+            if(-not(Test-Path -LiteralPath $path -PathType Leaf)){continue}
+            # An unavailable input lease is fail-closed. Denying Delete sharing
+            # prevents the protected file from being renamed/replaced during
+            # our publication even if another hardlink names it.
+            $handle=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,$share)
+            $leases.Add($handle)
+        }
+        [void](Assert-NativePublishDestinationSafe $full $ProtectedPaths)
+        if((Get-NativePublishDestinationSnapshot $full) -cne $ExpectedDestinationSnapshot){
+            throw 'Native output destination changed while acquiring protected input leases.'
+        }
+        Publish-VerifiedOutput $Temporary $full
+    }finally{
+        foreach($lease in $leases){$lease.Dispose()}
+    }
+}
