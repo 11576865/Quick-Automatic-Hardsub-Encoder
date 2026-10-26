@@ -1,0 +1,51 @@
+name: Windows WU21 real over-4GiB playable MKV acceptance
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'windows/output-safety.ps1'
+      - 'scripts/build-wu21-playable-over4gib-mkv.cjs'
+      - 'scripts/check-wu21-over4gib-playable-mkv.ps1'
+      - '.github/workflows/windows-wu21-over4gib-playable-mkv.yml'
+  workflow_dispatch:
+jobs:
+  playable-over4gib:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parse real Windows PowerShell and Node fixture source
+        shell: powershell
+        run: |
+          foreach($file in @('windows/output-safety.ps1','scripts/check-wu21-over4gib-playable-mkv.ps1')){
+            $tokens=$null;$errors=$null
+            [void][Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file),[ref]$tokens,[ref]$errors)
+            if($errors.Count){$errors|Format-List;throw "Invalid Windows PowerShell 5.1 syntax: $file"}
+          }
+          & node --check 'scripts/build-wu21-playable-over4gib-mkv.cjs'
+          if($LASTEXITCODE -ne 0){throw 'WU21 Node EBML builder syntax invalid'}
+      - name: Acquire genuine FFmpeg and FFprobe on Windows
+        shell: powershell
+        run: |
+          $ready=$false
+          $tools=Join-Path $env:ChocolateyInstall 'lib\ffmpeg\tools'
+          for($i=1;$i -le 3;$i++){
+            choco install ffmpeg --yes --no-progress
+            $binary=if(Test-Path -LiteralPath $tools){
+              Get-ChildItem -LiteralPath $tools -Recurse -File -Filter ffmpeg.exe | Select-Object -First 1
+            }else{$null}
+            $probe=if($binary){Join-Path $binary.DirectoryName 'ffprobe.exe'}else{''}
+            if($binary -and (Test-Path -LiteralPath $probe)){$ready=$true;break}
+            if($i -lt 3){Start-Sleep -Seconds ($i*5)}
+          }
+          if(-not $ready){throw 'No real Windows FFmpeg/FFprobe binaries available.'}
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $binary.DirectoryName
+          Write-Host ("Real FFmpeg: "+$binary.FullName)
+      - name: Produce, copy, publish, demux and decode actual >4GiB Matroska
+        shell: powershell
+        run: |
+          & ./scripts/check-wu21-over4gib-playable-mkv.ps1
+          if($LASTEXITCODE -ne 0){throw 'WU21 real large Matroska delivery acceptance failed'}
