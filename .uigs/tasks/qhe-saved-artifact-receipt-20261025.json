@@ -1,0 +1,44 @@
+{
+  "goal": "Retain same-job Native saved artifact receipt in product UI and exported report",
+  "status": "FRONTEND_CLIP_DIAGNOSTIC_COMMITTED_PENDING_CI",
+  "current_bounded_work_unit": "Normalize Native save receipt, preserve across audit refresh, display and export",
+  "authorization": {
+    "source": "R19 §03/P1 A08; R24 §05/§20; route D1/D4",
+    "requirements": [
+      "B02",
+      "B17",
+      "B20",
+      "B24"
+    ],
+    "acceptance": "User can inspect saved path bytes and SHA256 in artifact view and downloaded report",
+    "gap": "Native callback returned receipt but current report and artifact view discarded it",
+    "priority": "Traceable delivery of existing output before new codec or batch variants"
+  },
+  "completed_units": [
+    "Normalizer negative and positive tests red/green",
+    "Same-job receipt capture and report refresh preservation",
+    "Artifact evidence projection added",
+    "Windows real save UI/downloaded-report assertions added",
+    "Local model440PASS12SKIP0FAIL",
+    "Windows real saved artifact UI and exported report receipt verified on5b0726b; frontend fixture needed explicit audio/subtitle trim range before adding clip",
+    "Audio/subtitle trim setup advanced past queue insertion. Added bounded failure evidence for actual task state, clip message, compiled task count and authoritative form fields; no gates relaxed."
+  ],
+  "next_units": [
+    "Read exact-head Windows WU02 and frontend results"
+  ],
+  "authorized_next_units": [
+    "Verify actual Native receipt in displayed and exported report"
+  ],
+  "discovered_followups": [],
+  "branch": "feat/saved-artifact-receipt-20261025",
+  "pr": 144,
+  "latest_durable_commit": "21fabac96c7cd9e534afc3aa1540ab69a7931afe",
+  "external_validation_states": {
+    "windows": "40224955730 SUCCESS exact21fabac; same-job UI/exported report validated",
+    "frontend": "40224955534/job121264250685 FAILED line281 waiting saving; queue insertion now passed, missing terminal-state diagnostic",
+    "uigs": "40191012168 SUCCESS on prior head",
+    "uigs_intake": "PENDING"
+  },
+  "blockers": [],
+  "updated_at": "2026-10-27"
+}

@@ -28,3 +28,10 @@ test('collapsed review distinguishes stale save retry from current checked plan 
  const rejected=buildTaskReview({artifact:{task,report:{deliveryAllowed:false}},state:'failed'});
  assert.match(taskReviewOverview(rejected),/禁止交付/);
 });
+
+test('saved Native file evidence remains attached to the original artifact',()=>{
+ const deliveryReceipt={kind:'native-saved-file',jobId:'job-a',path:'C:/out.mkv',bytes:10,sha256:'ab'.repeat(32)};
+ const artifact={task,report:{verified:true,deliveryAllowed:true,outputBytes:10,deliveryReceipt}};
+ assert.deepEqual(buildTaskReview({artifact,state:'saved'}).artifact.deliveryReceipt,deliveryReceipt);
+ assert.equal(buildTaskReview({artifact:{task,report:{verified:true,outputBytes:10}},state:'saved'}).artifact.deliveryReceipt,null);
+});
