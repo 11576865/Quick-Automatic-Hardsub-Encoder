@@ -278,7 +278,20 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
   await page.locator('#taskAddClip').click();
   assert.equal(await page.locator('#taskClipQueueList>li').count(),1,await page.locator('#taskClipQueueStatus').textContent());
   await page.locator('#taskExportClips').click();
-  await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
+  try{
+    await page.waitForFunction(()=>document.querySelector('#mediaWorkspace').dataset.taskState==='saving');
+  }catch(error){
+    const evidence=await page.evaluate(()=>({
+      state:document.querySelector('#mediaWorkspace').dataset.taskState,
+      taskStatus:document.querySelector('#taskStatus').textContent,
+      clipStatus:document.querySelector('#taskClipQueueStatus').textContent,
+      queue:document.querySelector('#taskClipQueueList').textContent,
+      busy:basicFixture.busy,nativeReceipt:basicFixture.nativeReceipt,
+      executedTasks:basicFixture.tasks.length,
+      form:Object.fromEntries(['operation','start','end','videoRange','audio','audioRange','subtitleRange','audioPlan','mustCopyAudioOrdinals'].map(name=>[name,document.querySelector('#mediaTaskForm').elements.namedItem(name)?.value]))
+    }));
+    throw Error('Native clip receipt scenario stopped before saving: '+JSON.stringify(evidence)+'; '+error.message);
+  }
   await page.evaluate(()=>window.dispatchEvent(new CustomEvent('quick-hardsub-native-export-result',{detail:{ok:true,jobId:'fixture-native',bytes:1000,path:'C:/Exports/clip.mkv',sha256:'ab'.repeat(32)}})));
   await page.waitForFunction(()=>!basicFixture.busy&&document.querySelector('#mediaWorkspace').dataset.taskState==='saved');
   const savedClipEvidence=await page.locator('[data-review="artifact-evidence"]').textContent();
