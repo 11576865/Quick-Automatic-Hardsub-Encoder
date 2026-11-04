@@ -249,6 +249,17 @@ let browser;
    'Native Bridge SHA-256 export receipt is not the published file bytes');
   assert.equal(Number(exported.bytes),statSync(published).size,
    'Native Bridge published byte count is incorrect');
+  await page.waitForFunction(expected=>document.querySelector('[data-review="artifact-evidence"]')?.textContent.includes(expected),exported.sha256);
+  assert.ok((await page.locator('[data-review="artifact-evidence"]').textContent()).includes(exported.path),
+   'Saved artifact view must retain the real Native destination');
+  const reportDownload=page.waitForEvent('download');
+  await page.locator('[data-v3-action="report"]').click();
+  const downloadedReport=await reportDownload;
+  const savedReport=JSON.parse(readFileSync(await downloadedReport.path(),'utf8'));
+  assert.deepEqual(savedReport.deliveryReceipt,{
+    kind:'native-saved-file',jobId:exported.jobId,path:exported.path,
+    bytes:exported.bytes,sha256:exported.sha256.toLowerCase()
+  },'Exported task report must preserve the actual same-job saved-file receipt');
   const receipt=await page.evaluate(()=>({
     kind:'wu12-production-main-to-windows-native-v1',
     productionMainLoaded:true,sourceRecoveredFromNative:true,

@@ -17,6 +17,7 @@ export function buildTaskReview({media=null,hasSource=false,sourceIdentity='',ta
   rows.push('元数据 → '+(plan.metadata?'保留':'不保留'),'章节 → '+(plan.chapters?'保留':'不保留'));
  }
  const report=artifact?.report;
+ const deliveryReceipt=report?.deliveryReceipt?.kind==='native-saved-file'?report.deliveryReceipt:null;
  let artifactStatus='尚无成品';
  if(artifact){
   artifactStatus=report?.deliveryAllowed===false?'禁止交付':state==='saved'?(artifact.saveKind==='browser-download'?'已交给浏览器保存':'保存操作已完成'):state==='saving'?'正在保存':state==='save_failed'?'保存失败，可重试':'成品暂存，尚未保存';
@@ -26,7 +27,7 @@ export function buildTaskReview({media=null,hasSource=false,sourceIdentity='',ta
   domainProjection,domainIssue,
   source:{status:media?'来源参数已读取':hasSource?'来源未读取参数':'未选择来源',facts:media?[media.videoCodec||media.codec||'视频编码未知',media.width&&media.height?media.width+'×'+media.height:'尺寸未知',Number(media.duration)>0?Number(media.duration).toFixed(2)+' 秒':'时长未知',Number(media.audioTracks??media.audioStreams?.length??0)+' 条音轨']:[]},
   plan:{status:task?'当前方案已检查':'当前方案未检查',encoder:task?.encoder||null,container:task?.outputContainer||null,rows,budget:task?.sizePlan?['目标 '+formatSize(task.sizePlan.targetBytes),'固定负载 '+formatSize(task.sizePlan.fixedPayloadBytes),'编码音频 '+formatSize(task.sizePlan.encodedAudioBytes),'封装余量 '+formatSize(task.sizePlan.containerReserveBytes),...(task.sizePlan.copiedTrimReserveBytes>0?['裁切复制流按完整源流预留 '+formatSize(task.sizePlan.copiedTrimReserveBytes)]:[])]:[]},
-  artifact:{available:!!artifact,status:artifactStatus,source:artifact?.source||'来源未记录',encoder:artifact?.task?.encoder||null,container:artifact?.task?.outputContainer||null,bytes:Number.isSafeInteger(report?.outputBytes)&&report.outputBytes>0?report.outputBytes:null,verification:report?.verified===true?'后端成品验证已通过':report?.verified===false?'后端成品验证未通过':'未提供后端验证回执',playback:'外部播放器与真实设备兼容性未验证'}
+  artifact:{available:!!artifact,status:artifactStatus,source:artifact?.source||'来源未记录',encoder:artifact?.task?.encoder||null,container:artifact?.task?.outputContainer||null,bytes:Number.isSafeInteger(report?.outputBytes)&&report.outputBytes>0?report.outputBytes:null,verification:report?.verified===true?'后端成品验证已通过':report?.verified===false?'后端成品验证未通过':'未提供后端验证回执',deliveryReceipt,playback:'外部播放器与真实设备兼容性未验证'}
  };
 }
 export function taskReviewOverview(model){
@@ -40,7 +41,7 @@ export function renderTaskReview(root,model){
  put('source-status',model.source.status);list('source-facts',model.source.facts);
  put('plan-status',model.plan.status);put('plan-codec',model.plan.encoder?[model.plan.encoder,model.plan.container?.toUpperCase()].filter(Boolean).join(' · '):'检查后显示执行计划');list('plan-rows',model.plan.rows);list('plan-budget',model.plan.budget);
  put('artifact-status',model.artifact.status);put('artifact-facts',model.artifact.available?[model.artifact.source,model.artifact.encoder?'执行配置 '+model.artifact.encoder:null,model.artifact.container?'计划容器 '+model.artifact.container.toUpperCase():null,model.artifact.bytes?formatSize(model.artifact.bytes):'成品字节数未知'].filter(Boolean).join(' · '):'执行后显示实际成品');
- put('artifact-evidence',model.artifact.available?model.artifact.verification+'。'+model.artifact.playback+'。':'成品回执与保存状态会在此显示。');
+ put('artifact-evidence',model.artifact.available?model.artifact.verification+'。'+model.artifact.playback+'。'+(model.artifact.deliveryReceipt?' Native 保存回执 · '+model.artifact.deliveryReceipt.path+' · '+model.artifact.deliveryReceipt.bytes+' B · SHA256 '+model.artifact.deliveryReceipt.sha256:''):'成品回执与保存状态会在此显示。');
  // A user-expandable read-only P1 domain view uses the same compiled task.
  // It is never an editable form nor a separate task-state authority.
  let details=root.querySelector('[data-review-domain-projection]');

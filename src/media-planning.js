@@ -94,6 +94,7 @@ export function outputReport(task, result, elapsedSeconds) {
     ? auditTrimCopyPayload(task,result.outputPacketEvidence) : null;
   return {version:1, operation:task.operation, encoder:task.encoder || 'copy', parameters:task,
     trimCopyAudit,
+    deliveryReceipt:result.deliveryReceipt??null,
     cutTimelineEvidence:result.verified===true?result.cutTimelineEvidence??null:null,
     completedMuxByteLedger:result.verified===true && result.outputPacketEvidence
       ?summarizeCompletedMuxBytes({task,result}):null,
