@@ -26,7 +26,7 @@ export function mountWorkbenchV3({source,media}) {
   <nav class="v3-path" aria-label="工作台对象导航"><button data-v3-action="source">${icon('video')}来源 · <span data-v3-source-state>未选择</span></button><span>›</span><button data-v3-action="plan">${icon('sliders')}输出计划 · <span data-v3-plan-state>未检查</span></button><span>›</span><button data-v3-action="artifact">${icon('unknown')}成品 · <span data-v3-artifact-state>未生成</span></button></nav>
   <div class="v3-grid"><aside class="v3-source"><h2>来源与依赖</h2><div data-v3-source-slot></div><section class="v3-objects"><h3>轨道与附件</h3><div data-v3-objects>读取视频参数后显示真实对象。</div><p>来源对象只读；去向见输出计划。</p></section></aside>
   <main class="v3-main"><div class="v3-plan-view"><section class="v3-card v3-cut"><details class="v3-time-range"><summary>处理时间范围</summary><p class="v3-range-guided">引导模式使用自己的范围与采用流程；切换到手动参数后，可在这里编辑正式任务时间。</p><div class="v3-range-controls"><div class="v3-cut-fields"><label>请求切入<input data-v3-time="start" data-basic-field="start" aria-describedby="v3TimeHelp" value="0" aria-label="请求切入时间"></label><span>→</span><label>请求切出<input data-v3-time="end" data-basic-field="end" aria-describedby="v3TimeHelp" placeholder="片尾" aria-label="请求切出时间"></label></div><div class="v3-basic-grid" data-v3-range-policies></div><p id="v3TimeHelp">时间按来源时间轴输入，支持秒数或 时:分:秒；切出留空表示片尾。视频、音频和软字幕的范围策略彼此独立；逐音轨设置优先于音频默认策略。软字幕策略不控制烧入画面的 ASS。</p><div data-v3-copy-boundary><p data-v3-cut-state>关键帧位置尚未探测；实际切入、切出与偏差须在探测及成品审计后确认。</p><button data-v3-action="timeline">探测可实现切点</button></div></div></details></section>
-  <section class="v3-card v3-output"><h2>拟输出文件</h2><p class="v3-filename" data-v3-output-name>选择来源后形成输出计划</p><div class="v3-targets"><label>输出容器<button data-v3-action="container" data-v3-container>Auto · 按正式参数选择</button></label><label>保存位置 · 待接入<button data-v3-action="location">执行前选择…</button></label></div><dl class="v3-output-rows" data-v3-output-rows><div><dt>来源对象</dt><dd>尚未读取</dd></div><div><dt>正式计划</dt><dd>检查后显示逐流去向</dd></div></dl></section>
+  <section class="v3-card v3-output"><h2>拟输出文件</h2><p class="v3-filename" data-v3-output-name>选择来源后形成输出计划</p><div class="v3-targets"><label>输出容器<button data-v3-action="container" data-v3-container>Auto · 按正式参数选择</button></label><label>保存方式<button type="button" data-v3-action="location" aria-haspopup="dialog">交给浏览器下载</button></label></div><dl class="v3-output-rows" data-v3-output-rows><div><dt>来源对象</dt><dd>尚未读取</dd></div><div><dt>正式计划</dt><dd>检查后显示逐流去向</dd></div></dl></section>
   <section class="v3-card v3-decisions"><h2>目标与编码决策</h2><div class="v3-targets"><label>形成计划<button data-v3-action="parameters" data-v3-strategy>手动参数 / 引导目标</button></label><label>体积约束<button data-v3-action="budget" data-v3-budget>按正式参数配置</button></label></div><p data-v3-current-plan>当前正式参数尚未检查。</p><div class="v3-button-pair"><button data-v3-action="compare">比较编码器</button><button data-v3-action="parameters">检查正式参数</button></div></section>
   <section class="v3-preview-entry"><button data-v3-action="preview" aria-expanded="false" aria-controls="v3Preview">展开画面预览 · 按源画幅显示</button></section></div>
   <section id="v3Preview" class="v3-card v3-preview" hidden><div class="v3-section-head"><h2>画面预览</h2><button data-v3-action="close-preview">返回输出计划</button></div><p data-v3-aspect>来源画幅尚未读取</p><div class="v3-viewport"><img data-v3-frame alt="实际生成的预览帧" hidden><div data-v3-frame-empty>${icon('video')}<span>尚未加载预览帧</span></div></div><div class="v3-button-pair"><button data-v3-action="generate-preview">生成实际预览</button><button data-v3-action="timeline">定位与逐帧检查</button></div><p>预览帧来自现有媒体预览流程；无帧时保持空状态。</p></section>
@@ -55,6 +55,9 @@ export function mountWorkbenchV3({source,media}) {
   const modeHome=document.createComment('v3-mode-home');modeNav.before(modeHome);
   for(const [mode,label] of Object.entries({hardsub:'ASS 硬字幕',transcode:'纯视频转码',copy:'无损剪切'}))modeNav.querySelector(`[data-media-mode="${mode}"] strong`).textContent=label;
   const modeNames={hardsub:'硬字幕',transcode:'转码',copy:'剪切'};
+  const saveMethod=()=>document.body.dataset.runtimeBackend?.endsWith('-native')
+    ? {label:'保存成品时选择位置',description:'成品通过检查后，点击「保存成品」打开系统保存对话框。'}
+    : {label:'交给浏览器下载',description:'成品通过检查后，点击「保存成品」交给浏览器下载。下载位置由浏览器设置决定。'};
   function showView(view) {
     shell.dataset.view=view;
     for(const [name,selector] of Object.entries({plan:'.v3-plan-view',preview:'#v3Preview',comparison:'.v3-comparison',artifact:'.v3-artifact',queue:'.v3-queues'}))q(selector).hidden=name!==view;
@@ -105,7 +108,14 @@ export function mountWorkbenchV3({source,media}) {
     queued=false;
     if(!shell.isConnected||!$('#mediaTaskForm'))return;
     const operation=document.body.dataset.mediaOperation||'hardsub',file=source(),m=media(),form=$('#mediaTaskForm');
-    if(lastOperation&&lastOperation!==operation)showView('plan');lastOperation=operation;
+    if(lastOperation!==operation){
+      if(lastOperation)showView('plan');
+      const output=q('.v3-output'),range=q('.v3-cut');
+      if(operation==='copy')output.before(range);
+      else range.before(output);
+      lastOperation=operation;
+    }
+    setText('[data-v3-action="location"]',saveMethod().label);
     const field=name=>form.elements.namedItem(name);
     setText('[data-v3-identity]',`${file?.name||'尚未选择来源'} / ${modeNames[operation]}任务`);
     setText('[data-v3-source-state]',file?'已选择':'未选择');
@@ -178,7 +188,7 @@ export function mountWorkbenchV3({source,media}) {
     }
     if(command==='source'||command==='source-inspect'){input.scrollIntoView({block:'start'});input.setAttribute('tabindex','-1');(command==='source-inspect'?$('#analyze'):input).focus({preventScroll:true});return;}
     if(command==='plan'){showView('plan');refresh();return;}
-    if(command==='location')return pending('保存位置 · 待接入','此入口预留执行前选择位置。当前版本仍在实际执行与保存流程中选择或下载成品；尚未取得目录权限。');
+    if(command==='location')return pending('保存方式',saveMethod().description);
     if(command==='help')return pending('工作台帮助','左侧添加来源与依赖，中央确认拟输出文件及正式参数，右侧配置预期意图草稿。标有“待接入”的设置尚未应用到执行；实际执行与保存以正式计划和已有验证结果为准。');
     if(command==='settings'){showEditor('.platform-rail');return;}
     if(command==='run'){
