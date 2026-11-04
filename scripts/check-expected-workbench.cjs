@@ -63,7 +63,8 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
     assert.equal(await page.locator('.v3-source-toolbar button span').first().isVisible(),true);
     await page.locator('[data-v3-action="location"]').click();
     assert.equal(await page.locator('.v3-help').isVisible(),true);
-    assert.match(await page.locator('.v3-help').textContent(),/保存方式/);
+    assert.match(await page.locator('.v3-help').textContent(),/保存方式.*浏览器下载/s);
+    assert.equal(await page.locator('[data-v3-action="location"]').textContent(),'交给浏览器下载');
     await page.keyboard.press('Escape');
     await page.locator('[data-v3-action="artifact"]').click();
     assert.equal(await page.locator('.v3-artifact').isVisible(),true,'Artifact audit must have a composed view');
@@ -91,6 +92,11 @@ const {chromium}=require(process.env.QHE_PLAYWRIGHT_MODULE||'playwright');
     await page.locator(`[data-media-mode="${operation}"]`).click();
     await page.waitForFunction(op=>document.body.dataset.mediaOperation===op,operation);
     await page.waitForTimeout(50);
+    if(width>=768){
+     const first=page.locator('.v3-plan-view > section').first();
+     assert.equal(await first.evaluate(el=>el.matches('.v3-cut')),operation==='copy','Only Stream Copy puts the time range first');
+     assert.equal(await first.evaluate(el=>el.matches('.v3-output')),operation!=='copy','Hard subtitle and transcode put the output plan first');
+    }
     const before=await page.locator('#mediaTaskForm').evaluate(form=>JSON.stringify([...new FormData(form)]));
     await inspector.locator('[data-intent-tab="decision"]').click();
     if(operation==='copy'){
