@@ -2604,7 +2604,8 @@ export function mountMediaWorkspace(hooks) {
     let current=null,phase='prepare';
     try{
       if(!clips.length)throw Error('请先加入至少一个片段');
-      if(clipSourceKey!==clipSource()||!clipSource())throw Error('视频已变化，请重新建立片段列表');
+      const sourceIdentity=clipSource();
+      if(!sourceIdentity||clipSourceKey!==sourceIdentity)throw Error('视频已变化，请重新建立片段列表');
       if(!clipMedia())throw Error('请先读取视频参数');
       const settings=read();
       validateQueuedCopySettings(settings);
@@ -2622,12 +2623,14 @@ export function mountMediaWorkspace(hooks) {
       syncClipQueue();
       const media=await hooks.prepare('copy');
       if(!media)throw Error('未能读取当前视频参数');
+      if(sourceIdentity!==clipSource()||clipSourceKey!==sourceIdentity)throw Error('视频已变化，请重新建立片段列表');
+      const compileMedia={...media,sourceIdentity};
       // Validate all pending ranges before running the first irreversible export.
       const pending=clips.map((clip,index)=>({clip,index}))
         .filter(({clip})=>clip.state!=='saved');
       const tasks=pending.map(({clip,index})=>{
         const raw={...settings,start:clip.startText,end:clip.endText};
-        return {clip,index,task:compileTask(raw,media)};
+        return {clip,index,task:compileTask(raw,compileMedia)};
       });
       if(!tasks.length){showClipMessage('全部片段已导出。');syncClipQueue();return;}
       for(const {task} of tasks)await hooks.validate?.(task);
